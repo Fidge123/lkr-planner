@@ -8,7 +8,7 @@ function App() {
       <header className="bg-base-200 border-b border-base-300 px-6 py-4 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-4">
           <h1 className="text-2xl font-bold text-primary">LKR Planner</h1>
-          <div className="badge badge-outline badge-primary">Week View</div>
+          <div className="badge badge-outline badge-primary">Wochenansicht</div>
         </div>
         <div className="flex items-center gap-2">
           <button type="button" className="btn btn-ghost btn-sm">
@@ -27,13 +27,13 @@ function App() {
                 d="M15 19l-7-7 7-7"
               />
             </svg>
-            Previous
+            Zurück
           </button>
           <button type="button" className="btn btn-primary btn-sm">
-            Today
+            Heute
           </button>
           <button type="button" className="btn btn-ghost btn-sm">
-            Next
+            Weiter
             <svg
               xmlns="http://www.w3.org/2000/svg"
               className="h-5 w-5"

@@ -4,44 +4,37 @@ export const employees: Employee[] = [
   {
     id: "emp-1",
     name: "Anna Schmidt",
-    role: "Senior Developer",
-    avatar: "AS",
+    role: "Senior Entwicklerin",
   },
   {
     id: "emp-2",
     name: "Max Müller",
-    role: "Project Manager",
-    avatar: "MM",
+    role: "Projektleiter",
   },
   {
     id: "emp-3",
     name: "Lisa Weber",
-    role: "UI/UX Designer",
-    avatar: "LW",
+    role: "UI/UX Designerin",
   },
   {
     id: "emp-4",
     name: "Tom Fischer",
-    role: "Backend Developer",
-    avatar: "TF",
+    role: "Backend Entwickler",
   },
   {
     id: "emp-5",
     name: "Sarah Koch",
-    role: "QA Engineer",
-    avatar: "SK",
+    role: "QA Ingenieurin",
   },
   {
     id: "emp-6",
     name: "Jan Becker",
-    role: "DevOps Engineer",
-    avatar: "JB",
+    role: "DevOps Ingenieur",
   },
   {
     id: "emp-7",
     name: "Maria Hofmann",
-    role: "Full Stack Developer",
-    avatar: "MH",
+    role: "Fullstack Entwicklerin",
   },
 ];
 
@@ -52,122 +45,122 @@ export const employees: Employee[] = [
 export const workItems: WorkItem[] = [
   {
     id: "wi-1",
-    title: "API Integration",
-    project: "Customer Portal",
+    title: "API-Integration",
+    project: "Kundenportal",
     color: "bg-primary",
-    days: [0, 1, 2], // Mon-Wed continuous
+    days: [0, 1, 2], // Mo-Mi durchgehend
     assignedEmployeeIds: ["emp-1", "emp-4"],
   },
   {
     id: "wi-2",
-    title: "UI Mockups",
+    title: "UI-Entwürfe",
     project: "Mobile App",
     color: "bg-secondary",
-    days: [0, 1], // Mon-Tue
+    days: [0, 1], // Mo-Di
     assignedEmployeeIds: ["emp-3"],
   },
   {
     id: "wi-3",
-    title: "Sprint Planning",
-    project: "Internal",
+    title: "Sprint-Planung",
+    project: "Intern",
     color: "bg-accent",
-    days: [0], // Monday only
+    days: [0], // Nur Montag
     assignedEmployeeIds: ["emp-2"],
   },
   {
     id: "wi-4",
-    title: "Database Migration",
-    project: "Legacy System",
+    title: "Datenbank-Migration",
+    project: "Altsystem",
     color: "bg-info",
-    days: [1, 2, 4], // Tue-Wed, then resumed Friday (paused Thursday)
+    days: [1, 2, 4], // Di-Mi, dann Freitag fortgesetzt (Do pausiert)
     assignedEmployeeIds: ["emp-4", "emp-6"],
   },
   {
     id: "wi-5",
-    title: "Test Automation",
-    project: "Customer Portal",
+    title: "Test-Automatisierung",
+    project: "Kundenportal",
     color: "bg-success",
-    days: [2, 3, 4], // Wed-Fri
+    days: [2, 3, 4], // Mi-Fr
     assignedEmployeeIds: ["emp-5"],
   },
   {
     id: "wi-6",
-    title: "Code Review",
+    title: "Code-Review",
     project: "Mobile App",
     color: "bg-warning",
-    days: [3], // Thursday only
+    days: [3], // Nur Donnerstag
     assignedEmployeeIds: ["emp-1", "emp-7"],
   },
   {
     id: "wi-7",
-    title: "CI/CD Pipeline",
-    project: "Infrastructure",
+    title: "CI/CD-Pipeline",
+    project: "Infrastruktur",
     color: "bg-error",
-    days: [0, 2, 4], // Mon, Wed, Fri (intermittent)
+    days: [0, 2, 4], // Mo, Mi, Fr (intermittierend)
     assignedEmployeeIds: ["emp-6"],
   },
   {
     id: "wi-8",
-    title: "User Research",
+    title: "Nutzerforschung",
     project: "Mobile App",
     color: "bg-primary/70",
-    days: [1, 2], // Tue-Wed
+    days: [1, 2], // Di-Mi
     assignedEmployeeIds: ["emp-3", "emp-2"],
   },
   {
     id: "wi-9",
-    title: "Performance Audit",
-    project: "Customer Portal",
+    title: "Performance-Audit",
+    project: "Kundenportal",
     color: "bg-secondary/70",
-    days: [3, 4], // Thu-Fri
+    days: [3, 4], // Do-Fr
     assignedEmployeeIds: ["emp-7"],
   },
   {
     id: "wi-10",
-    title: "Documentation",
-    project: "Internal",
+    title: "Dokumentation",
+    project: "Intern",
     color: "bg-accent/70",
-    days: [4], // Friday only
+    days: [4], // Nur Freitag
     assignedEmployeeIds: ["emp-2"],
   },
   {
     id: "wi-11",
-    title: "Bug Fixes",
-    project: "Customer Portal",
+    title: "Fehlerbehebung",
+    project: "Kundenportal",
     color: "bg-info/70",
-    days: [0, 1], // Mon-Tue
+    days: [0, 1], // Mo-Di
     assignedEmployeeIds: ["emp-7"],
   },
   {
     id: "wi-12",
-    title: "Security Review",
-    project: "Infrastructure",
+    title: "Sicherheitsüberprüfung",
+    project: "Infrastruktur",
     color: "bg-success/70",
-    days: [2, 3], // Wed-Thu
+    days: [2, 3], // Mi-Do
     assignedEmployeeIds: ["emp-6", "emp-4"],
   },
   {
     id: "wi-13",
-    title: "Stakeholder Meeting",
+    title: "Stakeholder-Meeting",
     project: "Mobile App",
     color: "bg-warning/70",
-    days: [1], // Tuesday only
+    days: [1], // Nur Dienstag
     assignedEmployeeIds: ["emp-2", "emp-3"],
   },
   {
     id: "wi-14",
-    title: "Feature Development",
-    project: "Customer Portal",
+    title: "Feature-Entwicklung",
+    project: "Kundenportal",
     color: "bg-error/70",
-    days: [3, 4], // Thu-Fri
+    days: [3, 4], // Do-Fr
     assignedEmployeeIds: ["emp-1"],
   },
   {
     id: "wi-15",
-    title: "Integration Testing",
-    project: "Legacy System",
+    title: "Integrationstests",
+    project: "Altsystem",
     color: "bg-neutral",
-    days: [0, 3], // Mon, Thu (gap for pause)
+    days: [0, 3], // Mo, Do (Pause dazwischen)
     assignedEmployeeIds: ["emp-5"],
   },
 ];

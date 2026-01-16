@@ -12,8 +12,8 @@ function getWeekDays(): WeekDay[] {
   monday.setDate(today.getDate() + mondayOffset);
 
   const weekDays: WeekDay[] = [];
-  const dayNames = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
-  const shortNames = ["Mon", "Tue", "Wed", "Thu", "Fri"];
+  const dayNames = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag"];
+  const shortNames = ["Mo", "Di", "Mi", "Do", "Fr"];
 
   for (let i = 0; i < 5; i++) {
     const date = new Date(monday);
@@ -40,7 +40,7 @@ export function PlanningGrid() {
           {/* Empty corner cell */}
           <div className="p-3 bg-base-200 rounded-lg flex items-center justify-center">
             <span className="text-sm font-semibold text-base-content/70">
-              Employees
+              Mitarbeiter
             </span>
           </div>
 
@@ -71,11 +71,6 @@ export function PlanningGrid() {
           >
             {/* Employee info cell */}
             <div className="p-3 flex items-center gap-3 border-r border-base-300">
-              <div className="avatar placeholder">
-                <div className="bg-primary text-primary-content w-10 h-10 rounded-full">
-                  <span className="text-sm font-bold">{employee.avatar}</span>
-                </div>
-              </div>
               <div className="flex-1 min-w-0">
                 <div className="font-semibold text-sm truncate">
                   {employee.name}
@@ -109,7 +104,7 @@ export function PlanningGrid() {
 
                     {hasOverflow && (
                       <div className="text-xs text-base-content/50 text-center mt-auto">
-                        +{cellWorkItems.length - 3} more
+                        +{cellWorkItems.length - 3} weitere
                       </div>
                     )}
 

@@ -44,7 +44,7 @@ export function WorkItemBadge({
         transition-all duration-200 hover:brightness-110 hover:scale-[1.02]
         cursor-pointer shadow-sm
       `}
-      title={`${workItem.title} - ${workItem.project}${hasMultipleAssignees ? `\nAlso assigned: ${otherAssignees.map((e) => e.name).join(", ")}` : ""}`}
+      title={`${workItem.title} - ${workItem.project}${hasMultipleAssignees ? `\nEbenfalls zugewiesen: ${otherAssignees.map((e) => e.name).join(", ")}` : ""}`}
     >
       <span className="truncate flex-1">{workItem.title}</span>
 
@@ -57,7 +57,7 @@ export function WorkItemBadge({
               className="w-4 h-4 rounded-full bg-base-100/30 text-[8px] flex items-center justify-center font-bold border border-base-100/20"
               title={assignee.name}
             >
-              {assignee.avatar[0]}
+              {assignee.name[0]}
             </div>
           ))}
           {otherAssignees.length > 2 && (
