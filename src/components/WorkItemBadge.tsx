@@ -32,7 +32,7 @@ export function WorkItemBadge({
   const hasMultipleAssignees = otherAssignees.length > 0;
 
   return (
-    <div
+    <article
       className={`
         ${workItem.color} text-base-100
         px-2 py-1 text-xs font-medium
@@ -46,32 +46,43 @@ export function WorkItemBadge({
       `}
       title={`${workItem.title} - ${workItem.project}${hasMultipleAssignees ? `\nEbenfalls zugewiesen: ${otherAssignees.map((e) => e.name).join(", ")}` : ""}`}
     >
-      <span className="truncate flex-1">{workItem.title}</span>
+      <h4 className="truncate flex-1 font-medium">{workItem.title}</h4>
 
-      {/* Show indicator for multi-assignee work items */}
       {hasMultipleAssignees && (
-        <div className="flex -space-x-1">
+        <aside
+          className="flex -space-x-1"
+          aria-label="Weitere zugewiesene Mitarbeiter"
+        >
           {otherAssignees.slice(0, 2).map((assignee) => (
-            <div
+            <abbr
               key={assignee.id}
-              className="w-4 h-4 rounded-full bg-base-100/30 text-[8px] flex items-center justify-center font-bold border border-base-100/20"
+              className="avatar placeholder w-4 h-4 no-underline"
               title={assignee.name}
             >
-              {assignee.name[0]}
-            </div>
+              <figure className="bg-base-100/30 text-[8px] rounded-full border border-base-100/20">
+                {assignee.name[0]}
+              </figure>
+            </abbr>
           ))}
           {otherAssignees.length > 2 && (
-            <div className="w-4 h-4 rounded-full bg-base-100/30 text-[8px] flex items-center justify-center font-bold border border-base-100/20">
-              +{otherAssignees.length - 2}
-            </div>
+            <abbr
+              className="avatar placeholder w-4 h-4 no-underline"
+              title={`${otherAssignees.length - 2} weitere`}
+            >
+              <figure className="bg-base-100/30 text-[8px] rounded-full border border-base-100/20">
+                +{otherAssignees.length - 2}
+              </figure>
+            </abbr>
           )}
-        </div>
+        </aside>
       )}
 
-      {/* Visual indicator for continuation */}
       {continuesToNext && (
-        <div className="absolute right-0 top-1/2 -translate-y-1/2 w-2 h-2 bg-inherit" />
+        <i
+          className="absolute right-0 top-1/2 -translate-y-1/2 w-2 h-2 bg-inherit"
+          aria-hidden="true"
+        />
       )}
-    </div>
+    </article>
   );
 }

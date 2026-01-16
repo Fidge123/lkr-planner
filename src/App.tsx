@@ -1,17 +1,29 @@
+import { useState } from "react";
 import "./App.css";
 import { PlanningGrid } from "./components/PlanningGrid";
 
 function App() {
+  const [weekOffset, setWeekOffset] = useState(0);
+
+  const goToPreviousWeek = () => setWeekOffset((prev) => prev - 1);
+  const goToNextWeek = () => setWeekOffset((prev) => prev + 1);
+  const goToCurrentWeek = () => setWeekOffset(0);
+
   return (
-    <div className="min-h-screen bg-base-100 flex flex-col">
-      {/* Header */}
-      <header className="bg-base-200 border-b border-base-300 px-6 py-4 flex items-center justify-between shadow-sm">
-        <div className="flex items-center gap-4">
+    <article className="min-h-screen bg-base-100 flex flex-col">
+      <header className="navbar bg-base-200 border-b border-base-300 shadow-sm">
+        <nav className="navbar-start gap-4">
           <h1 className="text-2xl font-bold text-primary">LKR Planner</h1>
-          <div className="badge badge-outline badge-primary">Wochenansicht</div>
-        </div>
-        <div className="flex items-center gap-2">
-          <button type="button" className="btn btn-ghost btn-sm">
+          <mark className="badge badge-outline badge-primary bg-transparent">
+            Wochenansicht
+          </mark>
+        </nav>
+        <nav className="navbar-end join">
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm join-item"
+            onClick={goToPreviousWeek}
+          >
             <svg
               xmlns="http://www.w3.org/2000/svg"
               className="h-5 w-5"
@@ -29,10 +41,18 @@ function App() {
             </svg>
             Zurück
           </button>
-          <button type="button" className="btn btn-primary btn-sm">
+          <button
+            type="button"
+            className={`btn btn-sm join-item ${weekOffset === 0 ? "btn-primary" : "btn-outline btn-primary"}`}
+            onClick={goToCurrentWeek}
+          >
             Heute
           </button>
-          <button type="button" className="btn btn-ghost btn-sm">
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm join-item"
+            onClick={goToNextWeek}
+          >
             Weiter
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -50,14 +70,13 @@ function App() {
               />
             </svg>
           </button>
-        </div>
+        </nav>
       </header>
 
-      {/* Main content */}
       <main className="flex-1 overflow-hidden">
-        <PlanningGrid />
+        <PlanningGrid weekOffset={weekOffset} />
       </main>
-    </div>
+    </article>
   );
 }
 

@@ -32,9 +32,7 @@ The application is built for macOS using Bun as the runtime and package manager.
 - **Variables**: camelCase with descriptive names
 - **Constants**: camelCase (not SCREAMING_SNAKE_CASE)
 
-### Code Patterns
-
-#### React Components
+### React Components
 
 ```tsx
 // Preferred pattern: Named function exports with Props interface
@@ -48,7 +46,13 @@ interface Props {
 }
 ```
 
-#### API Calls
+### Semantic Markup
+
+- Always use semantic HTML elements
+- Avoid `div` and `span` elements
+- Keep the markup simple and semantically correct
+
+### API Calls
 
 - Use Tauri's `@tauri-apps/plugin-http` for HTTP requests
 - Handle errors with try/catch or `.catch()` Promise chains
