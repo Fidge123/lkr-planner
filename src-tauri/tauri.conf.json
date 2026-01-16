@@ -25,11 +25,7 @@
     "active": true,
     "createUpdaterArtifacts": true,
     "targets": "all",
-    "icon": [
-      "icons/apple-touch-icon.png",
-      "icons/favicon-32x32.png",
-      "icons/favicon.ico"
-    ],
+    "icon": ["icons/icon.png", "icons/icon.svg"],
     "macOS": {
       "dmg": {
         "appPosition": {

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <g>
+    <title>App Icon (w/ Shadow)</title>
+    <g>
+      <title>Background (Masked)</title>
+      <path style="stroke-width: 3px; fill: #4A90E2;"
+        d="M 100 724 L 100 300 C 100 185.001 170 99.995 300.026 100 L 724 99.995 C 854 100 924 185.001 924 300 L 924 724 C 924 839.001 854 923.995 724 924 L 300.026 924 C 170 924 100 839.001 100 724 Z">
+        <title>Icon Shape</title>
+      </path>
+    </g>
+  </g>
+
+  <text
+    x="512"
+    y="512"
+    font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif"
+    font-size="620"
+    font-weight="700"
+    fill="white"
+    text-anchor="middle"
+    dominant-baseline="central"
+  >R</text>
+</svg>
