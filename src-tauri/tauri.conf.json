@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "lkr-planner",
+        "title": "Richter Labortechnik",
         "width": 800,
         "height": 600
       }
@@ -23,13 +23,40 @@
   },
   "bundle": {
     "active": true,
+    "createUpdaterArtifacts": true,
     "targets": "all",
     "icon": [
-      "icons/32x32.png",
-      "icons/128x128.png",
-      "icons/128x128@2x.png",
-      "icons/icon.icns",
-      "icons/icon.ico"
-    ]
+      "icons/apple-touch-icon.png",
+      "icons/favicon-32x32.png",
+      "icons/favicon.ico"
+    ],
+    "macOS": {
+      "dmg": {
+        "appPosition": {
+          "x": 180,
+          "y": 170
+        },
+        "applicationFolderPosition": {
+          "x": 480,
+          "y": 170
+        },
+        "windowSize": {
+          "height": 400,
+          "width": 660
+        }
+      },
+      "files": {},
+      "hardenedRuntime": true,
+      "minimumSystemVersion": "10.13",
+      "signingIdentity": "-"
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDgxNEU4NDhBNTdDMkMxQ0QKUldUTndjSlhpb1JPZ2EwV2p6dVdiZ3djRDlpMUtuem03Y3R2U3lFcE5Od0xaaDE5NExpSHF1VWoK",
+      "endpoints": [
+        "https://github.com/Fidge123/lkr-planner/releases/latest/download/latest.json"
+      ]
+    }
   }
 }
