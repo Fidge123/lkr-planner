@@ -9,9 +9,7 @@ export interface WorkItem {
   title: string;
   project: string;
   color: string;
-  // Days this work item spans (0 = Monday, 4 = Friday)
-  days: number[];
-  // Employees assigned to this work item
+  days: string[];
   assignedEmployeeIds: string[];
 }
 
@@ -20,10 +18,3 @@ export interface DayAssignment {
   day: number;
   workItemIds: string[];
 }
-
-export type WeekDay = {
-  index: number;
-  name: string;
-  shortName: string;
-  date: Date;
-};

@@ -38,17 +38,13 @@ export const employees: Employee[] = [
   },
 ];
 
-// Work items with various patterns:
-// - Multi-day spans
-// - Paused and resumed (gaps in days)
-// - Multiple assignees
 export const workItems: WorkItem[] = [
   {
     id: "wi-1",
     title: "API-Integration",
     project: "Kundenportal",
     color: "bg-primary",
-    days: [0, 1, 2], // Mo-Mi durchgehend
+    days: ["2026-01-26", "2026-01-27", "2026-01-28"],
     assignedEmployeeIds: ["emp-1", "emp-4"],
   },
   {
@@ -56,7 +52,7 @@ export const workItems: WorkItem[] = [
     title: "UI-Entwürfe",
     project: "Mobile App",
     color: "bg-secondary",
-    days: [0, 1], // Mo-Di
+    days: ["2026-01-26", "2026-01-27"],
     assignedEmployeeIds: ["emp-3"],
   },
   {
@@ -64,7 +60,7 @@ export const workItems: WorkItem[] = [
     title: "Sprint-Planung",
     project: "Intern",
     color: "bg-accent",
-    days: [0], // Nur Montag
+    days: ["2026-01-26"],
     assignedEmployeeIds: ["emp-2"],
   },
   {
@@ -72,7 +68,7 @@ export const workItems: WorkItem[] = [
     title: "Datenbank-Migration",
     project: "Altsystem",
     color: "bg-info",
-    days: [1, 2, 4], // Di-Mi, dann Freitag fortgesetzt (Do pausiert)
+    days: ["2026-01-27", "2026-01-28", "2026-01-30"],
     assignedEmployeeIds: ["emp-4", "emp-6"],
   },
   {
@@ -80,7 +76,7 @@ export const workItems: WorkItem[] = [
     title: "Test-Automatisierung",
     project: "Kundenportal",
     color: "bg-success",
-    days: [2, 3, 4], // Mi-Fr
+    days: ["2026-01-28", "2026-01-29", "2026-01-30"],
     assignedEmployeeIds: ["emp-5"],
   },
   {
@@ -88,7 +84,7 @@ export const workItems: WorkItem[] = [
     title: "Code-Review",
     project: "Mobile App",
     color: "bg-warning",
-    days: [3], // Nur Donnerstag
+    days: ["2026-01-29"],
     assignedEmployeeIds: ["emp-1", "emp-7"],
   },
   {
@@ -96,7 +92,7 @@ export const workItems: WorkItem[] = [
     title: "CI/CD-Pipeline",
     project: "Infrastruktur",
     color: "bg-error",
-    days: [0, 2, 4], // Mo, Mi, Fr (intermittierend)
+    days: ["2026-01-26", "2026-01-28", "2026-01-30"],
     assignedEmployeeIds: ["emp-6"],
   },
   {
@@ -104,7 +100,7 @@ export const workItems: WorkItem[] = [
     title: "Nutzerforschung",
     project: "Mobile App",
     color: "bg-primary/70",
-    days: [1, 2], // Di-Mi
+    days: ["2026-01-27", "2026-01-28"],
     assignedEmployeeIds: ["emp-3", "emp-2"],
   },
   {
@@ -112,7 +108,7 @@ export const workItems: WorkItem[] = [
     title: "Performance-Audit",
     project: "Kundenportal",
     color: "bg-secondary/70",
-    days: [3, 4], // Do-Fr
+    days: ["2026-01-29", "2026-01-30"],
     assignedEmployeeIds: ["emp-7"],
   },
   {
@@ -120,7 +116,7 @@ export const workItems: WorkItem[] = [
     title: "Dokumentation",
     project: "Intern",
     color: "bg-accent/70",
-    days: [4], // Nur Freitag
+    days: ["2026-01-30"],
     assignedEmployeeIds: ["emp-2"],
   },
   {
@@ -128,7 +124,7 @@ export const workItems: WorkItem[] = [
     title: "Fehlerbehebung",
     project: "Kundenportal",
     color: "bg-info/70",
-    days: [0, 1], // Mo-Di
+    days: ["2026-01-26", "2026-01-27"],
     assignedEmployeeIds: ["emp-7"],
   },
   {
@@ -136,7 +132,7 @@ export const workItems: WorkItem[] = [
     title: "Sicherheitsüberprüfung",
     project: "Infrastruktur",
     color: "bg-success/70",
-    days: [2, 3], // Mi-Do
+    days: ["2026-01-28", "2026-01-29"],
     assignedEmployeeIds: ["emp-6", "emp-4"],
   },
   {
@@ -144,7 +140,7 @@ export const workItems: WorkItem[] = [
     title: "Stakeholder-Meeting",
     project: "Mobile App",
     color: "bg-warning/70",
-    days: [1], // Nur Dienstag
+    days: ["2026-01-27"],
     assignedEmployeeIds: ["emp-2", "emp-3"],
   },
   {
@@ -152,7 +148,7 @@ export const workItems: WorkItem[] = [
     title: "Feature-Entwicklung",
     project: "Kundenportal",
     color: "bg-error/70",
-    days: [3, 4], // Do-Fr
+    days: ["2026-01-29", "2026-01-30"],
     assignedEmployeeIds: ["emp-1"],
   },
   {
@@ -160,18 +156,18 @@ export const workItems: WorkItem[] = [
     title: "Integrationstests",
     project: "Altsystem",
     color: "bg-neutral",
-    days: [0, 3], // Mo, Do (Pause dazwischen)
+    days: ["2026-01-26", "2026-01-29"],
     assignedEmployeeIds: ["emp-5"],
   },
 ];
 
 // Helper function to get work items for a specific employee and day
-export function getWorkItemsForCell(
-  employeeId: string,
-  dayIndex: number,
-): WorkItem[] {
+export function getWorkItemsForCell(employeeId: string, day: Date): WorkItem[] {
   return workItems.filter(
     (wi) =>
-      wi.assignedEmployeeIds.includes(employeeId) && wi.days.includes(dayIndex),
+      wi.assignedEmployeeIds.includes(employeeId) &&
+      wi.days
+        .map((d) => d.slice(0, 10))
+        .includes(day.toISOString().slice(0, 10)),
   );
 }
