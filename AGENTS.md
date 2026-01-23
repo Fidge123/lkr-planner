@@ -72,6 +72,7 @@ interface Props {
 - **Language**: All display text in the application must be in German
 - **Components**: Use DaisyUI if possible, otherwise Tailwind
 - **Styling**: Utility-first Tailwind classes, avoid custom CSS
+- **Icons**: Use Lucide icons
 
 ### Error Handling
 

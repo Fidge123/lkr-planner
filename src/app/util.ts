@@ -5,7 +5,7 @@ export function getWeekDays(weekOffset: number) {
   // Calculate Monday of the current week (or next week if today is weekend)
   const mondayOffset =
     currentDay === 0 ? 1 : currentDay === 6 ? 2 : 1 - currentDay;
-  const monday = new Date(today.toDateString());
+  const monday = new Date(today.toISOString().slice(0, 10));
   monday.setDate(today.getDate() + mondayOffset + weekOffset * 7);
 
   return [
