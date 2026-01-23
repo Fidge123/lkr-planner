@@ -5,16 +5,21 @@
 This is a **Tauri + React + TypeScript** desktop application which provides a planning view and integrates with [Daylite](https://developer.daylite.app/reference/getting-started) and [Planradar](https://help.planradar.com/hc/en-gb/articles/15480453097373-Open-APIs).
 The application is built for macOS using Bun as the runtime and package manager.
 
+When working on this application, always follow the TDD loop:
+1. Write a test which fails
+2. Implement the minimum amount of code to make the test pass
+3. Refactor the code if needed
+
+Before introducing a new dependency, always confirm with the user by providing a list of options with pros and cons.
+
 ## Technical Stack
 
 ### Core Technologies
 
 - **Framework**: Tauri v2 (Rust backend, web frontend)
-- **Frontend**: React 19 + TypeScript 5.9
-- **Bundler**: Vite 7 with React plugin
+- **Frontend**: React 19 + TypeScript 5.8
 - **Runtime**: Bun (for development and dependency management)
 - **Styling**: Tailwind CSS v4 + DaisyUI components
-- **State Management**: React useState/useEffect hooks (no external state library)
 
 ### Development Tools
 
@@ -26,10 +31,8 @@ The application is built for macOS using Bun as the runtime and package manager.
 
 ### Naming Conventions
 
-- **Files**: camelCase for TypeScript files, PascalCase for React components
+- **Files**: Prefer kebab-case whenver possible
 - **Components**: PascalCase function components (exported as named exports)
-- **Types/Interfaces**: PascalCase with descriptive names
-- **Variables**: camelCase with descriptive names
 - **Constants**: camelCase (not SCREAMING_SNAKE_CASE)
 
 ### React Components
@@ -48,14 +51,13 @@ interface Props {
 
 ### Semantic Markup
 
-- Always use semantic HTML elements
-- Avoid `div` and `span` elements
-- Keep the markup simple and semantically correct
+- Create the simplest valid and semantic HTML possible
+- Avoid nested `div` and `span` elements
 
 ### API Calls
 
 - Use Tauri's `@tauri-apps/plugin-http` for HTTP requests
-- Handle errors with try/catch or `.catch()` Promise chains
+- Handle errors with try/catch or `.catch()` promise chains
 - Return specific typed responses
 - Include proper error messages with status codes
 
@@ -70,7 +72,6 @@ interface Props {
 - **Language**: All display text in the application must be in German
 - **Components**: Use DaisyUI if possible, otherwise Tailwind
 - **Styling**: Utility-first Tailwind classes, avoid custom CSS
-- **Interactions**: Hover states, transitions, focus management
 
 ### Error Handling
 
@@ -78,13 +79,6 @@ interface Props {
 - Include technical details in development/debugging modes
 - Use error boundaries for React error handling
 - Log errors to console for debugging
-
-### Dependencies Philosophy
-
-- Prefer native web APIs over external libraries when possible
-- Use well-maintained, popular libraries for complex functionality
-- Keep bundle size minimal - avoid heavy dependencies
-- Regular updates to stay current with ecosystem
 
 ## Development Workflow
 

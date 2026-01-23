@@ -1,7 +1,7 @@
 import { useState } from "react";
-import "./App.css";
+import "./app.css";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { PlanningGrid } from "./components/PlanningGrid";
+import { PlanningGrid } from "./app/page";
 
 function App() {
   const [weekOffset, setWeekOffset] = useState(0);
