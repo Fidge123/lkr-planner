@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "lkr-planner",
+  "productName": "Richter Labortechnik",
   "version": "0.1.0",
   "identifier": "de.richter-labor.planner",
   "build": {
@@ -13,8 +13,8 @@
     "windows": [
       {
         "title": "Richter Labortechnik",
-        "width": 800,
-        "height": 600
+        "width": 1536,
+        "height": 1024
       }
     ],
     "security": {
