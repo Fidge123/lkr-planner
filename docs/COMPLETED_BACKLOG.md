@@ -105,3 +105,26 @@ Acceptance Criteria:
 **Implementation:**
 - Updated `.github/workflows/test.yml` to install Rust (`dtolnay/rust-toolchain@stable`).
 - Added explicit Rust test step: `cargo test --manifest-path src-tauri/Cargo.toml`.
+
+### BL-026: Release GH Action with Timestamped Version on `main` ✅
+**Status:** Completed (2026-02-13)  
+Priority: P1  
+Effort: S
+
+Scope:
+- Update the release GitHub Action to generate a unique timestamped version for every `main` release run.
+- Append UTC timestamp to the base app version as prerelease segment (e.g. `0.1.0-main.20260213T153045Z`).
+- Apply the computed version consistently to all release artifacts/metadata used by Tauri updater.
+- Keep source-controlled base versions unchanged; stamping happens in CI only.
+
+Acceptance Criteria:
+- ✅ Two release runs from `main` always produce different version strings, even without code-level version bump.
+- ✅ Generated version is valid SemVer and sortable in chronological order.
+- ✅ GitHub release tag/name and updater metadata contain the stamped version.
+
+Tests (write first):
+- ✅ Added `scripts/stamp-release-version.spec.ts` for version format, validity, and uniqueness.
+
+**Implementation:**
+- Added `scripts/stamp-release-version.ts` to compute and validate stamped versions and patch `src-tauri/tauri.conf.json` during CI runtime only.
+- Updated `.github/workflows/release.yml` to run stamping step (`id: stamp_version`) and use `steps.stamp_version.outputs.stamped_version` for release tag and name.
