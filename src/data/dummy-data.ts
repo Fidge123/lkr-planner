@@ -2,8 +2,8 @@ import type {
   Assignment,
   AssignmentSource,
   AssignmentSyncStatus,
-  Employee,
-  Project,
+  DayliteContactRecord,
+  DayliteProjectRecord,
 } from "../domain/planning";
 
 export interface PlanningCellProject {
@@ -29,107 +29,180 @@ const projectStatusClasses: Record<string, string> = {
   unknown: "bg-base-300",
 };
 
-export const employees: Employee[] = [
+export const employees: DayliteContactRecord[] = [
   {
-    id: "emp-1",
-    dayliteReference: "/v1/contacts/1001",
-    name: "Anna Schmidt",
-    skills: ["Backend", "API"],
-    homeLocation: "Köln, Deutschland",
-    primaryIcalUrl: "https://calendar.example.com/anna/primary.ics",
-    absenceIcalUrl: "https://calendar.example.com/anna/absence.ics",
-    active: true,
+    self: "/v1/contacts/1001",
+    full_name: "Anna Schmidt",
+    keywords: ["Backend", "API"],
+    addresses: [
+      {
+        city: "Köln",
+        country: "Deutschland",
+      },
+    ],
+    urls: [
+      {
+        label: "Einsatz iCal",
+        url: "https://calendar.example.com/anna/primary.ics",
+      },
+      {
+        label: "Abwesenheit iCal",
+        url: "https://calendar.example.com/anna/absence.ics",
+      },
+    ],
   },
   {
-    id: "emp-2",
-    dayliteReference: "/v1/contacts/1002",
-    name: "Max Müller",
-    skills: ["Projektleitung", "Koordination"],
-    homeLocation: "Bonn, Deutschland",
-    primaryIcalUrl: "https://calendar.example.com/max/primary.ics",
-    absenceIcalUrl: "https://calendar.example.com/max/absence.ics",
-    active: true,
+    self: "/v1/contacts/1002",
+    full_name: "Max Müller",
+    keywords: ["Projektleitung", "Koordination"],
+    addresses: [
+      {
+        city: "Bonn",
+        country: "Deutschland",
+      },
+    ],
+    urls: [
+      {
+        label: "Einsatz iCal",
+        url: "https://calendar.example.com/max/primary.ics",
+      },
+      {
+        label: "Abwesenheit iCal",
+        url: "https://calendar.example.com/max/absence.ics",
+      },
+    ],
   },
   {
-    id: "emp-3",
-    dayliteReference: "/v1/contacts/1003",
-    name: "Lisa Weber",
-    skills: ["UI/UX", "Research"],
-    homeLocation: "Köln, Deutschland",
-    primaryIcalUrl: "https://calendar.example.com/lisa/primary.ics",
-    absenceIcalUrl: "https://calendar.example.com/lisa/absence.ics",
-    active: true,
+    self: "/v1/contacts/1003",
+    full_name: "Lisa Weber",
+    keywords: ["UI/UX", "Research"],
+    addresses: [
+      {
+        city: "Köln",
+        country: "Deutschland",
+      },
+    ],
+    urls: [
+      {
+        label: "Einsatz iCal",
+        url: "https://calendar.example.com/lisa/primary.ics",
+      },
+      {
+        label: "Abwesenheit iCal",
+        url: "https://calendar.example.com/lisa/absence.ics",
+      },
+    ],
   },
   {
-    id: "emp-4",
-    dayliteReference: "/v1/contacts/1004",
-    name: "Tom Fischer",
-    skills: ["Backend", "Datenbank"],
-    homeLocation: "Leverkusen, Deutschland",
-    primaryIcalUrl: "https://calendar.example.com/tom/primary.ics",
-    absenceIcalUrl: "https://calendar.example.com/tom/absence.ics",
-    active: true,
+    self: "/v1/contacts/1004",
+    full_name: "Tom Fischer",
+    nickname: "Tom",
+    keywords: ["Backend", "Datenbank"],
+    addresses: [
+      {
+        city: "Leverkusen",
+        country: "Deutschland",
+      },
+    ],
+    urls: [
+      {
+        label: "Einsatz iCal",
+        url: "https://calendar.example.com/tom/primary.ics",
+      },
+      {
+        label: "Abwesenheit iCal",
+        url: "https://calendar.example.com/tom/absence.ics",
+      },
+    ],
   },
   {
-    id: "emp-5",
-    dayliteReference: "/v1/contacts/1005",
-    name: "Sarah Koch",
-    skills: ["QA", "Testautomatisierung"],
-    homeLocation: "Düsseldorf, Deutschland",
-    primaryIcalUrl: "https://calendar.example.com/sarah/primary.ics",
-    absenceIcalUrl: "https://calendar.example.com/sarah/absence.ics",
-    active: true,
+    self: "/v1/contacts/1005",
+    full_name: "Sarah Koch",
+    keywords: ["QA", "Testautomatisierung"],
+    addresses: [
+      {
+        city: "Düsseldorf",
+        country: "Deutschland",
+      },
+    ],
+    urls: [
+      {
+        label: "Einsatz iCal",
+        url: "https://calendar.example.com/sarah/primary.ics",
+      },
+      {
+        label: "Abwesenheit iCal",
+        url: "https://calendar.example.com/sarah/absence.ics",
+      },
+    ],
   },
   {
-    id: "emp-6",
-    dayliteReference: "/v1/contacts/1006",
-    name: "Jan Becker",
-    skills: ["DevOps", "Security"],
-    homeLocation: "Köln, Deutschland",
-    primaryIcalUrl: "https://calendar.example.com/jan/primary.ics",
-    absenceIcalUrl: "https://calendar.example.com/jan/absence.ics",
-    active: true,
+    self: "/v1/contacts/1006",
+    full_name: "Jan Becker",
+    keywords: ["DevOps", "Security"],
+    addresses: [
+      {
+        city: "Köln",
+        country: "Deutschland",
+      },
+    ],
+    urls: [
+      {
+        label: "Einsatz iCal",
+        url: "https://calendar.example.com/jan/primary.ics",
+      },
+      {
+        label: "Abwesenheit iCal",
+        url: "https://calendar.example.com/jan/absence.ics",
+      },
+    ],
   },
   {
-    id: "emp-7",
-    dayliteReference: "/v1/contacts/1007",
-    name: "Maria Hofmann",
-    skills: ["Fullstack", "Performance"],
-    homeLocation: "Siegburg, Deutschland",
-    primaryIcalUrl: "https://calendar.example.com/maria/primary.ics",
-    absenceIcalUrl: "https://calendar.example.com/maria/absence.ics",
-    active: true,
+    self: "/v1/contacts/1007",
+    full_name: "Maria Hofmann",
+    keywords: ["Fullstack", "Performance"],
+    addresses: [
+      {
+        city: "Siegburg",
+        country: "Deutschland",
+      },
+    ],
+    urls: [
+      {
+        label: "Einsatz iCal",
+        url: "https://calendar.example.com/maria/primary.ics",
+      },
+      {
+        label: "Abwesenheit iCal",
+        url: "https://calendar.example.com/maria/absence.ics",
+      },
+    ],
   },
 ];
 
-export const projects: Project[] = [
+export const projects: DayliteProjectRecord[] = [
   {
-    id: "proj-1",
-    dayliteReference: "/v1/projects/3001",
+    self: "/v1/projects/3001",
     name: "Kundenportal",
     status: "in_progress",
   },
   {
-    id: "proj-2",
-    dayliteReference: "/v1/projects/3002",
+    self: "/v1/projects/3002",
     name: "Mobile App",
     status: "new",
   },
   {
-    id: "proj-3",
-    dayliteReference: "/v1/projects/3003",
+    self: "/v1/projects/3003",
     name: "Intern",
     status: "done",
   },
   {
-    id: "proj-4",
-    dayliteReference: "/v1/projects/3004",
+    self: "/v1/projects/3004",
     name: "Altsystem",
     status: "in_progress",
   },
   {
-    id: "proj-5",
-    dayliteReference: "/v1/projects/3005",
+    self: "/v1/projects/3005",
     name: "Infrastruktur",
     status: "new",
   },
@@ -138,122 +211,122 @@ export const projects: Project[] = [
 const assignmentTemplates: AssignmentTemplate[] = [
   {
     id: "asg-1",
-    projectId: "proj-1",
+    projectId: "/v1/projects/3001",
     days: ["2026-01-26", "2026-01-27", "2026-01-28"],
-    employeeIds: ["emp-1", "emp-4"],
-    source: "manual",
+    employeeIds: ["/v1/contacts/1001", "/v1/contacts/1004"],
+    source: "app",
     syncStatus: "synced",
   },
   {
     id: "asg-2",
-    projectId: "proj-2",
+    projectId: "/v1/projects/3002",
     days: ["2026-01-26", "2026-01-27"],
-    employeeIds: ["emp-3"],
-    source: "manual",
+    employeeIds: ["/v1/contacts/1003"],
+    source: "app",
     syncStatus: "synced",
   },
   {
     id: "asg-3",
-    projectId: "proj-3",
+    projectId: "/v1/projects/3003",
     days: ["2026-01-26"],
-    employeeIds: ["emp-2"],
-    source: "manual",
+    employeeIds: ["/v1/contacts/1002"],
+    source: "app",
     syncStatus: "pending",
   },
   {
     id: "asg-4",
-    projectId: "proj-4",
+    projectId: "/v1/projects/3004",
     days: ["2026-01-27", "2026-01-28", "2026-01-30"],
-    employeeIds: ["emp-4", "emp-6"],
-    source: "manual",
+    employeeIds: ["/v1/contacts/1004", "/v1/contacts/1006"],
+    source: "app",
     syncStatus: "synced",
   },
   {
     id: "asg-5",
-    projectId: "proj-1",
+    projectId: "/v1/projects/3001",
     days: ["2026-01-28", "2026-01-29", "2026-01-30"],
-    employeeIds: ["emp-5"],
-    source: "manual",
+    employeeIds: ["/v1/contacts/1005"],
+    source: "app",
     syncStatus: "pending",
   },
   {
     id: "asg-6",
-    projectId: "proj-2",
+    projectId: "/v1/projects/3002",
     days: ["2026-01-29"],
-    employeeIds: ["emp-1", "emp-7"],
-    source: "manual",
+    employeeIds: ["/v1/contacts/1001", "/v1/contacts/1007"],
+    source: "app",
     syncStatus: "pending",
   },
   {
     id: "asg-7",
-    projectId: "proj-5",
+    projectId: "/v1/projects/3005",
     days: ["2026-01-26", "2026-01-28", "2026-01-30"],
-    employeeIds: ["emp-6"],
-    source: "manual",
+    employeeIds: ["/v1/contacts/1006"],
+    source: "app",
     syncStatus: "synced",
   },
   {
     id: "asg-8",
-    projectId: "proj-2",
+    projectId: "/v1/projects/3002",
     days: ["2026-01-27", "2026-01-28"],
-    employeeIds: ["emp-3", "emp-2"],
-    source: "manual",
+    employeeIds: ["/v1/contacts/1003", "/v1/contacts/1002"],
+    source: "app",
     syncStatus: "synced",
   },
   {
     id: "asg-9",
-    projectId: "proj-1",
+    projectId: "/v1/projects/3001",
     days: ["2026-01-29", "2026-01-30"],
-    employeeIds: ["emp-7"],
-    source: "manual",
+    employeeIds: ["/v1/contacts/1007"],
+    source: "app",
     syncStatus: "pending",
   },
   {
     id: "asg-10",
-    projectId: "proj-3",
+    projectId: "/v1/projects/3003",
     days: ["2026-01-30"],
-    employeeIds: ["emp-2"],
-    source: "manual",
+    employeeIds: ["/v1/contacts/1002"],
+    source: "app",
     syncStatus: "synced",
   },
   {
     id: "asg-11",
-    projectId: "proj-1",
+    projectId: "/v1/projects/3001",
     days: ["2026-01-26", "2026-01-27"],
-    employeeIds: ["emp-7"],
-    source: "manual",
+    employeeIds: ["/v1/contacts/1007"],
+    source: "app",
     syncStatus: "synced",
   },
   {
     id: "asg-12",
-    projectId: "proj-5",
+    projectId: "/v1/projects/3005",
     days: ["2026-01-28", "2026-01-29"],
-    employeeIds: ["emp-6", "emp-4"],
-    source: "manual",
+    employeeIds: ["/v1/contacts/1006", "/v1/contacts/1004"],
+    source: "app",
     syncStatus: "synced",
   },
   {
     id: "asg-13",
-    projectId: "proj-2",
+    projectId: "/v1/projects/3002",
     days: ["2026-01-27"],
-    employeeIds: ["emp-2", "emp-3"],
-    source: "manual",
+    employeeIds: ["/v1/contacts/1002", "/v1/contacts/1003"],
+    source: "app",
     syncStatus: "synced",
   },
   {
     id: "asg-14",
-    projectId: "proj-1",
+    projectId: "/v1/projects/3001",
     days: ["2026-01-29", "2026-01-30"],
-    employeeIds: ["emp-1"],
-    source: "manual",
+    employeeIds: ["/v1/contacts/1001"],
+    source: "app",
     syncStatus: "pending",
   },
   {
     id: "asg-15",
-    projectId: "proj-4",
+    projectId: "/v1/projects/3004",
     days: ["2026-01-26", "2026-01-29"],
-    employeeIds: ["emp-5"],
-    source: "manual",
+    employeeIds: ["/v1/contacts/1005"],
+    source: "app",
     syncStatus: "synced",
   },
 ];
@@ -275,10 +348,12 @@ export const assignments: Assignment[] = assignmentTemplates.flatMap(
     ),
 );
 
-const projectsById = new Map(projects.map((project) => [project.id, project]));
+const projectsByReference = new Map(
+  projects.map((project) => [project.self, project]),
+);
 
 export function getWorkItemsForCell(
-  employeeId: string,
+  employeeReference: string,
   day: Date,
 ): PlanningCellProject[] {
   const isoDay = day.toISOString().slice(0, 10);
@@ -286,11 +361,11 @@ export function getWorkItemsForCell(
   return assignments
     .filter(
       (assignment) =>
-        assignment.employeeId === employeeId &&
+        assignment.employeeId === employeeReference &&
         isDayInAssignmentPeriod(isoDay, assignment),
     )
     .map((assignment) => {
-      const project = projectsById.get(assignment.projectId);
+      const project = projectsByReference.get(assignment.projectId);
       const status = project?.status ?? "unknown";
 
       return {

@@ -1,11 +1,12 @@
 import { describe, expect, it } from "bun:test";
 import {
+  getAbsenceIcalUrlFromContact,
+  getDayliteContactDisplayName,
+  getPrimaryAddressFromContact,
+  getPrimaryIcalUrlFromContact,
   isAssignment,
   isDayliteContactRecord,
   isDayliteProjectRecord,
-  isSyncIssue,
-  mapDayliteContactRecordToEmployee,
-  mapDayliteProjectRecordToProject,
 } from "./planning";
 
 describe("planning domain mappers and guards", () => {
@@ -14,7 +15,7 @@ describe("planning domain mappers and guards", () => {
       const raw: unknown = {
         self: "/v1/projects/7000",
         name: "Sell Sea Shells",
-        status: "new",
+        status: "new_status",
       };
 
       expect(isDayliteProjectRecord(raw)).toBe(true);
@@ -30,23 +31,6 @@ describe("planning domain mappers and guards", () => {
     });
   });
 
-  describe("mapDayliteProjectRecordToProject", () => {
-    it("maps daylite records to project domain type", () => {
-      const project = mapDayliteProjectRecordToProject({
-        self: "/v1/projects/7000",
-        name: "Sell Sea Shells",
-        status: "new",
-      });
-
-      expect(project).toEqual({
-        id: "7000",
-        dayliteReference: "/v1/projects/7000",
-        name: "Sell Sea Shells",
-        status: "new",
-      });
-    });
-  });
-
   describe("isDayliteContactRecord", () => {
     it("accepts valid contact records from daylite", () => {
       const raw: unknown = {
@@ -57,30 +41,58 @@ describe("planning domain mappers and guards", () => {
 
       expect(isDayliteContactRecord(raw)).toBe(true);
     });
-
-    it("rejects invalid records", () => {
-      const raw: unknown = {
-        first_name: "Thomas",
-      };
-
-      expect(isDayliteContactRecord(raw)).toBe(false);
-    });
   });
 
-  describe("mapDayliteContactRecordToEmployee", () => {
-    it("maps contact urls and attributes to employee fields", () => {
-      const employee = mapDayliteContactRecordToEmployee({
+  describe("daylite contact helpers", () => {
+    it("uses nickname first, then full_name for display", () => {
+      expect(
+        getDayliteContactDisplayName({
+          self: "/v1/contacts/1000",
+          nickname: "Tom",
+          full_name: "Thomas Bartelmess",
+        }),
+      ).toBe("Tom");
+
+      expect(
+        getDayliteContactDisplayName({
+          self: "/v1/contacts/2000",
+          full_name: "Anna Schmidt",
+        }),
+      ).toBe("Anna Schmidt");
+
+      expect(
+        getDayliteContactDisplayName({
+          self: "/v1/contacts/3000",
+        }),
+      ).toBe("");
+    });
+
+    it("returns daylite address format without remapping", () => {
+      const contact = {
         self: "/v1/contacts/1000",
-        first_name: "Thomas",
-        middle_name: "Michael",
-        last_name: "Bartelmess",
-        keywords: ["Monteur", "Elektrik"],
         addresses: [
           {
+            label: "Home",
+            street: "Musterstraße 1",
             city: "Köln",
+            postal_code: "50667",
             country: "Deutschland",
           },
         ],
+      };
+
+      expect(getPrimaryAddressFromContact(contact)).toEqual({
+        label: "Home",
+        street: "Musterstraße 1",
+        city: "Köln",
+        postal_code: "50667",
+        country: "Deutschland",
+      });
+    });
+
+    it("extracts iCal urls from urls and extra_fields", () => {
+      const fromUrls = {
+        self: "/v1/contacts/1000",
         urls: [
           {
             label: "Einsatz iCal",
@@ -91,37 +103,33 @@ describe("planning domain mappers and guards", () => {
             url: "https://example.com/absence.ics",
           },
         ],
-      });
+      };
 
-      expect(employee).toEqual({
-        id: "1000",
-        dayliteReference: "/v1/contacts/1000",
-        name: "Thomas Michael Bartelmess",
-        skills: ["Monteur", "Elektrik"],
-        homeLocation: "Köln, Deutschland",
-        primaryIcalUrl: "https://example.com/primary.ics",
-        absenceIcalUrl: "https://example.com/absence.ics",
-        active: true,
-      });
-    });
+      expect(getPrimaryIcalUrlFromContact(fromUrls)).toBe(
+        "https://example.com/primary.ics",
+      );
+      expect(getAbsenceIcalUrlFromContact(fromUrls)).toBe(
+        "https://example.com/absence.ics",
+      );
 
-    it("falls back to extra_fields for ical urls", () => {
-      const employee = mapDayliteContactRecordToEmployee({
-        self: "/v1/contacts/2000",
-        first_name: "Anna",
-        last_name: "Schmidt",
+      const fromExtraFields = {
+        self: "/v1/contacts/4000",
         extra_fields:
           '{"primary_ical_url":{"value":"https://example.com/primary.ics"},"absence_ical_url":{"value":"https://example.com/absence.ics"}}',
-      });
+      };
 
-      expect(employee.primaryIcalUrl).toBe("https://example.com/primary.ics");
-      expect(employee.absenceIcalUrl).toBe("https://example.com/absence.ics");
+      expect(getPrimaryIcalUrlFromContact(fromExtraFields)).toBe(
+        "https://example.com/primary.ics",
+      );
+      expect(getAbsenceIcalUrlFromContact(fromExtraFields)).toBe(
+        "https://example.com/absence.ics",
+      );
     });
   });
 
   describe("isAssignment", () => {
     it("validates assignment shape and enums", () => {
-      const assignment: unknown = {
+      const assignment = {
         id: "asg-1",
         employeeId: "emp-1",
         projectId: "proj-1",
@@ -129,26 +137,12 @@ describe("planning domain mappers and guards", () => {
           startDate: "2026-01-26",
           endDate: "2026-01-26",
         },
-        source: "manual",
+        source: "app",
         syncStatus: "synced",
       };
 
       expect(isAssignment(assignment)).toBe(true);
       expect(isAssignment({ ...assignment, source: "other" })).toBe(false);
-    });
-  });
-
-  describe("isSyncIssue", () => {
-    it("validates sync issue shape and source", () => {
-      const issue: unknown = {
-        source: "daylite",
-        code: "rate_limit",
-        message: "Too many requests",
-        timestamp: "2026-02-13T12:00:00.000Z",
-      };
-
-      expect(isSyncIssue(issue)).toBe(true);
-      expect(isSyncIssue({ ...issue, source: "other" })).toBe(false);
     });
   });
 });

@@ -1,39 +1,3 @@
-const assignmentSources = ["manual", "daylite", "planradar", "ical"] as const;
-const assignmentSyncStatuses = ["pending", "synced", "failed"] as const;
-const syncSources = ["daylite", "planradar", "ical", "manual"] as const;
-
-const primaryIcalLabels = ["einsatz", "zuweisung", "assignment", "primary"];
-const absenceIcalLabels = [
-  "abwesenheit",
-  "absence",
-  "vacation",
-  "urlaub",
-  "sick",
-  "krank",
-];
-
-export type AssignmentSource = (typeof assignmentSources)[number];
-export type AssignmentSyncStatus = (typeof assignmentSyncStatuses)[number];
-export type SyncSource = (typeof syncSources)[number];
-
-export interface Project {
-  id: string;
-  dayliteReference: string;
-  name: string;
-  status: string;
-}
-
-export interface Employee {
-  id: string;
-  dayliteReference: string;
-  name: string;
-  skills: string[];
-  homeLocation: string;
-  primaryIcalUrl: string;
-  absenceIcalUrl: string;
-  active: boolean;
-}
-
 export interface AssignmentPeriod {
   startDate: string;
   endDate: string;
@@ -44,25 +8,23 @@ export interface Assignment {
   employeeId: string;
   projectId: string;
   period: AssignmentPeriod;
-  source: AssignmentSource;
-  syncStatus: AssignmentSyncStatus;
-}
-
-export interface SyncIssue {
-  source: SyncSource;
-  code: string;
-  message: string;
-  timestamp: string;
 }
 
 export interface DayliteProjectRecord {
   self: string;
   name: string;
-  status?: string;
+  status:
+    | "new_status"
+    | "in_progress"
+    | "done"
+    | "abandoned"
+    | "cancelled"
+    | "deferred";
   category?: string;
   keywords?: string[];
   due?: string;
   started?: string;
+  completed?: string;
   create_date?: string;
   modify_date?: string;
 }
@@ -92,9 +54,8 @@ type DayliteExtraFields = Record<string, DayliteExtraFieldValue>;
 
 export interface DayliteContactRecord {
   self: string;
-  first_name?: string;
-  middle_name?: string;
-  last_name?: string;
+  full_name?: string;
+  nickname?: string;
   category?: string;
   keywords?: string[];
   urls?: DayliteUrl[];
@@ -127,20 +88,14 @@ export function isDayliteContactRecord(
     return false;
   }
 
-  if ("first_name" in value && value.first_name !== undefined) {
-    if (typeof value.first_name !== "string") {
+  if ("full_name" in value && value.full_name !== undefined) {
+    if (typeof value.full_name !== "string") {
       return false;
     }
   }
 
-  if ("middle_name" in value && value.middle_name !== undefined) {
-    if (typeof value.middle_name !== "string") {
-      return false;
-    }
-  }
-
-  if ("last_name" in value && value.last_name !== undefined) {
-    if (typeof value.last_name !== "string") {
+  if ("nickname" in value && value.nickname !== undefined) {
+    if (typeof value.nickname !== "string") {
       return false;
     }
   }
@@ -172,97 +127,41 @@ export function isAssignment(value: unknown): value is Assignment {
     return false;
   }
 
-  if (
-    typeof value.source !== "string" ||
-    !assignmentSources.includes(value.source as AssignmentSource)
-  ) {
-    return false;
-  }
-
-  if (
-    typeof value.syncStatus !== "string" ||
-    !assignmentSyncStatuses.includes(value.syncStatus as AssignmentSyncStatus)
-  ) {
-    return false;
-  }
-
   return true;
 }
 
-export function isSyncIssue(value: unknown): value is SyncIssue {
-  if (!isObject(value)) {
-    return false;
-  }
+export function getDayliteContactDisplayName(
+  record: DayliteContactRecord,
+): string {
+  return record?.nickname ?? record?.full_name ?? "";
+}
 
-  if (
-    typeof value.source !== "string" ||
-    !syncSources.includes(value.source as SyncSource)
-  ) {
-    return false;
-  }
+export function getPrimaryAddressFromContact(
+  record: DayliteContactRecord,
+): DayliteAddress | null {
+  return record.addresses?.[0] ?? null;
+}
 
+export function getPrimaryIcalUrlFromContact(
+  record: DayliteContactRecord,
+): string {
+  const extraFields = parseExtraFields(record.extra_fields);
   return (
-    typeof value.code === "string" &&
-    typeof value.message === "string" &&
-    typeof value.timestamp === "string"
+    findIcalUrlFromUrls(record.urls, "Termine") ??
+    findIcalUrlFromExtraFields(extraFields, "Termine") ??
+    ""
   );
 }
 
-export function mapDayliteProjectRecordToProject(
-  record: DayliteProjectRecord,
-): Project {
-  return {
-    id: extractDayliteObjectId(record.self),
-    dayliteReference: record.self,
-    name: record.name,
-    status: record.status ?? "unknown",
-  };
-}
-
-export function mapDayliteContactRecordToEmployee(
+export function getAbsenceIcalUrlFromContact(
   record: DayliteContactRecord,
-): Employee {
+): string {
   const extraFields = parseExtraFields(record.extra_fields);
-  const primaryIcalUrl =
-    findIcalUrlFromUrls(record.urls, primaryIcalLabels) ??
-    findIcalUrlFromExtraFields(extraFields, primaryIcalLabels) ??
-    "";
-  const absenceIcalUrl =
-    findIcalUrlFromUrls(record.urls, absenceIcalLabels) ??
-    findIcalUrlFromExtraFields(extraFields, absenceIcalLabels) ??
-    "";
-
-  return {
-    id: extractDayliteObjectId(record.self),
-    dayliteReference: record.self,
-    name: mapContactName(record),
-    skills: record.keywords ?? [],
-    homeLocation: mapHomeLocation(record.addresses),
-    primaryIcalUrl,
-    absenceIcalUrl,
-    active: true,
-  };
-}
-
-function mapContactName(record: DayliteContactRecord): string {
-  const nameParts = [record.first_name, record.middle_name, record.last_name]
-    .map((namePart) => (typeof namePart === "string" ? namePart.trim() : ""))
-    .filter((namePart) => namePart.length > 0);
-
-  return nameParts.length > 0 ? nameParts.join(" ") : record.self;
-}
-
-function mapHomeLocation(addresses: DayliteAddress[] | undefined): string {
-  const address = addresses?.[0];
-  if (!address) {
-    return "Unbekannt";
-  }
-
-  const locationParts = [address.city, address.state, address.country]
-    .map((part) => (typeof part === "string" ? part.trim() : ""))
-    .filter((part) => part.length > 0);
-
-  return locationParts.length > 0 ? locationParts.join(", ") : "Unbekannt";
+  return (
+    findIcalUrlFromUrls(record.urls, "Fehlzeiten") ??
+    findIcalUrlFromExtraFields(extraFields, "Fehlzeiten") ??
+    ""
+  );
 }
 
 function parseExtraFields(
@@ -309,7 +208,7 @@ function isDayliteExtraFields(value: unknown): value is DayliteExtraFields {
 
 function findIcalUrlFromUrls(
   urls: DayliteUrl[] | undefined,
-  labelMatchers: readonly string[],
+  matcher: string,
 ): string | undefined {
   if (!urls) {
     return undefined;
@@ -325,7 +224,7 @@ function findIcalUrlFromUrls(
     }
 
     const normalizedLabel = candidateUrl.label.toLowerCase();
-    return labelMatchers.some((matcher) => normalizedLabel.includes(matcher));
+    return normalizedLabel.includes(matcher);
   });
 
   return matchedUrl?.url;
@@ -333,7 +232,7 @@ function findIcalUrlFromUrls(
 
 function findIcalUrlFromExtraFields(
   extraFields: DayliteExtraFields,
-  labelMatchers: readonly string[],
+  matcher: string,
 ): string | undefined {
   const matches = Object.entries(extraFields).find(([fieldKey]) => {
     const normalizedKey = fieldKey.toLowerCase();
@@ -341,7 +240,7 @@ function findIcalUrlFromExtraFields(
       return false;
     }
 
-    return labelMatchers.some((matcher) => normalizedKey.includes(matcher));
+    return normalizedKey.includes(matcher);
   });
 
   if (!matches) {
@@ -350,11 +249,6 @@ function findIcalUrlFromExtraFields(
 
   const [, fieldValue] = matches;
   return fieldValue.value;
-}
-
-function extractDayliteObjectId(reference: string): string {
-  const matchedIdentifier = reference.match(/\/(\d+)$/);
-  return matchedIdentifier ? matchedIdentifier[1] : reference;
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
