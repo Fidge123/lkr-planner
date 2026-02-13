@@ -93,6 +93,7 @@ Unless otherwise instructed, always work on the highest priority backlog item fr
 Verify first, if the backlog item contains all information that you need to implement it.
 Check if the acceptance criteria are clear and testable.
 Follow Red-Green-Refactor TDD loop.
+Document new architecture decisions as ADRs in `docs/adr`.
 If you have questions or need clarification, ask the user.
 Once you are done, update the backlog item and move it to the `docs/COMPLETED_BACKLOG.md`.
 If there are follow-up tasks necessary, add them to the backlog.

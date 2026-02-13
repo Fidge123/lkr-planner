@@ -66,3 +66,25 @@ Tests (write first):
 - Implemented exemplary `HealthService` (TS) and `check_health` command (Rust).
 - Created `docs/ARCHITECTURE.md` with principles and data flow documentation.
 - Successfully executed unit tests in `src/services/health.spec.ts` and Rust tests in `health.rs`.
+
+### BL-023: Transition Architecture Documentation to ADRs ✅
+**Status:** Completed (2026-02-13)  
+Priority: P0  
+Effort: S
+
+Scope:
+- Create `docs/adr` directory.
+- Move current `ARCHITECTURE.md` content into initial Architecture Decision Records (ADRs).
+- Update `AGENTS.md` to ensure future architecture decisions are documented as ADRs.
+- Delete `ARCHITECTURE.md` after transition.
+
+Acceptance Criteria:
+- ✅ `docs/adr` contains initial ADRs.
+- ✅ `AGENTS.md` mentions ADR requirement.
+- ✅ `ARCHITECTURE.md` is removed.
+
+**Implementation:**
+- Added `docs/adr/0001-frontend-backend-separation.md`.
+- Added `docs/adr/0002-service-facade-and-integration-structure.md`.
+- Updated `AGENTS.md` with ADR documentation requirement (`docs/adr`).
+- Removed `docs/ARCHITECTURE.md`.

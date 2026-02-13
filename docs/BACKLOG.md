@@ -32,21 +32,6 @@ Focus is on small, testable increments (Red-Green-Refactor) and clear acceptance
 
 ## EPIC 1: Project Hygiene and Architecture Basis
 
-### BL-023: Transition Architecture Documentation to ADRs
-Prioritized: P0  
-Effort: S
-
-Scope:
-- Create `docs/adr` directory.
-- Move current `ARCHITECTURE.md` content into initial Architecture Decision Records (ADRs).
-- Update `AGENTS.md` to ensure future architecture decisions are documented as ADRs.
-- Delete `ARCHITECTURE.md` after transition.
-
-Acceptance Criteria:
-- `docs/adr` contains initial ADRs.
-- `AGENTS.md` mentions ADR requirement.
-- `ARCHITECTURE.md` is removed.
-
 ### BL-024: CI/CD: Include Rust Tests
 Prioritized: P0  
 Effort: S
@@ -450,6 +435,25 @@ Acceptance Criteria:
 
 Tests (write first):
 - Smoke test checklist as executable flow (manual + script where possible).
+
+### BL-026: Release GH Action with Timestamped Version on `main`
+Priority: P1  
+Effort: S
+
+Scope:
+- Update the release GitHub Action to generate a unique timestamped version for every `main` release run.
+- Append UTC timestamp to the base app version as prerelease segment (e.g. `0.1.0-main.20260213T153045Z`).
+- Apply the computed version consistently to all release artifacts/metadata used by Tauri updater.
+- Keep source-controlled base versions unchanged; stamping happens in CI only.
+
+Acceptance Criteria:
+- Two release runs from `main` always produce different version strings, even without code-level version bump.
+- Generated version is valid SemVer and sortable in chronological order.
+- GitHub release tag/name and updater metadata contain the stamped version.
+
+Tests (write first):
+- Add a workflow/script test for version format and uniqueness.
+- Validate generated version in CI logs and fail workflow on invalid format.
 
 ## Open Product Questions
 - Keine offenen Produktfragen aktuell.
