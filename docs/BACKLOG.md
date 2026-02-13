@@ -84,7 +84,7 @@ Effort: M
 Scope:
 - Add types for:
   - `Project` (Daylite reference, name, status)
-  - `Employee` (Skills, location, iCal URL, active flag)
+  - `Employee` (skills, home location, primary iCal URL, absence iCal URL, active flag)
   - `Assignment` (Employee, project, period, source, sync status)
   - `SyncIssue` (Source, code, message, timestamp)
 
@@ -106,6 +106,7 @@ Scope:
   - Employee-specific settings
   - Project proposal filters (pipelines, columns, categories, exclusion status)
   - Contact filter for active employees (Default keyword: `Monteur`)
+  - Routing settings for `openrouteservice.org` (API key, profile)
 - Optional local cache for recently loaded Daylite data (without source-of-truth role).
 
 Acceptance Criteria:
@@ -180,15 +181,20 @@ Scope:
 - Load contacts from Daylite and display as a possible employee source.
 - Enable assignment Contact <-> local employee.
 - Provide local configuration for contact filter (Default: keyword `Monteur`).
+- Maintain two iCal references in Daylite contact mapping:
+  - Primary assignment iCal URL
+  - Secondary absence iCal URL (vacation/sick leave)
 
 Acceptance Criteria:
 - User can take over/assign contact as employee.
 - Persisted assignment remains after restart.
 - Filter changes take effect without code change.
+- Both iCal URLs are readable/writable through Daylite contact data.
 
 Tests (write first):
 - Test for contact-to-employee mapping.
 - Test for persistence of assignment.
+- Tests for mapping both iCal URLs from/to Daylite contact fields.
 
 ## EPIC 4: Planradar Integration
 
@@ -219,6 +225,10 @@ Scope:
   - If no link exists: User can link an existing Planradar project or create a new project via cloning.
   - If linked Planradar project is archived/closed: automatically reactivate (unarchive/reopen).
 - Persist the linked Planradar project reference as a custom field in Daylite.
+- Use configurable Daylite field mapping for this link:
+  - Default field label: `Planradar-Projekt-ID`
+  - Stored field value: `planradarProjectId` returned by Planradar API
+  - Daylite field key/id is metadata to locate the field, not the stored project id itself
 - Ensure idempotency.
 
 Acceptance Criteria:
@@ -287,16 +297,20 @@ Priority: P0
 Effort: M
 
 Scope:
-- Save iCal URL per employee.
+- Save two iCal URLs per employee (from Daylite):
+  - Primary assignment iCal
+  - Secondary absence iCal (vacation/sick leave)
 - Basic validation + connection test (manually triggerable).
 
 Acceptance Criteria:
 - Invalid URLs are handled cleanly.
 - Connection test provides clear success/error message.
+- Absence iCal can be validated and tested independently from primary iCal.
 
 Tests (write first):
 - Parser/validation tests.
 - Error case tests for unreachable calendar sources.
+- Tests for separate validation/reporting of primary vs absence iCal.
 
 ## EPIC 6: Planning Logic and Calendar Sync
 
@@ -324,18 +338,33 @@ Scope:
   - Select project
   - Visual warning symbol for projects without Planradar link
   - Action "Link or create Planradar project (Clone)"
-  - Set period
-  - Show conflicts
+  - Set one or many workdays (non-contiguous days supported)
+  - Show warnings (advisory only, never blocking save)
+- Support multiple projects per employee/day and multiple employees per project.
 - Save changes persistently.
 
 Acceptance Criteria:
 - End-to-end flow for assignment CRUD exists.
-- Conflicts are made visible before saving.
+- Warnings are visible before saving, but do not block save.
 - Projects without Planradar link are clearly marked and directly editable in planning.
+- Warning behavior is implemented as:
+  - High priority, non-dismissable: no linked Planradar project
+  - Low priority, non-dismissable: any event in secondary absence iCal (vacation/sick leave)
+  - Low priority, dismissable: skill mismatch
+  - Low priority, dismissable: estimated driving time exceeds 2 hours
+- Driving-time warning origin rule:
+  - Default origin is employee home location (from Daylite contact)
+  - If there is an earlier assignment on the same day, use that project location as origin
+  - Only earlier same-day assignments may override home-location origin
+- Driving-time warning source:
+  - Use `openrouteservice.org` Directions API for travel-time estimation
 
 Tests (write first):
-- Service tests for overlap detection.
+- Service tests for warning evaluation and priority/dismissability rules.
 - UI tests for Create/Edit/Delete.
+- UI tests for warning rendering and dismiss action (dismissable only).
+- Service tests for driving-time origin precedence (home vs earlier same-day project).
+- Service tests with mocked `openrouteservice.org` responses (success, timeout, API error).
 
 ### BL-017: iCal Synchronization for Employee Assignments
 Priority: P0  
@@ -344,13 +373,19 @@ Effort: L
 Scope:
 - Mirror changes to assignments in employee iCal.
 - Idempotent synchronization (no duplicate appointments).
+- Weekly view remains day-based (no exact time input).
+- iCal events use a fixed daily dummy window `08:00-16:00` (local time).
+- If an employee has multiple projects on the same day, split this window evenly across those projects.
+- Use secondary absence iCal as warning input only; assignment events are not written to the absence calendar.
 
 Acceptance Criteria:
 - New/Update/Delete in planning creates correct iCal action.
 - Sync status per assignment viewable.
+- Slot splitting is deterministic and stable for repeated syncs.
 
 Tests (write first):
 - Sync Service tests including retry scenarios.
+- Tests for same-day slot splitting (1..n assignments/day).
 
 ### BL-018: Trigger Week-Based Planradar Actions from Planning
 Priority: P1  
@@ -358,14 +393,16 @@ Effort: M
 
 Scope:
 - Create/reactivate projects assigned for the current week in Planradar.
-- Trigger manually and optionally automatically on week change.
+- Trigger manually only in v1.
 
 Acceptance Criteria:
 - Action is traceably logged.
 - Failed entries are individually re-executable.
+- No automatic trigger runs in v1 (no week-change/background auto-sync).
 
 Tests (write first):
 - Tests for trigger logic (current week only).
+- Tests ensuring no automatic trigger path is active.
 
 ## EPIC 7: Stability, Observability, Release
 
@@ -383,17 +420,18 @@ Acceptance Criteria:
 Tests (write first):
 - Reducer/State tests for event collection and filter.
 
-### BL-020: Background Sync and Manual Synchronization
+### BL-020: Manual Synchronization Runner (v1)
 Priority: P1  
 Effort: M
 
 Scope:
 - Manual "Sync Now" button.
-- Optional interval sync with lock against parallel runs.
+- Sync run-lock to prevent parallel runs.
 
 Acceptance Criteria:
 - No competing sync runs.
 - Visible feedback on running sync.
+- No scheduled/background synchronization in v1.
 
 Tests (write first):
 - Tests for run-lock and re-execution after error.
@@ -414,11 +452,4 @@ Tests (write first):
 - Smoke test checklist as executable flow (manual + script where possible).
 
 ## Open Product Questions
-1. How should conflict logic be prioritized: hard block or warning?
-2. Which conflict types should be considered in v1:
-   - Double booking of an employee in the same period
-   - Absence according to iCal
-   - Skill mismatch
-   - Location/travel conflict
-3. Should Planradar sync in v1 run only manually or also automatically (e.g., on week change/background)?
-4. What is the name of the Daylite custom field for the Planradar link (technical key), and is it already present?
+- Keine offenen Produktfragen aktuell.
