@@ -30,7 +30,8 @@ Der Fokus liegt auf kleinen, testbaren Inkrementen (Red-Green-Refactor) und klar
 
 ## EPIC 1: Projekt-Hygiene und Architektur-Basis
 
-### BL-001: OpenAPI-Dateien vor Commit schützen
+### BL-001: OpenAPI-Dateien vor Commit schützen ✅
+**Status:** Abgeschlossen (2026-02-13)  
 Priorität: P0  
 Aufwand: S
 
@@ -38,11 +39,16 @@ Scope:
 - `.gitignore` so erweitern, dass lokale OpenAPI-Artefakte in `docs/` nicht versehentlich committed werden (z. B. `docs/*openapi*.json`).
 
 Abnahmekriterien:
-- `git status` zeigt OpenAPI-Dateien nicht mehr als neue Dateien.
-- `docs/BACKLOG.md` bleibt versioniert.
+- ✅ `git status` zeigt OpenAPI-Dateien nicht mehr als neue Dateien.
+- ✅ `docs/BACKLOG.md` bleibt versioniert.
 
 Tests (zuerst schreiben):
 - Kein Code-Test nötig; Verifikation über Git-Status-Check im Workflow.
+
+**Umsetzung:**
+- Pattern `docs/*openapi*.json` zu `.gitignore` hinzugefügt
+- Verifiziert: `daylite-openapi.json` und `planradar-openapi.json` werden ignoriert
+- Verifiziert: `docs/BACKLOG.md` bleibt versioniert
 
 ### BL-002: Test-Workflow vereinheitlichen
 Priorität: P0  
