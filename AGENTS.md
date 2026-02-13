@@ -68,7 +68,7 @@ interface Props {
 
 ### UI/UX Patterns
 
-- **Language**: All display text in the application must be in German
+- **Language**: All display text in the application must be German, Code and development documentation must be English
 - **Components**: Use DaisyUI if possible, otherwise Tailwind
 - **Styling**: Utility-first Tailwind classes, avoid custom CSS
 - **Icons**: Use Lucide icons

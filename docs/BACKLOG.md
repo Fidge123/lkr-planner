@@ -1,400 +1,408 @@
 # LKR Planner Backlog
 
-## Ziel
-Umsetzbarer, priorisierter Backlog für die gemeinsame Umsetzung mit einem Coding Agent.
-Der Fokus liegt auf kleinen, testbaren Inkrementen (Red-Green-Refactor) und klaren Abnahmekriterien.
+## Goal
+Actionable, prioritized backlog for collaborative implementation with a coding agent.
+Focus is on small, testable increments (Red-Green-Refactor) and clear acceptance criteria.
 
-## Leitplanken
-- TDD in jedem Task: zuerst failing Test, dann minimale Implementierung, dann Refactor.
-- UI-Texte immer auf Deutsch.
-- API-Calls über `@tauri-apps/plugin-http`.
-- Neue Dependencies nur nach expliziter Entscheidung (Optionen mit Pros/Cons vorbereiten).
-- OpenAPI-Dateien in `docs/` lokal nutzen, aber nicht committen.
+## Guidelines
+- TDD in every task: first failing test, then minimal implementation, then refactor.
+- UI texts always in German.
+- API calls via `@tauri-apps/plugin-http`.
+- New dependencies only after explicit decision (prepare options with Pros/Cons).
+- Use OpenAPI files in `docs/` locally, but do not commit them.
+- Daylite is the Source of Truth for projects and employees (local caches only as technical optimization).
+- No offline support for v1 (online-first).
 
-## Aktueller Stand (aus Codebasis)
-- Wochenansicht mit Dummy-Daten ist vorhanden (`src/app/*`, `src/data/dummy-data.ts`).
-- Datum-Helfer sind teilweise getestet (`src/app/util.spec.ts`).
-- Daylite- und Planradar-Integration ist noch nicht implementiert.
-- Employee-Management ist noch nicht implementiert.
+## Current Status (from codebase)
+- Weekly view with dummy data exists (`src/app/*`, `src/data/dummy-data.ts`).
+- Date helpers are partially tested (`src/app/util.spec.ts`).
+- Daylite and Planradar integration is not yet implemented.
+- Employee management is not yet implemented.
 
-## Priorisierte Epics
-1. Projekt-Hygiene und Architektur-Basis
-2. Domänenmodell und lokale Speicherung
-3. Daylite-Integration
-4. Planradar-Integration
-5. Mitarbeiterverwaltung
-6. Planungslogik und Kalender-Sync
-7. Stabilität, Observability, Release
+## Prioritized Epics
+1. Project Hygiene and Architecture Basis
+2. Domain Model and Local Storage
+3. Daylite Integration
+4. Planradar Integration
+5. Employee Management
+6. Planning Logic and Calendar Sync
+7. Stability, Observability, Release
 
-## Backlog-Items
+## Backlog Items
 
-## EPIC 1: Projekt-Hygiene und Architektur-Basis
+## EPIC 1: Project Hygiene and Architecture Basis
 
-### BL-001: OpenAPI-Dateien vor Commit schützen ✅
-**Status:** Abgeschlossen (2026-02-13)  
-Priorität: P0  
-Aufwand: S
-
-Scope:
-- `.gitignore` so erweitern, dass lokale OpenAPI-Artefakte in `docs/` nicht versehentlich committed werden (z. B. `docs/*openapi*.json`).
-
-Abnahmekriterien:
-- ✅ `git status` zeigt OpenAPI-Dateien nicht mehr als neue Dateien.
-- ✅ `docs/BACKLOG.md` bleibt versioniert.
-
-Tests (zuerst schreiben):
-- Kein Code-Test nötig; Verifikation über Git-Status-Check im Workflow.
-
-**Umsetzung:**
-- Pattern `docs/*openapi*.json` zu `.gitignore` hinzugefügt
-- Verifiziert: `daylite-openapi.json` und `planradar-openapi.json` werden ignoriert
-- Verifiziert: `docs/BACKLOG.md` bleibt versioniert
-
-### BL-002: Test-Workflow vereinheitlichen ✅
-**Status:** Abgeschlossen (2026-02-13)  
-Priorität: P0  
-Aufwand: S
+### BL-023: Transition Architecture Documentation to ADRs
+Prioritized: P0  
+Effort: S
 
 Scope:
-- `package.json` um klare Test-Skripte ergänzen (`test`, optional `test:watch`).
-- README um standardisierten lokalen Qualitäts-Flow ergänzen (`bun test`, `bun lint`, `bun format:check`).
+- Create `docs/adr` directory.
+- Move current `ARCHITECTURE.md` content into initial Architecture Decision Records (ADRs).
+- Update `AGENTS.md` to ensure future architecture decisions are documented as ADRs.
+- Delete `ARCHITECTURE.md` after transition.
 
-Abnahmekriterien:
-- ✅ `bun test` läuft als offizieller Standardbefehl.
-- ✅ Workflow ist für Agent und Entwickler identisch dokumentiert.
+Acceptance Criteria:
+- ✅ `docs/adr` contains initial ADRs.
+- ✅ `AGENTS.md` mentions ADR requirement.
+- ✅ `ARCHITECTURE.md` is removed.
 
-Tests (zuerst schreiben):
-- Mindestens ein vorhandener Testlauf muss im CI/Lokal mit `bun test` laufen.
-
-**Umsetzung:**
-- `test` und `test:watch` Skripte zu `package.json` hinzugefügt
-- README um Development-Sektion erweitert mit vollständigem lokalen Qualitäts-Workflow
-- Verifiziert: `bun test` und `bun run test` funktionieren identisch
-- Verifiziert: Alle Quality-Checks (`test`, `lint`, `format:check`) sind dokumentiert
-
-### BL-003: Integrationsarchitektur festziehen (Frontend <-> Tauri Commands)
-Priorität: P0  
-Aufwand: M
+### BL-024: CI/CD: Include Rust Tests
+Prioritized: P0  
+Effort: S
 
 Scope:
-- Klaren Schnitt definieren:
-  - React-UI konsumiert nur Service-Funktionen.
-  - Netzwerk und Secrets laufen in Tauri/Rust Commands.
-- Ordnerstruktur für Integrationen anlegen (z. B. `src/services`, `src-tauri/src/integrations`).
+- Add a step to the appropriate GitHub Action (e.g., `test.yml`) to run Rust tests using `cargo test`.
+- Ensure the workflow fails if Rust tests fail.
 
-Abnahmekriterien:
-- Mindestens ein exemplarischer Flow nutzt bereits den definierten Schnitt.
-- Dokumentierte Architektur-Notiz im Repo (`docs/`).
+Acceptance Criteria:
+- ✅ GitHub Action runs `cargo test`.
+- ✅ Build fails on failing Rust tests.
 
-Tests (zuerst schreiben):
-- Unit-Test für Service-Fassade im Frontend (Mock auf Command-Aufruf).
 
-## EPIC 2: Domänenmodell und lokale Speicherung
+## EPIC 2: Domain Model and Local Storage
 
-### BL-004: Domänen-Typen für Planung v1 definieren
-Priorität: P0  
-Aufwand: M
+### BL-004: Define Domain Types for Planning v1
+Priority: P0  
+Effort: M
 
 Scope:
-- Typen ergänzen für:
-  - `Project` (Daylite-Referenz, Name, Status)
-  - `Employee` (Skills, Standort, iCal-URL, Aktiv-Flag)
-  - `Assignment` (Mitarbeiter, Projekt, Zeitraum, Quelle, Sync-Status)
-  - `SyncIssue` (Quelle, Code, Nachricht, Zeitstempel)
+- Add types for:
+  - `Project` (Daylite reference, name, status)
+  - `Employee` (Skills, location, iCal URL, active flag)
+  - `Assignment` (Employee, project, period, source, sync status)
+  - `SyncIssue` (Source, code, message, timestamp)
 
-Abnahmekriterien:
-- Dummy-Daten auf neue Typen migriert.
-- Keine `any`-basierten Workarounds.
+Acceptance Criteria:
+- Dummy data migrated to new types.
+- No `any`-based workarounds.
 
-Tests (zuerst schreiben):
-- Type-/Unit-Tests für zentrale Mapper/Guards.
+Tests (write first):
+- Type/Unit tests for central mappers/guards.
 
-### BL-005: Lokalen Konfigurations-Store für Mitarbeiter aufbauen
-Priorität: P1  
-Aufwand: M
+### BL-005: Build Local Configuration and Cache Store
+Priority: P1  
+Effort: M
 
 Scope:
-- Persistenz für lokale App-Konfiguration (z. B. Tauri Store oder Datei-Backend) für:
-  - API-Endpoints
-  - Tokens/Referenzen
-  - Mitarbeiter-spezifische Einstellungen
+- Persistence for local app configuration (e.g., Tauri store or file backend) for:
+  - API endpoints
+  - Tokens/references
+  - Employee-specific settings
+  - Project proposal filters (pipelines, columns, categories, exclusion status)
+  - Contact filter for active employees (Default keyword: `Monteur`)
+- Optional local cache for recently loaded Daylite data (without source-of-truth role).
 
-Abnahmekriterien:
-- Neustart-sicheres Laden/Speichern.
-- Fehlerfälle geben deutsche User-Meldung und technische Debug-Details.
+Acceptance Criteria:
+- Restart-safe loading/saving.
+- Error cases provide German user message and technical debug details.
 
-Tests (zuerst schreiben):
-- Unit-Tests für Load/Save + Fehlerfall (defekte Datei, fehlende Felder).
+Tests (write first):
+- Unit tests for load/save + error case (corrupt file, missing fields).
 
-## EPIC 3: Daylite-Integration
+## EPIC 3: Daylite Integration
 
 ### BL-006: Daylite API Client (Basis)
-Priorität: P0  
-Aufwand: M
+Priority: P0  
+Effort: M
 
 Scope:
-- Minimalen Client für benötigte Endpunkte bauen:
-  - Projekte lesen/suchen
-  - Kontakte lesen/suchen (für Mitarbeiter-Mapping)
-- Einheitliches Fehlerobjekt inkl. HTTP-Status.
+- Build minimal client for required endpoints:
+  - Read/search projects
+  - Read/search contacts (for employee mapping)
+- Uniform error object including HTTP status.
 
-Abnahmekriterien:
-- Client liefert typisierte Responses.
-- Fehler werden zentral normalisiert.
+Acceptance Criteria:
+- Client returns typed responses.
+- Errors are centrally normalized.
 
-Tests (zuerst schreiben):
-- Unit-Tests mit gemockten HTTP-Responses (200/401/429/500).
+Tests (write first):
+- Unit tests with mocked HTTP responses (200/401/429/500).
 
-### BL-007: Daylite Projekt-Synchronisierung (Read)
-Priorität: P0  
-Aufwand: M
-
-Scope:
-- Daylite-Projekte als Source of Truth laden.
-- In internes `Project`-Modell mappen.
-
-Abnahmekriterien:
-- UI kann Projektliste aus Daylite laden (ohne Dummy-Projekte).
-- Zeitstempel „Zuletzt synchronisiert“ sichtbar.
-
-Tests (zuerst schreiben):
-- Mapper-Tests für Datums-/Status-Felder.
-- Service-Test für erfolgreichen Sync + API-Fehler.
-
-### BL-008: Daylite Kontakte für Mitarbeiter-Konfiguration nutzen
-Priorität: P1  
-Aufwand: M
+### BL-007: Daylite Project Synchronization (Read)
+Priority: P0  
+Effort: M
 
 Scope:
-- Kontakte aus Daylite laden und als mögliche Mitarbeiterquelle anzeigen.
-- Zuordnung Kontakt <-> lokaler Mitarbeiter ermöglichen.
+- Load Daylite projects as Source of Truth.
+- Map into internal `Project` model.
+- Implement proposal logic for calendar view (locally configurable):
+  - Pipeline rule: Pipeline `Aufträge` and column `Vorbereitung` or `Durchführung` (Defaults).
+  - Category rule: Category `Überfällig` or `Liefertermin bekannt`.
+  - Exclusion rule: Status `Done` is not proposed.
 
-Abnahmekriterien:
-- Benutzer kann Kontakt als Mitarbeiter übernehmen/zuordnen.
-- Persistierte Zuordnung bleibt nach Neustart erhalten.
+Acceptance Criteria:
+- UI can load project list from Daylite (without dummy projects) and correctly filter proposal set.
+- "Last synchronized" timestamp visible.
+- Default rules are locally adjustable.
 
-Tests (zuerst schreiben):
-- Test für Kontakt-zu-Mitarbeiter-Mapping.
-- Test für Persistenz der Zuordnung.
+Tests (write first):
+- Mapper tests for date/status fields.
+- Service test for successful sync + API error.
+- Rule tests for pipeline, category, and exclusion logic.
 
-## EPIC 4: Planradar-Integration
+### BL-022: Project Search Outside Proposal Set
+Priority: P0  
+Effort: M
+
+Scope:
+- Provide a search in the assignment dialog that also finds projects not in the proposal set.
+- Search via at least name + external reference (if available).
+
+Acceptance Criteria:
+- User can specifically find and assign a project even if it is not proposed.
+- Search results are clearly distinguishable from proposed projects.
+
+Tests (write first):
+- UI tests for search input, result list, selection.
+- Service tests for search API and error cases.
+
+### BL-008: Use Daylite Contacts for Employee Configuration
+Priority: P1  
+Effort: M
+
+Scope:
+- Load contacts from Daylite and display as a possible employee source.
+- Enable assignment Contact <-> local employee.
+- Provide local configuration for contact filter (Default: keyword `Monteur`).
+
+Acceptance Criteria:
+- User can take over/assign contact as employee.
+- Persisted assignment remains after restart.
+- Filter changes take effect without code change.
+
+Tests (write first):
+- Test for contact-to-employee mapping.
+- Test for persistence of assignment.
+
+## EPIC 4: Planradar Integration
 
 ### BL-009: Planradar API Client (Basis)
-Priorität: P0  
-Aufwand: M
+Priority: P0  
+Effort: M
 
 Scope:
-- Minimalclient für:
-  - Projekte suchen/listen
-  - Projekt anlegen (Template-basiert, falls nötig)
-  - Projektstatus prüfen (aktiv/reopen)
+- Minimal client for:
+  - Search/list projects
+  - Create project (template-based, if needed)
+  - Check project status (active/reopen)
 
-Abnahmekriterien:
-- Typisierte Responses und standardisierte Fehler.
-- Konfigurierbare Tenant/Account-Parameter.
+Acceptance Criteria:
+- Typed responses and standardized errors.
+- Configurable tenant/account parameters.
 
-Tests (zuerst schreiben):
-- Unit-Tests analog Daylite-Client inkl. Auth- und Rate-Limit-Fälle.
+Tests (write first):
+- Unit tests analogous to Daylite client including Auth and Rate-Limit cases.
 
-### BL-010: Daylite -> Planradar Projektabgleich
-Priorität: P0  
-Aufwand: L
-
-Scope:
-- Abgleichlogik:
-  - Existiert entsprechendes Planradar-Projekt?
-  - Falls nein: anlegen (Template-Regel)
-  - Falls vorhanden aber geschlossen: reopen/aktivieren
-- Idempotenz sicherstellen.
-
-Abnahmekriterien:
-- Mehrfacher Lauf erzeugt keine Duplikate.
-- Jede Aktion wird als Sync-Ereignis protokolliert.
-
-Tests (zuerst schreiben):
-- Service-Tests für Fälle: neu, bereits vorhanden, geschlossen, API-Fehler.
-
-### BL-011: Mapping-Regeln Daylite-Projekt -> Planradar-Template
-Priorität: P1  
-Aufwand: M
+### BL-010: Daylite -> Planradar Project Comparison
+Priority: P0  
+Effort: L
 
 Scope:
-- Konfigurierbare Regelmatrix (z. B. nach Projektkategorie/Typ).
-- Fallback-Regel für nicht gemappte Projekte.
+- Comparison logic:
+  - Does a corresponding Planradar project exist (via Daylite custom field link)?
+  - If no link exists: User can link an existing Planradar project or create a new project via cloning.
+  - If linked Planradar project is archived/closed: automatically reactivate (unarchive/reopen).
+- Persist the linked Planradar project reference as a custom field in Daylite.
+- Ensure idempotency.
 
-Abnahmekriterien:
-- Regelwerk ist in UI editierbar (mindestens Basisform).
-- Fehlendes Mapping erzeugt klaren SyncIssue statt Hard-Fail.
+Acceptance Criteria:
+- Multiple runs do not create duplicates.
+- Every action is logged as a sync event.
+- After successful linking, the link is stored in Daylite and reused in the next run.
 
-Tests (zuerst schreiben):
-- Regel-Engine Tests (Treffer, Fallback, ungültige Regel).
+Tests (write first):
+- Service tests for cases: new, already existing, closed, API error.
+- Test for persistence and reuse of the Daylite custom field link.
 
-## EPIC 5: Mitarbeiterverwaltung
-
-### BL-012: Mitarbeiterliste mit CRUD
-Priorität: P0  
-Aufwand: M
-
-Scope:
-- Screen für Mitarbeiterverwaltung:
-  - Anlegen
-  - Bearbeiten
-  - Deaktivieren
-  - Löschen (mit Schutz bei aktiven Zuweisungen)
-
-Abnahmekriterien:
-- Vollständiger CRUD-Flow ohne Reload.
-- Alle Texte und Fehlermeldungen auf Deutsch.
-
-Tests (zuerst schreiben):
-- Unit-Tests für Validierung (Pflichtfelder, iCal-URL-Format).
-- UI-Tests für Create/Edit/Delete-Flows.
-
-### BL-013: Skills, Verfügbarkeit und Standort modellieren
-Priorität: P1  
-Aufwand: M
+### BL-011: Mapping Rules Daylite Project -> Planradar Template
+Priority: P1  
+Effort: M
 
 Scope:
-- Mitarbeiter um strukturierte Skills, Wochenverfügbarkeit und Home-Location erweitern.
+- Configurable rule matrix (e.g., by project category/type).
+- Fallback rule for unmapped projects.
+- Make clone source selectable as template or existing Planradar project.
 
-Abnahmekriterien:
-- Daten werden im Formular gepflegt und persistiert.
-- Planungsansicht zeigt Verfügbarkeitskontext (z. B. Hinweis bei Abwesenheit).
+Acceptance Criteria:
+- Ruleset is editable in UI (at least basic form).
+- Missing mapping creates clear SyncIssue instead of hard-fail.
+- Clone flow works for both variants (template, project).
 
-Tests (zuerst schreiben):
-- Tests für Verfügbarkeitsberechnung je Wochentag.
+Tests (write first):
+- Rule Engine tests (hit, fallback, invalid rule).
 
-### BL-014: iCal-Quelle pro Mitarbeiter hinterlegen und validieren
-Priorität: P0  
-Aufwand: M
+## EPIC 5: Employee Management
 
-Scope:
-- iCal-URL pro Mitarbeiter speichern.
-- Grundvalidierung + Verbindungstest (manuell auslösbar).
-
-Abnahmekriterien:
-- Ungültige URLs werden sauber abgefangen.
-- Verbindungstest liefert klare Erfolg-/Fehlermeldung.
-
-Tests (zuerst schreiben):
-- Parser-/Validierungstests.
-- Fehlerfalltests für nicht erreichbare Kalenderquellen.
-
-## EPIC 6: Planungslogik und Kalender-Sync
-
-### BL-015: Planungstabelle von Dummy-Daten auf echte Datenquelle umstellen
-Priorität: P0  
-Aufwand: M
+### BL-012: Employee List with CRUD
+Priority: P0  
+Effort: M
 
 Scope:
-- `dummy-data` entkoppeln, stattdessen Service-Layer anbinden.
-- Lade-, Leer- und Fehlerzustände in der Wochenansicht ergänzen.
+- Screen for employee management:
+  - Create
+  - Edit
+  - Deactivate
+  - Delete (with protection for active assignments)
 
-Abnahmekriterien:
-- Wochenansicht funktioniert mit persistenten Daten.
-- Fehlerzustände sind für Nutzer verständlich (Deutsch).
+Acceptance Criteria:
+- Complete CRUD flow without reload.
+- All texts and error messages in German.
 
-Tests (zuerst schreiben):
-- UI-Tests für Loading/Empty/Error.
+Tests (write first):
+- Unit tests for validation (mandatory fields, iCal URL format).
+- UI tests for Create/Edit/Delete flows.
 
-### BL-016: Zuweisungen erstellen/bearbeiten/löschen in Wochenansicht
-Priorität: P0  
-Aufwand: L
-
-Scope:
-- Klick auf Zelle öffnet Editor für Assignment:
-  - Projekt auswählen
-  - Zeitraum setzen
-  - Konflikte anzeigen
-- Änderungen persistent speichern.
-
-Abnahmekriterien:
-- End-to-end Flow für Assignment-CRUD vorhanden.
-- Konflikte werden vor dem Speichern sichtbar gemacht.
-
-Tests (zuerst schreiben):
-- Service-Tests für Overlap-Erkennung.
-- UI-Tests für Create/Edit/Delete.
-
-### BL-017: iCal-Synchronisierung für Mitarbeiterzuweisungen
-Priorität: P0  
-Aufwand: L
+### BL-013: Model Skills, Availability and Location
+Priority: P1  
+Effort: M
 
 Scope:
-- Änderungen an Assignments in Mitarbeiter-iCal spiegeln.
-- Idempotente Synchronisierung (keine doppelten Termine).
+- Expand employee with structured skills, weekly availability and home location.
 
-Abnahmekriterien:
-- Neu/Update/Delete in Planung erzeugt korrekte iCal-Aktion.
-- Sync-Status pro Assignment einsehbar.
+Acceptance Criteria:
+- Data is maintained and persisted in the form.
+- Planning view shows availability context (e.g., hint for absence).
 
-Tests (zuerst schreiben):
-- Sync-Service Tests inkl. Retry-Szenarien.
+Tests (write first):
+- Tests for availability calculation per weekday.
 
-### BL-018: Wochenbasierte Planradar-Aktionen aus Planung auslösen
-Priorität: P1  
-Aufwand: M
-
-Scope:
-- Für aktuelle Woche zugewiesene Projekte in Planradar anlegen/reaktivieren.
-- Auslösung manuell und optional automatisch beim Wochenwechsel.
-
-Abnahmekriterien:
-- Aktion ist nachvollziehbar geloggt.
-- Fehlgeschlagene Einträge sind einzeln erneut ausführbar.
-
-Tests (zuerst schreiben):
-- Tests für Trigger-Logik (nur aktuelle Woche).
-
-## EPIC 7: Stabilität, Observability, Release
-
-### BL-019: Zentrales Fehler- und Sync-Issue-Panel
-Priorität: P1  
-Aufwand: M
+### BL-014: Store and Validate iCal Source per Employee
+Priority: P0  
+Effort: M
 
 Scope:
-- UI-Bereich mit letzten Fehlern, Warnungen und Sync-Issues.
-- Filterbar nach Quelle (Daylite, Planradar, iCal).
+- Save iCal URL per employee.
+- Basic validation + connection test (manually triggerable).
 
-Abnahmekriterien:
-- Nutzer kann Fehlerfälle nachvollziehen und gezielt neu anstoßen.
+Acceptance Criteria:
+- Invalid URLs are handled cleanly.
+- Connection test provides clear success/error message.
 
-Tests (zuerst schreiben):
-- Reducer/State-Tests für Event-Sammlung und Filter.
+Tests (write first):
+- Parser/validation tests.
+- Error case tests for unreachable calendar sources.
 
-### BL-020: Hintergrund-Sync und manuelle Synchronisierung
-Priorität: P1  
-Aufwand: M
+## EPIC 6: Planning Logic and Calendar Sync
 
-Scope:
-- Manueller „Jetzt synchronisieren“-Button.
-- Optionaler Intervall-Sync mit Sperre gegen parallele Läufe.
-
-Abnahmekriterien:
-- Keine konkurrierenden Sync-Läufe.
-- Sichtbares Feedback über laufenden Sync.
-
-Tests (zuerst schreiben):
-- Tests für Run-Lock und erneute Ausführung nach Fehler.
-
-### BL-021: Release-Härtung für macOS
-Priorität: P2  
-Aufwand: M
+### BL-015: Switch Planning Table from Dummy Data to Real Data Source
+Priority: P0  
+Effort: M
 
 Scope:
-- Build-Checkliste (`bun build:macos`, Smoke-Test, Signierung/Notarisierung als separater Prozess, falls benötigt).
-- Basis-Telemetrie/Logging für Supportfälle (lokal).
+- Decouple `dummy-data`, connect service layer instead.
+- Add load, empty, and error states in weekly view.
 
-Abnahmekriterien:
-- Reproduzierbarer Release-Ablauf dokumentiert.
-- Kritische Fehler sind aus Logs rekonstruierbar.
+Acceptance Criteria:
+- Weekly view works with persistent data.
+- Error states are understandable for users (German).
 
-Tests (zuerst schreiben):
-- Smoke-Test-Checklist als ausführbarer Ablauf (manuell + Skript wo möglich).
+Tests (write first):
+- UI tests for Loading/Empty/Error.
 
-## Empfohlene Umsetzungsreihenfolge (erste 3 Sprints)
+### BL-016: Create/Edit/Delete Assignments in Weekly View
+Priority: P0  
+Effort: L
 
-### Sprint 1 (Fundament)
+Scope:
+- Click on cell opens editor for assignment:
+  - Select project
+  - Visual warning symbol for projects without Planradar link
+  - Action "Link or create Planradar project (Clone)"
+  - Set period
+  - Show conflicts
+- Save changes persistently.
+
+Acceptance Criteria:
+- End-to-end flow for assignment CRUD exists.
+- Conflicts are made visible before saving.
+- Projects without Planradar link are clearly marked and directly editable in planning.
+
+Tests (write first):
+- Service tests for overlap detection.
+- UI tests for Create/Edit/Delete.
+
+### BL-017: iCal Synchronization for Employee Assignments
+Priority: P0  
+Effort: L
+
+Scope:
+- Mirror changes to assignments in employee iCal.
+- Idempotent synchronization (no duplicate appointments).
+
+Acceptance Criteria:
+- New/Update/Delete in planning creates correct iCal action.
+- Sync status per assignment viewable.
+
+Tests (write first):
+- Sync Service tests including retry scenarios.
+
+### BL-018: Trigger Week-Based Planradar Actions from Planning
+Priority: P1  
+Effort: M
+
+Scope:
+- Create/reactivate projects assigned for the current week in Planradar.
+- Trigger manually and optionally automatically on week change.
+
+Acceptance Criteria:
+- Action is traceably logged.
+- Failed entries are individually re-executable.
+
+Tests (write first):
+- Tests for trigger logic (current week only).
+
+## EPIC 7: Stability, Observability, Release
+
+### BL-019: Central Error and Sync Issue Panel
+Priority: P1  
+Effort: M
+
+Scope:
+- UI area with last errors, warnings and sync issues.
+- Filterable by source (Daylite, Planradar, iCal).
+
+Acceptance Criteria:
+- User can trace error cases and specifically re-trigger them.
+
+Tests (write first):
+- Reducer/State tests for event collection and filter.
+
+### BL-020: Background Sync and Manual Synchronization
+Priority: P1  
+Effort: M
+
+Scope:
+- Manual "Sync Now" button.
+- Optional interval sync with lock against parallel runs.
+
+Acceptance Criteria:
+- No competing sync runs.
+- Visible feedback on running sync.
+
+Tests (write first):
+- Tests for run-lock and re-execution after error.
+
+### BL-021: Release Hardening for macOS
+Priority: P2  
+Effort: M
+
+Scope:
+- Build checklist (`bun build:macos`, smoke test, signing/notarization as separate process if needed).
+- Basic telemetry/logging for support cases (local).
+
+Acceptance Criteria:
+- Reproducible release process documented.
+- Critical errors reconstructible from logs.
+
+Tests (write first):
+- Smoke test checklist as executable flow (manual + script where possible).
+
+## Recommended Implementation Order (first 3 Sprints)
+
+### Sprint 1 (Foundation & Architecture)
+- **BL-023: Transition Architecture Documentation to ADRs**
+- **BL-024: CI/CD: Include Rust Tests**
 - BL-001
 - BL-002
 - BL-003
@@ -402,14 +410,15 @@ Tests (zuerst schreiben):
 - BL-006
 - BL-009
 
-### Sprint 2 (erste echte End-to-End Synchronisierung)
+### Sprint 2 (First Real End-to-End Synchronization)
 - BL-007
+- BL-022
 - BL-010
 - BL-012
 - BL-015
 - BL-016
 
-### Sprint 3 (Mitarbeiter + Kalender + Stabilität)
+### Sprint 3 (Employees + Calendar + Stability)
 - BL-013
 - BL-014
 - BL-017
@@ -417,10 +426,12 @@ Tests (zuerst schreiben):
 - BL-019
 - BL-020
 
-## Offene Produktfragen
-1. Was ist die fachliche Regel, um ein Daylite-Projekt eindeutig einem Planradar-Projekt zuzuordnen (ID-Feld, externer Schlüssel, Namensregel)?
-2. Sollen Mitarbeiter primär aus Daylite-Kontakten kommen oder auch vollständig lokal gepflegt werden dürfen?
-3. Wie soll Konfliktlogik priorisiert werden: harte Blockade beim Überbuchen oder nur Warnung?
-4. Soll Planradar-Sync automatisch im Hintergrund laufen oder nur manuell ausgelöst werden (v1)?
-5. Gibt es Anforderungen an Offline-Fähigkeit oder reicht „online-first“ für v1?
-
+## Open Product Questions
+1. How should conflict logic be prioritized: hard block or warning?
+2. Which conflict types should be considered in v1:
+   - Double booking of an employee in the same period
+   - Absence according to iCal
+   - Skill mismatch
+   - Location/travel conflict
+3. Should Planradar sync in v1 run only manually or also automatically (e.g., on week change/background)?
+4. What is the name of the Daylite custom field for the Planradar link (technical key), and is it already present?
