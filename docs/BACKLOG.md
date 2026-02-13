@@ -13,24 +13,6 @@
 
 ## EPIC 2: Domain Model and Local Storage
 
-### BL-004: Define Domain Types for Planning v1
-Priority: P0  
-Effort: M
-
-Scope:
-- Add types for:
-  - `Project` (Daylite reference, name, status)
-  - `Employee` (skills, home location, primary iCal URL, absence iCal URL, active flag)
-  - `Assignment` (Employee, project, period, source, sync status)
-  - `SyncIssue` (Source, code, message, timestamp)
-
-Acceptance Criteria:
-- Dummy data migrated to new types.
-- No `any`-based workarounds.
-
-Tests (write first):
-- Type/Unit tests for central mappers/guards.
-
 ### BL-005: Build Local Configuration and Cache Store
 Priority: P1  
 Effort: M

@@ -1,5 +1,5 @@
 import { getWorkItemsForCell } from "../../data/dummy-data";
-import type { Employee } from "../../types";
+import type { Employee } from "../../domain/planning";
 import { isToday } from "../util";
 import { TimetableCell } from "./timetable-cell";
 

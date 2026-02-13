@@ -1,173 +1,311 @@
-import type { Employee, WorkItem } from "../types";
+import type {
+  Assignment,
+  AssignmentSource,
+  AssignmentSyncStatus,
+  Employee,
+  Project,
+} from "../domain/planning";
+
+export interface PlanningCellProject {
+  id: string;
+  title: string;
+  color: string;
+}
+
+interface AssignmentTemplate {
+  id: string;
+  projectId: string;
+  days: string[];
+  employeeIds: string[];
+  source: AssignmentSource;
+  syncStatus: AssignmentSyncStatus;
+}
+
+const projectStatusClasses: Record<string, string> = {
+  new: "bg-primary",
+  in_progress: "bg-secondary",
+  done: "bg-success",
+  archived: "bg-neutral",
+  unknown: "bg-base-300",
+};
 
 export const employees: Employee[] = [
   {
     id: "emp-1",
+    dayliteReference: "/v1/contacts/1001",
     name: "Anna Schmidt",
-    role: "Senior Entwicklerin",
+    skills: ["Backend", "API"],
+    homeLocation: "Köln, Deutschland",
+    primaryIcalUrl: "https://calendar.example.com/anna/primary.ics",
+    absenceIcalUrl: "https://calendar.example.com/anna/absence.ics",
+    active: true,
   },
   {
     id: "emp-2",
+    dayliteReference: "/v1/contacts/1002",
     name: "Max Müller",
-    role: "Projektleiter",
+    skills: ["Projektleitung", "Koordination"],
+    homeLocation: "Bonn, Deutschland",
+    primaryIcalUrl: "https://calendar.example.com/max/primary.ics",
+    absenceIcalUrl: "https://calendar.example.com/max/absence.ics",
+    active: true,
   },
   {
     id: "emp-3",
+    dayliteReference: "/v1/contacts/1003",
     name: "Lisa Weber",
-    role: "UI/UX Designerin",
+    skills: ["UI/UX", "Research"],
+    homeLocation: "Köln, Deutschland",
+    primaryIcalUrl: "https://calendar.example.com/lisa/primary.ics",
+    absenceIcalUrl: "https://calendar.example.com/lisa/absence.ics",
+    active: true,
   },
   {
     id: "emp-4",
+    dayliteReference: "/v1/contacts/1004",
     name: "Tom Fischer",
-    role: "Backend Entwickler",
+    skills: ["Backend", "Datenbank"],
+    homeLocation: "Leverkusen, Deutschland",
+    primaryIcalUrl: "https://calendar.example.com/tom/primary.ics",
+    absenceIcalUrl: "https://calendar.example.com/tom/absence.ics",
+    active: true,
   },
   {
     id: "emp-5",
+    dayliteReference: "/v1/contacts/1005",
     name: "Sarah Koch",
-    role: "QA Ingenieurin",
+    skills: ["QA", "Testautomatisierung"],
+    homeLocation: "Düsseldorf, Deutschland",
+    primaryIcalUrl: "https://calendar.example.com/sarah/primary.ics",
+    absenceIcalUrl: "https://calendar.example.com/sarah/absence.ics",
+    active: true,
   },
   {
     id: "emp-6",
+    dayliteReference: "/v1/contacts/1006",
     name: "Jan Becker",
-    role: "DevOps Ingenieur",
+    skills: ["DevOps", "Security"],
+    homeLocation: "Köln, Deutschland",
+    primaryIcalUrl: "https://calendar.example.com/jan/primary.ics",
+    absenceIcalUrl: "https://calendar.example.com/jan/absence.ics",
+    active: true,
   },
   {
     id: "emp-7",
+    dayliteReference: "/v1/contacts/1007",
     name: "Maria Hofmann",
-    role: "Fullstack Entwicklerin",
+    skills: ["Fullstack", "Performance"],
+    homeLocation: "Siegburg, Deutschland",
+    primaryIcalUrl: "https://calendar.example.com/maria/primary.ics",
+    absenceIcalUrl: "https://calendar.example.com/maria/absence.ics",
+    active: true,
   },
 ];
 
-export const workItems: WorkItem[] = [
+export const projects: Project[] = [
   {
-    id: "wi-1",
-    title: "API-Integration",
-    project: "Kundenportal",
-    color: "bg-primary",
+    id: "proj-1",
+    dayliteReference: "/v1/projects/3001",
+    name: "Kundenportal",
+    status: "in_progress",
+  },
+  {
+    id: "proj-2",
+    dayliteReference: "/v1/projects/3002",
+    name: "Mobile App",
+    status: "new",
+  },
+  {
+    id: "proj-3",
+    dayliteReference: "/v1/projects/3003",
+    name: "Intern",
+    status: "done",
+  },
+  {
+    id: "proj-4",
+    dayliteReference: "/v1/projects/3004",
+    name: "Altsystem",
+    status: "in_progress",
+  },
+  {
+    id: "proj-5",
+    dayliteReference: "/v1/projects/3005",
+    name: "Infrastruktur",
+    status: "new",
+  },
+];
+
+const assignmentTemplates: AssignmentTemplate[] = [
+  {
+    id: "asg-1",
+    projectId: "proj-1",
     days: ["2026-01-26", "2026-01-27", "2026-01-28"],
-    assignedEmployeeIds: ["emp-1", "emp-4"],
+    employeeIds: ["emp-1", "emp-4"],
+    source: "manual",
+    syncStatus: "synced",
   },
   {
-    id: "wi-2",
-    title: "UI-Entwürfe",
-    project: "Mobile App",
-    color: "bg-secondary",
+    id: "asg-2",
+    projectId: "proj-2",
     days: ["2026-01-26", "2026-01-27"],
-    assignedEmployeeIds: ["emp-3"],
+    employeeIds: ["emp-3"],
+    source: "manual",
+    syncStatus: "synced",
   },
   {
-    id: "wi-3",
-    title: "Sprint-Planung",
-    project: "Intern",
-    color: "bg-accent",
+    id: "asg-3",
+    projectId: "proj-3",
     days: ["2026-01-26"],
-    assignedEmployeeIds: ["emp-2"],
+    employeeIds: ["emp-2"],
+    source: "manual",
+    syncStatus: "pending",
   },
   {
-    id: "wi-4",
-    title: "Datenbank-Migration",
-    project: "Altsystem",
-    color: "bg-info",
+    id: "asg-4",
+    projectId: "proj-4",
     days: ["2026-01-27", "2026-01-28", "2026-01-30"],
-    assignedEmployeeIds: ["emp-4", "emp-6"],
+    employeeIds: ["emp-4", "emp-6"],
+    source: "manual",
+    syncStatus: "synced",
   },
   {
-    id: "wi-5",
-    title: "Test-Automatisierung",
-    project: "Kundenportal",
-    color: "bg-success",
+    id: "asg-5",
+    projectId: "proj-1",
     days: ["2026-01-28", "2026-01-29", "2026-01-30"],
-    assignedEmployeeIds: ["emp-5"],
+    employeeIds: ["emp-5"],
+    source: "manual",
+    syncStatus: "pending",
   },
   {
-    id: "wi-6",
-    title: "Code-Review",
-    project: "Mobile App",
-    color: "bg-warning",
+    id: "asg-6",
+    projectId: "proj-2",
     days: ["2026-01-29"],
-    assignedEmployeeIds: ["emp-1", "emp-7"],
+    employeeIds: ["emp-1", "emp-7"],
+    source: "manual",
+    syncStatus: "pending",
   },
   {
-    id: "wi-7",
-    title: "CI/CD-Pipeline",
-    project: "Infrastruktur",
-    color: "bg-error",
+    id: "asg-7",
+    projectId: "proj-5",
     days: ["2026-01-26", "2026-01-28", "2026-01-30"],
-    assignedEmployeeIds: ["emp-6"],
+    employeeIds: ["emp-6"],
+    source: "manual",
+    syncStatus: "synced",
   },
   {
-    id: "wi-8",
-    title: "Nutzerforschung",
-    project: "Mobile App",
-    color: "bg-primary/70",
+    id: "asg-8",
+    projectId: "proj-2",
     days: ["2026-01-27", "2026-01-28"],
-    assignedEmployeeIds: ["emp-3", "emp-2"],
+    employeeIds: ["emp-3", "emp-2"],
+    source: "manual",
+    syncStatus: "synced",
   },
   {
-    id: "wi-9",
-    title: "Performance-Audit",
-    project: "Kundenportal",
-    color: "bg-secondary/70",
+    id: "asg-9",
+    projectId: "proj-1",
     days: ["2026-01-29", "2026-01-30"],
-    assignedEmployeeIds: ["emp-7"],
+    employeeIds: ["emp-7"],
+    source: "manual",
+    syncStatus: "pending",
   },
   {
-    id: "wi-10",
-    title: "Dokumentation",
-    project: "Intern",
-    color: "bg-accent/70",
+    id: "asg-10",
+    projectId: "proj-3",
     days: ["2026-01-30"],
-    assignedEmployeeIds: ["emp-2"],
+    employeeIds: ["emp-2"],
+    source: "manual",
+    syncStatus: "synced",
   },
   {
-    id: "wi-11",
-    title: "Fehlerbehebung",
-    project: "Kundenportal",
-    color: "bg-info/70",
+    id: "asg-11",
+    projectId: "proj-1",
     days: ["2026-01-26", "2026-01-27"],
-    assignedEmployeeIds: ["emp-7"],
+    employeeIds: ["emp-7"],
+    source: "manual",
+    syncStatus: "synced",
   },
   {
-    id: "wi-12",
-    title: "Sicherheitsüberprüfung",
-    project: "Infrastruktur",
-    color: "bg-success/70",
+    id: "asg-12",
+    projectId: "proj-5",
     days: ["2026-01-28", "2026-01-29"],
-    assignedEmployeeIds: ["emp-6", "emp-4"],
+    employeeIds: ["emp-6", "emp-4"],
+    source: "manual",
+    syncStatus: "synced",
   },
   {
-    id: "wi-13",
-    title: "Stakeholder-Meeting",
-    project: "Mobile App",
-    color: "bg-warning/70",
+    id: "asg-13",
+    projectId: "proj-2",
     days: ["2026-01-27"],
-    assignedEmployeeIds: ["emp-2", "emp-3"],
+    employeeIds: ["emp-2", "emp-3"],
+    source: "manual",
+    syncStatus: "synced",
   },
   {
-    id: "wi-14",
-    title: "Feature-Entwicklung",
-    project: "Kundenportal",
-    color: "bg-error/70",
+    id: "asg-14",
+    projectId: "proj-1",
     days: ["2026-01-29", "2026-01-30"],
-    assignedEmployeeIds: ["emp-1"],
+    employeeIds: ["emp-1"],
+    source: "manual",
+    syncStatus: "pending",
   },
   {
-    id: "wi-15",
-    title: "Integrationstests",
-    project: "Altsystem",
-    color: "bg-neutral",
+    id: "asg-15",
+    projectId: "proj-4",
     days: ["2026-01-26", "2026-01-29"],
-    assignedEmployeeIds: ["emp-5"],
+    employeeIds: ["emp-5"],
+    source: "manual",
+    syncStatus: "synced",
   },
 ];
 
-// Helper function to get work items for a specific employee and day
-export function getWorkItemsForCell(employeeId: string, day: Date): WorkItem[] {
-  return workItems.filter(
-    (wi) =>
-      wi.assignedEmployeeIds.includes(employeeId) &&
-      wi.days
-        .map((d) => d.slice(0, 10))
-        .includes(day.toISOString().slice(0, 10)),
+export const assignments: Assignment[] = assignmentTemplates.flatMap(
+  (template) =>
+    template.employeeIds.flatMap((employeeId) =>
+      template.days.map((day) => ({
+        id: `${template.id}-${employeeId}-${day}`,
+        employeeId,
+        projectId: template.projectId,
+        period: {
+          startDate: day,
+          endDate: day,
+        },
+        source: template.source,
+        syncStatus: template.syncStatus,
+      })),
+    ),
+);
+
+const projectsById = new Map(projects.map((project) => [project.id, project]));
+
+export function getWorkItemsForCell(
+  employeeId: string,
+  day: Date,
+): PlanningCellProject[] {
+  const isoDay = day.toISOString().slice(0, 10);
+
+  return assignments
+    .filter(
+      (assignment) =>
+        assignment.employeeId === employeeId &&
+        isDayInAssignmentPeriod(isoDay, assignment),
+    )
+    .map((assignment) => {
+      const project = projectsById.get(assignment.projectId);
+      const status = project?.status ?? "unknown";
+
+      return {
+        id: assignment.id,
+        title: project?.name ?? assignment.projectId,
+        color: projectStatusClasses[status] ?? projectStatusClasses.unknown,
+      };
+    });
+}
+
+function isDayInAssignmentPeriod(
+  isoDay: string,
+  assignment: Assignment,
+): boolean {
+  return (
+    isoDay >= assignment.period.startDate && isoDay <= assignment.period.endDate
   );
 }

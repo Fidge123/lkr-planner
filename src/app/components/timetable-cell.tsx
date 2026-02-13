@@ -1,4 +1,4 @@
-import type { WorkItem } from "../../types";
+import type { PlanningCellProject } from "../../data/dummy-data";
 
 export function TimetableCell({ highlight = false, projects }: Props) {
   return (
@@ -30,5 +30,5 @@ export function TimetableCell({ highlight = false, projects }: Props) {
 
 interface Props {
   highlight: boolean;
-  projects: WorkItem[];
+  projects: PlanningCellProject[];
 }

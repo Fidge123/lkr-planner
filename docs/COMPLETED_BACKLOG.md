@@ -153,3 +153,31 @@ Tests (write first):
 - Annotated `check_health` and health types in `src-tauri/src/integrations/health.rs` for Specta type generation.
 - Replaced manual `tauri::generate_handler!` wiring with `tauri_specta::Builder` in `src-tauri/src/lib.rs`, including TS export to `src/generated/tauri.ts`.
 - Updated `src/services/health.ts` to use generated binding commands (`commands.checkHealth`) and generated type aliases instead of direct `invoke`.
+
+## EPIC 2: Domain Model and Local Storage
+
+### BL-004: Define Domain Types for Planning v1 ✅
+**Status:** Completed (2026-02-13)  
+Priority: P0  
+Effort: M
+
+Scope:
+- Add types for:
+  - `Project` (Daylite reference, name, status)
+  - `Employee` (skills, home location, primary iCal URL, absence iCal URL, active flag)
+  - `Assignment` (Employee, project, period, source, sync status)
+  - `SyncIssue` (Source, code, message, timestamp)
+
+Acceptance Criteria:
+- ✅ Dummy data migrated to new types.
+- ✅ No `any`-based workarounds.
+
+Tests (write first):
+- ✅ Added `src/domain/planning.spec.ts` with unit tests for central guards/mappers.
+
+**Implementation:**
+- Added new planning domain module at `src/domain/planning.ts` with strict domain types and type guards.
+- Added Daylite-to-domain mappers for project/contact records aligned with local OpenAPI shapes.
+- Migrated dummy planning data to `Employee`, `Project`, and `Assignment` domain types in `src/data/dummy-data.ts`.
+- Updated timetable components to consume the migrated typed data model.
+- Removed obsolete legacy `src/types.ts`.
