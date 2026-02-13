@@ -86,3 +86,13 @@ interface Props {
 2. To bundle the macOS app use `bun build:macos`
 3. `bun lint` and `bun format` for code quality
 4. Test with `bun test` before committing
+
+## Working with the backlog
+
+Unless otherwise instructed, always work on the highest priority backlog item from `docs/BACKLOG.md`.
+Verify first, if the backlog item contains all information that you need to implement it.
+Check if the acceptance criteria are clear and testable.
+Follow Red-Green-Refactor TDD loop.
+If you have questions or need clarification, ask the user.
+Once you are done, update the backlog item and move it to the `docs/COMPLETED_BACKLOG.md`.
+If there are follow-up tasks necessary, add them to the backlog.
