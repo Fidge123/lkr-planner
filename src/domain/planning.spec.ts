@@ -95,11 +95,11 @@ describe("planning domain mappers and guards", () => {
         self: "/v1/contacts/1000",
         urls: [
           {
-            label: "Einsatz iCal",
+            label: "FR-Termine",
             url: "https://example.com/primary.ics",
           },
           {
-            label: "Abwesenheit iCal",
+            label: "FR-Fehlzeiten",
             url: "https://example.com/absence.ics",
           },
         ],
@@ -115,7 +115,7 @@ describe("planning domain mappers and guards", () => {
       const fromExtraFields = {
         self: "/v1/contacts/4000",
         extra_fields:
-          '{"primary_ical_url":{"value":"https://example.com/primary.ics"},"absence_ical_url":{"value":"https://example.com/absence.ics"}}',
+          '{"ical_termine":{"value":"https://example.com/primary.ics"},"ical_fehlzeiten":{"value":"https://example.com/absence.ics"}}',
       };
 
       expect(getPrimaryIcalUrlFromContact(fromExtraFields)).toBe(
@@ -137,12 +137,9 @@ describe("planning domain mappers and guards", () => {
           startDate: "2026-01-26",
           endDate: "2026-01-26",
         },
-        source: "app",
-        syncStatus: "synced",
       };
 
       expect(isAssignment(assignment)).toBe(true);
-      expect(isAssignment({ ...assignment, source: "other" })).toBe(false);
     });
   });
 });

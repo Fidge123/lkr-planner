@@ -224,7 +224,7 @@ function findIcalUrlFromUrls(
     }
 
     const normalizedLabel = candidateUrl.label.toLowerCase();
-    return normalizedLabel.includes(matcher);
+    return normalizedLabel.includes(matcher.toLowerCase());
   });
 
   return matchedUrl?.url;
@@ -240,7 +240,7 @@ function findIcalUrlFromExtraFields(
       return false;
     }
 
-    return normalizedKey.includes(matcher);
+    return normalizedKey.includes(matcher.toLowerCase());
   });
 
   if (!matches) {
