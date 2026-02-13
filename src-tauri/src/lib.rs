@@ -1,7 +1,20 @@
 use tauri_plugin_updater::UpdaterExt;
 
+mod integrations;
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let mut specta_builder = tauri_specta::Builder::<tauri::Wry>::new().commands(
+        tauri_specta::collect_commands![integrations::health::check_health],
+    );
+
+    specta_builder
+        .export(
+            specta_typescript::Typescript::default(),
+            "../src/generated/tauri.ts",
+        )
+        .expect("failed to export tauri specta bindings");
+
     tauri::Builder::default()
         .setup(|app| {
             let handle = app.handle().clone();
@@ -13,6 +26,7 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_opener::init())
+        .invoke_handler(specta_builder.invoke_handler())
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

@@ -5,7 +5,7 @@
 This is a **Tauri + React + TypeScript** desktop application which provides a planning view and integrates with [Daylite](https://developer.daylite.app/reference/getting-started) and [Planradar](https://help.planradar.com/hc/en-gb/articles/15480453097373-Open-APIs).
 The application is built for macOS using Bun as the runtime and package manager.
 
-When working on this application, always follow the TDD loop:
+When working on this application, always follow the red-green-refactor TDD loop:
 1. Write a test which fails
 2. Implement the minimum amount of code to make the test pass
 3. Refactor the code if needed
@@ -68,7 +68,7 @@ interface Props {
 
 ### UI/UX Patterns
 
-- **Language**: All display text in the application must be in German
+- **Language**: All display text in the application must be German, Code and development documentation must be English
 - **Components**: Use DaisyUI if possible, otherwise Tailwind
 - **Styling**: Utility-first Tailwind classes, avoid custom CSS
 - **Icons**: Use Lucide icons
@@ -86,3 +86,14 @@ interface Props {
 2. To bundle the macOS app use `bun build:macos`
 3. `bun lint` and `bun format` for code quality
 4. Test with `bun test` before committing
+
+## Working with the backlog
+
+Unless otherwise instructed, always work on the highest priority backlog item from `docs/BACKLOG.md`.
+Verify first, if the backlog item contains all information that you need to implement it.
+Check if the acceptance criteria are clear and testable.
+Follow Red-Green-Refactor TDD loop.
+Document new architecture decisions as ADRs in `docs/adr`.
+If you have questions or need clarification, ask the user.
+Once you are done, update the backlog item and move it to the `docs/COMPLETED_BACKLOG.md`.
+If there are follow-up tasks necessary, add them to the backlog.
