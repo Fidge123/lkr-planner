@@ -25,7 +25,12 @@
     "active": true,
     "createUpdaterArtifacts": true,
     "targets": "all",
-    "icon": ["icons/icon.png", "icons/icon.svg"],
+    "icon": [
+      "icons/icon.png",
+      "icons/icon.svg",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
     "macOS": {
       "dmg": {
         "appPosition": {

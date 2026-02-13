@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "build:macos": "bun tauri build --bundles app",
     "preview": "vite preview",
     "tauri": "tauri",
     "lint": "biome check .",

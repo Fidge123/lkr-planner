@@ -12,7 +12,7 @@ export function PlanningGrid({ weekOffset }: Props) {
         <thead className="text-base-content">
           <tr className="divide-x divide-slate-300 bg-base-200">
             <th className="w-36 p-4 font-bold">Mitarbeiter</th>
-            {weekDays.map((day, i) => (
+            {weekDays.map((day) => (
               <TimetableHeader key={day.getTime()} day={day} />
             ))}
           </tr>
