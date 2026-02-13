@@ -30,8 +30,6 @@ Focus is on small, testable increments (Red-Green-Refactor) and clear acceptance
 
 ## Backlog Items
 
-## EPIC 1: Project Hygiene and Architecture Basis
-
 ## EPIC 2: Domain Model and Local Storage
 
 ### BL-004: Define Domain Types for Planning v1
