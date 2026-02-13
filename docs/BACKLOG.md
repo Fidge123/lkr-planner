@@ -11,29 +11,6 @@
 
 ## Backlog Items
 
-## EPIC 2: Domain Model and Local Storage
-
-### BL-005: Build Local Configuration and Cache Store
-Priority: P1  
-Effort: M
-
-Scope:
-- Persistence for local app configuration (e.g., Tauri store or file backend) for:
-  - API endpoints
-  - Tokens/references
-  - Employee-specific settings
-  - Project proposal filters (pipelines, columns, categories, exclusion status)
-  - Contact filter for active employees (Default keyword: `Monteur`)
-  - Routing settings for `openrouteservice.org` (API key, profile)
-- Optional local cache for recently loaded Daylite data (without source-of-truth role).
-
-Acceptance Criteria:
-- Restart-safe loading/saving.
-- Error cases provide German user message and technical debug details.
-
-Tests (write first):
-- Unit tests for load/save + error case (corrupt file, missing fields).
-
 ## EPIC 3: Daylite Integration
 
 ### BL-006: Daylite API Client (Basis)
