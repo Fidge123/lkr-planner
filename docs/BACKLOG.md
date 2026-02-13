@@ -1,9 +1,5 @@
 # LKR Planner Backlog
 
-## Goal
-Actionable, prioritized backlog for collaborative implementation with a coding agent.
-Focus is on small, testable increments (Red-Green-Refactor) and clear acceptance criteria.
-
 ## Guidelines
 - TDD in every task: first failing test, then minimal implementation, then refactor.
 - UI texts always in German.
@@ -12,21 +8,6 @@ Focus is on small, testable increments (Red-Green-Refactor) and clear acceptance
 - Use OpenAPI files in `docs/` locally, but do not commit them.
 - Daylite is the Source of Truth for projects and employees (local caches only as technical optimization).
 - No offline support for v1 (online-first).
-
-## Current Status (from codebase)
-- Weekly view with dummy data exists (`src/app/*`, `src/data/dummy-data.ts`).
-- Date helpers are partially tested (`src/app/util.spec.ts`).
-- Daylite and Planradar integration is not yet implemented.
-- Employee management is not yet implemented.
-
-## Prioritized Epics
-1. Project Hygiene and Architecture Basis
-2. Domain Model and Local Storage
-3. Daylite Integration
-4. Planradar Integration
-5. Employee Management
-6. Planning Logic and Calendar Sync
-7. Stability, Observability, Release
 
 ## Backlog Items
 
