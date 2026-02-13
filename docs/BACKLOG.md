@@ -43,9 +43,9 @@ Scope:
 - Delete `ARCHITECTURE.md` after transition.
 
 Acceptance Criteria:
-- ✅ `docs/adr` contains initial ADRs.
-- ✅ `AGENTS.md` mentions ADR requirement.
-- ✅ `ARCHITECTURE.md` is removed.
+- `docs/adr` contains initial ADRs.
+- `AGENTS.md` mentions ADR requirement.
+- `ARCHITECTURE.md` is removed.
 
 ### BL-024: CI/CD: Include Rust Tests
 Prioritized: P0  
@@ -56,8 +56,23 @@ Scope:
 - Ensure the workflow fails if Rust tests fail.
 
 Acceptance Criteria:
-- ✅ GitHub Action runs `cargo test`.
-- ✅ Build fails on failing Rust tests.
+- GitHub Action runs `cargo test`.
+- Build fails on failing Rust tests.
+
+### BL-025: Introduce tauri-specta for typesafe commands
+Prioritized: P0  
+Effort: S
+
+Scope:
+- Add `specta` and `tauri-specta` dependencies to the Rust backend.
+- Set up generator for TypeScript types in a shared location (e.g., `src-tauri/src/bindings.ts`).
+- Migrate existing `check_health` command to use Specta.
+- Update `HealthService` to use the generated bindings instead of manual `invoke`.
+
+Acceptance Criteria:
+- TypeScript bindings are automatically generated.
+- `HealthService` uses generated types.
+- No manual `invoke` calls for commands registered with Specta.
 
 
 ## EPIC 2: Domain Model and Local Storage
@@ -397,34 +412,6 @@ Acceptance Criteria:
 
 Tests (write first):
 - Smoke test checklist as executable flow (manual + script where possible).
-
-## Recommended Implementation Order (first 3 Sprints)
-
-### Sprint 1 (Foundation & Architecture)
-- **BL-023: Transition Architecture Documentation to ADRs**
-- **BL-024: CI/CD: Include Rust Tests**
-- BL-001
-- BL-002
-- BL-003
-- BL-004
-- BL-006
-- BL-009
-
-### Sprint 2 (First Real End-to-End Synchronization)
-- BL-007
-- BL-022
-- BL-010
-- BL-012
-- BL-015
-- BL-016
-
-### Sprint 3 (Employees + Calendar + Stability)
-- BL-013
-- BL-014
-- BL-017
-- BL-018
-- BL-019
-- BL-020
 
 ## Open Product Questions
 1. How should conflict logic be prioritized: hard block or warning?
