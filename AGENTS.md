@@ -5,7 +5,7 @@
 This is a **Tauri + React + TypeScript** desktop application which provides a planning view and integrates with [Daylite](https://developer.daylite.app/reference/getting-started) and [Planradar](https://help.planradar.com/hc/en-gb/articles/15480453097373-Open-APIs).
 The application is built for macOS using Bun as the runtime and package manager.
 
-When working on this application, always follow the TDD loop:
+When working on this application, always follow the red-green-refactor TDD loop:
 1. Write a test which fails
 2. Implement the minimum amount of code to make the test pass
 3. Refactor the code if needed
