@@ -28,3 +28,42 @@ Status: In progress
 A weekly calendar view allows you to assign employees to Daylite projects.
 This syncs with the iCal calendar of the employee.
 Any assigned projects for the current week are also created/reopened in Planradar.
+
+## Development
+
+### Local Quality Workflow
+
+Before committing changes, ensure all quality checks pass:
+
+```bash
+# Run tests
+bun test
+
+# Run tests in watch mode during development
+bun test:watch
+
+# Check code quality (lint)
+bun lint
+
+# Auto-fix linting issues
+bun lint:fix
+
+# Check code formatting
+bun format:check
+
+# Auto-format code
+bun format
+```
+
+### Running the Application
+
+```bash
+# Development mode
+bun tauri dev
+
+# Build for macOS
+bun build:macos
+```
+
+**Note:** The same quality checks (`bun test`, `bun lint`, `bun format:check`) are run in CI/CD, so running them locally ensures your changes will pass automated checks.
+

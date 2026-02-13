@@ -50,7 +50,8 @@ Tests (zuerst schreiben):
 - Verifiziert: `daylite-openapi.json` und `planradar-openapi.json` werden ignoriert
 - Verifiziert: `docs/BACKLOG.md` bleibt versioniert
 
-### BL-002: Test-Workflow vereinheitlichen
+### BL-002: Test-Workflow vereinheitlichen ✅
+**Status:** Abgeschlossen (2026-02-13)  
 Priorität: P0  
 Aufwand: S
 
@@ -59,11 +60,17 @@ Scope:
 - README um standardisierten lokalen Qualitäts-Flow ergänzen (`bun test`, `bun lint`, `bun format:check`).
 
 Abnahmekriterien:
-- `bun test` läuft als offizieller Standardbefehl.
-- Workflow ist für Agent und Entwickler identisch dokumentiert.
+- ✅ `bun test` läuft als offizieller Standardbefehl.
+- ✅ Workflow ist für Agent und Entwickler identisch dokumentiert.
 
 Tests (zuerst schreiben):
 - Mindestens ein vorhandener Testlauf muss im CI/Lokal mit `bun test` laufen.
+
+**Umsetzung:**
+- `test` und `test:watch` Skripte zu `package.json` hinzugefügt
+- README um Development-Sektion erweitert mit vollständigem lokalen Qualitäts-Workflow
+- Verifiziert: `bun test` und `bun run test` funktionieren identisch
+- Verifiziert: Alle Quality-Checks (`test`, `lint`, `format:check`) sind dokumentiert
 
 ### BL-003: Integrationsarchitektur festziehen (Frontend <-> Tauri Commands)
 Priorität: P0  
