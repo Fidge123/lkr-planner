@@ -31,14 +31,13 @@ Before introducing a new dependency, always confirm with the user by providing a
 
 ### Naming Conventions
 
-- **Files**: Prefer kebab-case whenver possible
-- **Components**: PascalCase function components (exported as named exports)
-- **Constants**: camelCase (not SCREAMING_SNAKE_CASE)
+- **Files**: kebab-case
+- **Components**: PascalCase function components
+- **Constants**: camelCase
 
 ### React Components
 
 ```tsx
-// Preferred pattern: Named function exports with Props interface
 export function ComponentName({ prop1, prop2 }: Props) {
   // Component logic
 }
