@@ -1,14 +1,15 @@
 use serde::{Deserialize, Serialize};
+use specta::Type;
 
 /// Health status response
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Type)]
 pub struct HealthStatus {
     pub status: HealthStatusEnum,
     pub timestamp: String,
     pub version: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Type)]
 #[serde(rename_all = "lowercase")]
 pub enum HealthStatusEnum {
     Healthy,
@@ -17,6 +18,7 @@ pub enum HealthStatusEnum {
 
 /// Check the health status of the application
 #[tauri::command]
+#[specta::specta]
 pub fn check_health() -> Result<HealthStatus, String> {
     let now = chrono::Utc::now();
     let version = env!("CARGO_PKG_VERSION");

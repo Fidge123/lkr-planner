@@ -32,22 +32,6 @@ Focus is on small, testable increments (Red-Green-Refactor) and clear acceptance
 
 ## EPIC 1: Project Hygiene and Architecture Basis
 
-### BL-025: Introduce tauri-specta for typesafe commands
-Prioritized: P0  
-Effort: S
-
-Scope:
-- Add `specta` and `tauri-specta` dependencies to the Rust backend.
-- Set up generator for TypeScript types in a shared location (e.g., `src-tauri/src/bindings.ts`).
-- Migrate existing `check_health` command to use Specta.
-- Update `HealthService` to use the generated bindings instead of manual `invoke`.
-
-Acceptance Criteria:
-- TypeScript bindings are automatically generated.
-- `HealthService` uses generated types.
-- No manual `invoke` calls for commands registered with Specta.
-
-
 ## EPIC 2: Domain Model and Local Storage
 
 ### BL-004: Define Domain Types for Planning v1
@@ -301,6 +285,32 @@ Acceptance Criteria:
 
 Tests (write first):
 - UI tests for Loading/Empty/Error.
+
+### BL-027: Import German Holidays via Nager API for Week View
+Priority: P1  
+Effort: M
+
+Scope:
+- Integrate public holiday import from `https://date.nager.at` for Germany (`DE`).
+- Fetch holidays per year from Nager API and map to app day model.
+- In weekly view, indicate holidays that apply to at least one of:
+  - Hamburg (`HH`)
+  - Schleswig-Holstein (`SH`)
+  - Mecklenburg-Vorpommern (`MV`)
+- Show holiday indication in day header (German label/icon) and keep normal planning interactions.
+- Cache yearly holiday data locally to avoid repeated API calls during week navigation.
+
+Acceptance Criteria:
+- Week view marks relevant holiday days for `HH`, `SH`, `MV`.
+- If a holiday applies only to a subset of these states, the UI indicates affected states.
+- Weeks crossing year boundaries correctly show holidays from both years.
+- API failure does not break planning view; user gets a German warning state.
+
+Tests (write first):
+- Service tests for Nager API mapping/filtering (`DE`, `HH`/`SH`/`MV`).
+- Tests for year-boundary fetch behavior (two-year query).
+- UI tests for holiday indicator rendering in week header.
+- Error-state test for Nager API timeout/failure.
 
 ### BL-016: Create/Edit/Delete Assignments in Weekly View
 Priority: P0  

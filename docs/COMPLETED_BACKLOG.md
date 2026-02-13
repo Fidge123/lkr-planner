@@ -128,3 +128,28 @@ Tests (write first):
 **Implementation:**
 - Added `scripts/stamp-release-version.ts` to compute and validate stamped versions and patch `src-tauri/tauri.conf.json` during CI runtime only.
 - Updated `.github/workflows/release.yml` to run stamping step (`id: stamp_version`) and use `steps.stamp_version.outputs.stamped_version` for release tag and name.
+
+### BL-025: Introduce tauri-specta for typesafe commands ✅
+**Status:** Completed (2026-02-13)  
+Priority: P0  
+Effort: S
+
+Scope:
+- Add `specta` and `tauri-specta` dependencies to the Rust backend.
+- Set up generator for TypeScript types in a shared location (e.g., `src-tauri/src/bindings.ts`).
+- Migrate existing `check_health` command to use Specta.
+- Update `HealthService` to use the generated bindings instead of manual `invoke`.
+
+Acceptance Criteria:
+- ✅ TypeScript bindings are automatically generated.
+- ✅ `HealthService` uses generated types.
+- ✅ No manual `invoke` calls for commands registered with Specta.
+
+Tests (write first):
+- ✅ Updated `src/services/health.spec.ts` to mock generated command bindings.
+
+**Implementation:**
+- Added Rust dependencies in `src-tauri/Cargo.toml`: `specta`, `specta-typescript`, and `tauri-specta`.
+- Annotated `check_health` and health types in `src-tauri/src/integrations/health.rs` for Specta type generation.
+- Replaced manual `tauri::generate_handler!` wiring with `tauri_specta::Builder` in `src-tauri/src/lib.rs`, including TS export to `src/generated/tauri.ts`.
+- Updated `src/services/health.ts` to use generated binding commands (`commands.checkHealth`) and generated type aliases instead of direct `invoke`.
