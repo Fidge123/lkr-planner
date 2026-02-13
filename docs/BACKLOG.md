@@ -32,18 +32,6 @@ Focus is on small, testable increments (Red-Green-Refactor) and clear acceptance
 
 ## EPIC 1: Project Hygiene and Architecture Basis
 
-### BL-024: CI/CD: Include Rust Tests
-Prioritized: P0  
-Effort: S
-
-Scope:
-- Add a step to the appropriate GitHub Action (e.g., `test.yml`) to run Rust tests using `cargo test`.
-- Ensure the workflow fails if Rust tests fail.
-
-Acceptance Criteria:
-- GitHub Action runs `cargo test`.
-- Build fails on failing Rust tests.
-
 ### BL-025: Introduce tauri-specta for typesafe commands
 Prioritized: P0  
 Effort: S

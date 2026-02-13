@@ -88,3 +88,20 @@ Acceptance Criteria:
 - Added `docs/adr/0002-service-facade-and-integration-structure.md`.
 - Updated `AGENTS.md` with ADR documentation requirement (`docs/adr`).
 - Removed `docs/ARCHITECTURE.md`.
+
+### BL-024: CI/CD: Include Rust Tests ✅
+**Status:** Completed (2026-02-13)  
+Priority: P0  
+Effort: S
+
+Scope:
+- Add a step to the appropriate GitHub Action (e.g., `test.yml`) to run Rust tests using `cargo test`.
+- Ensure the workflow fails if Rust tests fail.
+
+Acceptance Criteria:
+- ✅ GitHub Action runs `cargo test`.
+- ✅ Build fails on failing Rust tests.
+
+**Implementation:**
+- Updated `.github/workflows/test.yml` to install Rust (`dtolnay/rust-toolchain@stable`).
+- Added explicit Rust test step: `cargo test --manifest-path src-tauri/Cargo.toml`.
