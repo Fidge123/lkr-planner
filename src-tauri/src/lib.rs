@@ -4,13 +4,16 @@ mod integrations;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let mut specta_builder = tauri_specta::Builder::<tauri::Wry>::new().commands(
-        tauri_specta::collect_commands![integrations::health::check_health],
-    );
+    let specta_builder =
+        tauri_specta::Builder::<tauri::Wry>::new().commands(tauri_specta::collect_commands![
+            integrations::health::check_health,
+            integrations::local_store::load_local_store,
+            integrations::local_store::save_local_store
+        ]);
 
     specta_builder
         .export(
-            specta_typescript::Typescript::default(),
+            specta_typescript::Typescript::default().header("// @ts-nocheck"),
             "../src/generated/tauri.ts",
         )
         .expect("failed to export tauri specta bindings");

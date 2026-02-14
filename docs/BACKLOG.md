@@ -1,9 +1,5 @@
 # LKR Planner Backlog
 
-## Goal
-Actionable, prioritized backlog for collaborative implementation with a coding agent.
-Focus is on small, testable increments (Red-Green-Refactor) and clear acceptance criteria.
-
 ## Guidelines
 - TDD in every task: first failing test, then minimal implementation, then refactor.
 - UI texts always in German.
@@ -13,63 +9,7 @@ Focus is on small, testable increments (Red-Green-Refactor) and clear acceptance
 - Daylite is the Source of Truth for projects and employees (local caches only as technical optimization).
 - No offline support for v1 (online-first).
 
-## Current Status (from codebase)
-- Weekly view with dummy data exists (`src/app/*`, `src/data/dummy-data.ts`).
-- Date helpers are partially tested (`src/app/util.spec.ts`).
-- Daylite and Planradar integration is not yet implemented.
-- Employee management is not yet implemented.
-
-## Prioritized Epics
-1. Project Hygiene and Architecture Basis
-2. Domain Model and Local Storage
-3. Daylite Integration
-4. Planradar Integration
-5. Employee Management
-6. Planning Logic and Calendar Sync
-7. Stability, Observability, Release
-
 ## Backlog Items
-
-## EPIC 2: Domain Model and Local Storage
-
-### BL-004: Define Domain Types for Planning v1
-Priority: P0  
-Effort: M
-
-Scope:
-- Add types for:
-  - `Project` (Daylite reference, name, status)
-  - `Employee` (skills, home location, primary iCal URL, absence iCal URL, active flag)
-  - `Assignment` (Employee, project, period, source, sync status)
-  - `SyncIssue` (Source, code, message, timestamp)
-
-Acceptance Criteria:
-- Dummy data migrated to new types.
-- No `any`-based workarounds.
-
-Tests (write first):
-- Type/Unit tests for central mappers/guards.
-
-### BL-005: Build Local Configuration and Cache Store
-Priority: P1  
-Effort: M
-
-Scope:
-- Persistence for local app configuration (e.g., Tauri store or file backend) for:
-  - API endpoints
-  - Tokens/references
-  - Employee-specific settings
-  - Project proposal filters (pipelines, columns, categories, exclusion status)
-  - Contact filter for active employees (Default keyword: `Monteur`)
-  - Routing settings for `openrouteservice.org` (API key, profile)
-- Optional local cache for recently loaded Daylite data (without source-of-truth role).
-
-Acceptance Criteria:
-- Restart-safe loading/saving.
-- Error cases provide German user message and technical debug details.
-
-Tests (write first):
-- Unit tests for load/save + error case (corrupt file, missing fields).
 
 ## EPIC 3: Daylite Integration
 

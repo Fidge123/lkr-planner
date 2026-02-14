@@ -28,5 +28,10 @@ jobs:
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Run rust warning check
+        run: cargo check --manifest-path src-tauri/Cargo.toml
+        env:
+          RUSTFLAGS: -D warnings
+
       - name: Run rust tests
         run: cargo test --manifest-path src-tauri/Cargo.toml

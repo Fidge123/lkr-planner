@@ -20,7 +20,7 @@ export function PlanningGrid({ weekOffset }: Props) {
         <tbody>
           {employees.map((employee) => (
             <TimetableRow
-              key={employee.id}
+              key={employee.self}
               employee={employee}
               weekDays={weekDays}
             />

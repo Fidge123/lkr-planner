@@ -1,173 +1,352 @@
-import type { Employee, WorkItem } from "../types";
+import type {
+  Assignment,
+  DayliteContactRecord,
+  DayliteProjectRecord,
+} from "../domain/planning";
 
-export const employees: Employee[] = [
+export interface PlanningCellProject {
+  id: string;
+  title: string;
+  color: string;
+}
+
+interface AssignmentTemplate {
+  id: string;
+  projectId: string;
+  days: string[];
+  employeeIds: string[];
+}
+
+const projectStatusClasses: Record<string, string> = {
+  new_status: "bg-primary",
+  in_progress: "bg-secondary",
+  done: "bg-success",
+  abandoned: "bg-neutral",
+  cancelled: "bg-neutral",
+  deferred: "bg-warning",
+  unknown: "bg-base-300",
+};
+
+export const employees: DayliteContactRecord[] = [
   {
-    id: "emp-1",
-    name: "Anna Schmidt",
-    role: "Senior Entwicklerin",
+    self: "/v1/contacts/1001",
+    full_name: "Anna Schmidt",
+    keywords: ["Backend", "API"],
+    addresses: [
+      {
+        city: "Köln",
+        country: "Deutschland",
+      },
+    ],
+    urls: [
+      {
+        label: "Einsatz iCal",
+        url: "https://calendar.example.com/anna/primary.ics",
+      },
+      {
+        label: "Abwesenheit iCal",
+        url: "https://calendar.example.com/anna/absence.ics",
+      },
+    ],
   },
   {
-    id: "emp-2",
-    name: "Max Müller",
-    role: "Projektleiter",
+    self: "/v1/contacts/1002",
+    full_name: "Max Müller",
+    keywords: ["Projektleitung", "Koordination"],
+    addresses: [
+      {
+        city: "Bonn",
+        country: "Deutschland",
+      },
+    ],
+    urls: [
+      {
+        label: "Einsatz iCal",
+        url: "https://calendar.example.com/max/primary.ics",
+      },
+      {
+        label: "Abwesenheit iCal",
+        url: "https://calendar.example.com/max/absence.ics",
+      },
+    ],
   },
   {
-    id: "emp-3",
-    name: "Lisa Weber",
-    role: "UI/UX Designerin",
+    self: "/v1/contacts/1003",
+    full_name: "Lisa Weber",
+    keywords: ["UI/UX", "Research"],
+    addresses: [
+      {
+        city: "Köln",
+        country: "Deutschland",
+      },
+    ],
+    urls: [
+      {
+        label: "Einsatz iCal",
+        url: "https://calendar.example.com/lisa/primary.ics",
+      },
+      {
+        label: "Abwesenheit iCal",
+        url: "https://calendar.example.com/lisa/absence.ics",
+      },
+    ],
   },
   {
-    id: "emp-4",
-    name: "Tom Fischer",
-    role: "Backend Entwickler",
+    self: "/v1/contacts/1004",
+    full_name: "Tom Fischer",
+    nickname: "Tom",
+    keywords: ["Backend", "Datenbank"],
+    addresses: [
+      {
+        city: "Leverkusen",
+        country: "Deutschland",
+      },
+    ],
+    urls: [
+      {
+        label: "Einsatz iCal",
+        url: "https://calendar.example.com/tom/primary.ics",
+      },
+      {
+        label: "Abwesenheit iCal",
+        url: "https://calendar.example.com/tom/absence.ics",
+      },
+    ],
   },
   {
-    id: "emp-5",
-    name: "Sarah Koch",
-    role: "QA Ingenieurin",
+    self: "/v1/contacts/1005",
+    full_name: "Sarah Koch",
+    keywords: ["QA", "Testautomatisierung"],
+    addresses: [
+      {
+        city: "Düsseldorf",
+        country: "Deutschland",
+      },
+    ],
+    urls: [
+      {
+        label: "Einsatz iCal",
+        url: "https://calendar.example.com/sarah/primary.ics",
+      },
+      {
+        label: "Abwesenheit iCal",
+        url: "https://calendar.example.com/sarah/absence.ics",
+      },
+    ],
   },
   {
-    id: "emp-6",
-    name: "Jan Becker",
-    role: "DevOps Ingenieur",
+    self: "/v1/contacts/1006",
+    full_name: "Jan Becker",
+    keywords: ["DevOps", "Security"],
+    addresses: [
+      {
+        city: "Köln",
+        country: "Deutschland",
+      },
+    ],
+    urls: [
+      {
+        label: "Einsatz iCal",
+        url: "https://calendar.example.com/jan/primary.ics",
+      },
+      {
+        label: "Abwesenheit iCal",
+        url: "https://calendar.example.com/jan/absence.ics",
+      },
+    ],
   },
   {
-    id: "emp-7",
-    name: "Maria Hofmann",
-    role: "Fullstack Entwicklerin",
+    self: "/v1/contacts/1007",
+    full_name: "Maria Hofmann",
+    keywords: ["Fullstack", "Performance"],
+    addresses: [
+      {
+        city: "Siegburg",
+        country: "Deutschland",
+      },
+    ],
+    urls: [
+      {
+        label: "Einsatz iCal",
+        url: "https://calendar.example.com/maria/primary.ics",
+      },
+      {
+        label: "Abwesenheit iCal",
+        url: "https://calendar.example.com/maria/absence.ics",
+      },
+    ],
   },
 ];
 
-export const workItems: WorkItem[] = [
+export const projects: DayliteProjectRecord[] = [
   {
-    id: "wi-1",
-    title: "API-Integration",
-    project: "Kundenportal",
-    color: "bg-primary",
+    self: "/v1/projects/3001",
+    name: "Kundenportal",
+    status: "in_progress",
+  },
+  {
+    self: "/v1/projects/3002",
+    name: "Mobile App",
+    status: "new_status",
+  },
+  {
+    self: "/v1/projects/3003",
+    name: "Intern",
+    status: "done",
+  },
+  {
+    self: "/v1/projects/3004",
+    name: "Altsystem",
+    status: "in_progress",
+  },
+  {
+    self: "/v1/projects/3005",
+    name: "Infrastruktur",
+    status: "new_status",
+  },
+];
+
+const assignmentTemplates: AssignmentTemplate[] = [
+  {
+    id: "asg-1",
+    projectId: "/v1/projects/3001",
     days: ["2026-01-26", "2026-01-27", "2026-01-28"],
-    assignedEmployeeIds: ["emp-1", "emp-4"],
+    employeeIds: ["/v1/contacts/1001", "/v1/contacts/1004"],
   },
   {
-    id: "wi-2",
-    title: "UI-Entwürfe",
-    project: "Mobile App",
-    color: "bg-secondary",
+    id: "asg-2",
+    projectId: "/v1/projects/3002",
     days: ["2026-01-26", "2026-01-27"],
-    assignedEmployeeIds: ["emp-3"],
+    employeeIds: ["/v1/contacts/1003"],
   },
   {
-    id: "wi-3",
-    title: "Sprint-Planung",
-    project: "Intern",
-    color: "bg-accent",
+    id: "asg-3",
+    projectId: "/v1/projects/3003",
     days: ["2026-01-26"],
-    assignedEmployeeIds: ["emp-2"],
+    employeeIds: ["/v1/contacts/1002"],
   },
   {
-    id: "wi-4",
-    title: "Datenbank-Migration",
-    project: "Altsystem",
-    color: "bg-info",
+    id: "asg-4",
+    projectId: "/v1/projects/3004",
     days: ["2026-01-27", "2026-01-28", "2026-01-30"],
-    assignedEmployeeIds: ["emp-4", "emp-6"],
+    employeeIds: ["/v1/contacts/1004", "/v1/contacts/1006"],
   },
   {
-    id: "wi-5",
-    title: "Test-Automatisierung",
-    project: "Kundenportal",
-    color: "bg-success",
+    id: "asg-5",
+    projectId: "/v1/projects/3001",
     days: ["2026-01-28", "2026-01-29", "2026-01-30"],
-    assignedEmployeeIds: ["emp-5"],
+    employeeIds: ["/v1/contacts/1005"],
   },
   {
-    id: "wi-6",
-    title: "Code-Review",
-    project: "Mobile App",
-    color: "bg-warning",
+    id: "asg-6",
+    projectId: "/v1/projects/3002",
     days: ["2026-01-29"],
-    assignedEmployeeIds: ["emp-1", "emp-7"],
+    employeeIds: ["/v1/contacts/1001", "/v1/contacts/1007"],
   },
   {
-    id: "wi-7",
-    title: "CI/CD-Pipeline",
-    project: "Infrastruktur",
-    color: "bg-error",
+    id: "asg-7",
+    projectId: "/v1/projects/3005",
     days: ["2026-01-26", "2026-01-28", "2026-01-30"],
-    assignedEmployeeIds: ["emp-6"],
+    employeeIds: ["/v1/contacts/1006"],
   },
   {
-    id: "wi-8",
-    title: "Nutzerforschung",
-    project: "Mobile App",
-    color: "bg-primary/70",
+    id: "asg-8",
+    projectId: "/v1/projects/3002",
     days: ["2026-01-27", "2026-01-28"],
-    assignedEmployeeIds: ["emp-3", "emp-2"],
+    employeeIds: ["/v1/contacts/1003", "/v1/contacts/1002"],
   },
   {
-    id: "wi-9",
-    title: "Performance-Audit",
-    project: "Kundenportal",
-    color: "bg-secondary/70",
+    id: "asg-9",
+    projectId: "/v1/projects/3001",
     days: ["2026-01-29", "2026-01-30"],
-    assignedEmployeeIds: ["emp-7"],
+    employeeIds: ["/v1/contacts/1007"],
   },
   {
-    id: "wi-10",
-    title: "Dokumentation",
-    project: "Intern",
-    color: "bg-accent/70",
+    id: "asg-10",
+    projectId: "/v1/projects/3003",
     days: ["2026-01-30"],
-    assignedEmployeeIds: ["emp-2"],
+    employeeIds: ["/v1/contacts/1002"],
   },
   {
-    id: "wi-11",
-    title: "Fehlerbehebung",
-    project: "Kundenportal",
-    color: "bg-info/70",
+    id: "asg-11",
+    projectId: "/v1/projects/3001",
     days: ["2026-01-26", "2026-01-27"],
-    assignedEmployeeIds: ["emp-7"],
+    employeeIds: ["/v1/contacts/1007"],
   },
   {
-    id: "wi-12",
-    title: "Sicherheitsüberprüfung",
-    project: "Infrastruktur",
-    color: "bg-success/70",
+    id: "asg-12",
+    projectId: "/v1/projects/3005",
     days: ["2026-01-28", "2026-01-29"],
-    assignedEmployeeIds: ["emp-6", "emp-4"],
+    employeeIds: ["/v1/contacts/1006", "/v1/contacts/1004"],
   },
   {
-    id: "wi-13",
-    title: "Stakeholder-Meeting",
-    project: "Mobile App",
-    color: "bg-warning/70",
+    id: "asg-13",
+    projectId: "/v1/projects/3002",
     days: ["2026-01-27"],
-    assignedEmployeeIds: ["emp-2", "emp-3"],
+    employeeIds: ["/v1/contacts/1002", "/v1/contacts/1003"],
   },
   {
-    id: "wi-14",
-    title: "Feature-Entwicklung",
-    project: "Kundenportal",
-    color: "bg-error/70",
+    id: "asg-14",
+    projectId: "/v1/projects/3001",
     days: ["2026-01-29", "2026-01-30"],
-    assignedEmployeeIds: ["emp-1"],
+    employeeIds: ["/v1/contacts/1001"],
   },
   {
-    id: "wi-15",
-    title: "Integrationstests",
-    project: "Altsystem",
-    color: "bg-neutral",
+    id: "asg-15",
+    projectId: "/v1/projects/3004",
     days: ["2026-01-26", "2026-01-29"],
-    assignedEmployeeIds: ["emp-5"],
+    employeeIds: ["/v1/contacts/1005"],
   },
 ];
 
-// Helper function to get work items for a specific employee and day
-export function getWorkItemsForCell(employeeId: string, day: Date): WorkItem[] {
-  return workItems.filter(
-    (wi) =>
-      wi.assignedEmployeeIds.includes(employeeId) &&
-      wi.days
-        .map((d) => d.slice(0, 10))
-        .includes(day.toISOString().slice(0, 10)),
+export const assignments: Assignment[] = assignmentTemplates.flatMap(
+  (template) =>
+    template.employeeIds.flatMap((employeeId) =>
+      template.days.map((day) => ({
+        id: `${template.id}-${employeeId}-${day}`,
+        employeeId,
+        projectId: template.projectId,
+        period: {
+          startDate: day,
+          endDate: day,
+        },
+      })),
+    ),
+);
+
+const projectsByReference = new Map(
+  projects.map((project) => [project.self, project]),
+);
+
+export function getWorkItemsForCell(
+  employeeReference: string,
+  day: Date,
+): PlanningCellProject[] {
+  const isoDay = day.toISOString().slice(0, 10);
+
+  return assignments
+    .filter(
+      (assignment) =>
+        assignment.employeeId === employeeReference &&
+        isDayInAssignmentPeriod(isoDay, assignment),
+    )
+    .map((assignment) => {
+      const project = projectsByReference.get(assignment.projectId);
+      const status = project?.status ?? "unknown";
+
+      return {
+        id: assignment.id,
+        title: project?.name ?? assignment.projectId,
+        color: projectStatusClasses[status] ?? projectStatusClasses.unknown,
+      };
+    });
+}
+
+function isDayInAssignmentPeriod(
+  isoDay: string,
+  assignment: Assignment,
+): boolean {
+  return (
+    isoDay >= assignment.period.startDate && isoDay <= assignment.period.endDate
   );
 }

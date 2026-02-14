@@ -153,3 +153,64 @@ Tests (write first):
 - Annotated `check_health` and health types in `src-tauri/src/integrations/health.rs` for Specta type generation.
 - Replaced manual `tauri::generate_handler!` wiring with `tauri_specta::Builder` in `src-tauri/src/lib.rs`, including TS export to `src/generated/tauri.ts`.
 - Updated `src/services/health.ts` to use generated binding commands (`commands.checkHealth`) and generated type aliases instead of direct `invoke`.
+
+## EPIC 2: Domain Model and Local Storage
+
+### BL-004: Define Domain Types for Planning v1 ✅
+**Status:** Completed (2026-02-13)  
+Priority: P0  
+Effort: M
+
+Scope:
+- Add types for:
+  - `Project` (Daylite reference, name, status)
+  - `Employee` (skills, home location, primary iCal URL, absence iCal URL, active flag)
+  - `Assignment` (Employee, project, period, source, sync status)
+  - `SyncIssue` (Source, code, message, timestamp)
+
+Acceptance Criteria:
+- ✅ Dummy data migrated to new types.
+- ✅ No `any`-based workarounds.
+
+Tests (write first):
+- ✅ Added `src/domain/planning.spec.ts` with unit tests for central guards/mappers.
+
+**Implementation:**
+- Added new planning domain module at `src/domain/planning.ts` with strict domain types and type guards.
+- Added Daylite-to-domain mappers for project/contact records aligned with local OpenAPI shapes.
+- Migrated dummy planning data to `Employee`, `Project`, and `Assignment` domain types in `src/data/dummy-data.ts`.
+- Updated timetable components to consume the migrated typed data model.
+- Removed obsolete legacy `src/types.ts`.
+
+### BL-005: Build Local Configuration and Cache Store ✅
+**Status:** Completed (2026-02-13)  
+Priority: P1  
+Effort: M
+
+Scope:
+- Persistence for local app configuration (file backend) for:
+  - API endpoints
+  - Tokens/references
+  - Employee-specific settings
+  - Project proposal filters (pipelines, columns, categories, exclusion status)
+  - Contact filter for active employees (Default keyword: `Monteur`)
+  - Routing settings for `openrouteservice.org` (API key, profile)
+- Optional local cache for recently loaded Daylite data (without source-of-truth role).
+
+Acceptance Criteria:
+- ✅ Restart-safe loading/saving.
+- ✅ Error cases provide German user message and technical debug details.
+
+Tests (write first):
+- ✅ Added Rust unit tests in `src-tauri/src/integrations/local_store.rs` for:
+  - load defaults when file is missing
+  - save/load restart safety
+  - corrupt JSON file error
+  - missing fields error
+
+**Implementation:**
+- Added new integration module `src-tauri/src/integrations/local_store.rs` with typed `LocalStore` schema and defaults.
+- Implemented Tauri commands `load_local_store` and `save_local_store` and registered them in `src-tauri/src/lib.rs`.
+- Persisted store in Tauri `app_config_dir` as `local-store.json`.
+- Implemented structured `StoreError` with `code`, `userMessage`, and `technicalMessage`.
+- Added ADR `docs/adr/0005-local-config-and-cache-store.md` for the storage decision.
