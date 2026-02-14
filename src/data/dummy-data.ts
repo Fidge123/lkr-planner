@@ -1,7 +1,5 @@
 import type {
   Assignment,
-  AssignmentSource,
-  AssignmentSyncStatus,
   DayliteContactRecord,
   DayliteProjectRecord,
 } from "../domain/planning";
@@ -17,8 +15,6 @@ interface AssignmentTemplate {
   projectId: string;
   days: string[];
   employeeIds: string[];
-  source: AssignmentSource;
-  syncStatus: AssignmentSyncStatus;
 }
 
 const projectStatusClasses: Record<string, string> = {
@@ -216,120 +212,90 @@ const assignmentTemplates: AssignmentTemplate[] = [
     projectId: "/v1/projects/3001",
     days: ["2026-01-26", "2026-01-27", "2026-01-28"],
     employeeIds: ["/v1/contacts/1001", "/v1/contacts/1004"],
-    source: "app",
-    syncStatus: "synced",
   },
   {
     id: "asg-2",
     projectId: "/v1/projects/3002",
     days: ["2026-01-26", "2026-01-27"],
     employeeIds: ["/v1/contacts/1003"],
-    source: "app",
-    syncStatus: "synced",
   },
   {
     id: "asg-3",
     projectId: "/v1/projects/3003",
     days: ["2026-01-26"],
     employeeIds: ["/v1/contacts/1002"],
-    source: "app",
-    syncStatus: "pending",
   },
   {
     id: "asg-4",
     projectId: "/v1/projects/3004",
     days: ["2026-01-27", "2026-01-28", "2026-01-30"],
     employeeIds: ["/v1/contacts/1004", "/v1/contacts/1006"],
-    source: "app",
-    syncStatus: "synced",
   },
   {
     id: "asg-5",
     projectId: "/v1/projects/3001",
     days: ["2026-01-28", "2026-01-29", "2026-01-30"],
     employeeIds: ["/v1/contacts/1005"],
-    source: "app",
-    syncStatus: "pending",
   },
   {
     id: "asg-6",
     projectId: "/v1/projects/3002",
     days: ["2026-01-29"],
     employeeIds: ["/v1/contacts/1001", "/v1/contacts/1007"],
-    source: "app",
-    syncStatus: "pending",
   },
   {
     id: "asg-7",
     projectId: "/v1/projects/3005",
     days: ["2026-01-26", "2026-01-28", "2026-01-30"],
     employeeIds: ["/v1/contacts/1006"],
-    source: "app",
-    syncStatus: "synced",
   },
   {
     id: "asg-8",
     projectId: "/v1/projects/3002",
     days: ["2026-01-27", "2026-01-28"],
     employeeIds: ["/v1/contacts/1003", "/v1/contacts/1002"],
-    source: "app",
-    syncStatus: "synced",
   },
   {
     id: "asg-9",
     projectId: "/v1/projects/3001",
     days: ["2026-01-29", "2026-01-30"],
     employeeIds: ["/v1/contacts/1007"],
-    source: "app",
-    syncStatus: "pending",
   },
   {
     id: "asg-10",
     projectId: "/v1/projects/3003",
     days: ["2026-01-30"],
     employeeIds: ["/v1/contacts/1002"],
-    source: "app",
-    syncStatus: "synced",
   },
   {
     id: "asg-11",
     projectId: "/v1/projects/3001",
     days: ["2026-01-26", "2026-01-27"],
     employeeIds: ["/v1/contacts/1007"],
-    source: "app",
-    syncStatus: "synced",
   },
   {
     id: "asg-12",
     projectId: "/v1/projects/3005",
     days: ["2026-01-28", "2026-01-29"],
     employeeIds: ["/v1/contacts/1006", "/v1/contacts/1004"],
-    source: "app",
-    syncStatus: "synced",
   },
   {
     id: "asg-13",
     projectId: "/v1/projects/3002",
     days: ["2026-01-27"],
     employeeIds: ["/v1/contacts/1002", "/v1/contacts/1003"],
-    source: "app",
-    syncStatus: "synced",
   },
   {
     id: "asg-14",
     projectId: "/v1/projects/3001",
     days: ["2026-01-29", "2026-01-30"],
     employeeIds: ["/v1/contacts/1001"],
-    source: "app",
-    syncStatus: "pending",
   },
   {
     id: "asg-15",
     projectId: "/v1/projects/3004",
     days: ["2026-01-26", "2026-01-29"],
     employeeIds: ["/v1/contacts/1005"],
-    source: "app",
-    syncStatus: "synced",
   },
 ];
 
@@ -344,8 +310,6 @@ export const assignments: Assignment[] = assignmentTemplates.flatMap(
           startDate: day,
           endDate: day,
         },
-        source: template.source,
-        syncStatus: template.syncStatus,
       })),
     ),
 );
