@@ -13,7 +13,7 @@ pub fn run() {
 
     specta_builder
         .export(
-            specta_typescript::Typescript::default(),
+            specta_typescript::Typescript::default().header("// @ts-nocheck"),
             "../src/generated/tauri.ts",
         )
         .expect("failed to export tauri specta bindings");

@@ -22,10 +22,12 @@ interface AssignmentTemplate {
 }
 
 const projectStatusClasses: Record<string, string> = {
-  new: "bg-primary",
+  new_status: "bg-primary",
   in_progress: "bg-secondary",
   done: "bg-success",
-  archived: "bg-neutral",
+  abandoned: "bg-neutral",
+  cancelled: "bg-neutral",
+  deferred: "bg-warning",
   unknown: "bg-base-300",
 };
 
@@ -189,7 +191,7 @@ export const projects: DayliteProjectRecord[] = [
   {
     self: "/v1/projects/3002",
     name: "Mobile App",
-    status: "new",
+    status: "new_status",
   },
   {
     self: "/v1/projects/3003",
@@ -204,7 +206,7 @@ export const projects: DayliteProjectRecord[] = [
   {
     self: "/v1/projects/3005",
     name: "Infrastruktur",
-    status: "new",
+    status: "new_status",
   },
 ];
 
