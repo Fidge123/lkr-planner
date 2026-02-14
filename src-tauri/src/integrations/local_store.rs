@@ -45,6 +45,10 @@ pub struct ApiEndpoints {
 pub struct TokenReferences {
     pub daylite_token_reference: String,
     pub planradar_token_reference: String,
+    #[serde(default)]
+    pub daylite_access_token: String,
+    #[serde(default)]
+    pub daylite_refresh_token: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq, Default)]
@@ -269,6 +273,8 @@ mod tests {
             token_references: TokenReferences {
                 daylite_token_reference: "keychain://daylite-token".to_string(),
                 planradar_token_reference: "keychain://planradar-token".to_string(),
+                daylite_access_token: "access-token-1".to_string(),
+                daylite_refresh_token: "refresh-token-1".to_string(),
             },
             employee_settings: vec![EmployeeSetting {
                 employee_id: "emp-1".to_string(),

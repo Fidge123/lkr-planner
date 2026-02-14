@@ -13,23 +13,6 @@
 
 ## EPIC 3: Daylite Integration
 
-### BL-006: Daylite API Client (Basis)
-Priority: P0  
-Effort: M
-
-Scope:
-- Build minimal client for required endpoints:
-  - Read/search projects
-  - Read/search contacts (for employee mapping)
-- Uniform error object including HTTP status.
-
-Acceptance Criteria:
-- Client returns typed responses.
-- Errors are centrally normalized.
-
-Tests (write first):
-- Unit tests with mocked HTTP responses (200/401/429/500).
-
 ### BL-007: Daylite Project Synchronization (Read)
 Priority: P0  
 Effort: M

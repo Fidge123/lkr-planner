@@ -214,3 +214,37 @@ Tests (write first):
 - Persisted store in Tauri `app_config_dir` as `local-store.json`.
 - Implemented structured `StoreError` with `code`, `userMessage`, and `technicalMessage`.
 - Added ADR `docs/adr/0005-local-config-and-cache-store.md` for the storage decision.
+
+## EPIC 3: Daylite Integration
+
+### BL-006: Daylite API Client (Basis) ✅
+**Status:** Completed (2026-02-14)  
+Priority: P0  
+Effort: M
+
+Scope:
+- Build minimal client for required endpoints:
+  - Read/search projects
+  - Read/search contacts (for employee mapping)
+- Uniform error object including HTTP status.
+
+Acceptance Criteria:
+- ✅ Client returns typed responses.
+- ✅ Errors are centrally normalized.
+
+Tests (write first):
+- ✅ Added Rust unit tests in `src-tauri/src/integrations/daylite.rs` with mocked HTTP responses:
+  - success (200)
+  - unauthorized (401)
+  - rate limit (429)
+  - server error (500)
+- ✅ Added token refresh/rotation test for Daylite personal token flow.
+
+**Implementation:**
+- Added new Daylite integration module `src-tauri/src/integrations/daylite.rs`.
+- Implemented typed API client methods for project/contact list and search endpoints.
+- Implemented centralized `DayliteApiError` with machine-readable code, optional HTTP status, German user message, and technical details.
+- Implemented Daylite personal token flow via `/personal_token/refresh_token` and automatic retry on `401`.
+- Added persistent tracking of rotated Daylite `access` + `refresh` tokens in local store (`tokenReferences.dayliteAccessToken`, `tokenReferences.dayliteRefreshToken`) so users do not need to request a personal token again after normal refresh cycles.
+- Added Tauri commands for Daylite connect/list/search flows and registered them in `src-tauri/src/lib.rs`.
+- Added ADR `docs/adr/0006-daylite-personal-token-rotation.md`.
