@@ -16,20 +16,77 @@ export function createStampedReleaseVersion(baseVersion: string): string {
   return stamped;
 }
 
-export async function stampTauriConfig(configPath: string): Promise<string> {
-  const raw = await readFile(configPath, "utf8");
-  const config = JSON.parse(raw) as TauriConfig;
-  const stampedVersion = createStampedReleaseVersion(config.version);
-
+function stampTauriConfigContent(
+  rawConfig: string,
+  stampedVersion: string,
+): string {
+  const config = JSON.parse(rawConfig) as TauriConfig;
   config.version = stampedVersion;
-  await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`, "utf8");
+  return `${JSON.stringify(config, null, 2)}\n`;
+}
+
+function stampCargoTomlPackageVersion(
+  rawCargoToml: string,
+  stampedVersion: string,
+): string {
+  const lines = rawCargoToml.split(/\r?\n/);
+  let inPackageSection = false;
+  let replaced = false;
+
+  const stampedLines = lines.map((line) => {
+    const trimmed = line.trim();
+
+    if (trimmed.startsWith("[")) {
+      inPackageSection = trimmed === "[package]";
+      return line;
+    }
+
+    if (inPackageSection && !replaced && /^version\s*=\s*".*"$/.test(trimmed)) {
+      replaced = true;
+      const indentation = line.match(/^\s*/)?.[0] ?? "";
+      return `${indentation}version = "${stampedVersion}"`;
+    }
+
+    return line;
+  });
+
+  if (!replaced) {
+    throw new Error(
+      "Could not stamp Cargo.toml package version: missing [package].version field.",
+    );
+  }
+
+  return `${stampedLines.join("\n")}\n`;
+}
+
+export async function stampReleaseVersionFiles(
+  tauriConfigPath: string,
+  cargoTomlPath: string,
+): Promise<string> {
+  const tauriRaw = await readFile(tauriConfigPath, "utf8");
+  const tauriConfig = JSON.parse(tauriRaw) as TauriConfig;
+  const stampedVersion = createStampedReleaseVersion(tauriConfig.version);
+
+  const stampedTauriConfig = stampTauriConfigContent(tauriRaw, stampedVersion);
+  await writeFile(tauriConfigPath, stampedTauriConfig, "utf8");
+
+  const cargoRaw = await readFile(cargoTomlPath, "utf8");
+  const stampedCargoToml = stampCargoTomlPackageVersion(
+    cargoRaw,
+    stampedVersion,
+  );
+  await writeFile(cargoTomlPath, stampedCargoToml, "utf8");
 
   return stampedVersion;
 }
 
 async function main() {
-  const configPath = "src-tauri/tauri.conf.json";
-  const stampedVersion = await stampTauriConfig(configPath);
+  const tauriConfigPath = "src-tauri/tauri.conf.json";
+  const cargoTomlPath = "src-tauri/Cargo.toml";
+  const stampedVersion = await stampReleaseVersionFiles(
+    tauriConfigPath,
+    cargoTomlPath,
+  );
 
   console.log(`Stamped release version: ${stampedVersion}`);
 
