@@ -2,6 +2,7 @@ import { describe, expect, it, setSystemTime } from "bun:test";
 import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { parse } from "smol-toml";
 import {
   createStampedReleaseVersion,
   stampReleaseVersionFiles,
@@ -63,9 +64,12 @@ serde = { version = "1", features = ["derive"] }
     expect(stampedTauriConfig.version).toBe(stampedVersion);
 
     const stampedCargoToml = await readFile(cargoTomlPath, "utf8");
-    expect(stampedCargoToml).toContain(`version = "${stampedVersion}"`);
-    expect(stampedCargoToml).toContain(
-      'serde = { version = "1", features = ["derive"] }',
-    );
+    const parsedCargoToml = parse(stampedCargoToml) as {
+      package: { version: string };
+      dependencies: { serde: { version: string; features: string[] } };
+    };
+    expect(parsedCargoToml.package.version).toBe(stampedVersion);
+    expect(parsedCargoToml.dependencies.serde.version).toBe("1");
+    expect(parsedCargoToml.dependencies.serde.features).toEqual(["derive"]);
   });
 });

@@ -1,19 +1,18 @@
 import { readFile, writeFile } from "node:fs/promises";
+import { parse, stringify, type TomlTable } from "smol-toml";
 
 interface TauriConfig {
   version: string;
 }
 
-export function getEpochMilliseconds(): string {
-  return String(Date.now());
-}
+type CargoToml = {
+  package?: {
+    version?: string;
+  };
+} & TomlTable;
 
 export function createStampedReleaseVersion(baseVersion: string): string {
-  const epochMilliseconds = getEpochMilliseconds();
-
-  const stamped = `${baseVersion}-main.${epochMilliseconds}`;
-
-  return stamped;
+  return `${baseVersion}-main.${String(Date.now())}`;
 }
 
 function stampTauriConfigContent(
@@ -29,34 +28,14 @@ function stampCargoTomlPackageVersion(
   rawCargoToml: string,
   stampedVersion: string,
 ): string {
-  const lines = rawCargoToml.split(/\r?\n/);
-  let inPackageSection = false;
-  let replaced = false;
+  const parsedToml = parse(rawCargoToml) as CargoToml;
 
-  const stampedLines = lines.map((line) => {
-    const trimmed = line.trim();
-
-    if (trimmed.startsWith("[")) {
-      inPackageSection = trimmed === "[package]";
-      return line;
-    }
-
-    if (inPackageSection && !replaced && /^version\s*=\s*".*"$/.test(trimmed)) {
-      replaced = true;
-      const indentation = line.match(/^\s*/)?.[0] ?? "";
-      return `${indentation}version = "${stampedVersion}"`;
-    }
-
-    return line;
-  });
-
-  if (!replaced) {
-    throw new Error(
-      "Could not stamp Cargo.toml package version: missing [package].version field.",
-    );
+  if (!parsedToml.package?.version) {
+    throw new Error("Cargo.toml is missing [package].version field.");
   }
 
-  return `${stampedLines.join("\n")}\n`;
+  parsedToml.package.version = stampedVersion;
+  return `${stringify(parsedToml)}\n`.replace(/\n+$/, "\n");
 }
 
 export async function stampReleaseVersionFiles(
@@ -87,8 +66,6 @@ async function main() {
     tauriConfigPath,
     cargoTomlPath,
   );
-
-  console.log(`Stamped release version: ${stampedVersion}`);
 
   if (process.env.GITHUB_OUTPUT) {
     await writeFile(
