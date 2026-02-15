@@ -12,7 +12,8 @@ pub struct LocalStore {
     pub api_endpoints: ApiEndpoints,
     pub token_references: TokenReferences,
     pub employee_settings: Vec<EmployeeSetting>,
-    pub project_proposal_filters: ProjectProposalFilters,
+    #[serde(alias = "projectProposalFilters")]
+    pub standard_filter: StandardFilter,
     pub contact_filter: ContactFilter,
     pub routing_settings: RoutingSettings,
     #[serde(default)]
@@ -25,7 +26,7 @@ impl Default for LocalStore {
             api_endpoints: ApiEndpoints::default(),
             token_references: TokenReferences::default(),
             employee_settings: Vec::new(),
-            project_proposal_filters: ProjectProposalFilters::default(),
+            standard_filter: StandardFilter::default(),
             contact_filter: ContactFilter::default(),
             routing_settings: RoutingSettings::default(),
             daylite_cache: DayliteCache::default(),
@@ -49,6 +50,9 @@ pub struct TokenReferences {
     pub daylite_access_token: String,
     #[serde(default)]
     pub daylite_refresh_token: String,
+    #[serde(default)]
+    #[specta(type = Option<f64>)]
+    pub daylite_access_token_expires_at_ms: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq, Default)]
@@ -62,14 +66,14 @@ pub struct EmployeeSetting {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-pub struct ProjectProposalFilters {
+pub struct StandardFilter {
     pub pipelines: Vec<String>,
     pub columns: Vec<String>,
     pub categories: Vec<String>,
     pub exclusion_statuses: Vec<String>,
 }
 
-impl Default for ProjectProposalFilters {
+impl Default for StandardFilter {
     fn default() -> Self {
         Self {
             pipelines: vec!["Aufträge".to_string()],
@@ -275,6 +279,7 @@ mod tests {
                 planradar_token_reference: "keychain://planradar-token".to_string(),
                 daylite_access_token: "access-token-1".to_string(),
                 daylite_refresh_token: "refresh-token-1".to_string(),
+                daylite_access_token_expires_at_ms: Some(1_761_200_000_000),
             },
             employee_settings: vec![EmployeeSetting {
                 employee_id: "emp-1".to_string(),
@@ -282,7 +287,7 @@ mod tests {
                 primary_ical_url: "https://example.com/primary.ics".to_string(),
                 absence_ical_url: "https://example.com/absence.ics".to_string(),
             }],
-            project_proposal_filters: ProjectProposalFilters {
+            standard_filter: StandardFilter {
                 pipelines: vec!["Aufträge".to_string()],
                 columns: vec!["Vorbereitung".to_string()],
                 categories: vec!["Überfällig".to_string()],

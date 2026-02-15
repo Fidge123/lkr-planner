@@ -15,7 +15,7 @@ The app already routes frontend state changes through Tauri commands, and no add
   - API endpoints
   - token references
   - employee-specific settings
-  - project proposal filters
+  - Standard-Filter (pipelines, columns, categories, exclusion status)
   - contact filter (default keyword `Monteur`)
   - OpenRouteService routing settings (API key, profile)
   - optional Daylite cache data (recent projects/contacts + last sync timestamp)

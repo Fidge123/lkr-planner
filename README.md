@@ -13,10 +13,10 @@ It uses the [Daylite API](https://developer.daylite.app/reference/getting-starte
 Daylite projects are the source of truth for the project data.
 The application will try to create Planradar projects automatically based on the appropriate template.
 
-### Daylite Personal Token Setup
+### Daylite Authentication Setup
 
-End-user setup instructions for requesting and connecting a Daylite personal token are documented in `docs/daylite-personal-token.md`.
-The app persists rotated Daylite access/refresh tokens locally, so users do not need to request a personal token again during normal operation.
+End-user authentication flow and token lifecycle are documented in `docs/daylite-authentication-flow.md`.
+The app persists rotated Daylite access/refresh tokens locally and refreshes access tokens before expiry.
 
 ### Basic Employee Management
 

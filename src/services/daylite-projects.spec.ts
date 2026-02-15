@@ -29,6 +29,7 @@ describe("daylite project service", () => {
           reference: "/v1/projects/7000",
           name: "Projekt Nord",
           status: "NEW",
+          category: "Überfällig",
           due: "2026-02-15",
           createDate: "not-a-date",
           modifyDate: "2026-02-15T12:45:00+01:00",
@@ -41,13 +42,56 @@ describe("daylite project service", () => {
     expect(result.source).toBe("network");
     expect(result.errorMessage).toBeNull();
     expect(result.projects).toEqual([
-      {
+      expect.objectContaining({
         self: "/v1/projects/7000",
         name: "Projekt Nord",
         status: "new_status",
         due: "2026-02-15T00:00:00.000Z",
         modify_date: "2026-02-15T11:45:00.000Z",
-      },
+      }),
+    ]);
+  });
+
+  it("applies the standard filter by default after loading Daylite projects", async () => {
+    mockDayliteListProjects.mockResolvedValue({
+      status: "ok",
+      data: [
+        {
+          reference: "/v1/projects/7101",
+          name: "Projekt Pipeline",
+          status: "in_progress",
+          keywords: ["Aufträge", "Vorbereitung"],
+          category: "Neutral",
+        },
+        {
+          reference: "/v1/projects/7102",
+          name: "Projekt Kategorie",
+          status: "new",
+          keywords: ["Sonstiges"],
+          category: "Überfällig",
+        },
+        {
+          reference: "/v1/projects/7103",
+          name: "Projekt Erledigt",
+          status: "done",
+          keywords: ["Aufträge", "Durchführung"],
+          category: "Liefertermin bekannt",
+        },
+        {
+          reference: "/v1/projects/7104",
+          name: "Projekt Ohne Treffer",
+          status: "in_progress",
+          keywords: ["Sonstiges"],
+          category: "Neutral",
+        },
+      ],
+    });
+
+    const result = await loadDayliteProjects({ nowMs: 1_000 });
+
+    expect(result.projects.map((project) => project.self)).toEqual([
+      "/v1/projects/7101",
+      "/v1/projects/7102",
     ]);
   });
 
@@ -59,6 +103,7 @@ describe("daylite project service", () => {
           reference: "/v1/projects/7001",
           name: "Projekt Ost",
           status: "in_progress",
+          category: "Liefertermin bekannt",
         },
       ],
     });
@@ -79,6 +124,7 @@ describe("daylite project service", () => {
           reference: "/v1/projects/7010",
           name: "Projekt Mehrfachnutzung",
           status: "in_progress",
+          keywords: ["Aufträge", "Vorbereitung"],
         },
       ],
     });
@@ -100,6 +146,7 @@ describe("daylite project service", () => {
             reference: "/v1/projects/7002",
             name: "Projekt Alt",
             status: "in_progress",
+            keywords: ["Aufträge", "Vorbereitung"],
           },
         ],
       })
@@ -109,7 +156,8 @@ describe("daylite project service", () => {
           {
             reference: "/v1/projects/7003",
             name: "Projekt Neu",
-            status: "done",
+            status: "in_progress",
+            keywords: ["Aufträge", "Durchführung"],
           },
         ],
       });
@@ -142,6 +190,7 @@ describe("daylite project service", () => {
           reference: "/v1/projects/7004",
           name: "Projekt Parallel",
           status: "in_progress",
+          category: "Liefertermin bekannt",
         },
       ],
     });
@@ -162,6 +211,7 @@ describe("daylite project service", () => {
             reference: "/v1/projects/7005",
             name: "Projekt Stabil",
             status: "in_progress",
+            category: "Überfällig",
           },
         ],
       })

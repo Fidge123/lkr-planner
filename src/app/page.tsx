@@ -63,7 +63,9 @@ export function PlanningGridTable({
           </p>
         ) : null}
         {!isLoading && projects.length === 0 ? (
-          <p className="mt-2 text-base-content/70">Keine Projekte geladen.</p>
+          <p className="mt-2 text-base-content/70">
+            Keine Projekte im Standard-Filter gefunden
+          </p>
         ) : null}
         {!isLoading && projects.length > 0 ? (
           <table className="table table-sm mt-3">

@@ -1,5 +1,6 @@
 import type { DayliteProjectRecord } from "../domain/planning";
 import { commands } from "../generated/tauri";
+import { applyStandardFilter } from "./standard-filter";
 
 export const DEFAULT_DAYLITE_PROJECT_CACHE_TTL_MS = 30_000;
 
@@ -59,8 +60,10 @@ export async function loadDayliteProjects(
   const cacheIsFresh = projectCache !== null && cacheAgeMs < cacheTtlMs;
 
   if (!forceRefresh && cacheIsFresh && projectCache) {
+    const filteredProjects = applyStandardFilter(projectCache.projects);
+
     return {
-      projects: projectCache.projects,
+      projects: filteredProjects,
       source: "cache",
       errorMessage: null,
     };
@@ -73,9 +76,10 @@ export async function loadDayliteProjects(
   inFlightRequest = fetchAndMapProjects()
     .then((projects) => {
       projectCache = { projects, fetchedAtMs: nowMs };
+      const filteredProjects = applyStandardFilter(projects);
 
       return {
-        projects,
+        projects: filteredProjects,
         source: "network",
         errorMessage: null,
       } satisfies DayliteProjectsLoadResult;
@@ -83,8 +87,10 @@ export async function loadDayliteProjects(
     .catch((error) => {
       const errorMessage = getErrorMessage(error);
       if (projectCache) {
+        const filteredProjects = applyStandardFilter(projectCache.projects);
+
         return {
-          projects: projectCache.projects,
+          projects: filteredProjects,
           source: "stale-cache",
           errorMessage,
         } satisfies DayliteProjectsLoadResult;

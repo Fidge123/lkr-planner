@@ -3,10 +3,10 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use specta::Type;
-use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
 use tauri_plugin_http::reqwest;
 use tauri_plugin_http::reqwest::header::AUTHORIZATION;
 
@@ -15,6 +15,8 @@ use tauri_plugin_http::reqwest::header::AUTHORIZATION;
 pub struct DayliteTokenState {
     pub access_token: String,
     pub refresh_token: String,
+    #[serde(default)]
+    pub access_token_expires_at_ms: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
@@ -97,9 +99,9 @@ pub enum DayliteApiErrorCode {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-pub struct DaylitePersonalTokenRequest {
+pub struct DayliteRefreshTokenRequest {
     pub base_url: String,
-    pub personal_token: String,
+    pub refresh_token: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
@@ -111,15 +113,13 @@ pub struct DayliteSearchInput {
 
 #[tauri::command]
 #[specta::specta]
-pub async fn daylite_connect_personal_token(
+pub async fn daylite_connect_refresh_token(
     app: tauri::AppHandle,
-    request: DaylitePersonalTokenRequest,
+    request: DayliteRefreshTokenRequest,
 ) -> Result<DayliteTokenSyncStatus, DayliteApiError> {
     let base_url = normalize_base_url(&request.base_url)?;
     let client = DayliteApiClient::new(&base_url)?;
-    let token_state = client
-        .exchange_personal_token(request.personal_token)
-        .await?;
+    let token_state = client.exchange_refresh_token(request.refresh_token).await?;
 
     let mut store = load_store_or_error(app.clone())?;
     store.api_endpoints.daylite_base_url = base_url;
@@ -219,25 +219,31 @@ impl DayliteApiClient {
         Self { transport }
     }
 
-    pub async fn exchange_personal_token(
+    pub async fn exchange_refresh_token(
         &self,
-        personal_token: String,
+        refresh_token: String,
     ) -> Result<DayliteTokenState, DayliteApiError> {
-        self.refresh_tokens(personal_token).await
+        self.refresh_tokens(refresh_token).await
     }
 
     pub async fn list_projects(
         &self,
         token_state: DayliteTokenState,
     ) -> Result<DayliteApiResponse<Vec<DayliteProjectSummary>>, DayliteApiError> {
-        self.execute_json_request(
-            DayliteHttpMethod::Get,
-            "/projects",
-            Vec::new(),
-            None,
-            token_state,
-        )
-        .await
+        let search_response = self
+            .execute_json_request::<DayliteSearchResult<DayliteProjectSummary>>(
+                DayliteHttpMethod::Post,
+                "/projects/_search",
+                vec![("full-records".to_string(), "true".to_string())],
+                Some(json!({})),
+                token_state,
+            )
+            .await?;
+
+        Ok(DayliteApiResponse {
+            data: search_response.data.results,
+            token_state: search_response.token_state,
+        })
     }
 
     pub async fn search_projects(
@@ -317,48 +323,27 @@ impl DayliteApiClient {
         if token_state.access_token.trim().is_empty() && token_state.refresh_token.trim().is_empty()
         {
             return Err(missing_token_error(
-                "Es ist kein Daylite-Token hinterlegt. Bitte zuerst ein Personal Token verbinden.",
+                "Es sind keine Daylite-Zugangsdaten hinterlegt. Bitte ein Refresh-Token hinterlegen.",
                 "Weder Access- noch Refresh-Token sind vorhanden.",
             ));
         }
 
-        if token_state.access_token.trim().is_empty() {
+        let now_ms = current_epoch_ms()?;
+        if should_refresh_access_token(&token_state, now_ms) {
             token_state = self
                 .refresh_tokens(token_state.refresh_token.clone())
                 .await?;
         }
 
-        let mut response = self
+        let response = self
             .send_request(
                 method,
                 path,
-                query.clone(),
-                body.clone(),
+                query,
+                body,
                 Some(token_state.access_token.clone()),
             )
             .await?;
-
-        apply_rotated_tokens(&response, &mut token_state);
-
-        if response.status == 401 {
-            if token_state.refresh_token.trim().is_empty() {
-                return Err(normalize_http_error(response.status, &response.body, path));
-            }
-
-            token_state = self
-                .refresh_tokens(token_state.refresh_token.clone())
-                .await?;
-            response = self
-                .send_request(
-                    method,
-                    path,
-                    query,
-                    body,
-                    Some(token_state.access_token.clone()),
-                )
-                .await?;
-            apply_rotated_tokens(&response, &mut token_state);
-        }
 
         if !(200..300).contains(&response.status) {
             return Err(normalize_http_error(response.status, &response.body, path));
@@ -383,7 +368,7 @@ impl DayliteApiClient {
     ) -> Result<DayliteTokenState, DayliteApiError> {
         if refresh_token.trim().is_empty() {
             return Err(missing_token_error(
-                "Das Daylite-Refresh-Token fehlt. Bitte Personal Token erneut verbinden.",
+                "Das Daylite-Refresh-Token fehlt. Bitte Refresh-Token hinterlegen.",
                 "Refresh-Token ist leer.",
             ));
         }
@@ -408,23 +393,53 @@ impl DayliteApiClient {
             return Err(error);
         }
 
-        let access_token = extract_access_token(&response).ok_or_else(|| DayliteApiError {
-            code: DayliteApiErrorCode::TokenRefreshFailed,
-            http_status: Some(response.status),
-            user_message: "Das Daylite-Access-Token konnte nicht erneuert werden.".to_string(),
-            technical_message: format!(
-                "Kein Access-Token in Refresh-Antwort gefunden. headers={:?}, body={}",
-                response.headers,
-                truncate_for_log(&response.body)
-            ),
-        })?;
+        let parsed_refresh = parse_refresh_response_body(&response)?;
+        let access_token = parsed_refresh.access_token.trim().to_string();
+        let refreshed_refresh_token = parsed_refresh.refresh_token.trim().to_string();
 
-        let refreshed_refresh_token =
-            extract_refresh_token(&response).unwrap_or_else(|| refresh_token.clone());
+        if access_token.is_empty() {
+            return Err(DayliteApiError {
+                code: DayliteApiErrorCode::TokenRefreshFailed,
+                http_status: Some(response.status),
+                user_message: "Das Daylite-Access-Token konnte nicht erneuert werden.".to_string(),
+                technical_message: format!(
+                    "Refresh-Antwort enthält ein leeres access_token Feld. body={}",
+                    truncate_for_log(&response.body)
+                ),
+            });
+        }
+
+        if refreshed_refresh_token.is_empty() {
+            return Err(DayliteApiError {
+                code: DayliteApiErrorCode::TokenRefreshFailed,
+                http_status: Some(response.status),
+                user_message: "Das Daylite-Refresh-Token konnte nicht erneuert werden.".to_string(),
+                technical_message: format!(
+                    "Refresh-Antwort enthält ein leeres refresh_token Feld. body={}",
+                    truncate_for_log(&response.body)
+                ),
+            });
+        }
+
+        if parsed_refresh.expires_in == 0 {
+            return Err(DayliteApiError {
+                code: DayliteApiErrorCode::TokenRefreshFailed,
+                http_status: Some(response.status),
+                user_message: "Die Ablaufzeit des Daylite-Access-Tokens ist ungültig.".to_string(),
+                technical_message: format!(
+                    "Refresh-Antwort enthält expires_in=0. body={}",
+                    truncate_for_log(&response.body)
+                ),
+            });
+        }
+
+        let now_ms = current_epoch_ms()?;
+        let expires_at_ms = now_ms.saturating_add(parsed_refresh.expires_in.saturating_mul(1_000));
 
         Ok(DayliteTokenState {
             access_token,
             refresh_token: refreshed_refresh_token,
+            access_token_expires_at_ms: Some(expires_at_ms),
         })
     }
 
@@ -475,7 +490,6 @@ struct DayliteHttpRequest {
 #[derive(Debug, Clone)]
 struct DayliteHttpResponse {
     status: u16,
-    headers: HashMap<String, String>,
     body: String,
 }
 
@@ -551,14 +565,6 @@ impl DayliteHttpTransport for ReqwestTransport {
             })?;
 
             let status = response.status().as_u16();
-            let mut headers = HashMap::new();
-            for (key, value) in response.headers() {
-                headers.insert(
-                    key.as_str().to_ascii_lowercase(),
-                    value.to_str().unwrap_or_default().to_string(),
-                );
-            }
-
             let body = response.text().await.map_err(|error| DayliteApiError {
                 code: DayliteApiErrorCode::RequestFailed,
                 http_status: Some(status),
@@ -566,11 +572,7 @@ impl DayliteHttpTransport for ReqwestTransport {
                 technical_message: format!("Antworttext konnte nicht gelesen werden: {error}"),
             })?;
 
-            Ok(DayliteHttpResponse {
-                status,
-                headers,
-                body,
-            })
+            Ok(DayliteHttpResponse { status, body })
         })
     }
 }
@@ -618,88 +620,56 @@ fn missing_token_error(user_message: &str, technical_message: &str) -> DayliteAp
     }
 }
 
-fn apply_rotated_tokens(response: &DayliteHttpResponse, token_state: &mut DayliteTokenState) {
-    if let Some(access_token) = extract_access_token(response) {
-        token_state.access_token = access_token;
-    }
-    if let Some(refresh_token) = extract_refresh_token(response) {
-        token_state.refresh_token = refresh_token;
-    }
+#[derive(Debug, Deserialize)]
+struct DayliteRefreshTokenResponse {
+    access_token: String,
+    refresh_token: String,
+    expires_in: u64,
 }
 
-fn extract_access_token(response: &DayliteHttpResponse) -> Option<String> {
-    extract_header_token(response, &["authorization", "access-token", "access_token"])
-        .map(|token| normalize_access_token(&token))
-        .filter(|token| !token.is_empty())
-        .or_else(|| {
-            extract_token_from_json(
-                &response.body,
-                &["authorization", "access_token", "access-token", "token"],
-            )
-            .map(|token| normalize_access_token(&token))
-            .filter(|token| !token.is_empty())
-        })
-}
-
-fn extract_refresh_token(response: &DayliteHttpResponse) -> Option<String> {
-    extract_header_token(
-        response,
-        &["refresh-token", "refresh_token", "x-refresh-token"],
-    )
-    .filter(|token| !token.trim().is_empty())
-    .or_else(|| {
-        extract_token_from_json(&response.body, &["refresh_token", "refresh-token"])
-            .filter(|token| !token.trim().is_empty())
-    })
-}
-
-fn extract_header_token(response: &DayliteHttpResponse, key_candidates: &[&str]) -> Option<String> {
-    key_candidates.iter().find_map(|key| {
-        response
-            .headers
-            .get(*key)
-            .map(|value| value.trim().to_string())
-    })
-}
-
-fn extract_token_from_json(body: &str, key_candidates: &[&str]) -> Option<String> {
-    let parsed = serde_json::from_str::<Value>(body).ok()?;
-    find_json_key_value(&parsed, key_candidates)
-}
-
-fn find_json_key_value(value: &Value, key_candidates: &[&str]) -> Option<String> {
-    match value {
-        Value::Object(map) => {
-            for (key, current_value) in map {
-                if key_candidates
-                    .iter()
-                    .any(|candidate| key.eq_ignore_ascii_case(candidate))
-                {
-                    if let Some(token) = current_value.as_str() {
-                        return Some(token.to_string());
-                    }
-                }
-
-                if let Some(found) = find_json_key_value(current_value, key_candidates) {
-                    return Some(found);
-                }
-            }
-            None
+fn parse_refresh_response_body(
+    response: &DayliteHttpResponse,
+) -> Result<DayliteRefreshTokenResponse, DayliteApiError> {
+    serde_json::from_str::<DayliteRefreshTokenResponse>(&response.body).map_err(|error| {
+        DayliteApiError {
+            code: DayliteApiErrorCode::TokenRefreshFailed,
+            http_status: Some(response.status),
+            user_message: "Die Daylite-Token-Antwort konnte nicht verarbeitet werden.".to_string(),
+            technical_message: format!(
+                "Ungültige Refresh-Antwort. Erwartet wurden access_token, refresh_token, expires_in. error={error}; body={}",
+                truncate_for_log(&response.body)
+            ),
         }
-        Value::Array(values) => values
-            .iter()
-            .find_map(|item| find_json_key_value(item, key_candidates)),
-        _ => None,
+    })
+}
+
+fn should_refresh_access_token(token_state: &DayliteTokenState, now_ms: u64) -> bool {
+    if token_state.access_token.trim().is_empty() {
+        return true;
+    }
+
+    match token_state.access_token_expires_at_ms {
+        Some(expires_at_ms) => expires_at_ms <= now_ms.saturating_add(10_000),
+        None => true,
     }
 }
 
-fn normalize_access_token(token_value: &str) -> String {
-    let trimmed = token_value.trim();
-    if trimmed.len() >= 7 && trimmed[..7].eq_ignore_ascii_case("bearer ") {
-        return trimmed[7..].trim().to_string();
-    }
+fn current_epoch_ms() -> Result<u64, DayliteApiError> {
+    let duration = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|error| DayliteApiError {
+            code: DayliteApiErrorCode::RequestFailed,
+            http_status: None,
+            user_message: "Die aktuelle Systemzeit konnte nicht gelesen werden.".to_string(),
+            technical_message: format!("Systemzeitfehler: {error}"),
+        })?;
 
-    trimmed.to_string()
+    u64::try_from(duration.as_millis()).map_err(|error| DayliteApiError {
+        code: DayliteApiErrorCode::RequestFailed,
+        http_status: None,
+        user_message: "Die aktuelle Systemzeit konnte nicht gelesen werden.".to_string(),
+        technical_message: format!("Zeitstempel-Konvertierung fehlgeschlagen: {error}"),
+    })
 }
 
 fn truncate_for_log(value: &str) -> String {
@@ -735,12 +705,15 @@ fn load_daylite_tokens(store: &LocalStore) -> DayliteTokenState {
     DayliteTokenState {
         access_token: store.token_references.daylite_access_token.clone(),
         refresh_token: store.token_references.daylite_refresh_token.clone(),
+        access_token_expires_at_ms: store.token_references.daylite_access_token_expires_at_ms,
     }
 }
 
 fn store_daylite_tokens(store: &mut LocalStore, token_state: &DayliteTokenState) {
     store.token_references.daylite_access_token = token_state.access_token.clone();
     store.token_references.daylite_refresh_token = token_state.refresh_token.clone();
+    store.token_references.daylite_access_token_expires_at_ms =
+        token_state.access_token_expires_at_ms;
 }
 
 fn load_store_or_error(app: tauri::AppHandle) -> Result<LocalStore, DayliteApiError> {
@@ -772,7 +745,7 @@ mod tests {
             let transport = MockTransport::new(vec![Ok(mock_response(
                 200,
                 vec![],
-                r#"[{"self":"/v1/projects/1000","name":"Projekt Alpha"}]"#,
+                r#"{"results":[{"self":"/v1/projects/1000","name":"Projekt Alpha","status":"in_progress","category":"Überfällig","keywords":["Aufträge","Vorbereitung"]}]}"#,
             ))]);
             let client = DayliteApiClient::with_transport(Arc::new(transport.clone()));
 
@@ -780,6 +753,7 @@ mod tests {
                 .list_projects(DayliteTokenState {
                     access_token: "access-1".to_string(),
                     refresh_token: "refresh-1".to_string(),
+                    access_token_expires_at_ms: Some(u64::MAX),
                 })
                 .await
                 .expect("request should succeed");
@@ -787,8 +761,15 @@ mod tests {
             assert_eq!(result.data.len(), 1);
             assert_eq!(result.data[0].reference, "/v1/projects/1000");
             assert_eq!(result.data[0].name, "Projekt Alpha");
+            assert_eq!(result.data[0].status, Some("in_progress".to_string()));
             assert_eq!(transport.requests().len(), 1);
-            assert_eq!(transport.requests()[0].path, "/projects");
+            assert_eq!(transport.requests()[0].method, DayliteHttpMethod::Post);
+            assert_eq!(transport.requests()[0].path, "/projects/_search");
+            assert_eq!(
+                transport.requests()[0].query,
+                vec![("full-records".to_string(), "true".to_string())]
+            );
+            assert_eq!(transport.requests()[0].body, Some(json!({})));
         });
     }
 
@@ -806,6 +787,7 @@ mod tests {
                 .list_projects(DayliteTokenState {
                     access_token: "invalid-token".to_string(),
                     refresh_token: String::new(),
+                    access_token_expires_at_ms: Some(u64::MAX),
                 })
                 .await
                 .expect_err("request should fail");
@@ -831,6 +813,7 @@ mod tests {
                 .list_projects(DayliteTokenState {
                     access_token: "access-1".to_string(),
                     refresh_token: "refresh-1".to_string(),
+                    access_token_expires_at_ms: Some(u64::MAX),
                 })
                 .await
                 .expect_err("request should fail");
@@ -854,6 +837,7 @@ mod tests {
                 .list_projects(DayliteTokenState {
                     access_token: "access-1".to_string(),
                     refresh_token: "refresh-1".to_string(),
+                    access_token_expires_at_ms: Some(u64::MAX),
                 })
                 .await
                 .expect_err("request should fail");
@@ -877,9 +861,10 @@ mod tests {
                 .list_projects(DayliteTokenState {
                     access_token: "access-1".to_string(),
                     refresh_token: "refresh-1".to_string(),
+                    access_token_expires_at_ms: Some(u64::MAX),
                 })
                 .await
-                .expect_err("request should fail because payload is not an array");
+                .expect_err("request should fail because payload is not a search object");
 
             assert_eq!(error.code, DayliteApiErrorCode::InvalidResponse);
             assert_eq!(error.http_status, Some(200));
@@ -887,28 +872,18 @@ mod tests {
     }
 
     #[test]
-    fn list_projects_uses_personal_token_refresh_flow_and_rotates_tokens() {
+    fn list_projects_refreshes_before_request_when_access_token_is_expired() {
         tauri::async_runtime::block_on(async {
             let transport = MockTransport::new(vec![
-                Ok(mock_response(401, vec![], r#"{"error":"unauthorized"}"#)),
                 Ok(mock_response(
                     200,
-                    vec![
-                        (
-                            "authorization".to_string(),
-                            "Bearer refreshed-access-token".to_string(),
-                        ),
-                        (
-                            "refresh-token".to_string(),
-                            "refreshed-refresh-token".to_string(),
-                        ),
-                    ],
-                    r#"{"result":"ok"}"#,
+                    vec![],
+                    r#"{"access_token":"refreshed-access-token","expires_in":3600,"token_type":"Bearer","scope":"daylite:read daylite:write","refresh_token":"refreshed-refresh-token"}"#,
                 )),
                 Ok(mock_response(
                     200,
                     vec![],
-                    r#"[{"self":"/v1/projects/2000","name":"Projekt Beta"}]"#,
+                    r#"{"results":[{"self":"/v1/projects/2000","name":"Projekt Beta"}]}"#,
                 )),
             ]);
             let client = DayliteApiClient::with_transport(Arc::new(transport.clone()));
@@ -917,6 +892,7 @@ mod tests {
                 .list_projects(DayliteTokenState {
                     access_token: "expired-access-token".to_string(),
                     refresh_token: "initial-refresh-token".to_string(),
+                    access_token_expires_at_ms: Some(0),
                 })
                 .await
                 .expect("request should succeed after refresh");
@@ -924,23 +900,148 @@ mod tests {
             assert_eq!(result.data.len(), 1);
             assert_eq!(result.token_state.access_token, "refreshed-access-token");
             assert_eq!(result.token_state.refresh_token, "refreshed-refresh-token");
+            assert!(result.token_state.access_token_expires_at_ms.is_some());
 
             let requests = transport.requests();
-            assert_eq!(requests.len(), 3);
-            assert_eq!(requests[0].path, "/projects");
-            assert_eq!(requests[1].path, "/personal_token/refresh_token");
+            assert_eq!(requests.len(), 2);
+            assert_eq!(requests[0].path, "/personal_token/refresh_token");
             assert_eq!(
-                requests[1].query,
+                requests[0].query,
                 vec![(
                     "refresh_token".to_string(),
                     "initial-refresh-token".to_string()
                 )]
             );
-            assert_eq!(requests[2].path, "/projects");
+            assert_eq!(requests[1].path, "/projects/_search");
             assert_eq!(
-                requests[2].access_token,
+                requests[1].access_token,
                 Some("refreshed-access-token".to_string())
             );
+        });
+    }
+
+    #[test]
+    fn list_projects_refreshes_when_access_token_is_missing() {
+        tauri::async_runtime::block_on(async {
+            let transport = MockTransport::new(vec![
+                Ok(mock_response(
+                    200,
+                    vec![],
+                    r#"{"access_token":"new-access-token","expires_in":3600,"token_type":"Bearer","scope":"daylite:read daylite:write","refresh_token":"new-refresh-token"}"#,
+                )),
+                Ok(mock_response(
+                    200,
+                    vec![],
+                    r#"{"results":[{"self":"/v1/projects/4000","name":"Projekt Delta"}]}"#,
+                )),
+            ]);
+            let client = DayliteApiClient::with_transport(Arc::new(transport.clone()));
+
+            let result = client
+                .list_projects(DayliteTokenState {
+                    access_token: String::new(),
+                    refresh_token: "initial-refresh-token".to_string(),
+                    access_token_expires_at_ms: None,
+                })
+                .await
+                .expect("request should succeed after oauth-style token refresh");
+
+            assert_eq!(result.data.len(), 1);
+            assert_eq!(result.token_state.access_token, "new-access-token");
+            assert_eq!(result.token_state.refresh_token, "new-refresh-token");
+            assert!(result.token_state.access_token_expires_at_ms.is_some());
+
+            let requests = transport.requests();
+            assert_eq!(requests.len(), 2);
+            assert_eq!(requests[0].path, "/personal_token/refresh_token");
+            assert_eq!(requests[1].path, "/projects/_search");
+            assert_eq!(
+                requests[1].access_token,
+                Some("new-access-token".to_string())
+            );
+        });
+    }
+
+    #[test]
+    fn list_projects_uses_existing_access_token_when_it_is_still_valid() {
+        tauri::async_runtime::block_on(async {
+            let transport = MockTransport::new(vec![Ok(mock_response(
+                200,
+                vec![],
+                r#"{"results":[{"self":"/v1/projects/3000","name":"Projekt Gamma"}]}"#,
+            ))]);
+            let client = DayliteApiClient::with_transport(Arc::new(transport.clone()));
+
+            let result = client
+                .list_projects(DayliteTokenState {
+                    access_token: "active-access-token".to_string(),
+                    refresh_token: "initial-refresh-token".to_string(),
+                    access_token_expires_at_ms: Some(u64::MAX),
+                })
+                .await
+                .expect("request should succeed with existing access token");
+
+            assert_eq!(result.data.len(), 1);
+            assert_eq!(result.token_state.access_token, "active-access-token");
+            assert_eq!(result.token_state.refresh_token, "initial-refresh-token");
+
+            let requests = transport.requests();
+            assert_eq!(requests.len(), 1);
+            assert_eq!(requests[0].path, "/projects/_search");
+            assert_eq!(
+                requests[0].access_token,
+                Some("active-access-token".to_string())
+            );
+        });
+    }
+
+    #[test]
+    fn list_projects_fails_refresh_when_token_fields_are_not_snake_case() {
+        tauri::async_runtime::block_on(async {
+            let transport = MockTransport::new(vec![Ok(mock_response(
+                200,
+                vec![],
+                r#"{"accessToken":"new-access-token","refreshToken":"new-refresh-token","expires_in":3600}"#,
+            ))]);
+            let client = DayliteApiClient::with_transport(Arc::new(transport));
+
+            let error = client
+                .list_projects(DayliteTokenState {
+                    access_token: String::new(),
+                    refresh_token: "initial-refresh-token".to_string(),
+                    access_token_expires_at_ms: None,
+                })
+                .await
+                .expect_err("request should fail for unsupported token key names");
+
+            assert_eq!(error.code, DayliteApiErrorCode::TokenRefreshFailed);
+        });
+    }
+
+    #[test]
+    fn list_projects_does_not_refresh_on_401_when_access_token_not_near_expiry() {
+        tauri::async_runtime::block_on(async {
+            let transport = MockTransport::new(vec![Ok(mock_response(
+                401,
+                vec![],
+                r#"{"error":"unauthorized"}"#,
+            ))]);
+            let client = DayliteApiClient::with_transport(Arc::new(transport.clone()));
+
+            let error = client
+                .list_projects(DayliteTokenState {
+                    access_token: "invalid-access-token".to_string(),
+                    refresh_token: "refresh-token-1".to_string(),
+                    access_token_expires_at_ms: Some(u64::MAX),
+                })
+                .await
+                .expect_err("request should fail with unauthorized");
+
+            assert_eq!(error.code, DayliteApiErrorCode::Unauthorized);
+
+            let requests = transport.requests();
+            assert_eq!(requests.len(), 1);
+            assert_eq!(requests[0].path, "/projects/_search");
         });
     }
 
@@ -959,6 +1060,7 @@ mod tests {
                     DayliteTokenState {
                         access_token: "access-1".to_string(),
                         refresh_token: "refresh-1".to_string(),
+                        access_token_expires_at_ms: Some(u64::MAX),
                     },
                     "Max",
                     Some(10),
@@ -1005,6 +1107,28 @@ mod tests {
             assert_eq!(error.code, DayliteApiErrorCode::MissingToken);
             assert_eq!(error.http_status, None);
         });
+    }
+
+    #[test]
+    fn should_refresh_access_token_when_less_than_ten_seconds_remain() {
+        let token_state = DayliteTokenState {
+            access_token: "access-token-1".to_string(),
+            refresh_token: "refresh-token-1".to_string(),
+            access_token_expires_at_ms: Some(9_999),
+        };
+
+        assert!(should_refresh_access_token(&token_state, 0));
+    }
+
+    #[test]
+    fn should_not_refresh_access_token_when_more_than_ten_seconds_remain() {
+        let token_state = DayliteTokenState {
+            access_token: "access-token-1".to_string(),
+            refresh_token: "refresh-token-1".to_string(),
+            access_token_expires_at_ms: Some(10_001),
+        };
+
+        assert!(!should_refresh_access_token(&token_state, 0));
     }
 
     #[derive(Clone)]
@@ -1061,12 +1185,11 @@ mod tests {
 
     fn mock_response(
         status: u16,
-        headers: Vec<(String, String)>,
+        _headers: Vec<(String, String)>,
         body: &str,
     ) -> DayliteHttpResponse {
         DayliteHttpResponse {
             status,
-            headers: headers.into_iter().collect(),
             body: body.to_string(),
         }
     }

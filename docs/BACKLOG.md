@@ -13,30 +13,6 @@
 
 ## EPIC 3: Daylite Integration
 
-### BL-028: Standard-Filter Logic for Daylite Projects
-Priority: P0  
-Effort: S
-
-Scope:
-- Replace term "proposal set" with:
-  - `Standard-Filter` (saved default rule set)
-  - `Filter` (currently active rule set in UI context)
-- Implement Standard-Filter rule engine for Daylite projects:
-  - Pipeline rule default: pipeline `Aufträge` and column `Vorbereitung` or `Durchführung`
-  - Category rule default: category `Überfällig` or `Liefertermin bekannt`
-  - Exclusion rule default: status `Done` is never shown
-- Apply Standard-Filter by default in planning/assignment project lists.
-
-Acceptance Criteria:
-- Project lists use Standard-Filter by default.
-- `Done` projects are excluded even if other rules match.
-- Empty result after filtering shows clear German state text (`Keine Projekte im Standard-Filter gefunden`).
-
-Tests (write first):
-- Rule engine tests for default rules and exclusion precedence.
-- Integration tests for filter application on loaded Daylite projects.
-- UI tests for empty state when Standard-Filter has no results.
-
 ### BL-029: Standard-Filter Configuration UI (Dedicated Modal)
 Priority: P1  
 Effort: M

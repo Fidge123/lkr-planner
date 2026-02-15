@@ -192,7 +192,7 @@ Scope:
   - API endpoints
   - Tokens/references
   - Employee-specific settings
-  - Project proposal filters (pipelines, columns, categories, exclusion status)
+  - Standard-Filter (pipelines, columns, categories, exclusion status)
   - Contact filter for active employees (Default keyword: `Monteur`)
   - Routing settings for `openrouteservice.org` (API key, profile)
 - Optional local cache for recently loaded Daylite data (without source-of-truth role).
@@ -238,16 +238,16 @@ Tests (write first):
   - unauthorized (401)
   - rate limit (429)
   - server error (500)
-- ✅ Added token refresh/rotation test for Daylite personal token flow.
+- ✅ Added token refresh/rotation test for Daylite access/refresh token flow.
 
 **Implementation:**
 - Added new Daylite integration module `src-tauri/src/integrations/daylite.rs`.
 - Implemented typed API client methods for project/contact list and search endpoints.
 - Implemented centralized `DayliteApiError` with machine-readable code, optional HTTP status, German user message, and technical details.
-- Implemented Daylite personal token flow via `/personal_token/refresh_token` and automatic retry on `401`.
-- Added persistent tracking of rotated Daylite `access` + `refresh` tokens in local store (`tokenReferences.dayliteAccessToken`, `tokenReferences.dayliteRefreshToken`) so users do not need to request a personal token again after normal refresh cycles.
+- Implemented Daylite access/refresh token flow via `/personal_token/refresh_token`.
+- Added persistent tracking of rotated Daylite `access` + `refresh` tokens in local store (`tokenReferences.dayliteAccessToken`, `tokenReferences.dayliteRefreshToken`).
 - Added Tauri commands for Daylite connect/list/search flows and registered them in `src-tauri/src/lib.rs`.
-- Added ADR `docs/adr/0006-daylite-personal-token-rotation.md`.
+- Added ADR `docs/adr/0006-daylite-access-refresh-token-rotation.md`.
 
 ### BL-007: Daylite Project Loading with Short-Lived Cache (Read) ✅
 **Status:** Completed (2026-02-15)  
@@ -282,6 +282,37 @@ Tests (write first):
 - Extended Daylite project summary payload fields and binding types (`src-tauri/src/integrations/daylite.rs`, `src/generated/tauri.ts`).
 - Added ADR `docs/adr/0007-daylite-project-on-demand-loading-cache.md`.
 
+### BL-028: Standard-Filter Logic for Daylite Projects ✅
+**Status:** Completed (2026-02-15)  
+Priority: P0  
+Effort: S
+
+Scope:
+- Replace term "proposal set" with:
+  - `Standard-Filter` (saved default rule set)
+  - `Filter` (currently active rule set in UI context)
+- Implement Standard-Filter rule engine for Daylite projects:
+  - Pipeline rule default: pipeline `Aufträge` and column `Vorbereitung` or `Durchführung`
+  - Category rule default: category `Überfällig` or `Liefertermin bekannt`
+  - Exclusion rule default: status `Done` is never shown
+- Apply Standard-Filter by default in planning/assignment project lists.
+
+Acceptance Criteria:
+- ✅ Project lists use Standard-Filter by default.
+- ✅ `Done` projects are excluded even if other rules match.
+- ✅ Empty result after filtering shows clear German state text (`Keine Projekte im Standard-Filter gefunden`).
+
+Tests (write first):
+- ✅ Added rule engine tests in `src/services/standard-filter.spec.ts` for default rules and exclusion precedence.
+- ✅ Added integration tests in `src/services/daylite-projects.spec.ts` for Standard-Filter application on loaded Daylite projects.
+- ✅ Added UI empty-state assertion in `src/app/page.spec.tsx` for Standard-Filter with no results.
+
+**Implementation:**
+- Added Standard-Filter rule engine in `src/services/standard-filter.ts` with documented defaults and exclusion precedence.
+- Applied Standard-Filter by default in Daylite project loading flow (`src/services/daylite-projects.ts`) for network, cache, and stale-cache paths.
+- Updated planning project empty-state text to `Keine Projekte im Standard-Filter gefunden` in `src/app/page.tsx`.
+- Renamed local store terminology from proposal filters to Standard-Filter (`src-tauri/src/integrations/local_store.rs`, `src/generated/tauri.ts`) with backward-compatible alias support for existing `projectProposalFilters` payloads.
+
 ### BL-030: Show Daylite-Projects below the planning table ✅
 **Status:** Completed (2026-02-15)  
 Priority: P0  
@@ -296,7 +327,7 @@ Acceptance Criteria:
 - ✅ Loaded Daylite projects are visible below the planning table.
 - ✅ Section uses the existing in-memory dataset from planning project state.
 - ✅ Rendering the section does not create additional Daylite requests.
-- ✅ German loading/empty states are visible (`Projekte werden geladen...`, `Keine Projekte geladen.`).
+- ✅ German loading/empty states are visible (`Projekte werden geladen...`, `Keine Projekte im Standard-Filter gefunden`).
 
 Tests (write first):
 - ✅ Added/updated UI tests in `src/app/page.spec.tsx` for:

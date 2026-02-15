@@ -64,14 +64,16 @@ describe("planning grid project loading states", () => {
     expect(html).not.toContain("Kundenportal");
   });
 
-  it("shows empty state below the planning table when no projects are loaded", () => {
+  it("shows empty state for an empty standard filter result", () => {
     const html = renderToStaticMarkup(
       <PlanningGridTable weekOffset={0} projectState={{ ...defaultState }} />,
     );
 
     const tableIndex = html.indexOf("</table>");
     const sectionLabelIndex = html.indexOf("Geladene Projekte");
-    const emptyStateIndex = html.indexOf("Keine Projekte geladen.");
+    const emptyStateIndex = html.indexOf(
+      "Keine Projekte im Standard-Filter gefunden",
+    );
 
     expect(tableIndex).toBeGreaterThan(-1);
     expect(sectionLabelIndex).toBeGreaterThan(tableIndex);
