@@ -281,3 +281,31 @@ Tests (write first):
 - Updated timetable rendering to resolve assignment labels from loaded Daylite projects (`src/app/components/timetable-row.tsx`, `src/data/dummy-data.ts`).
 - Extended Daylite project summary payload fields and binding types (`src-tauri/src/integrations/daylite.rs`, `src/generated/tauri.ts`).
 - Added ADR `docs/adr/0007-daylite-project-on-demand-loading-cache.md`.
+
+### BL-030: Show Daylite-Projects below the planning table ✅
+**Status:** Completed (2026-02-15)  
+Priority: P0  
+Effort: S
+
+Scope:
+- Add a project overview section below the weekly planning table.
+- Render already loaded Daylite projects (no extra backend request path).
+- Display at least project name, status, and due date in German UI.
+
+Acceptance Criteria:
+- ✅ Loaded Daylite projects are visible below the planning table.
+- ✅ Section uses the existing in-memory dataset from planning project state.
+- ✅ Rendering the section does not create additional Daylite requests.
+- ✅ German loading/empty states are visible (`Projekte werden geladen...`, `Keine Projekte geladen.`).
+
+Tests (write first):
+- ✅ Added/updated UI tests in `src/app/page.spec.tsx` for:
+  - loading state in the overview section
+  - empty state below table
+  - loaded row rendering including status and due date
+- ✅ Added service/UI integration-oriented cache test in `src/services/daylite-projects.spec.ts` for secondary UI consumer reuse without extra request.
+
+**Implementation:**
+- Added loaded-project overview UI under the table in `src/app/page.tsx`.
+- Added German status mapping and due-date formatting for overview rows in `src/app/page.tsx`.
+- Kept existing top-level error banner behavior and avoided duplicate error panels.

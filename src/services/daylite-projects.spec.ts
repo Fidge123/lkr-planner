@@ -71,6 +71,26 @@ describe("daylite project service", () => {
     expect(mockDayliteListProjects).toHaveBeenCalledTimes(1);
   });
 
+  it("does not increase request count for secondary ui consumers (overview section)", async () => {
+    mockDayliteListProjects.mockResolvedValue({
+      status: "ok",
+      data: [
+        {
+          reference: "/v1/projects/7010",
+          name: "Projekt Mehrfachnutzung",
+          status: "in_progress",
+        },
+      ],
+    });
+
+    const planningData = await loadDayliteProjects({ nowMs: 10_000 });
+    const overviewData = await loadDayliteProjects({ nowMs: 10_010 });
+
+    expect(planningData.projects[0]?.self).toBe("/v1/projects/7010");
+    expect(overviewData.projects[0]?.self).toBe("/v1/projects/7010");
+    expect(mockDayliteListProjects).toHaveBeenCalledTimes(1);
+  });
+
   it("loads fresh data when ttl expires", async () => {
     mockDayliteListProjects
       .mockResolvedValueOnce({

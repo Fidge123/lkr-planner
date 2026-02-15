@@ -26,9 +26,6 @@ export function PlanningGridTable({
 
   return (
     <section className="w-full h-full overflow-auto">
-      {isLoading && projects.length === 0 ? (
-        <p className="p-4 text-base-content">Projekte werden geladen...</p>
-      ) : null}
       {errorMessage ? (
         <section className="alert alert-error m-4">
           <span>{errorMessage}</span>
@@ -57,6 +54,38 @@ export function PlanningGridTable({
           ))}
         </tbody>
       </table>
+
+      <section className="p-4 border-t border-base-300">
+        <h2 className="text-lg font-semibold">Geladene Projekte</h2>
+        {isLoading ? (
+          <p className="mt-2 text-base-content/70">
+            Projekte werden geladen...
+          </p>
+        ) : null}
+        {!isLoading && projects.length === 0 ? (
+          <p className="mt-2 text-base-content/70">Keine Projekte geladen.</p>
+        ) : null}
+        {!isLoading && projects.length > 0 ? (
+          <table className="table table-sm mt-3">
+            <thead>
+              <tr>
+                <th>Projekt</th>
+                <th>Status</th>
+                <th>Fällig</th>
+              </tr>
+            </thead>
+            <tbody>
+              {projects.map((project) => (
+                <tr key={project.self}>
+                  <td>{project.name}</td>
+                  <td>{toGermanProjectStatus(project.status)}</td>
+                  <td>{formatGermanDate(project.due)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : null}
+      </section>
     </section>
   );
 }
@@ -76,4 +105,44 @@ export interface PlanningGridProjectsState {
   isLoading: boolean;
   errorMessage: string | null;
   reloadProjects: () => void;
+}
+
+function toGermanProjectStatus(status: DayliteProjectRecord["status"]): string {
+  if (status === "new_status") {
+    return "Neu";
+  }
+  if (status === "in_progress") {
+    return "In Arbeit";
+  }
+  if (status === "done") {
+    return "Erledigt";
+  }
+  if (status === "abandoned") {
+    return "Abgebrochen";
+  }
+  if (status === "cancelled") {
+    return "Storniert";
+  }
+  if (status === "deferred") {
+    return "Zurückgestellt";
+  }
+
+  return "Unbekannt";
+}
+
+function formatGermanDate(isoDate: string | undefined): string {
+  if (!isoDate) {
+    return "Kein Termin";
+  }
+
+  const date = new Date(isoDate);
+  if (Number.isNaN(date.getTime())) {
+    return "Kein Termin";
+  }
+
+  return date.toLocaleDateString("de-DE", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
 }

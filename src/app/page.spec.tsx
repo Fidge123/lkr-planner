@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it, setSystemTime } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
-import { PlanningGrid, type PlanningGridProjectsState } from "./page";
+import { type PlanningGridProjectsState, PlanningGridTable } from "./page";
 
 const defaultState: PlanningGridProjectsState = {
   projects: [],
@@ -16,18 +16,19 @@ describe("planning grid project loading states", () => {
 
   it("shows initial german loading state when projects are loading", () => {
     const html = renderToStaticMarkup(
-      <PlanningGrid
+      <PlanningGridTable
         weekOffset={0}
         projectState={{ ...defaultState, isLoading: true }}
       />,
     );
 
+    expect(html).toContain("Geladene Projekte");
     expect(html).toContain("Projekte werden geladen...");
   });
 
   it("shows german error banner with retry action", () => {
     const html = renderToStaticMarkup(
-      <PlanningGrid
+      <PlanningGridTable
         weekOffset={0}
         projectState={{
           ...defaultState,
@@ -44,7 +45,7 @@ describe("planning grid project loading states", () => {
 
   it("renders daylite-backed project names instead of dummy projects", () => {
     const html = renderToStaticMarkup(
-      <PlanningGrid
+      <PlanningGridTable
         weekOffset={0}
         projectState={{
           ...defaultState,
@@ -61,5 +62,41 @@ describe("planning grid project loading states", () => {
 
     expect(html).toContain("Live Daylite Projekt");
     expect(html).not.toContain("Kundenportal");
+  });
+
+  it("shows empty state below the planning table when no projects are loaded", () => {
+    const html = renderToStaticMarkup(
+      <PlanningGridTable weekOffset={0} projectState={{ ...defaultState }} />,
+    );
+
+    const tableIndex = html.indexOf("</table>");
+    const sectionLabelIndex = html.indexOf("Geladene Projekte");
+    const emptyStateIndex = html.indexOf("Keine Projekte geladen.");
+
+    expect(tableIndex).toBeGreaterThan(-1);
+    expect(sectionLabelIndex).toBeGreaterThan(tableIndex);
+    expect(emptyStateIndex).toBeGreaterThan(sectionLabelIndex);
+  });
+
+  it("renders project status and due date in loaded projects section", () => {
+    const html = renderToStaticMarkup(
+      <PlanningGridTable
+        weekOffset={0}
+        projectState={{
+          ...defaultState,
+          projects: [
+            {
+              self: "/v1/projects/3001",
+              name: "Live Daylite Projekt",
+              status: "in_progress",
+              due: "2026-02-20T00:00:00.000Z",
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect(html).toContain("In Arbeit");
+    expect(html).toContain("20.02.2026");
   });
 });
