@@ -13,6 +13,37 @@
 
 ## EPIC 3: Daylite Integration
 
+### BL-030: Show Daylite-Projects below the planning table
+Priority: P0  
+Effort: S
+
+Scope:
+- Add a project overview section below the planning table in weekly view.
+- Render the currently loaded Daylite projects from the existing project loading state (no additional fetch call).
+- Show compact project rows with at least:
+  - project name
+  - status
+  - due date (if available)
+- Keep all display texts in German.
+
+UI behavior:
+- Loading state: `Projekte werden geladen...`
+- Empty state after successful load with no projects: `Keine Projekte geladen.`
+- Loaded state: list/table of loaded projects directly below the planning grid.
+- Error handling: keep existing error banner behavior from project loading; do not introduce a second, conflicting error UI.
+
+Acceptance Criteria:
+- User sees loaded Daylite projects below the planning table.
+- The section uses the same in-memory project dataset as the planning grid.
+- Rendering the section does not trigger additional Daylite requests.
+- German loading and empty states are visible and understandable.
+
+Tests (write first):
+- UI test: loaded state renders expected project names/status information below the table.
+- UI test: loading state text is visible in the project overview section.
+- UI test: empty state text `Keine Projekte geladen.` is visible when result set is empty.
+- Service/UI integration test: showing the overview section does not increase Daylite request count.
+
 ### BL-028: Standard-Filter Logic for Daylite Projects
 Priority: P0  
 Effort: S
