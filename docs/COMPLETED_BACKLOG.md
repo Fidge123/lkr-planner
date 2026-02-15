@@ -248,3 +248,36 @@ Tests (write first):
 - Added persistent tracking of rotated Daylite `access` + `refresh` tokens in local store (`tokenReferences.dayliteAccessToken`, `tokenReferences.dayliteRefreshToken`) so users do not need to request a personal token again after normal refresh cycles.
 - Added Tauri commands for Daylite connect/list/search flows and registered them in `src-tauri/src/lib.rs`.
 - Added ADR `docs/adr/0006-daylite-personal-token-rotation.md`.
+
+### BL-007: Daylite Project Loading with Short-Lived Cache (Read) ✅
+**Status:** Completed (2026-02-15)  
+Priority: P0  
+Effort: M
+
+Scope:
+- Replace project dummy data in planning flows with Daylite project reads on demand.
+- Add short-lived local cache with default TTL `30s` and request coalescing.
+- Show German loading/error/retry UI states and keep last successful data usable on transient errors.
+
+Acceptance Criteria:
+- ✅ Planning UI loads project data from Daylite (no dummy project list in active flow).
+- ✅ Repeated access within `30s` reuses cached data.
+- ✅ Requests after TTL expiry fetch fresh Daylite data.
+- ✅ On fetch error, UI shows German message and supports retry while retaining previous data.
+
+Tests (write first):
+- ✅ Added frontend service tests in `src/services/daylite-projects.spec.ts` for:
+  - mapping normalization (status/date)
+  - TTL cache hit/miss
+  - in-flight request coalescing
+  - stale-cache fallback on transient error
+  - no-cache error path
+- ✅ Added planning UI state tests in `src/app/page.spec.tsx` for loading/error/loaded rendering.
+- ✅ Added Rust Daylite malformed payload test in `src-tauri/src/integrations/daylite.rs`.
+
+**Implementation:**
+- Added frontend Daylite project loader service with `30s` in-memory cache and coalescing in `src/services/daylite-projects.ts`.
+- Added planning hook `src/app/use-planning-projects.ts` and wired it into `src/app/page.tsx`.
+- Updated timetable rendering to resolve assignment labels from loaded Daylite projects (`src/app/components/timetable-row.tsx`, `src/data/dummy-data.ts`).
+- Extended Daylite project summary payload fields and binding types (`src-tauri/src/integrations/daylite.rs`, `src/generated/tauri.ts`).
+- Added ADR `docs/adr/0007-daylite-project-on-demand-loading-cache.md`.

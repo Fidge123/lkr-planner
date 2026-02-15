@@ -30,6 +30,22 @@ pub struct DayliteProjectSummary {
     #[serde(rename = "self")]
     pub reference: String,
     pub name: String,
+    #[serde(default)]
+    pub status: Option<String>,
+    #[serde(default)]
+    pub category: Option<String>,
+    #[serde(default)]
+    pub keywords: Vec<String>,
+    #[serde(default)]
+    pub due: Option<String>,
+    #[serde(default)]
+    pub started: Option<String>,
+    #[serde(default)]
+    pub completed: Option<String>,
+    #[serde(default)]
+    pub create_date: Option<String>,
+    #[serde(default)]
+    pub modify_date: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
@@ -844,6 +860,29 @@ mod tests {
 
             assert_eq!(error.code, DayliteApiErrorCode::ServerError);
             assert_eq!(error.http_status, Some(500));
+        });
+    }
+
+    #[test]
+    fn list_projects_returns_invalid_response_error_for_malformed_payload() {
+        tauri::async_runtime::block_on(async {
+            let transport = MockTransport::new(vec![Ok(mock_response(
+                200,
+                vec![],
+                r#"{"self":"/v1/projects/1000","name":"Projekt Alpha"}"#,
+            ))]);
+            let client = DayliteApiClient::with_transport(Arc::new(transport));
+
+            let error = client
+                .list_projects(DayliteTokenState {
+                    access_token: "access-1".to_string(),
+                    refresh_token: "refresh-1".to_string(),
+                })
+                .await
+                .expect_err("request should fail because payload is not an array");
+
+            assert_eq!(error.code, DayliteApiErrorCode::InvalidResponse);
+            assert_eq!(error.http_status, Some(200));
         });
     }
 

@@ -178,34 +178,6 @@ export const employees: DayliteContactRecord[] = [
   },
 ];
 
-export const projects: DayliteProjectRecord[] = [
-  {
-    self: "/v1/projects/3001",
-    name: "Kundenportal",
-    status: "in_progress",
-  },
-  {
-    self: "/v1/projects/3002",
-    name: "Mobile App",
-    status: "new_status",
-  },
-  {
-    self: "/v1/projects/3003",
-    name: "Intern",
-    status: "done",
-  },
-  {
-    self: "/v1/projects/3004",
-    name: "Altsystem",
-    status: "in_progress",
-  },
-  {
-    self: "/v1/projects/3005",
-    name: "Infrastruktur",
-    status: "new_status",
-  },
-];
-
 const assignmentTemplates: AssignmentTemplate[] = [
   {
     id: "asg-1",
@@ -314,15 +286,15 @@ export const assignments: Assignment[] = assignmentTemplates.flatMap(
     ),
 );
 
-const projectsByReference = new Map(
-  projects.map((project) => [project.self, project]),
-);
-
 export function getWorkItemsForCell(
   employeeReference: string,
   day: Date,
+  dayliteProjects: DayliteProjectRecord[],
 ): PlanningCellProject[] {
   const isoDay = day.toISOString().slice(0, 10);
+  const projectsByReference = new Map(
+    dayliteProjects.map((project) => [project.self, project]),
+  );
 
   return assignments
     .filter(

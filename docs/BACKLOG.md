@@ -13,39 +13,70 @@
 
 ## EPIC 3: Daylite Integration
 
-### BL-007: Daylite Project Synchronization (Read)
+### BL-028: Standard-Filter Logic for Daylite Projects
 Priority: P0  
-Effort: M
+Effort: S
 
 Scope:
-- Load Daylite projects as Source of Truth.
-- Map into internal `Project` model.
-- Implement proposal logic for calendar view (locally configurable):
-  - Pipeline rule: Pipeline `Aufträge` and column `Vorbereitung` or `Durchführung` (Defaults).
-  - Category rule: Category `Überfällig` or `Liefertermin bekannt`.
-  - Exclusion rule: Status `Done` is not proposed.
+- Replace term "proposal set" with:
+  - `Standard-Filter` (saved default rule set)
+  - `Filter` (currently active rule set in UI context)
+- Implement Standard-Filter rule engine for Daylite projects:
+  - Pipeline rule default: pipeline `Aufträge` and column `Vorbereitung` or `Durchführung`
+  - Category rule default: category `Überfällig` or `Liefertermin bekannt`
+  - Exclusion rule default: status `Done` is never shown
+- Apply Standard-Filter by default in planning/assignment project lists.
 
 Acceptance Criteria:
-- UI can load project list from Daylite (without dummy projects) and correctly filter proposal set.
-- "Last synchronized" timestamp visible.
-- Default rules are locally adjustable.
+- Project lists use Standard-Filter by default.
+- `Done` projects are excluded even if other rules match.
+- Empty result after filtering shows clear German state text (`Keine Projekte im Standard-Filter gefunden`).
 
 Tests (write first):
-- Mapper tests for date/status fields.
-- Service test for successful sync + API error.
-- Rule tests for pipeline, category, and exclusion logic.
+- Rule engine tests for default rules and exclusion precedence.
+- Integration tests for filter application on loaded Daylite projects.
+- UI tests for empty state when Standard-Filter has no results.
 
-### BL-022: Project Search Outside Proposal Set
+### BL-029: Standard-Filter Configuration UI (Dedicated Modal)
+Priority: P1  
+Effort: M
+
+Scope:
+- Add a dedicated modal for Standard-Filter configuration (opened from settings/config area, chosen as simplest implementation path).
+- Provide editable controls for:
+  - pipeline
+  - columns
+  - categories
+  - exclusion status
+- Provide actions:
+  - `Speichern`
+  - `Standardwerte wiederherstellen`
+  - `Abbrechen`
+- Persist Standard-Filter in local configuration as installation-wide setting (simplest implementation path).
+- Apply saved changes immediately without restart.
+
+Acceptance Criteria:
+- User can open the Standard-Filter modal and edit/save rules.
+- Saved rules persist across restart.
+- `Standardwerte wiederherstellen` resets to documented defaults.
+- Updated rules affect filtered project list immediately after save.
+
+Tests (write first):
+- UI tests for modal open/edit/save/cancel/reset flows.
+- Persistence tests for save/load of Standard-Filter configuration.
+- UI integration test for immediate filter effect after save.
+
+### BL-022: Project Search Outside Standard-Filter
 Priority: P0  
 Effort: M
 
 Scope:
-- Provide a search in the assignment dialog that also finds projects not in the proposal set.
+- Provide a search in the assignment dialog that also finds projects not in the Standard-Filter result set.
 - Search via at least name + external reference (if available).
 
 Acceptance Criteria:
-- User can specifically find and assign a project even if it is not proposed.
-- Search results are clearly distinguishable from proposed projects.
+- User can specifically find and assign a project even if it is not in the Standard-Filter result.
+- Search results are clearly distinguishable from Standard-Filter results.
 
 Tests (write first):
 - UI tests for search input, result list, selection.

@@ -1,12 +1,13 @@
 import { getWorkItemsForCell } from "../../data/dummy-data";
 import {
   type DayliteContactRecord,
+  type DayliteProjectRecord,
   getDayliteContactDisplayName,
 } from "../../domain/planning";
 import { isToday } from "../util";
 import { TimetableCell } from "./timetable-cell";
 
-export function TimetableRow({ employee, weekDays }: Props) {
+export function TimetableRow({ employee, projects, weekDays }: Props) {
   return (
     <tr key={employee.self} className="divide-x divide-slate-300">
       <th className="p-4 align-top font-normal">
@@ -17,7 +18,7 @@ export function TimetableRow({ employee, weekDays }: Props) {
         <TimetableCell
           key={day.toISOString()}
           highlight={isToday(day)}
-          projects={getWorkItemsForCell(employee.self, day)}
+          projects={getWorkItemsForCell(employee.self, day, projects)}
         />
       ))}
     </tr>
@@ -26,5 +27,6 @@ export function TimetableRow({ employee, weekDays }: Props) {
 
 interface Props {
   employee: DayliteContactRecord;
+  projects: DayliteProjectRecord[];
   weekDays: Date[];
 }
