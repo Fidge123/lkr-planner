@@ -283,7 +283,7 @@ Tests (write first):
 - Added ADR `docs/adr/0007-daylite-project-on-demand-loading-cache.md`.
 
 ### BL-028: Standard-Filter Logic for Daylite Projects ✅
-**Status:** Completed (2026-02-15)  
+**Status:** Reverted (2026-02-20)
 Priority: P0  
 Effort: S
 

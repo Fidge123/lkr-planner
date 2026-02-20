@@ -13,35 +13,6 @@
 
 ## EPIC 3: Daylite Integration
 
-### BL-029: Standard-Filter Configuration UI (Dedicated Modal)
-Priority: P1  
-Effort: M
-
-Scope:
-- Add a dedicated modal for Standard-Filter configuration (opened from settings/config area, chosen as simplest implementation path).
-- Provide editable controls for:
-  - pipeline
-  - columns
-  - categories
-  - exclusion status
-- Provide actions:
-  - `Speichern`
-  - `Standardwerte wiederherstellen`
-  - `Abbrechen`
-- Persist Standard-Filter in local configuration as installation-wide setting (simplest implementation path).
-- Apply saved changes immediately without restart.
-
-Acceptance Criteria:
-- User can open the Standard-Filter modal and edit/save rules.
-- Saved rules persist across restart.
-- `Standardwerte wiederherstellen` resets to documented defaults.
-- Updated rules affect filtered project list immediately after save.
-
-Tests (write first):
-- UI tests for modal open/edit/save/cancel/reset flows.
-- Persistence tests for save/load of Standard-Filter configuration.
-- UI integration test for immediate filter effect after save.
-
 ### BL-022: Project Search Outside Standard-Filter
 Priority: P0  
 Effort: M
@@ -63,22 +34,18 @@ Priority: P1
 Effort: M
 
 Scope:
-- Load contacts from Daylite and display as a possible employee source.
-- Enable assignment Contact <-> local employee.
-- Provide local configuration for contact filter (Default: keyword `Monteur`).
+- Load contacts from Daylite filtered for category `Monteur`.
 - Maintain two iCal references in Daylite contact mapping:
   - Primary assignment iCal URL
   - Secondary absence iCal URL (vacation/sick leave)
 
 Acceptance Criteria:
-- User can take over/assign contact as employee.
-- Persisted assignment remains after restart.
-- Filter changes take effect without code change.
+- Correct employees are shown.
+- Cached values are used to instantly show employees after restart.
 - Both iCal URLs are readable/writable through Daylite contact data.
 
 Tests (write first):
 - Test for contact-to-employee mapping.
-- Test for persistence of assignment.
 - Tests for mapping both iCal URLs from/to Daylite contact fields.
 
 ## EPIC 4: Planradar Integration
