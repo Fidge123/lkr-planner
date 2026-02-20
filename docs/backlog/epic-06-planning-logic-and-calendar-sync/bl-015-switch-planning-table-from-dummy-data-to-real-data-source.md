@@ -1,12 +1,23 @@
-# BL-015: Switch Planning Table from Dummy Data to Real Data Source
+# BL-015: Replace Remaining Dummy Assignment Data
 
 ## Scope
-- Decouple `dummy-data`, connect service layer instead.
-- Add load, empty, and error states in weekly view.
+- Remove remaining dummy assignment usage in weekly planning rows/cells.
+- Load assignment state from persistent app data instead of static fixtures.
+- Keep existing German loading, empty, and error states consistent.
+- Ensure week navigation uses the same persisted source.
 
 ## Acceptance Criteria
-- Weekly view works with persistent data.
-- Error states are understandable for users (German).
+- Weekly table no longer relies on hardcoded assignment fixtures.
+- Reloading the app keeps previously saved assignments visible.
+- Empty and error states remain user-friendly and German.
+
+## Dependencies
+- Requires stable assignment persistence contract (local store or backend command).
+
+## Out of Scope
+- Assignment modal behavior details (covered by BL-016/BL-031/BL-032/BL-033).
 
 ## Tests (write first)
-- UI tests for Loading/Empty/Error.
+- Service tests for load/save assignment persistence.
+- UI tests for loading, empty, persisted-data, and error states.
+- Week-navigation tests to verify persisted data consistency.

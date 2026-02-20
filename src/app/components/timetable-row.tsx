@@ -9,7 +9,7 @@ import { TimetableCell } from "./timetable-cell";
 
 export function TimetableRow({ employee, projects, weekDays }: Props) {
   return (
-    <tr key={employee.self} className="divide-x divide-slate-300">
+    <tr key={employee.self}>
       <th className="p-4 align-top font-normal">
         {getDayliteContactDisplayName(employee)}
       </th>

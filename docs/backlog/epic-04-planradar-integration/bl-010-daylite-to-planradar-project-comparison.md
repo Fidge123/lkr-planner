@@ -1,22 +1,24 @@
-# BL-010: Daylite -> Planradar Project Comparison
+# BL-010: Link Existing Planradar Projects to Daylite
 
 ## Scope
-- Comparison logic:
-  - Does a corresponding Planradar project exist (via Daylite custom field link)?
-  - If no link exists: User can link an existing Planradar project or create a new project via cloning.
-  - If linked Planradar project is archived/closed: automatically reactivate (unarchive/reopen).
-- Persist the linked Planradar project reference as a custom field in Daylite.
-- Use configurable Daylite field mapping for this link:
-  - Default field label: `Planradar-Projekt-ID`
-  - Stored field value: `planradarProjectId` returned by Planradar API
-  - Daylite field key/id is metadata to locate the field, not the stored project id itself
-- Ensure idempotency.
+- Determine if Daylite project has a linked Planradar project reference.
+- If no link exists, allow linking an already existing Planradar project.
+- Persist Planradar project ID into configured Daylite custom field.
+- Ensure idempotent link behavior across repeated runs.
 
 ## Acceptance Criteria
-- Multiple runs do not create duplicates.
-- Every action is logged as a sync event.
-- After successful linking, the link is stored in Daylite and reused in the next run.
+- Existing link is reused without duplicate link writes.
+- New link writes persist Planradar ID in configured Daylite field.
+- Link operation is logged as sync event.
+
+## Dependencies
+- Depends on BL-009 Planradar API client.
+
+## Out of Scope
+- Creating new Planradar projects.
+- Reactivating archived Planradar projects.
 
 ## Tests (write first)
-- Service tests for cases: new, already existing, closed, API error.
-- Test for persistence and reuse of the Daylite custom field link.
+- Service tests for linked/unlinked/project-not-found flows.
+- Persistence tests for Daylite custom field writes.
+- Idempotency tests for repeated link operations.

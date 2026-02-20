@@ -23,6 +23,39 @@ async function loadEpicEntries(backlogRoot: string): Promise<EpicEntry[]> {
     .sort((a, b) => Number(a.id) - Number(b.id));
 }
 
+async function loadActiveBlIds(backlogRoot: string): Promise<Set<string>> {
+  const epics = await loadEpicEntries(backlogRoot);
+  const ids = new Set<string>();
+
+  for (const epic of epics) {
+    const epicPath = join(backlogRoot, epic.dirName);
+    const files = (await readdir(epicPath, { withFileTypes: true }))
+      .filter((entry) => entry.isFile() && entry.name.endsWith(".md"))
+      .map((entry) => entry.name)
+      .sort();
+
+    for (const fileName of files) {
+      const match = fileName.match(/^bl-(\d{3})-[a-z0-9-]+\.md$/);
+      expect(match).not.toBeNull();
+      ids.add(match?.[1] ?? "");
+    }
+  }
+
+  return ids;
+}
+
+async function loadCompletedBlIds(backlogRoot: string): Promise<Set<string>> {
+  const completedPath = join(backlogRoot, "COMPLETED.md");
+  const completed = await readFile(completedPath, "utf8");
+  const ids = new Set<string>();
+
+  for (const match of completed.matchAll(/^### BL-(\d{3}): /gm)) {
+    ids.add(match[1]);
+  }
+
+  return ids;
+}
+
 describe("backlog documentation format", () => {
   const backlogRoot = join(process.cwd(), "docs", "backlog");
 
@@ -95,6 +128,15 @@ describe("backlog documentation format", () => {
         expect(content).not.toMatch(/^- Effort:/m);
         expect(content).not.toMatch(/^- Status:/m);
       }
+    }
+  });
+
+  it("does not reuse BL identifiers from completed backlog items", async () => {
+    const activeBlIds = await loadActiveBlIds(backlogRoot);
+    const completedBlIds = await loadCompletedBlIds(backlogRoot);
+
+    for (const activeId of activeBlIds) {
+      expect(completedBlIds.has(activeId)).toBe(false);
     }
   });
 });

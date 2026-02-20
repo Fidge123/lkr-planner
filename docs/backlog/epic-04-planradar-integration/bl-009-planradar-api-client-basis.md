@@ -1,14 +1,18 @@
 # BL-009: Planradar API Client (Basis)
 
 ## Scope
-- Minimal client for:
-  - Search/list projects
-  - Create project (template-based, if needed)
-  - Check project status (active/reopen)
+- Provide minimal typed Planradar client for:
+  - project search/list
+  - project create (template-based when required)
+  - project status read (active/archived/reopen support)
+- Normalize API error payloads for frontend usage.
+- Keep tenant/account settings configurable.
 
 ## Acceptance Criteria
-- Typed responses and standardized errors.
-- Configurable tenant/account parameters.
+- All client responses are typed.
+- Error payloads are standardized and consumable by UI/services.
+- Tenant/account configuration can be switched without code changes.
 
 ## Tests (write first)
-- Unit tests analogous to Daylite client including Auth and Rate-Limit cases.
+- Unit tests for success and API error mappings.
+- Auth and rate-limit behavior tests.

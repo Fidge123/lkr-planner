@@ -97,8 +97,8 @@ function App({ initialConfigOpen = false }: AppProps) {
   }, [isDayliteTokenModalOpen]);
 
   return (
-    <article className="min-h-screen bg-base-100 flex flex-col">
-      <header className="navbar p-4 shadow-sm border-b border-slate-300">
+    <article className="min-h-screen flex flex-col">
+      <header className="navbar p-4 shadow-sm border-b border-base-300">
         <div className="navbar-start gap-2">
           <h1 className="text-2xl font-bold">Wochenplanung</h1>
           <button
@@ -106,7 +106,7 @@ function App({ initialConfigOpen = false }: AppProps) {
             className="btn btn-ghost px-2"
             onClick={openDayliteTokenModal}
           >
-            <Settings className="size-6 text-slate-400" />
+            <Settings className="size-6 text-base-content/50" />
           </button>
         </div>
         <nav className="navbar-end gap-2">

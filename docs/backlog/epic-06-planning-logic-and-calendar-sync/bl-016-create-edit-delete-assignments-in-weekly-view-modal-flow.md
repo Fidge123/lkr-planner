@@ -1,25 +1,24 @@
-# BL-016: Create/Edit/Delete Assignments in Weekly View (Modal Flow)
+# BL-016: Assignment Modal CRUD Baseline
 
 ## Scope
-- Click on an employee/day cell opens an assignment modal.
-- Modal default suggestions:
-  - First suggestion: most recently assigned project across any employee/day (if available).
-  - Below first suggestion: top 4-5 overdue (`Überfällig`) projects.
-- Modal includes a text input above suggestions to filter all projects by name.
-- Filtered search uses only projects with status `new_status` or `in_progress`.
-- While filter text is present, show first 5 matching results and replace default suggestions.
-- Support multiple projects per employee/day and multiple employees per project.
-- Save changes persistently.
-- After assigning a project, show a translucent copy of that project in the next day cell (same employee row) for quick add.
+- Open assignment modal when user clicks an employee/day cell.
+- Support assigning and removing projects for the selected employee/day.
+- Support editing an existing assignment directly from the same modal.
+- Keep flow optimized for day-based planning (no free time input in this baseline).
 
 ## Acceptance Criteria
-- End-to-end flow for assignment CRUD exists.
-- Default suggestion order follows: previous assignment first, then overdue projects.
-- Filter input replaces default suggestions with first 5 matching results.
-- Newly assigned project appears as translucent quick-add suggestion in the next day cell.
+- Modal opens and closes reliably from cell interactions.
+- User can create, edit, and delete assignments for one employee/day.
+- Persisted state updates immediately in the weekly grid after save.
+
+## Dependencies
+- Depends on BL-015 for non-dummy assignment state.
+
+## Out of Scope
+- Suggestion ranking and search result replacement behavior.
+- Next-day translucent quick-add behavior.
 
 ## Tests (write first)
-- UI tests for modal open/close, Create/Edit/Delete flow.
-- UI tests for default suggestion order (previous assignment + overdue list).
-- UI tests for filter behavior (replace suggestions, max 5 results).
-- UI tests for translucent next-day quick-add behavior.
+- UI tests for modal open/close from cell interactions.
+- UI tests for create/edit/delete actions and persistence confirmation.
+- Regression tests for keyboard/cancel/unsaved-change handling.

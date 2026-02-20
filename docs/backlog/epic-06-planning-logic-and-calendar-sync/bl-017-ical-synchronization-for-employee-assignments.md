@@ -1,19 +1,24 @@
-# BL-017: iCal Synchronization for Employee Assignments
+# BL-017: iCal Assignment Sync Orchestration
 
 ## Scope
-- Mirror assignment create/update/delete changes to employee primary assignment iCal.
-- Idempotent synchronization (no duplicate appointments).
-- Weekly view remains day-based (no exact time input).
-- iCal events use a fixed daily dummy window `08:00-16:00` (local time).
-- If an employee has multiple projects on the same day, split this window evenly across those projects.
-- Secondary absence iCal is read-only input source; assignment events are never written to absence calendars.
+- Synchronize assignment create/update/delete operations to employee primary iCal.
+- Ensure idempotent sync behavior (no duplicate events across repeated runs).
+- Track and expose sync status per assignment for troubleshooting.
+- Keep absence iCal strictly read-only input.
 
 ## Acceptance Criteria
-- New/Update/Delete in planning creates correct iCal action.
-- Sync status per assignment is viewable.
-- Slot splitting is deterministic and stable for repeated syncs.
+- Create/update/delete actions generate corresponding iCal operations.
+- Re-running sync does not duplicate events.
+- Each assignment exposes current sync status.
+- No write operation targets absence calendars.
+
+## Dependencies
+- Depends on BL-034 for deterministic daily slot allocation.
+
+## Out of Scope
+- Manual global sync trigger UX.
 
 ## Tests (write first)
-- Sync service tests including retry scenarios.
-- Tests for same-day slot splitting (1..n assignments/day).
-- Tests ensuring no write operations target absence calendars.
+- Sync service tests for create/update/delete and retry behavior.
+- Idempotency tests across repeated sync executions.
+- Tests ensuring absence calendars are never written.

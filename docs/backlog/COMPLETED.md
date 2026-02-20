@@ -3,8 +3,6 @@
 This file stores concise implementation summaries for completed or reverted backlog items.
 It is intended for understanding past decisions, not for detailed task specifications.
 
-## EPIC 1: Project Hygiene and Architecture Basis
-
 ### BL-001: Protect OpenAPI files from commit
 - Status: Completed (2026-02-13)
 - Summary: Added ignore rules for local OpenAPI artifacts in `docs/` so generated API files are not accidentally committed.
@@ -33,8 +31,6 @@ It is intended for understanding past decisions, not for detailed task specifica
 - Status: Completed (2026-02-13)
 - Summary: Migrated command wiring to Specta-generated TypeScript bindings and removed manual frontend command typing for covered commands.
 
-## EPIC 2: Domain Model and Local Storage
-
 ### BL-004: Define Domain Types for Planning v1
 - Status: Completed (2026-02-13)
 - Summary: Introduced typed planning domain model and Daylite guards/mappers, then migrated dummy planning data to the new model.
@@ -42,8 +38,6 @@ It is intended for understanding past decisions, not for detailed task specifica
 ### BL-005: Build Local Configuration and Cache Store
 - Status: Completed (2026-02-13)
 - Summary: Added typed restart-safe local JSON store in Tauri with structured German/user-facing and technical error payloads.
-
-## EPIC 3: Daylite Integration
 
 ### BL-006: Daylite API Client (Basis)
 - Status: Completed (2026-02-14)
@@ -64,3 +58,11 @@ It is intended for understanding past decisions, not for detailed task specifica
 ### BL-030: Show Daylite-Projects below the planning table
 - Status: Completed (2026-02-15)
 - Summary: Added a Daylite project overview section below the planning table using existing in-memory data without extra backend requests.
+
+# BL-011: Mapping Rules Daylite Project -> Planradar Template
+- Status: Abandoned (2026-02-20)
+- Summary: Mapping between Daylite and Planradar templates was abandoned as it was not required for the initial release.
+
+# BL-018: Manual Week-Based Planradar Trigger
+- Status: Abandoned (2026-02-20)
+- Summary: No week-based Planradar trigger was added as it was not required for the initial release.

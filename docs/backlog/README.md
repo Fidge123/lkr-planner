@@ -13,33 +13,28 @@
 
 ### EPIC 3: Daylite Integration
 
-This epic covers Daylite data retrieval capabilities needed by the assignment modal and planning workflows.
-The main current focus is search behavior that supports assignment suggestions and explicit lookup.
+This epic covers project-query capabilities required by the assignment modal.
+It focuses on search/filtering and deterministic suggestion input data.
 
 Folder: `backlog/epic-03-daylite-integration`
 
 ### EPIC 4: Planradar Integration
 
-This epic handles Planradar project linking and creation, but it is intentionally scheduled after the iCal baseline for v1.
+This epic handles Planradar link/create/reactivate flows and weekly manual execution.
+It stays after iCal baseline scope for v1.
 
 Folder: `backlog/epic-04-planradar-integration`
 
 ### EPIC 5: Employee Management
 
-This epic handles employee master data and iCal source setup used by the planning and synchronization flows.
-For v1, employee iCal configuration has higher priority than extended skill/travel modeling.
+This epic is limited to employee iCal source validation and diagnostics.
+Employee master data itself comes from Daylite contacts.
 
 Folder: `backlog/epic-05-employee-management`
 
 ### EPIC 6: Planning Logic and Calendar Sync
 
-This epic defines the core planning experience: weekly grid behavior, assignment modal flow, calendar cell rendering, and iCal synchronization.
-It includes holiday handling limited to Germany-wide and MV holidays for v1.
+This epic defines the core planning user flow: assignment modal behavior, cell item composition, and iCal write synchronization.
+Large items were split into smaller BLIs to reduce delivery risk.
 
 Folder: `backlog/epic-06-planning-logic-and-calendar-sync`
-
-### EPIC 7: Stability, Observability, Release
-
-This epic covers operational controls around synchronization behavior, error visibility, and reproducible macOS releases.
-
-Folder: `backlog/epic-07-stability-observability-release`
