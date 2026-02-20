@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
+import type { LocalStore } from "../generated/tauri";
 import {
   DEFAULT_DAYLITE_CONTACT_CACHE_TTL_MS,
   loadCachedDayliteContactsFromStore,
@@ -8,6 +9,36 @@ import {
   updateDayliteContactIcalUrls,
 } from "./daylite-contacts";
 
+const defaultLocalStore: LocalStore = {
+  apiEndpoints: {
+    dayliteBaseUrl: "https://daylite.example/v1",
+    planradarBaseUrl: "",
+  },
+  tokenReferences: {
+    dayliteTokenReference: "",
+    planradarTokenReference: "",
+  },
+  employeeSettings: [],
+  standardFilter: {
+    pipelines: ["Aufträge"],
+    columns: ["Vorbereitung", "Durchführung"],
+    categories: ["Überfällig", "Liefertermin bekannt"],
+    exclusionStatuses: ["Done"],
+  },
+  contactFilter: {
+    activeEmployeeKeyword: "Monteur",
+  },
+  routingSettings: {
+    openrouteserviceApiKey: "",
+    openrouteserviceProfile: "driving-car",
+  },
+  dayliteCache: {
+    lastSyncedAt: null,
+    projects: [],
+    contacts: [],
+  },
+};
+
 const mockDayliteListContacts = mock(() => Promise.resolve({} as unknown));
 const mockDayliteUpdateContactIcalUrls = mock(() =>
   Promise.resolve({} as unknown),
@@ -15,39 +46,11 @@ const mockDayliteUpdateContactIcalUrls = mock(() =>
 const mockLoadLocalStore = mock(() =>
   Promise.resolve({
     status: "ok",
-    data: {
-      apiEndpoints: {
-        dayliteBaseUrl: "https://daylite.example/v1",
-        planradarBaseUrl: "",
-      },
-      tokenReferences: {
-        dayliteTokenReference: "",
-        planradarTokenReference: "",
-      },
-      employeeSettings: [],
-      standardFilter: {
-        pipelines: ["Aufträge"],
-        columns: ["Vorbereitung", "Durchführung"],
-        categories: ["Überfällig", "Liefertermin bekannt"],
-        exclusionStatuses: ["Done"],
-      },
-      contactFilter: {
-        activeEmployeeKeyword: "Monteur",
-      },
-      routingSettings: {
-        openrouteserviceApiKey: "",
-        openrouteserviceProfile: "driving-car",
-      },
-      dayliteCache: {
-        lastSyncedAt: null,
-        projects: [],
-        contacts: [],
-      },
-    },
-  } as const),
+    data: defaultLocalStore,
+  }),
 );
-const mockSaveLocalStore = mock(() =>
-  Promise.resolve({ status: "ok", data: null } as const),
+const mockSaveLocalStore = mock((_store: LocalStore) =>
+  Promise.resolve({ status: "ok", data: null }),
 );
 
 mock.module("../generated/tauri", () => ({
@@ -129,8 +132,14 @@ describe("daylite contact service", () => {
     await loadDayliteContacts({ nowMs: 2_000 });
 
     expect(mockSaveLocalStore).toHaveBeenCalledTimes(1);
-    const savedStore = mockSaveLocalStore.mock.calls[0]?.[0];
-    expect(savedStore.dayliteCache.contacts).toEqual([
+    const firstSaveCall = mockSaveLocalStore.mock.calls[0];
+    expect(firstSaveCall).toBeDefined();
+    if (!firstSaveCall) {
+      throw new Error("saveLocalStore was not called.");
+    }
+
+    const savedStore = firstSaveCall[0];
+    expect(savedStore.dayliteCache?.contacts).toEqual([
       {
         reference: "/v1/contacts/2001",
         displayName: "Mona Monteur",
@@ -152,31 +161,11 @@ describe("daylite contact service", () => {
     mockLoadLocalStore.mockResolvedValue({
       status: "ok",
       data: {
-        apiEndpoints: {
-          dayliteBaseUrl: "https://daylite.example/v1",
-          planradarBaseUrl: "",
-        },
-        tokenReferences: {
-          dayliteTokenReference: "",
-          planradarTokenReference: "",
-        },
-        employeeSettings: [],
-        standardFilter: {
-          pipelines: ["Aufträge"],
-          columns: ["Vorbereitung", "Durchführung"],
-          categories: ["Überfällig", "Liefertermin bekannt"],
-          exclusionStatuses: ["Done"],
-        },
-        contactFilter: {
-          activeEmployeeKeyword: "Monteur",
-        },
-        routingSettings: {
-          openrouteserviceApiKey: "",
-          openrouteserviceProfile: "driving-car",
-        },
+        ...defaultLocalStore,
         dayliteCache: {
+          ...defaultLocalStore.dayliteCache,
+          projects: defaultLocalStore.dayliteCache?.projects ?? [],
           lastSyncedAt: "2026-02-20T08:00:00.000Z",
-          projects: [],
           contacts: [
             {
               reference: "/v1/contacts/3001",
