@@ -10,6 +10,7 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "test": "bun test",
+    "test:docs": "bun test scripts/backlog-format.spec.ts scripts/adr-format.spec.ts",
     "test:watch": "bun test --watch",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",

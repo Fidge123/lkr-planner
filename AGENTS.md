@@ -89,11 +89,18 @@ interface Props {
 
 ## Working with the backlog
 
-Unless otherwise instructed, always work on the highest priority backlog item from `docs/BACKLOG.md`.
+Backlog structure:
+- `backlog/README.md` is the top-level overview and epic context index.
+- Each epic has its own folder (`backlog/epic-XX-...`).
+- Each backlog item (BLI) lives in its own markdown file inside the corresponding epic folder.
 Verify first, if the backlog item contains all information that you need to implement it.
 Check if the acceptance criteria are clear and testable.
 Follow Red-Green-Refactor TDD loop.
 Document new architecture decisions as ADRs in `docs/adr`.
 If you have questions or need clarification, ask the user.
-Once you are done, update the backlog item and move it to the `docs/COMPLETED_BACKLOG.md`.
+Once you are done, remove or update the active BLI in `backlog/` and add a concise implementation summary to `docs/backlog/COMPLETED.md`.
 If there are follow-up tasks necessary, add them to the backlog.
+
+Whenever files in `docs/backlog/` or `docs/adr/` are modified, always run:
+- `bun run test:docs`
+This check is mandatory for every backlog/ADR change.
