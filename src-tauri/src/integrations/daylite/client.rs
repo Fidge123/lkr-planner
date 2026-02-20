@@ -212,7 +212,6 @@ impl DayliteApiClient {
                     truncate_for_log(&response.body)
                 ),
             })?;
-        log_contact_payload_shape(path, &raw_json);
 
         let data = serde_json::from_value::<T>(raw_json).map_err(|error| DayliteApiError {
             code: DayliteApiErrorCode::InvalidResponse,
@@ -326,75 +325,6 @@ impl DayliteApiClient {
             })
             .await
     }
-}
-
-fn log_contact_payload_shape(path: &str, payload: &Value) {
-    if !path.starts_with("/contacts") {
-        return;
-    }
-
-    let Some(results) = payload.get("results").and_then(Value::as_array) else {
-        if path.starts_with("/contacts/") {
-            println!(
-                "[daylite-contacts] raw contact payload path={path} sample={:?}",
-                summarize_contact_payload(payload)
-            );
-        }
-        return;
-    };
-
-    let sample = results
-        .iter()
-        .take(5)
-        .map(summarize_contact_payload)
-        .collect::<Vec<_>>();
-
-    println!(
-        "[daylite-contacts] raw contact payload path={path} loaded={} sample={sample:?}",
-        results.len()
-    );
-}
-
-fn summarize_contact_payload(
-    contact: &Value,
-) -> (
-    Option<String>,
-    Vec<String>,
-    Option<String>,
-    Option<String>,
-    Option<String>,
-    Option<String>,
-    Option<String>,
-    bool,
-    usize,
-) {
-    let mut keys = contact
-        .as_object()
-        .map(|object| object.keys().cloned().collect::<Vec<_>>())
-        .unwrap_or_default();
-    keys.sort();
-
-    (
-        read_contact_string(contact, "self"),
-        keys,
-        read_contact_string(contact, "first_name")
-            .or_else(|| read_contact_string(contact, "firstName")),
-        read_contact_string(contact, "last_name")
-            .or_else(|| read_contact_string(contact, "lastName")),
-        read_contact_string(contact, "full_name")
-            .or_else(|| read_contact_string(contact, "fullName")),
-        read_contact_string(contact, "name"),
-        read_contact_string(contact, "category"),
-        contact.get("categories").is_some(),
-        contact
-            .get("urls")
-            .and_then(Value::as_array)
-            .map_or(0, std::vec::Vec::len),
-    )
-}
-
-fn read_contact_string(contact: &Value, key: &str) -> Option<String> {
-    contact.get(key).and_then(Value::as_str).map(str::to_string)
 }
 
 pub(super) type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;

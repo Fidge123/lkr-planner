@@ -99,15 +99,6 @@ let cacheTtlMs = DEFAULT_DAYLITE_CONTACT_CACHE_TTL_MS;
 let contactCache: ContactCacheEntry | null = null;
 let inFlightRequest: Promise<DayliteContactsLoadResult> | null = null;
 
-function logDayliteEmployeesDebug(message: string, payload?: unknown): void {
-  if (payload === undefined) {
-    console.info(`[daylite-employees] ${message}`);
-    return;
-  }
-
-  console.info(`[daylite-employees] ${message}`, payload);
-}
-
 export async function loadDayliteContacts(
   options: DayliteContactsLoadOptions = {},
 ): Promise<DayliteContactsLoadResult> {
@@ -117,10 +108,6 @@ export async function loadDayliteContacts(
   const cacheIsFresh = contactCache !== null && cacheAgeMs < cacheTtlMs;
 
   if (!forceRefresh && cacheIsFresh && contactCache) {
-    logDayliteEmployeesDebug("using in-memory cache", {
-      contactCount: contactCache.contacts.length,
-      sample: contactCache.contacts.slice(0, 5).map(toContactDebugSummary),
-    });
     return {
       contacts: contactCache.contacts,
       source: "cache",
@@ -134,11 +121,6 @@ export async function loadDayliteContacts(
 
   inFlightRequest = fetchAndMapContacts()
     .then(async (contacts) => {
-      logDayliteEmployeesDebug("loaded contacts from network", {
-        contactCount: contacts.length,
-        sample: contacts.slice(0, 5).map(toContactDebugSummary),
-      });
-
       contactCache = { contacts, fetchedAtMs: nowMs };
       await persistContactsToStore(contacts, nowMs);
 
@@ -150,15 +132,8 @@ export async function loadDayliteContacts(
     })
     .catch(async (error) => {
       const errorMessage = getErrorMessage(error);
-      logDayliteEmployeesDebug("network load failed", {
-        errorMessage,
-      });
 
       if (contactCache) {
-        logDayliteEmployeesDebug("falling back to stale in-memory cache", {
-          contactCount: contactCache.contacts.length,
-          sample: contactCache.contacts.slice(0, 5).map(toContactDebugSummary),
-        });
         return {
           contacts: contactCache.contacts,
           source: "stale-cache",
@@ -169,10 +144,6 @@ export async function loadDayliteContacts(
       const contactsFromStore = await loadCachedDayliteContactsFromStore();
       if (contactsFromStore.length > 0) {
         contactCache = { contacts: contactsFromStore, fetchedAtMs: nowMs };
-        logDayliteEmployeesDebug("falling back to persisted disk cache", {
-          contactCount: contactsFromStore.length,
-          sample: contactsFromStore.slice(0, 5).map(toContactDebugSummary),
-        });
 
         return {
           contacts: contactsFromStore,
@@ -200,26 +171,13 @@ export async function loadCachedDayliteContactsFromStore(): Promise<
 
   const result = await dayliteCommands.loadLocalStore();
   if (result.status === "error") {
-    logDayliteEmployeesDebug(
-      "loadLocalStore failed while reading employee cache",
-      {
-        error: result.error,
-      },
-    );
     return [];
   }
 
   const cachedContacts = result.data.dayliteCache?.contacts ?? [];
   const mappedContacts = cachedContacts.map(mapCachedContact);
   const filteredContacts = filterMonteurContacts(mappedContacts);
-  const sortedContacts = sortContacts(filteredContacts);
-  logDayliteEmployeesDebug("loaded contacts from persisted cache", {
-    cachedCount: cachedContacts.length,
-    filteredCount: filteredContacts.length,
-    sample: sortedContacts.slice(0, 5).map(toContactDebugSummary),
-  });
-
-  return sortedContacts;
+  return sortContacts(filteredContacts);
 }
 
 export async function updateDayliteContactIcalUrls(
@@ -234,17 +192,10 @@ export async function updateDayliteContactIcalUrls(
 
   const result = await dayliteCommands.dayliteUpdateContactIcalUrls(input);
   if (result.status === "error") {
-    logDayliteEmployeesDebug("failed to update contact iCal urls", {
-      input,
-      error: result.error,
-    });
     throw new Error(readCommandErrorMessage(result.error));
   }
 
   const updatedContact = mapDayliteContact(result.data);
-  logDayliteEmployeesDebug("updated contact iCal urls", {
-    contact: toContactDebugSummary(updatedContact),
-  });
 
   await persistUpdatedContactToStore(updatedContact);
   updateInMemoryContactCache(updatedContact);
@@ -279,30 +230,9 @@ async function fetchAndMapContacts(): Promise<DayliteContactRecord[]> {
     throw new Error(readCommandErrorMessage(result.error));
   }
 
-  logDayliteEmployeesDebug("raw Daylite contact payload", {
-    rawCount: result.data.length,
-    sample: result.data.slice(0, 5).map((contact) => ({
-      reference: contact.reference ?? contact.self ?? null,
-      firstName: contact.firstName ?? null,
-      lastName: contact.lastName ?? null,
-      fullName: contact.fullName ?? null,
-      nickname: contact.nickname ?? null,
-      category: contact.category ?? null,
-      urls: contact.urls?.length ?? 0,
-    })),
-  });
-
   const contacts = result.data.map(mapDayliteContact);
   const filteredContacts = filterMonteurContacts(contacts);
-  const sortedContacts = sortContacts(filteredContacts);
-  logDayliteEmployeesDebug("mapped + filtered Daylite contacts", {
-    mappedCount: contacts.length,
-    filteredCount: filteredContacts.length,
-    sample: sortedContacts.slice(0, 5).map(toContactDebugSummary),
-    categoryCounts: summarizeCategoryCounts(contacts),
-  });
-
-  return sortedContacts;
+  return sortContacts(filteredContacts);
 }
 
 async function persistContactsToStore(
@@ -319,12 +249,6 @@ async function persistContactsToStore(
 
   const loadResult = await dayliteCommands.loadLocalStore();
   if (loadResult.status === "error") {
-    logDayliteEmployeesDebug(
-      "loadLocalStore failed before writing contact cache",
-      {
-        error: loadResult.error,
-      },
-    );
     return;
   }
 
@@ -338,9 +262,6 @@ async function persistContactsToStore(
   };
 
   await dayliteCommands.saveLocalStore(updatedStore);
-  logDayliteEmployeesDebug("persisted contacts to local store", {
-    contactCount: contacts.length,
-  });
 }
 
 async function persistUpdatedContactToStore(
@@ -356,12 +277,6 @@ async function persistUpdatedContactToStore(
 
   const loadResult = await dayliteCommands.loadLocalStore();
   if (loadResult.status === "error") {
-    logDayliteEmployeesDebug(
-      "loadLocalStore failed before persisting updated contact",
-      {
-        error: loadResult.error,
-      },
-    );
     return;
   }
 
@@ -389,10 +304,6 @@ async function persistUpdatedContactToStore(
   };
 
   await dayliteCommands.saveLocalStore(updatedStore);
-  logDayliteEmployeesDebug("persisted updated contact to local store", {
-    contact: toContactDebugSummary(updatedContact),
-    resultingContactCount: sortedContacts.length,
-  });
 }
 
 function updateInMemoryContactCache(
@@ -427,23 +338,6 @@ function mapDayliteContact(
     "";
   const fullName =
     normalizeOptionalString(contact.fullName) ?? joinName(firstName, lastName);
-
-  if (!reference) {
-    logDayliteEmployeesDebug("mapped contact without reference", {
-      rawContact: contact,
-    });
-  }
-
-  if (!fullName && !normalizeOptionalString(contact.nickname)) {
-    logDayliteEmployeesDebug("mapped contact without displayable name", {
-      reference: reference || contact.self || null,
-      firstName: contact.firstName ?? null,
-      lastName: contact.lastName ?? null,
-      fullName: contact.fullName ?? null,
-      nickname: contact.nickname ?? null,
-      category: contact.category ?? null,
-    });
-  }
 
   return {
     self: reference,
@@ -563,28 +457,4 @@ function getErrorMessage(error: unknown): string {
   }
 
   return "Die Daten konnten nicht von Daylite geladen werden.";
-}
-
-function toContactDebugSummary(contact: DayliteContactRecord): {
-  self: string;
-  displayName: string;
-  category: string;
-  urls: number;
-} {
-  return {
-    self: contact.self,
-    displayName: getDayliteContactDisplayName(contact),
-    category: contact.category ?? "",
-    urls: contact.urls?.length ?? 0,
-  };
-}
-
-function summarizeCategoryCounts(
-  contacts: DayliteContactRecord[],
-): Record<string, number> {
-  return contacts.reduce<Record<string, number>>((counts, contact) => {
-    const key = contact.category?.trim().toLowerCase() || "<leer>";
-    counts[key] = (counts[key] ?? 0) + 1;
-    return counts;
-  }, {});
 }
