@@ -52,7 +52,7 @@ describe("daylite project service", () => {
     ]);
   });
 
-  it("applies the standard filter by default after loading Daylite projects", async () => {
+  it("returns the unfiltered Daylite list after loading projects", async () => {
     mockDayliteListProjects.mockResolvedValue({
       status: "ok",
       data: [
@@ -92,6 +92,8 @@ describe("daylite project service", () => {
     expect(result.projects.map((project) => project.self)).toEqual([
       "/v1/projects/7101",
       "/v1/projects/7102",
+      "/v1/projects/7103",
+      "/v1/projects/7104",
     ]);
   });
 
