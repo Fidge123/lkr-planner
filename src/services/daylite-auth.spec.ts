@@ -66,7 +66,10 @@ describe("daylite auth service", () => {
       },
     });
 
-    await updateDayliteRefreshToken(" refresh-token-123 ");
+    await updateDayliteRefreshToken({
+      baseUrl: " https://api.marketcircle.net/v1/ ",
+      refreshToken: " refresh-token-123 ",
+    });
 
     expect(mockDayliteConnectRefreshToken).toHaveBeenCalledWith({
       baseUrl: "https://api.marketcircle.net/v1",
@@ -75,9 +78,21 @@ describe("daylite auth service", () => {
   });
 
   it("throws a german message when refresh token is empty", async () => {
-    await expect(updateDayliteRefreshToken("   ")).rejects.toThrow(
-      "Bitte ein Refresh-Token eingeben.",
-    );
+    await expect(
+      updateDayliteRefreshToken({
+        baseUrl: "https://api.marketcircle.net/v1",
+        refreshToken: "   ",
+      }),
+    ).rejects.toThrow("Bitte ein Refresh-Token eingeben.");
+  });
+
+  it("throws a german message when daylite base url is empty", async () => {
+    await expect(
+      updateDayliteRefreshToken({
+        baseUrl: "   ",
+        refreshToken: "refresh-token-123",
+      }),
+    ).rejects.toThrow("Bitte eine Daylite-API-URL eingeben.");
   });
 
   it("throws daylite command error message on connect failure", async () => {
@@ -97,7 +112,10 @@ describe("daylite auth service", () => {
     });
 
     await expect(
-      updateDayliteRefreshToken("refresh-token-123"),
+      updateDayliteRefreshToken({
+        baseUrl: "https://api.marketcircle.net/v1",
+        refreshToken: "refresh-token-123",
+      }),
     ).rejects.toThrow("Token konnte nicht validiert werden.");
   });
 });

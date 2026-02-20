@@ -1,4 +1,4 @@
-import { type ChangeEvent, type FormEvent, useState } from "react";
+import { type ChangeEvent, type FormEvent, useEffect, useState } from "react";
 import "./app.css";
 import {
   ChevronLeft,
@@ -9,12 +9,18 @@ import {
 import { PlanningGrid } from "./app/page";
 import {
   DAYLITE_PERSONAL_TOKEN_URL,
+  DEFAULT_DAYLITE_BASE_URL,
+  resolveDayliteBaseUrl,
   updateDayliteRefreshToken,
 } from "./services/daylite-auth";
 
-function App() {
+function App({ initialConfigOpen = false }: AppProps) {
   const [weekOffset, setWeekOffset] = useState(0);
-  const [isDayliteTokenModalOpen, setIsDayliteTokenModalOpen] = useState(false);
+  const [isDayliteTokenModalOpen, setIsDayliteTokenModalOpen] =
+    useState(initialConfigOpen);
+  const [dayliteBaseUrlInput, setDayliteBaseUrlInput] = useState(
+    DEFAULT_DAYLITE_BASE_URL,
+  );
   const [refreshTokenInput, setRefreshTokenInput] = useState("");
   const [isSavingRefreshToken, setIsSavingRefreshToken] = useState(false);
   const [refreshTokenStatus, setRefreshTokenStatus] =
@@ -38,16 +44,24 @@ function App() {
   const onRefreshTokenInputChange = (event: ChangeEvent<HTMLInputElement>) => {
     setRefreshTokenInput(event.target.value);
   };
+  const onDayliteBaseUrlInputChange = (
+    event: ChangeEvent<HTMLInputElement>,
+  ) => {
+    setDayliteBaseUrlInput(event.target.value);
+  };
   const onRefreshTokenSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setIsSavingRefreshToken(true);
     setRefreshTokenStatus(null);
 
     try {
-      await updateDayliteRefreshToken(refreshTokenInput);
+      await updateDayliteRefreshToken({
+        baseUrl: dayliteBaseUrlInput,
+        refreshToken: refreshTokenInput,
+      });
       setRefreshTokenStatus({
         type: "success",
-        message: "Daylite-Refresh-Token wurde aktualisiert.",
+        message: "Daylite-Konfiguration wurde aktualisiert.",
       });
       setRefreshTokenInput("");
     } catch (error) {
@@ -63,6 +77,25 @@ function App() {
     }
   };
 
+  useEffect(() => {
+    if (!isDayliteTokenModalOpen) {
+      return;
+    }
+
+    let isActive = true;
+    void resolveDayliteBaseUrl().then((resolvedBaseUrl) => {
+      if (!isActive) {
+        return;
+      }
+
+      setDayliteBaseUrlInput(resolvedBaseUrl);
+    });
+
+    return () => {
+      isActive = false;
+    };
+  }, [isDayliteTokenModalOpen]);
+
   return (
     <article className="min-h-screen bg-base-100 flex flex-col">
       <header className="navbar p-4 shadow-sm border-b border-slate-300">
@@ -73,7 +106,7 @@ function App() {
             className="btn btn-ghost px-2"
             onClick={openDayliteTokenModal}
           >
-            <Settings className="size-6" />
+            <Settings className="size-6 text-slate-400" />
           </button>
         </div>
         <nav className="navbar-end gap-2">
@@ -110,12 +143,10 @@ function App() {
       {isDayliteTokenModalOpen ? (
         <div className="modal modal-open">
           <section className="modal-box max-w-xl">
-            <h2 className="text-lg font-semibold">
-              Daylite-Refresh-Token aktualisieren
-            </h2>
+            <h2 className="text-lg font-semibold">Daylite-Konfiguration</h2>
             <p className="mt-2 text-sm text-base-content/80">
-              Trage ein neues Refresh-Token ein, damit Daylite erneut verbunden
-              wird.
+              Bitte hinterlege alle Pflichtfelder, damit Daylite verbunden
+              werden kann.
             </p>
 
             {refreshTokenStatus ? (
@@ -134,6 +165,18 @@ function App() {
               className="mt-4 flex flex-col gap-4"
               onSubmit={onRefreshTokenSubmit}
             >
+              <label className="form-control w-full">
+                <span className="label-text mb-2">Daylite API-URL</span>
+                <input
+                  type="url"
+                  className="input input-bordered w-full"
+                  value={dayliteBaseUrlInput}
+                  onChange={onDayliteBaseUrlInputChange}
+                  disabled={isSavingRefreshToken}
+                  placeholder="https://api.marketcircle.net/v1"
+                />
+              </label>
+
               <label className="form-control w-full">
                 <span className="label-text mb-2">Refresh-Token</span>
                 <input
@@ -192,6 +235,10 @@ function App() {
 }
 
 export default App;
+
+interface AppProps {
+  initialConfigOpen?: boolean;
+}
 
 interface RefreshTokenStatus {
   type: "success" | "error";

@@ -1,7 +1,7 @@
 # ADR 0007: Daylite Project On-Demand Loading with 30s In-Memory Cache
 
-## Status
-Accepted (2026-02-15)
+- Status: Accepted
+- Date: 2026-02-15
 
 ## Context
 BL-007 requires replacing dummy project data in planning with live Daylite reads.

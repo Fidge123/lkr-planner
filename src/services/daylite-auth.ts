@@ -50,10 +50,23 @@ export async function resolveDayliteBaseUrl(): Promise<string> {
   }
 }
 
+export interface DayliteRefreshTokenInput {
+  baseUrl: string;
+  refreshToken: string;
+}
+
 export async function updateDayliteRefreshToken(
-  refreshToken: string,
+  input: DayliteRefreshTokenInput,
 ): Promise<void> {
-  const normalizedRefreshToken = normalizeOptionalString(refreshToken);
+  const normalizedBaseUrl = normalizeOptionalString(input.baseUrl)?.replace(
+    /\/+$/,
+    "",
+  );
+  if (!normalizedBaseUrl) {
+    throw new Error("Bitte eine Daylite-API-URL eingeben.");
+  }
+
+  const normalizedRefreshToken = normalizeOptionalString(input.refreshToken);
   if (!normalizedRefreshToken) {
     throw new Error("Bitte ein Refresh-Token eingeben.");
   }
@@ -65,9 +78,8 @@ export async function updateDayliteRefreshToken(
     );
   }
 
-  const baseUrl = await resolveDayliteBaseUrl();
   const result = await dayliteCommands.dayliteConnectRefreshToken({
-    baseUrl,
+    baseUrl: normalizedBaseUrl,
     refreshToken: normalizedRefreshToken,
   });
 
