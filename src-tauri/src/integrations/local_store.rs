@@ -135,6 +135,25 @@ pub struct DayliteProjectCacheEntry {
 pub struct DayliteContactCacheEntry {
     pub reference: String,
     pub display_name: String,
+    #[serde(default)]
+    pub full_name: Option<String>,
+    #[serde(default)]
+    pub nickname: Option<String>,
+    #[serde(default)]
+    pub category: Option<String>,
+    #[serde(default)]
+    pub urls: Vec<DayliteContactUrlCacheEntry>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct DayliteContactUrlCacheEntry {
+    #[serde(default)]
+    pub label: Option<String>,
+    #[serde(default)]
+    pub url: Option<String>,
+    #[serde(default)]
+    pub note: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
@@ -310,6 +329,14 @@ mod tests {
                 contacts: vec![DayliteContactCacheEntry {
                     reference: "/v1/contacts/1".to_string(),
                     display_name: "Max Mustermann".to_string(),
+                    full_name: Some("Max Mustermann".to_string()),
+                    nickname: Some("Max".to_string()),
+                    category: Some("Monteur".to_string()),
+                    urls: vec![DayliteContactUrlCacheEntry {
+                        label: Some("Einsatz iCal".to_string()),
+                        url: Some("https://example.com/primary.ics".to_string()),
+                        note: None,
+                    }],
                 }],
             },
         };

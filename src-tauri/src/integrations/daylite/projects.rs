@@ -24,9 +24,9 @@ pub struct DayliteProjectSummary {
     pub started: Option<String>,
     #[serde(default)]
     pub completed: Option<String>,
-    #[serde(default)]
+    #[serde(default, alias = "create_date")]
     pub create_date: Option<String>,
-    #[serde(default)]
+    #[serde(default, alias = "modify_date")]
     pub modify_date: Option<String>,
 }
 

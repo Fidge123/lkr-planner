@@ -12,7 +12,8 @@ export interface DayliteProjectsLoadResult {
 }
 
 interface DayliteProjectCommandRecord {
-  reference: string;
+  self?: string;
+  reference?: string;
   name: string;
   status?: string;
   category?: string;
@@ -131,8 +132,11 @@ async function fetchAndMapProjects(): Promise<DayliteProjectRecord[]> {
 function mapDayliteProject(
   project: DayliteProjectCommandRecord,
 ): DayliteProjectRecord {
+  const reference =
+    normalizeOptionalString(project.self ?? project.reference) ?? "";
+
   return {
-    self: project.reference,
+    self: reference,
     name: project.name,
     status: normalizeStatus(project.status),
     category: normalizeOptionalString(project.category),

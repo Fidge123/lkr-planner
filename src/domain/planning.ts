@@ -46,12 +46,6 @@ export interface DayliteAddress {
   note?: string;
 }
 
-type DayliteExtraFieldValue = {
-  value?: string;
-};
-
-type DayliteExtraFields = Record<string, DayliteExtraFieldValue>;
-
 export interface DayliteContactRecord {
   self: string;
   full_name?: string;
@@ -60,7 +54,6 @@ export interface DayliteContactRecord {
   keywords?: string[];
   urls?: DayliteUrl[];
   addresses?: DayliteAddress[];
-  extra_fields?: string | DayliteExtraFields;
 }
 
 export function isDayliteProjectRecord(
@@ -133,7 +126,17 @@ export function isAssignment(value: unknown): value is Assignment {
 export function getDayliteContactDisplayName(
   record: DayliteContactRecord,
 ): string {
-  return record?.nickname ?? record?.full_name ?? "";
+  const nickname = record?.nickname?.trim();
+  if (nickname) {
+    return nickname;
+  }
+
+  const fullName = record?.full_name?.trim();
+  if (fullName) {
+    return fullName;
+  }
+
+  return "Unbenannter Kontakt";
 }
 
 export function getPrimaryAddressFromContact(
@@ -145,70 +148,53 @@ export function getPrimaryAddressFromContact(
 export function getPrimaryIcalUrlFromContact(
   record: DayliteContactRecord,
 ): string {
-  const extraFields = parseExtraFields(record.extra_fields);
-  return (
-    findIcalUrlFromUrls(record.urls, "Termine") ??
-    findIcalUrlFromExtraFields(extraFields, "Termine") ??
-    ""
-  );
+  return findIcalUrlFromUrls(record.urls, matchesPrimaryIcalLabel) ?? "";
 }
 
 export function getAbsenceIcalUrlFromContact(
   record: DayliteContactRecord,
 ): string {
-  const extraFields = parseExtraFields(record.extra_fields);
-  return (
-    findIcalUrlFromUrls(record.urls, "Fehlzeiten") ??
-    findIcalUrlFromExtraFields(extraFields, "Fehlzeiten") ??
-    ""
-  );
+  return findIcalUrlFromUrls(record.urls, matchesAbsenceIcalLabel) ?? "";
 }
 
-function parseExtraFields(
-  extraFields: string | DayliteExtraFields | undefined,
-): DayliteExtraFields {
-  if (!extraFields) {
-    return {};
-  }
-
-  if (typeof extraFields === "string") {
-    try {
-      const parsed = JSON.parse(extraFields) as unknown;
-      if (isDayliteExtraFields(parsed)) {
-        return parsed;
-      }
-      return {};
-    } catch {
-      return {};
-    }
-  }
-
-  return extraFields;
-}
-
-function isDayliteExtraFields(value: unknown): value is DayliteExtraFields {
-  if (!isObject(value)) {
-    return false;
-  }
-
-  for (const fieldValue of Object.values(value)) {
-    if (!isObject(fieldValue)) {
-      return false;
+export function upsertDayliteContactIcalUrls(
+  urls: DayliteUrl[] | undefined,
+  primaryIcalUrl: string,
+  absenceIcalUrl: string,
+): DayliteUrl[] {
+  const preservedUrls = (urls ?? []).filter((candidateUrl) => {
+    const label = normalizeLabel(candidateUrl.label);
+    if (!label) {
+      return true;
     }
 
-    if ("value" in fieldValue && fieldValue.value !== undefined) {
-      if (typeof fieldValue.value !== "string") {
-        return false;
-      }
-    }
+    return !matchesPrimaryIcalLabel(label) && !matchesAbsenceIcalLabel(label);
+  });
+
+  const nextUrls = [...preservedUrls];
+  const normalizedPrimaryIcalUrl = normalizeUrl(primaryIcalUrl);
+  const normalizedAbsenceIcalUrl = normalizeUrl(absenceIcalUrl);
+
+  if (normalizedPrimaryIcalUrl) {
+    nextUrls.push({
+      label: "Einsatz iCal",
+      url: normalizedPrimaryIcalUrl,
+    });
   }
 
-  return true;
+  if (normalizedAbsenceIcalUrl) {
+    nextUrls.push({
+      label: "Abwesenheit iCal",
+      url: normalizedAbsenceIcalUrl,
+    });
+  }
+
+  return nextUrls;
 }
 
 function findIcalUrlFromUrls(
   urls: DayliteUrl[] | undefined,
-  matcher: string,
+  matcher: (normalizedLabel: string) => boolean,
 ): string | undefined {
   if (!urls) {
     return undefined;
@@ -219,36 +205,46 @@ function findIcalUrlFromUrls(
       return false;
     }
 
-    if (typeof candidateUrl.label !== "string") {
+    const normalizedLabel = normalizeLabel(candidateUrl.label);
+    if (!normalizedLabel) {
       return false;
     }
 
-    const normalizedLabel = candidateUrl.label.toLowerCase();
-    return normalizedLabel.includes(matcher.toLowerCase());
+    return matcher(normalizedLabel);
   });
 
-  return matchedUrl?.url;
+  return normalizeUrl(matchedUrl?.url);
 }
 
-function findIcalUrlFromExtraFields(
-  extraFields: DayliteExtraFields,
-  matcher: string,
-): string | undefined {
-  const matches = Object.entries(extraFields).find(([fieldKey]) => {
-    const normalizedKey = fieldKey.toLowerCase();
-    if (!normalizedKey.includes("ical")) {
-      return false;
-    }
+function matchesPrimaryIcalLabel(normalizedLabel: string): boolean {
+  return (
+    normalizedLabel.includes("einsatz") || normalizedLabel.includes("termine")
+  );
+}
 
-    return normalizedKey.includes(matcher.toLowerCase());
-  });
+function matchesAbsenceIcalLabel(normalizedLabel: string): boolean {
+  return (
+    normalizedLabel.includes("abwesenheit") ||
+    normalizedLabel.includes("fehlzeiten")
+  );
+}
 
-  if (!matches) {
+function normalizeLabel(label: string | undefined): string | undefined {
+  if (typeof label !== "string") {
     return undefined;
   }
 
-  const [, fieldValue] = matches;
-  return fieldValue.value;
+  const normalized = label.trim().toLowerCase();
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+function normalizeUrl(url: string | undefined): string | undefined {
+  if (typeof url !== "string") {
+    return undefined;
+  }
+
+  const normalized = url.trim();
+  return normalized.length > 0 ? normalized : undefined;
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {

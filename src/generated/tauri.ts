@@ -71,6 +71,14 @@ async dayliteSearchContacts(input: DayliteSearchInput) : Promise<Result<DayliteS
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+async dayliteUpdateContactIcalUrls(input: DayliteUpdateContactIcalUrlsInput) : Promise<Result<DayliteContactSummary, DayliteApiError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("daylite_update_contact_ical_urls", { input }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 
@@ -89,14 +97,17 @@ export type ContactFilter = { activeEmployeeKeyword: string }
 export type DayliteApiError = { code: DayliteApiErrorCode; httpStatus: number | null; userMessage: string; technicalMessage: string }
 export type DayliteApiErrorCode = "UNAUTHORIZED" | "RATE_LIMITED" | "SERVER_ERROR" | "MISSING_TOKEN" | "INVALID_CONFIGURATION" | "REQUEST_FAILED" | "INVALID_RESPONSE" | "TOKEN_REFRESH_FAILED"
 export type DayliteCache = { lastSyncedAt: string | null; projects: DayliteProjectCacheEntry[]; contacts: DayliteContactCacheEntry[] }
-export type DayliteContactCacheEntry = { reference: string; displayName: string }
-export type DayliteContactSummary = { self: string; firstName?: string; lastName?: string }
+export type DayliteContactCacheEntry = { reference: string; displayName: string; fullName?: string | null; nickname?: string | null; category?: string | null; urls?: DayliteContactUrlCacheEntry[] }
+export type DayliteContactSummary = { self: string; firstName?: string; lastName?: string; fullName?: string | null; nickname?: string | null; category?: string | null; urls?: DayliteContactUrl[] }
+export type DayliteContactUrl = { label?: string | null; url?: string | null; note?: string | null }
+export type DayliteContactUrlCacheEntry = { label?: string | null; url?: string | null; note?: string | null }
 export type DayliteProjectCacheEntry = { reference: string; name: string; status: string }
 export type DayliteProjectSummary = { self: string; name: string; status?: string | null; category?: string | null; keywords?: string[]; due?: string | null; started?: string | null; completed?: string | null; createDate?: string | null; modifyDate?: string | null }
 export type DayliteRefreshTokenRequest = { baseUrl: string; refreshToken: string }
 export type DayliteSearchInput = { searchTerm: string; limit: number | null }
 export type DayliteSearchResult<T> = { results: T[]; next: string | null }
 export type DayliteTokenSyncStatus = { hasAccessToken: boolean; hasRefreshToken: boolean }
+export type DayliteUpdateContactIcalUrlsInput = { contactReference: string; primaryIcalUrl: string; absenceIcalUrl: string }
 export type EmployeeSetting = { employeeId: string; dayliteContactReference: string; primaryIcalUrl: string; absenceIcalUrl: string }
 /**
  * Health status response

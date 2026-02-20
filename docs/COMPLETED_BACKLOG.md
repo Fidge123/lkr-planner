@@ -282,6 +282,39 @@ Tests (write first):
 - Extended Daylite project summary payload fields and binding types (`src-tauri/src/integrations/daylite.rs`, `src/generated/tauri.ts`).
 - Added ADR `docs/adr/0007-daylite-project-on-demand-loading-cache.md`.
 
+### BL-008: Use Daylite Contacts for Employee Configuration ✅
+**Status:** Completed (2026-02-20)  
+Priority: P1  
+Effort: M
+
+Scope:
+- Load Daylite contacts and use only category `Monteur` as employee source.
+- Read and write two iCal references via Daylite contact `urls`:
+  - Primary assignment iCal URL
+  - Secondary absence iCal URL (vacation/sick leave)
+- Use persisted cache values to show employees immediately after restart.
+
+Acceptance Criteria:
+- ✅ Correct employees are shown from Daylite contact category `Monteur`.
+- ✅ Restart-safe cached values are used for immediate employee rendering.
+- ✅ Both iCal URLs are readable and writable through Daylite contact `urls`.
+
+Tests (write first):
+- ✅ Added mapping/filter tests in `src/services/daylite-contacts.spec.ts` for contact-to-employee mapping and `Monteur` category filtering.
+- ✅ Added iCal read/write mapping tests:
+  - `src/domain/planning.spec.ts` (urls-only iCal extraction and url upsert mapping)
+  - `src/services/daylite-contacts.spec.ts` (command payload for iCal write)
+- ✅ Added planning UI test in `src/app/page.spec.tsx` to verify Daylite-backed employee rendering.
+- ✅ Added Rust Daylite client test in `src-tauri/src/integrations/daylite/client.rs` for PATCH update of contact iCal urls.
+
+**Implementation:**
+- Added Daylite employee/contact service with in-memory TTL cache, persisted local-cache read/write support, and category filtering in `src/services/daylite-contacts.ts`.
+- Added `usePlanningEmployees` hook and wired planning table employees to Daylite contacts in `src/app/use-planning-employees.ts` and `src/app/page.tsx`.
+- Implemented Daylite contact iCal write command (`daylite_update_contact_ical_urls`) and full-record contact loading in Rust (`src-tauri/src/integrations/daylite/contacts.rs`, `src-tauri/src/integrations/daylite/client.rs`, `src-tauri/src/lib.rs`).
+- Expanded local store contact cache payload for restart rendering (`src-tauri/src/integrations/local_store.rs`, `src/generated/tauri.ts`).
+- Removed `extra_fields` iCal mapping path and standardized to Daylite `urls` mapping only (`src/domain/planning.ts`).
+- Added ADR `docs/adr/0008-daylite-employee-contacts-and-urls-ical.md`.
+
 ### BL-028: Standard-Filter Logic for Daylite Projects ✅
 **Status:** Reverted (2026-02-20)
 Priority: P0  

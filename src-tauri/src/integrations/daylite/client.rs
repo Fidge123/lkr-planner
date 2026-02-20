@@ -1,4 +1,4 @@
-use super::contacts::DayliteContactSummary;
+use super::contacts::{DayliteContactSummary, DayliteContactUrl};
 use super::projects::DayliteProjectSummary;
 use super::shared::{
     build_limit_query, current_epoch_ms, missing_token_error, normalize_base_url,
@@ -83,14 +83,24 @@ impl DayliteApiClient {
         &self,
         token_state: DayliteTokenState,
     ) -> Result<DayliteApiResponse<Vec<DayliteContactSummary>>, DayliteApiError> {
-        self.execute_json_request(
-            DayliteHttpMethod::Get,
-            "/contacts",
-            Vec::new(),
-            None,
-            token_state,
-        )
-        .await
+        let search_response = self
+            .execute_json_request::<DayliteSearchResult<DayliteContactSummary>>(
+                DayliteHttpMethod::Post,
+                "/contacts/_search",
+                vec![("full-records".to_string(), "true".to_string())],
+                Some(json!({
+                    "category": {
+                        "equal": "Monteur"
+                    }
+                })),
+                token_state,
+            )
+            .await?;
+
+        Ok(DayliteApiResponse {
+            data: search_response.data.results,
+            token_state: search_response.token_state,
+        })
     }
 
     pub(super) async fn search_contacts(
@@ -100,16 +110,56 @@ impl DayliteApiClient {
         limit: Option<u16>,
     ) -> Result<DayliteApiResponse<DayliteSearchResult<DayliteContactSummary>>, DayliteApiError>
     {
+        let mut query = build_limit_query(limit);
+        query.push(("full-records".to_string(), "true".to_string()));
+
         self.execute_json_request(
             DayliteHttpMethod::Post,
             "/contacts/_search",
-            build_limit_query(limit),
+            query,
             Some(json!({
                 "full_name": {
                     "contains": search_term
                 }
             })),
             token_state,
+        )
+        .await
+    }
+
+    pub(super) async fn update_contact_ical_urls(
+        &self,
+        token_state: DayliteTokenState,
+        contact_reference: &str,
+        primary_ical_url: &str,
+        absence_ical_url: &str,
+    ) -> Result<DayliteApiResponse<DayliteContactSummary>, DayliteApiError> {
+        let contact_id = parse_contact_id(contact_reference)?;
+        let contact_path = format!("/contacts/{contact_id}");
+        let current_contact = self
+            .execute_json_request::<DayliteContactSummary>(
+                DayliteHttpMethod::Get,
+                &contact_path,
+                Vec::new(),
+                None,
+                token_state,
+            )
+            .await?;
+
+        let merged_urls = merge_contact_ical_urls(
+            current_contact.data.urls,
+            primary_ical_url,
+            absence_ical_url,
+        );
+
+        self.execute_json_request(
+            DayliteHttpMethod::Patch,
+            &contact_path,
+            Vec::new(),
+            Some(json!({
+                "urls": merged_urls,
+            })),
+            current_contact.token_state,
         )
         .await
     }
@@ -151,7 +201,20 @@ impl DayliteApiClient {
             return Err(normalize_http_error(response.status, &response.body, path));
         }
 
-        let data = serde_json::from_str::<T>(&response.body).map_err(|error| DayliteApiError {
+        let raw_json =
+            serde_json::from_str::<Value>(&response.body).map_err(|error| DayliteApiError {
+                code: DayliteApiErrorCode::InvalidResponse,
+                http_status: Some(response.status),
+                user_message: "Die Antwort von Daylite konnte nicht verarbeitet werden."
+                    .to_string(),
+                technical_message: format!(
+                    "JSON-Parsing für {path} fehlgeschlagen: {error}; body={}",
+                    truncate_for_log(&response.body)
+                ),
+            })?;
+        log_contact_payload_shape(path, &raw_json);
+
+        let data = serde_json::from_value::<T>(raw_json).map_err(|error| DayliteApiError {
             code: DayliteApiErrorCode::InvalidResponse,
             http_status: Some(response.status),
             user_message: "Die Antwort von Daylite konnte nicht verarbeitet werden.".to_string(),
@@ -265,6 +328,75 @@ impl DayliteApiClient {
     }
 }
 
+fn log_contact_payload_shape(path: &str, payload: &Value) {
+    if !path.starts_with("/contacts") {
+        return;
+    }
+
+    let Some(results) = payload.get("results").and_then(Value::as_array) else {
+        if path.starts_with("/contacts/") {
+            println!(
+                "[daylite-contacts] raw contact payload path={path} sample={:?}",
+                summarize_contact_payload(payload)
+            );
+        }
+        return;
+    };
+
+    let sample = results
+        .iter()
+        .take(5)
+        .map(summarize_contact_payload)
+        .collect::<Vec<_>>();
+
+    println!(
+        "[daylite-contacts] raw contact payload path={path} loaded={} sample={sample:?}",
+        results.len()
+    );
+}
+
+fn summarize_contact_payload(
+    contact: &Value,
+) -> (
+    Option<String>,
+    Vec<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    bool,
+    usize,
+) {
+    let mut keys = contact
+        .as_object()
+        .map(|object| object.keys().cloned().collect::<Vec<_>>())
+        .unwrap_or_default();
+    keys.sort();
+
+    (
+        read_contact_string(contact, "self"),
+        keys,
+        read_contact_string(contact, "first_name")
+            .or_else(|| read_contact_string(contact, "firstName")),
+        read_contact_string(contact, "last_name")
+            .or_else(|| read_contact_string(contact, "lastName")),
+        read_contact_string(contact, "full_name")
+            .or_else(|| read_contact_string(contact, "fullName")),
+        read_contact_string(contact, "name"),
+        read_contact_string(contact, "category"),
+        contact.get("categories").is_some(),
+        contact
+            .get("urls")
+            .and_then(Value::as_array)
+            .map_or(0, std::vec::Vec::len),
+    )
+}
+
+fn read_contact_string(contact: &Value, key: &str) -> Option<String> {
+    contact.get(key).and_then(Value::as_str).map(str::to_string)
+}
+
 pub(super) type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 pub(super) trait DayliteHttpTransport: Send + Sync {
@@ -278,6 +410,7 @@ pub(super) trait DayliteHttpTransport: Send + Sync {
 pub(super) enum DayliteHttpMethod {
     Get,
     Post,
+    Patch,
 }
 
 #[derive(Debug, Clone)]
@@ -345,6 +478,7 @@ impl DayliteHttpTransport for ReqwestTransport {
             let mut builder = match request.method {
                 DayliteHttpMethod::Get => self.http_client.get(url),
                 DayliteHttpMethod::Post => self.http_client.post(url),
+                DayliteHttpMethod::Patch => self.http_client.patch(url),
             };
 
             if let Some(access_token) = request.access_token {
@@ -400,6 +534,81 @@ fn parse_refresh_response_body(
             ),
         }
     })
+}
+
+fn parse_contact_id(contact_reference: &str) -> Result<u64, DayliteApiError> {
+    let trimmed_reference = contact_reference.trim();
+    let contact_id_raw = trimmed_reference.rsplit('/').next().unwrap_or_default();
+
+    contact_id_raw
+        .parse::<u64>()
+        .map_err(|error| DayliteApiError {
+            code: DayliteApiErrorCode::InvalidResponse,
+            http_status: None,
+            user_message: "Die Daylite-Kontaktreferenz ist ungültig.".to_string(),
+            technical_message: format!("Ungültige Kontaktreferenz `{trimmed_reference}`: {error}"),
+        })
+}
+
+fn merge_contact_ical_urls(
+    existing_urls: Vec<DayliteContactUrl>,
+    primary_ical_url: &str,
+    absence_ical_url: &str,
+) -> Vec<DayliteContactUrl> {
+    let mut merged_urls = existing_urls
+        .into_iter()
+        .filter(|url| {
+            let Some(label) = normalize_label(url.label.as_deref()) else {
+                return true;
+            };
+
+            !is_primary_ical_label(&label) && !is_absence_ical_label(&label)
+        })
+        .collect::<Vec<_>>();
+
+    let normalized_primary_ical_url = normalize_non_empty(primary_ical_url);
+    if let Some(primary_url) = normalized_primary_ical_url {
+        merged_urls.push(DayliteContactUrl {
+            label: Some("Einsatz iCal".to_string()),
+            url: Some(primary_url.to_string()),
+            note: None,
+        });
+    }
+
+    let normalized_absence_ical_url = normalize_non_empty(absence_ical_url);
+    if let Some(absence_url) = normalized_absence_ical_url {
+        merged_urls.push(DayliteContactUrl {
+            label: Some("Abwesenheit iCal".to_string()),
+            url: Some(absence_url.to_string()),
+            note: None,
+        });
+    }
+
+    merged_urls
+}
+
+fn is_primary_ical_label(label: &str) -> bool {
+    label.contains("einsatz") || label.contains("termine")
+}
+
+fn is_absence_ical_label(label: &str) -> bool {
+    label.contains("abwesenheit") || label.contains("fehlzeiten")
+}
+
+fn normalize_label(value: Option<&str>) -> Option<String> {
+    value
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(|value| value.to_lowercase())
+}
+
+fn normalize_non_empty(value: &str) -> Option<&str> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    Some(trimmed)
 }
 
 #[cfg(test)]
@@ -749,7 +958,10 @@ mod tests {
             assert_eq!(requests[0].path, "/contacts/_search");
             assert_eq!(
                 requests[0].query,
-                vec![("limit".to_string(), "10".to_string())]
+                vec![
+                    ("limit".to_string(), "10".to_string()),
+                    ("full-records".to_string(), "true".to_string())
+                ]
             );
             assert_eq!(
                 requests[0].body,
@@ -757,6 +969,109 @@ mod tests {
                     "full_name": {
                         "contains": "Max"
                     }
+                }))
+            );
+        });
+    }
+
+    #[test]
+    fn list_contacts_uses_full_records_search_endpoint() {
+        tauri::async_runtime::block_on(async {
+            let transport = MockTransport::new(vec![Ok(mock_response(
+                200,
+                vec![],
+                r#"{"results":[{"self":"/v1/contacts/100","full_name":"Max Mustermann","category":"Monteur","urls":[{"label":"Einsatz iCal","url":"https://example.com/max-primary.ics"}]}]}"#,
+            ))]);
+            let client = DayliteApiClient::with_transport(Arc::new(transport.clone()));
+
+            let result = client
+                .list_contacts(DayliteTokenState {
+                    access_token: "access-1".to_string(),
+                    refresh_token: "refresh-1".to_string(),
+                    access_token_expires_at_ms: Some(u64::MAX),
+                })
+                .await
+                .expect("list contacts should succeed");
+
+            assert_eq!(result.data.len(), 1);
+            assert_eq!(result.data[0].reference, "/v1/contacts/100");
+            assert_eq!(result.data[0].category, Some("Monteur".to_string()));
+
+            let requests = transport.requests();
+            assert_eq!(requests.len(), 1);
+            assert_eq!(requests[0].method, DayliteHttpMethod::Post);
+            assert_eq!(requests[0].path, "/contacts/_search");
+            assert_eq!(
+                requests[0].query,
+                vec![("full-records".to_string(), "true".to_string())]
+            );
+            assert_eq!(
+                requests[0].body,
+                Some(json!({
+                    "category": {
+                        "equal": "Monteur"
+                    }
+                }))
+            );
+        });
+    }
+
+    #[test]
+    fn update_contact_ical_urls_patches_contact_urls_only() {
+        tauri::async_runtime::block_on(async {
+            let transport = MockTransport::new(vec![
+                Ok(mock_response(
+                    200,
+                    vec![],
+                    r#"{"self":"/v1/contacts/100","full_name":"Max Mustermann","category":"Monteur","urls":[{"label":"Website","url":"https://example.com"},{"label":"FR-Fehlzeiten","url":"https://example.com/old-absence.ics"}]}"#,
+                )),
+                Ok(mock_response(
+                    200,
+                    vec![],
+                    r#"{"self":"/v1/contacts/100","full_name":"Max Mustermann","category":"Monteur","urls":[{"label":"Website","url":"https://example.com"},{"label":"Einsatz iCal","url":"https://example.com/new-primary.ics"},{"label":"Abwesenheit iCal","url":"https://example.com/new-absence.ics"}]}"#,
+                )),
+            ]);
+            let client = DayliteApiClient::with_transport(Arc::new(transport.clone()));
+
+            let result = client
+                .update_contact_ical_urls(
+                    DayliteTokenState {
+                        access_token: "access-1".to_string(),
+                        refresh_token: "refresh-1".to_string(),
+                        access_token_expires_at_ms: Some(u64::MAX),
+                    },
+                    "/v1/contacts/100",
+                    "https://example.com/new-primary.ics",
+                    "https://example.com/new-absence.ics",
+                )
+                .await
+                .expect("update contact should succeed");
+
+            assert_eq!(result.data.reference, "/v1/contacts/100");
+
+            let requests = transport.requests();
+            assert_eq!(requests.len(), 2);
+            assert_eq!(requests[0].method, DayliteHttpMethod::Get);
+            assert_eq!(requests[0].path, "/contacts/100");
+            assert_eq!(requests[1].method, DayliteHttpMethod::Patch);
+            assert_eq!(requests[1].path, "/contacts/100");
+            assert_eq!(
+                requests[1].body,
+                Some(json!({
+                    "urls": [
+                        {
+                            "label": "Website",
+                            "url": "https://example.com"
+                        },
+                        {
+                            "label": "Einsatz iCal",
+                            "url": "https://example.com/new-primary.ics"
+                        },
+                        {
+                            "label": "Abwesenheit iCal",
+                            "url": "https://example.com/new-absence.ics"
+                        }
+                    ]
                 }))
             );
         });

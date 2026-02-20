@@ -1,18 +1,28 @@
-import { employees } from "../data/dummy-data";
-import type { DayliteProjectRecord } from "../domain/planning";
+import type {
+  DayliteContactRecord,
+  DayliteProjectRecord,
+} from "../domain/planning";
 import { TimetableHeader } from "./components/timetable-header";
 import { TimetableRow } from "./components/timetable-row";
+import { usePlanningEmployees } from "./use-planning-employees";
 import { usePlanningProjects } from "./use-planning-projects";
 import { getWeekDays } from "./util";
 
-export function PlanningGrid({ weekOffset, projectState }: Props) {
+export function PlanningGrid({
+  weekOffset,
+  projectState,
+  employeeState,
+}: Props) {
   const planningProjectsState = usePlanningProjects();
+  const planningEmployeesState = usePlanningEmployees();
   const resolvedProjectState = projectState ?? planningProjectsState;
+  const resolvedEmployeeState = employeeState ?? planningEmployeesState;
 
   return (
     <PlanningGridTable
       weekOffset={weekOffset}
       projectState={resolvedProjectState}
+      employeeState={resolvedEmployeeState}
     />
   );
 }
@@ -20,9 +30,16 @@ export function PlanningGrid({ weekOffset, projectState }: Props) {
 export function PlanningGridTable({
   weekOffset,
   projectState,
+  employeeState,
 }: PlanningGridTableProps) {
   const weekDays = getWeekDays(weekOffset);
   const { projects, isLoading, errorMessage, reloadProjects } = projectState;
+  const {
+    employees,
+    isLoading: isEmployeeLoading,
+    errorMessage: employeeErrorMessage,
+    reloadEmployees,
+  } = employeeState;
 
   return (
     <section className="w-full h-full overflow-auto">
@@ -30,6 +47,18 @@ export function PlanningGridTable({
         <section className="alert alert-error m-4">
           <span>{errorMessage}</span>
           <button type="button" className="btn btn-sm" onClick={reloadProjects}>
+            Erneut laden
+          </button>
+        </section>
+      ) : null}
+      {employeeErrorMessage ? (
+        <section className="alert alert-error m-4">
+          <span>{employeeErrorMessage}</span>
+          <button
+            type="button"
+            className="btn btn-sm"
+            onClick={reloadEmployees}
+          >
             Erneut laden
           </button>
         </section>
@@ -44,14 +73,24 @@ export function PlanningGridTable({
           </tr>
         </thead>
         <tbody>
-          {employees.map((employee) => (
+          {employees.map((employee, index) => (
             <TimetableRow
-              key={employee.self}
+              key={buildEmployeeRowKey(employee, index)}
               employee={employee}
               projects={projects}
               weekDays={weekDays}
             />
           ))}
+          {!isEmployeeLoading && employees.length === 0 ? (
+            <tr key="no-employees-row">
+              <td
+                className="p-4 text-base-content/70"
+                colSpan={weekDays.length + 1}
+              >
+                Keine Mitarbeiter gefunden
+              </td>
+            </tr>
+          ) : null}
         </tbody>
       </table>
 
@@ -75,8 +114,8 @@ export function PlanningGridTable({
               </tr>
             </thead>
             <tbody>
-              {projects.map((project) => (
-                <tr key={project.self}>
+              {projects.map((project, index) => (
+                <tr key={buildProjectRowKey(project, index)}>
                   <td>{project.name}</td>
                   <td>{toGermanProjectStatus(project.status)}</td>
                   <td>{formatGermanDate(project.due)}</td>
@@ -93,11 +132,13 @@ export function PlanningGridTable({
 interface Props {
   weekOffset: number;
   projectState?: PlanningGridProjectsState;
+  employeeState?: PlanningGridEmployeesState;
 }
 
 interface PlanningGridTableProps {
   weekOffset: number;
   projectState: PlanningGridProjectsState;
+  employeeState: PlanningGridEmployeesState;
 }
 
 export interface PlanningGridProjectsState {
@@ -105,6 +146,13 @@ export interface PlanningGridProjectsState {
   isLoading: boolean;
   errorMessage: string | null;
   reloadProjects: () => void;
+}
+
+export interface PlanningGridEmployeesState {
+  employees: DayliteContactRecord[];
+  isLoading: boolean;
+  errorMessage: string | null;
+  reloadEmployees: () => void;
 }
 
 function toGermanProjectStatus(status: DayliteProjectRecord["status"]): string {
@@ -145,4 +193,39 @@ function formatGermanDate(isoDate: string | undefined): string {
     month: "2-digit",
     day: "2-digit",
   });
+}
+
+function buildEmployeeRowKey(
+  employee: DayliteContactRecord,
+  index: number,
+): string {
+  const stableReference = employee.self.trim();
+  if (stableReference.length > 0) {
+    return stableReference;
+  }
+
+  const stableName = (employee.nickname ?? employee.full_name ?? "").trim();
+  if (stableName.length > 0) {
+    return `employee-${stableName}-${index}`;
+  }
+
+  return `employee-empty-${index}`;
+}
+
+function buildProjectRowKey(
+  project: DayliteProjectRecord,
+  index: number,
+): string {
+  const stableReference =
+    typeof project.self === "string" ? project.self.trim() : "";
+  if (stableReference.length > 0) {
+    return stableReference;
+  }
+
+  const stableName = project.name.trim();
+  if (stableName.length > 0) {
+    return `project-${stableName}-${index}`;
+  }
+
+  return `project-empty-${index}`;
 }

@@ -52,6 +52,24 @@ describe("daylite project service", () => {
     ]);
   });
 
+  it("maps project self field from tauri command payload", async () => {
+    mockDayliteListProjects.mockResolvedValue({
+      status: "ok",
+      data: [
+        {
+          self: "/v1/projects/7999",
+          name: "Projekt Self Feld",
+          status: "in_progress",
+        },
+      ],
+    });
+
+    const result = await loadDayliteProjects({ nowMs: 1_000 });
+
+    expect(result.projects[0]?.self).toBe("/v1/projects/7999");
+    expect(result.projects[0]?.name).toBe("Projekt Self Feld");
+  });
+
   it("returns the unfiltered Daylite list after loading projects", async () => {
     mockDayliteListProjects.mockResolvedValue({
       status: "ok",

@@ -29,25 +29,6 @@ Tests (write first):
 - UI tests for search input, result list, selection.
 - Service tests for search API and error cases.
 
-### BL-008: Use Daylite Contacts for Employee Configuration
-Priority: P1  
-Effort: M
-
-Scope:
-- Load contacts from Daylite filtered for category `Monteur`.
-- Maintain two iCal references in Daylite contact mapping:
-  - Primary assignment iCal URL
-  - Secondary absence iCal URL (vacation/sick leave)
-
-Acceptance Criteria:
-- Correct employees are shown.
-- Cached values are used to instantly show employees after restart.
-- Both iCal URLs are readable/writable through Daylite contact data.
-
-Tests (write first):
-- Test for contact-to-employee mapping.
-- Tests for mapping both iCal URLs from/to Daylite contact fields.
-
 ## EPIC 4: Planradar Integration
 
 ### BL-009: Planradar API Client (Basis)

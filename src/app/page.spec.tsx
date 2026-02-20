@@ -1,12 +1,23 @@
 import { beforeAll, describe, expect, it, setSystemTime } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
-import { type PlanningGridProjectsState, PlanningGridTable } from "./page";
+import {
+  type PlanningGridEmployeesState,
+  type PlanningGridProjectsState,
+  PlanningGridTable,
+} from "./page";
 
 const defaultState: PlanningGridProjectsState = {
   projects: [],
   isLoading: false,
   errorMessage: null,
   reloadProjects: () => {},
+};
+
+const defaultEmployeeState: PlanningGridEmployeesState = {
+  employees: [],
+  isLoading: false,
+  errorMessage: null,
+  reloadEmployees: () => {},
 };
 
 describe("planning grid project loading states", () => {
@@ -19,6 +30,7 @@ describe("planning grid project loading states", () => {
       <PlanningGridTable
         weekOffset={0}
         projectState={{ ...defaultState, isLoading: true }}
+        employeeState={{ ...defaultEmployeeState }}
       />,
     );
 
@@ -34,6 +46,7 @@ describe("planning grid project loading states", () => {
           ...defaultState,
           errorMessage: "Die Daten konnten nicht von Daylite geladen werden.",
         }}
+        employeeState={{ ...defaultEmployeeState }}
       />,
     );
 
@@ -57,6 +70,7 @@ describe("planning grid project loading states", () => {
             },
           ],
         }}
+        employeeState={{ ...defaultEmployeeState }}
       />,
     );
 
@@ -66,7 +80,11 @@ describe("planning grid project loading states", () => {
 
   it("shows empty state when no projects are loaded", () => {
     const html = renderToStaticMarkup(
-      <PlanningGridTable weekOffset={0} projectState={{ ...defaultState }} />,
+      <PlanningGridTable
+        weekOffset={0}
+        projectState={{ ...defaultState }}
+        employeeState={{ ...defaultEmployeeState }}
+      />,
     );
 
     const tableIndex = html.indexOf("</table>");
@@ -93,10 +111,54 @@ describe("planning grid project loading states", () => {
             },
           ],
         }}
+        employeeState={{ ...defaultEmployeeState }}
       />,
     );
 
     expect(html).toContain("In Arbeit");
     expect(html).toContain("20.02.2026");
+  });
+
+  it("does not crash when a project record is missing self", () => {
+    const html = renderToStaticMarkup(
+      <PlanningGridTable
+        weekOffset={0}
+        projectState={{
+          ...defaultState,
+          projects: [
+            {
+              name: "Projekt Ohne Self",
+              status: "in_progress",
+            } as unknown as PlanningGridProjectsState["projects"][number],
+          ],
+        }}
+        employeeState={{ ...defaultEmployeeState }}
+      />,
+    );
+
+    expect(html).toContain("Projekt Ohne Self");
+    expect(html).toContain("In Arbeit");
+  });
+
+  it("renders daylite-backed employee names instead of dummy employee names", () => {
+    const html = renderToStaticMarkup(
+      <PlanningGridTable
+        weekOffset={0}
+        projectState={{ ...defaultState }}
+        employeeState={{
+          ...defaultEmployeeState,
+          employees: [
+            {
+              self: "/v1/contacts/9001",
+              full_name: "Monteur Aus Daylite",
+              category: "Monteur",
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect(html).toContain("Monteur Aus Daylite");
+    expect(html).not.toContain("Anna Schmidt");
   });
 });

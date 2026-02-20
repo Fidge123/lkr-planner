@@ -7,6 +7,7 @@ import {
   isAssignment,
   isDayliteContactRecord,
   isDayliteProjectRecord,
+  upsertDayliteContactIcalUrls,
 } from "./planning";
 
 describe("planning domain mappers and guards", () => {
@@ -64,7 +65,7 @@ describe("planning domain mappers and guards", () => {
         getDayliteContactDisplayName({
           self: "/v1/contacts/3000",
         }),
-      ).toBe("");
+      ).toBe("Unbenannter Kontakt");
     });
 
     it("returns daylite address format without remapping", () => {
@@ -90,7 +91,7 @@ describe("planning domain mappers and guards", () => {
       });
     });
 
-    it("extracts iCal urls from urls and extra_fields", () => {
+    it("extracts iCal urls from urls only", () => {
       const fromUrls = {
         self: "/v1/contacts/1000",
         urls: [
@@ -112,18 +113,48 @@ describe("planning domain mappers and guards", () => {
         "https://example.com/absence.ics",
       );
 
-      const fromExtraFields = {
-        self: "/v1/contacts/4000",
-        extra_fields:
-          '{"ical_termine":{"value":"https://example.com/primary.ics"},"ical_fehlzeiten":{"value":"https://example.com/absence.ics"}}',
-      };
+      expect(
+        getPrimaryIcalUrlFromContact({
+          self: "/v1/contacts/4000",
+        }),
+      ).toBe("");
+      expect(
+        getAbsenceIcalUrlFromContact({
+          self: "/v1/contacts/4000",
+        }),
+      ).toBe("");
+    });
 
-      expect(getPrimaryIcalUrlFromContact(fromExtraFields)).toBe(
-        "https://example.com/primary.ics",
+    it("maps both iCal urls back to daylite urls while preserving unrelated urls", () => {
+      const mergedUrls = upsertDayliteContactIcalUrls(
+        [
+          {
+            label: "Website",
+            url: "https://example.com",
+          },
+          {
+            label: "Abwesenheit iCal",
+            url: "https://old.example.com/absence.ics",
+          },
+        ],
+        "https://new.example.com/primary.ics",
+        "https://new.example.com/absence.ics",
       );
-      expect(getAbsenceIcalUrlFromContact(fromExtraFields)).toBe(
-        "https://example.com/absence.ics",
-      );
+
+      expect(mergedUrls).toEqual([
+        {
+          label: "Website",
+          url: "https://example.com",
+        },
+        {
+          label: "Einsatz iCal",
+          url: "https://new.example.com/primary.ics",
+        },
+        {
+          label: "Abwesenheit iCal",
+          url: "https://new.example.com/absence.ics",
+        },
+      ]);
     });
   });
 
