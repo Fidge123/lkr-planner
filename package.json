@@ -17,16 +17,16 @@
     "format:check": "biome format ."
   },
   "dependencies": {
-    "@tailwindcss/vite": "^4.1.18",
+    "@tailwindcss/vite": "^4.2.0",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-http": "~2",
     "@tauri-apps/plugin-opener": "^2",
     "@tauri-apps/plugin-updater": "~2",
-    "daisyui": "^5.5.18",
-    "lucide-react": "^0.563.0",
+    "daisyui": "^5.5.19",
+    "lucide-react": "^0.575.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
-    "tailwindcss": "^4.1.18"
+    "tailwindcss": "^4.2.0"
   },
   "devDependencies": {
     "@biomejs/biome": "2.3.15",
