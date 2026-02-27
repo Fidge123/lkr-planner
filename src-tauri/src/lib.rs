@@ -17,6 +17,7 @@ pub fn run() {
             integrations::daylite::contacts::daylite_update_contact_ical_urls
         ]);
 
+    #[cfg(debug_assertions)]
     specta_builder
         .export(
             specta_typescript::Typescript::default().header("// @ts-nocheck"),
