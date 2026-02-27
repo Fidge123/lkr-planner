@@ -4,16 +4,9 @@ import { ChevronLeft, ChevronRight, Settings } from "lucide-react";
 import { DayliteTokenModal } from "./app/components/daylite-token-modal";
 import { PlanningGrid } from "./app/page";
 
-function App({ initialConfigOpen = false }: AppProps) {
+function App() {
   const [weekOffset, setWeekOffset] = useState(0);
-  const [isDayliteTokenModalOpen, setIsDayliteTokenModalOpen] =
-    useState(initialConfigOpen);
-
-  const goToPreviousWeek = () => setWeekOffset((prev) => prev - 1);
-  const goToNextWeek = () => setWeekOffset((prev) => prev + 1);
-  const goToCurrentWeek = () => setWeekOffset(0);
-  const openDayliteTokenModal = () => setIsDayliteTokenModalOpen(true);
-  const closeDayliteTokenModal = () => setIsDayliteTokenModalOpen(false);
+  const [isDayliteTokenModalOpen, setIsDayliteTokenModalOpen] = useState(false);
 
   return (
     <article className="min-h-screen flex flex-col">
@@ -23,7 +16,7 @@ function App({ initialConfigOpen = false }: AppProps) {
           <button
             type="button"
             className="btn btn-ghost px-2"
-            onClick={openDayliteTokenModal}
+            onClick={() => setIsDayliteTokenModalOpen(true)}
           >
             <Settings className="size-6 text-base-content/50" />
           </button>
@@ -32,7 +25,7 @@ function App({ initialConfigOpen = false }: AppProps) {
           <button
             type="button"
             className="btn btn-ghost pl-2"
-            onClick={goToPreviousWeek}
+            onClick={() => setWeekOffset((prev) => prev - 1)}
           >
             <ChevronLeft className="" />
             Zurück
@@ -40,14 +33,14 @@ function App({ initialConfigOpen = false }: AppProps) {
           <button
             type="button"
             className={`btn px-6 btn-primary ${weekOffset !== 0 && "btn-outline"}`}
-            onClick={goToCurrentWeek}
+            onClick={() => setWeekOffset(0)}
           >
             Heute
           </button>
           <button
             type="button"
             className="btn btn-ghost pr-2"
-            onClick={goToNextWeek}
+            onClick={() => setWeekOffset((prev) => prev + 1)}
           >
             Weiter
             <ChevronRight />
@@ -61,14 +54,10 @@ function App({ initialConfigOpen = false }: AppProps) {
 
       <DayliteTokenModal
         isOpen={isDayliteTokenModalOpen}
-        onClose={closeDayliteTokenModal}
+        onClose={() => setIsDayliteTokenModalOpen(false)}
       />
     </article>
   );
 }
 
 export default App;
-
-interface AppProps {
-  initialConfigOpen?: boolean;
-}
