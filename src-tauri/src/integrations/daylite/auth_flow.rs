@@ -2,10 +2,12 @@ use super::client::DayliteApiClient;
 use super::client::DayliteHttpMethod;
 use super::shared::{
     current_epoch_ms, missing_token_error, normalize_http_error, parse_json_body,
-    should_refresh_access_token, truncate_for_log, DayliteApiError, DayliteApiErrorCode,
-    DayliteTokenState,
+    parse_success_json_body, should_refresh_access_token, truncate_for_log, DayliteApiError,
+    DayliteApiErrorCode, DayliteTokenState,
 };
+use serde::de::DeserializeOwned;
 use serde::Deserialize;
+use serde_json::Value;
 
 pub(super) async fn ensure_access_token(
     client: &DayliteApiClient,
@@ -107,6 +109,29 @@ pub(super) async fn refresh_tokens(
     })
 }
 
+pub(super) async fn send_authenticated_json<T: DeserializeOwned>(
+    client: &DayliteApiClient,
+    token_state: DayliteTokenState,
+    method: DayliteHttpMethod,
+    path: &str,
+    query: Vec<(String, String)>,
+    body: Option<Value>,
+) -> Result<(T, DayliteTokenState), DayliteApiError> {
+    let token_state = ensure_access_token(client, token_state).await?;
+    let response = client
+        .send_request(
+            method,
+            path,
+            query,
+            body,
+            Some(token_state.access_token.clone()),
+        )
+        .await?;
+    let data = parse_success_json_body::<T>(response.status, &response.body, path)?;
+
+    Ok((data, token_state))
+}
+
 #[derive(Debug, Deserialize)]
 struct DayliteRefreshTokenResponse {
     access_token: String,
@@ -129,9 +154,15 @@ fn parse_refresh_response_body(
 
 #[cfg(test)]
 mod tests {
-    use super::{ensure_access_token, refresh_tokens};
-    use crate::integrations::daylite::client::DayliteApiClient;
+    use super::{ensure_access_token, refresh_tokens, send_authenticated_json};
+    use crate::integrations::daylite::client::{
+        BoxFuture, DayliteApiClient, DayliteHttpMethod, DayliteHttpRequest, DayliteHttpResponse,
+        DayliteHttpTransport,
+    };
     use crate::integrations::daylite::shared::{DayliteApiErrorCode, DayliteTokenState};
+    use serde::Deserialize;
+    use std::collections::VecDeque;
+    use std::sync::{Arc, Mutex};
 
     #[test]
     fn ensure_access_token_returns_missing_token_error_when_both_tokens_are_missing() {
@@ -178,5 +209,156 @@ mod tests {
 
             assert_eq!(error.code, DayliteApiErrorCode::MissingToken);
         });
+    }
+
+    #[derive(Debug, Deserialize, PartialEq, Eq)]
+    struct AuthFlowFixture {
+        value: String,
+    }
+
+    #[test]
+    fn send_authenticated_json_uses_existing_access_token_and_parses_payload() {
+        tauri::async_runtime::block_on(async {
+            let transport = MockTransport::new(vec![Ok(mock_response(200, r#"{"value":"ok"}"#))]);
+            let client = DayliteApiClient::with_transport(Arc::new(transport.clone()));
+
+            let (data, token_state) = send_authenticated_json::<AuthFlowFixture>(
+                &client,
+                DayliteTokenState {
+                    access_token: "existing-access-token".to_string(),
+                    refresh_token: "refresh-token".to_string(),
+                    access_token_expires_at_ms: Some(u64::MAX),
+                },
+                DayliteHttpMethod::Post,
+                "/projects/_search",
+                vec![("full-records".to_string(), "true".to_string())],
+                None,
+            )
+            .await
+            .expect("request should succeed");
+
+            assert_eq!(
+                data,
+                AuthFlowFixture {
+                    value: "ok".to_string(),
+                }
+            );
+            assert_eq!(token_state.access_token, "existing-access-token");
+
+            let requests = transport.requests();
+            assert_eq!(requests.len(), 1);
+            assert_eq!(requests[0].path, "/projects/_search");
+            assert_eq!(
+                requests[0].access_token,
+                Some("existing-access-token".to_string())
+            );
+        });
+    }
+
+    #[test]
+    fn send_authenticated_json_refreshes_before_request_when_access_token_is_missing() {
+        tauri::async_runtime::block_on(async {
+            let transport = MockTransport::new(vec![
+                Ok(mock_response(
+                    200,
+                    r#"{"access_token":"refreshed-access-token","refresh_token":"refreshed-refresh-token","expires_in":3600}"#,
+                )),
+                Ok(mock_response(200, r#"{"value":"ok"}"#)),
+            ]);
+            let client = DayliteApiClient::with_transport(Arc::new(transport.clone()));
+
+            let (_, token_state) = send_authenticated_json::<AuthFlowFixture>(
+                &client,
+                DayliteTokenState {
+                    access_token: String::new(),
+                    refresh_token: "initial-refresh-token".to_string(),
+                    access_token_expires_at_ms: None,
+                },
+                DayliteHttpMethod::Get,
+                "/contacts/100",
+                Vec::new(),
+                None,
+            )
+            .await
+            .expect("request should succeed after refresh");
+
+            assert_eq!(token_state.access_token, "refreshed-access-token");
+            assert_eq!(token_state.refresh_token, "refreshed-refresh-token");
+            assert!(token_state.access_token_expires_at_ms.is_some());
+
+            let requests = transport.requests();
+            assert_eq!(requests.len(), 2);
+            assert_eq!(requests[0].path, "/personal_token/refresh_token");
+            assert_eq!(requests[1].path, "/contacts/100");
+            assert_eq!(
+                requests[1].access_token,
+                Some("refreshed-access-token".to_string())
+            );
+        });
+    }
+
+    #[derive(Clone)]
+    struct MockTransport {
+        responses: Arc<
+            Mutex<
+                VecDeque<
+                    Result<
+                        DayliteHttpResponse,
+                        crate::integrations::daylite::shared::DayliteApiError,
+                    >,
+                >,
+            >,
+        >,
+        requests: Arc<Mutex<Vec<DayliteHttpRequest>>>,
+    }
+
+    impl MockTransport {
+        fn new(
+            responses: Vec<
+                Result<DayliteHttpResponse, crate::integrations::daylite::shared::DayliteApiError>,
+            >,
+        ) -> Self {
+            Self {
+                responses: Arc::new(Mutex::new(VecDeque::from(responses))),
+                requests: Arc::new(Mutex::new(Vec::new())),
+            }
+        }
+
+        fn requests(&self) -> Vec<DayliteHttpRequest> {
+            self.requests
+                .lock()
+                .expect("request lock should succeed")
+                .clone()
+        }
+    }
+
+    impl DayliteHttpTransport for MockTransport {
+        fn send<'a>(
+            &'a self,
+            request: DayliteHttpRequest,
+        ) -> BoxFuture<
+            'a,
+            Result<DayliteHttpResponse, crate::integrations::daylite::shared::DayliteApiError>,
+        > {
+            Box::pin(async move {
+                self.requests
+                    .lock()
+                    .expect("request lock should succeed")
+                    .push(request);
+
+                self.responses
+                    .lock()
+                    .expect("response lock should succeed")
+                    .pop_front()
+                    .expect("mock should contain enough responses")
+            })
+        }
+    }
+
+    fn mock_response(status: u16, body: &str) -> DayliteHttpResponse {
+        DayliteHttpResponse {
+            status,
+            body: body.to_string(),
+        }
     }
 }

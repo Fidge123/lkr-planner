@@ -1,10 +1,10 @@
 use super::super::local_store::{DayliteContactCacheEntry, DayliteContactUrlCacheEntry};
-use super::auth_flow::ensure_access_token;
+use super::auth_flow::send_authenticated_json;
 use super::client::DayliteApiClient;
 use super::client::DayliteHttpMethod;
 use super::shared::{
-    load_daylite_tokens, load_store_or_error, parse_success_json_body, save_store_or_error,
-    store_daylite_tokens, DayliteApiError, DayliteApiErrorCode, DayliteSearchResult,
+    load_daylite_tokens, load_store_or_error, save_store_or_error, store_daylite_tokens,
+    DayliteApiError, DayliteApiErrorCode, DayliteSearchResult,
 };
 use chrono::{SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
@@ -70,11 +70,10 @@ pub async fn daylite_list_contacts(
 ) -> Result<Vec<PlanningContactRecord>, DayliteApiError> {
     let mut store = load_store_or_error(app.clone())?;
     let client = DayliteApiClient::new(&store.api_endpoints.daylite_base_url)?;
-    let mut token_state = load_daylite_tokens(&store);
-    token_state = ensure_access_token(&client, token_state).await?;
-
-    let response = client
-        .send_request(
+    let (search_result, token_state) =
+        send_authenticated_json::<DayliteSearchResult<DayliteContactSummary>>(
+            &client,
+            load_daylite_tokens(&store),
             DayliteHttpMethod::Post,
             "/contacts/_search",
             vec![("full-records".to_string(), "true".to_string())],
@@ -83,14 +82,8 @@ pub async fn daylite_list_contacts(
                     "equal": "Monteur"
                 }
             })),
-            Some(token_state.access_token.clone()),
         )
         .await?;
-    let search_result = parse_success_json_body::<DayliteSearchResult<DayliteContactSummary>>(
-        response.status,
-        &response.body,
-        "/contacts/_search",
-    )?;
     let contacts = sort_contacts(filter_monteur_contacts(
         search_result
             .results
@@ -119,47 +112,37 @@ pub async fn daylite_update_contact_ical_urls(
 ) -> Result<PlanningContactRecord, DayliteApiError> {
     let mut store = load_store_or_error(app.clone())?;
     let client = DayliteApiClient::new(&store.api_endpoints.daylite_base_url)?;
-    let mut token_state = load_daylite_tokens(&store);
-    token_state = ensure_access_token(&client, token_state).await?;
+    let token_state = load_daylite_tokens(&store);
 
     let contact_id = parse_contact_id(&input.contact_reference)?;
     let contact_path = format!("/contacts/{contact_id}");
-    let current_contact_response = client
-        .send_request(
-            DayliteHttpMethod::Get,
-            &contact_path,
-            Vec::new(),
-            None,
-            Some(token_state.access_token.clone()),
-        )
-        .await?;
-    let current_contact = parse_success_json_body::<DayliteContactSummary>(
-        current_contact_response.status,
-        &current_contact_response.body,
+    let (current_contact, token_state) = send_authenticated_json::<DayliteContactSummary>(
+        &client,
+        token_state,
+        DayliteHttpMethod::Get,
         &contact_path,
-    )?;
+        Vec::new(),
+        None,
+    )
+    .await?;
     let merged_urls = merge_contact_ical_urls(
         current_contact.urls,
         &input.primary_ical_url,
         &input.absence_ical_url,
     );
-    let update_response = client
-        .send_request(
-            DayliteHttpMethod::Patch,
-            &contact_path,
-            Vec::new(),
-            Some(json!({
-                "urls": merged_urls,
-            })),
-            Some(token_state.access_token.clone()),
-        )
-        .await?;
-    let updated_contact =
-        map_daylite_contact_summary(parse_success_json_body::<DayliteContactSummary>(
-            update_response.status,
-            &update_response.body,
-            &contact_path,
-        )?);
+    let (updated_contact, token_state) = send_authenticated_json::<DayliteContactSummary>(
+        &client,
+        token_state,
+        DayliteHttpMethod::Patch,
+        &contact_path,
+        Vec::new(),
+        Some(json!({
+            "urls": merged_urls,
+        })),
+    )
+    .await?;
+    let updated_contact = map_daylite_contact_summary(updated_contact);
+
     let mut cached_contacts: Vec<PlanningContactRecord> = store
         .daylite_cache
         .contacts

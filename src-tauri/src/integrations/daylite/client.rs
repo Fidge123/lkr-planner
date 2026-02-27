@@ -18,6 +18,11 @@ impl DayliteApiClient {
         })
     }
 
+    #[cfg(test)]
+    pub(super) fn with_transport(transport: Arc<dyn DayliteHttpTransport>) -> Self {
+        Self { transport }
+    }
+
     pub(super) async fn send_request(
         &self,
         method: DayliteHttpMethod,
