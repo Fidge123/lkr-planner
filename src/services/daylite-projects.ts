@@ -1,4 +1,4 @@
-import type { DayliteProjectRecord } from "../domain/planning";
+import type { PlanningProjectRecord } from "../domain/planning";
 import { commands } from "../generated/tauri";
 import { readDayliteApiErrorMessage } from "./daylite-service-helpers";
 
@@ -7,13 +7,13 @@ export const DEFAULT_DAYLITE_PROJECT_CACHE_TTL_MS = 30_000;
 type DayliteProjectsSource = "network" | "cache" | "stale-cache";
 
 interface DayliteProjectsLoadResult {
-  projects: DayliteProjectRecord[];
+  projects: PlanningProjectRecord[];
   source: DayliteProjectsSource;
   errorMessage?: string | null;
 }
 
 interface ProjectCacheEntry {
-  projects: DayliteProjectRecord[];
+  projects: PlanningProjectRecord[];
   fetchedAtMs: number;
 }
 
@@ -61,7 +61,7 @@ export async function loadDayliteProjects({
   return inFlightRequest;
 }
 
-async function fetchProjects(): Promise<DayliteProjectRecord[]> {
+async function fetchProjects(): Promise<PlanningProjectRecord[]> {
   const result = await commands.dayliteListProjects();
   if (result.status === "error") {
     throw new Error(

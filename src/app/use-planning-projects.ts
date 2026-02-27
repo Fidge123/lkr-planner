@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
-import type { DayliteProjectRecord } from "../domain/planning";
+import type { PlanningProjectRecord } from "../generated/tauri";
 import { loadDayliteProjects } from "../services/daylite-projects";
 import type { PlanningGridProjectsState } from "./page";
 
 export function usePlanningProjects(): PlanningGridProjectsState {
-  const [projects, setProjects] = useState<DayliteProjectRecord[]>([]);
+  const [projects, setProjects] = useState<PlanningProjectRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 

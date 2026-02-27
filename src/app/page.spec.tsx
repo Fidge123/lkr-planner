@@ -67,6 +67,7 @@ describe("planning grid project loading states", () => {
               self: "/v1/projects/3001",
               name: "Live Daylite Projekt",
               status: "in_progress",
+              keywords: [],
             },
           ],
         }}
@@ -107,6 +108,7 @@ describe("planning grid project loading states", () => {
               self: "/v1/projects/3001",
               name: "Live Daylite Projekt",
               status: "in_progress",
+              keywords: [],
               due: "2026-02-20T00:00:00.000Z",
             },
           ],
@@ -152,6 +154,7 @@ describe("planning grid project loading states", () => {
               self: "/v1/contacts/9001",
               full_name: "Monteur Aus Daylite",
               category: "Monteur",
+              urls: [],
             },
           ],
         }}

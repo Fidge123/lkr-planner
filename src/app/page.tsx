@@ -1,7 +1,5 @@
-import type {
-  DayliteContactRecord,
-  DayliteProjectRecord,
-} from "../domain/planning";
+import type { DayliteContactRecord } from "../domain/planning";
+import type { PlanningProjectRecord } from "../generated/tauri";
 import { TimetableHeader } from "./components/timetable-header";
 import { TimetableRow } from "./components/timetable-row";
 import { usePlanningEmployees } from "./use-planning-employees";
@@ -142,7 +140,7 @@ interface PlanningGridTableProps {
 }
 
 export interface PlanningGridProjectsState {
-  projects: DayliteProjectRecord[];
+  projects: PlanningProjectRecord[];
   isLoading: boolean;
   errorMessage: string | null;
   reloadProjects: () => void;
@@ -155,7 +153,9 @@ export interface PlanningGridEmployeesState {
   reloadEmployees: () => void;
 }
 
-function toGermanProjectStatus(status: DayliteProjectRecord["status"]): string {
+function toGermanProjectStatus(
+  status: PlanningProjectRecord["status"],
+): string {
   if (status === "new_status") {
     return "Neu";
   }
@@ -213,7 +213,7 @@ function buildEmployeeRowKey(
 }
 
 function buildProjectRowKey(
-  project: DayliteProjectRecord,
+  project: PlanningProjectRecord,
   index: number,
 ): string {
   const stableReference =

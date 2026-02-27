@@ -1,8 +1,5 @@
-import type {
-  Assignment,
-  DayliteContactRecord,
-  DayliteProjectRecord,
-} from "../domain/planning";
+import type { Assignment, DayliteContactRecord } from "../domain/planning";
+import type { PlanningProjectRecord } from "../generated/tauri";
 
 export interface PlanningCellProject {
   id: string;
@@ -289,7 +286,7 @@ export const assignments: Assignment[] = assignmentTemplates.flatMap(
 export function getWorkItemsForCell(
   employeeReference: string,
   day: Date,
-  dayliteProjects: DayliteProjectRecord[],
+  dayliteProjects: PlanningProjectRecord[],
 ): PlanningCellProject[] {
   const isoDay = day.toISOString().slice(0, 10);
   const projectsByReference = new Map(

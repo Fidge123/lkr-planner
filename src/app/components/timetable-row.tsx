@@ -1,9 +1,9 @@
 import { getWorkItemsForCell } from "../../data/dummy-data";
 import {
   type DayliteContactRecord,
-  type DayliteProjectRecord,
   getDayliteContactDisplayName,
 } from "../../domain/planning";
+import type { PlanningProjectRecord } from "../../generated/tauri";
 import { isToday } from "../util";
 import { TimetableCell } from "./timetable-cell";
 
@@ -27,6 +27,6 @@ export function TimetableRow({ employee, projects, weekDays }: Props) {
 
 interface Props {
   employee: DayliteContactRecord;
-  projects: DayliteProjectRecord[];
+  projects: PlanningProjectRecord[];
   weekDays: Date[];
 }

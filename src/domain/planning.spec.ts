@@ -17,6 +17,7 @@ describe("planning domain mappers and guards", () => {
         self: "/v1/projects/7000",
         name: "Sell Sea Shells",
         status: "new_status",
+        keywords: [],
       };
 
       expect(isDayliteProjectRecord(raw)).toBe(true);
@@ -30,6 +31,16 @@ describe("planning domain mappers and guards", () => {
 
       expect(isDayliteProjectRecord(raw)).toBe(false);
     });
+
+    it("rejects records when required keywords are missing", () => {
+      const raw: unknown = {
+        self: "/v1/projects/7000",
+        name: "Sell Sea Shells",
+        status: "new_status",
+      };
+
+      expect(isDayliteProjectRecord(raw)).toBe(false);
+    });
   });
 
   describe("isDayliteContactRecord", () => {
@@ -38,9 +49,19 @@ describe("planning domain mappers and guards", () => {
         self: "/v1/contacts/1000",
         first_name: "Thomas",
         last_name: "Bartelmess",
+        urls: [],
       };
 
       expect(isDayliteContactRecord(raw)).toBe(true);
+    });
+
+    it("rejects records when required urls are missing", () => {
+      const raw: unknown = {
+        self: "/v1/contacts/1000",
+        full_name: "Thomas Bartelmess",
+      };
+
+      expect(isDayliteContactRecord(raw)).toBe(false);
     });
   });
 
@@ -51,6 +72,7 @@ describe("planning domain mappers and guards", () => {
           self: "/v1/contacts/1000",
           nickname: "Tom",
           full_name: "Thomas Bartelmess",
+          urls: [],
         }),
       ).toBe("Tom");
 
@@ -58,12 +80,14 @@ describe("planning domain mappers and guards", () => {
         getDayliteContactDisplayName({
           self: "/v1/contacts/2000",
           full_name: "Anna Schmidt",
+          urls: [],
         }),
       ).toBe("Anna Schmidt");
 
       expect(
         getDayliteContactDisplayName({
           self: "/v1/contacts/3000",
+          urls: [],
         }),
       ).toBe("Unbenannter Kontakt");
     });
@@ -71,6 +95,7 @@ describe("planning domain mappers and guards", () => {
     it("returns daylite address format without remapping", () => {
       const contact = {
         self: "/v1/contacts/1000",
+        urls: [],
         addresses: [
           {
             label: "Home",
@@ -116,11 +141,13 @@ describe("planning domain mappers and guards", () => {
       expect(
         getPrimaryIcalUrlFromContact({
           self: "/v1/contacts/4000",
+          urls: [],
         }),
       ).toBe("");
       expect(
         getAbsenceIcalUrlFromContact({
           self: "/v1/contacts/4000",
+          urls: [],
         }),
       ).toBe("");
     });

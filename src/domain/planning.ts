@@ -1,4 +1,11 @@
-export interface AssignmentPeriod {
+import type {
+  DayliteContactUrl,
+  PlanningContactRecord,
+  PlanningProjectRecord,
+  PlanningProjectStatus,
+} from "../generated/tauri";
+
+interface AssignmentPeriod {
   startDate: string;
   endDate: string;
 }
@@ -8,31 +15,6 @@ export interface Assignment {
   employeeId: string;
   projectId: string;
   period: AssignmentPeriod;
-}
-
-export interface DayliteProjectRecord {
-  self: string;
-  name: string;
-  status:
-    | "new_status"
-    | "in_progress"
-    | "done"
-    | "abandoned"
-    | "cancelled"
-    | "deferred";
-  category?: string | null;
-  keywords?: string[];
-  due?: string | null;
-  started?: string | null;
-  completed?: string | null;
-  create_date?: string | null;
-  modify_date?: string | null;
-}
-
-export interface DayliteUrl {
-  label?: string | null;
-  url?: string | null;
-  note?: string | null;
 }
 
 export interface DayliteAddress {
@@ -46,19 +28,14 @@ export interface DayliteAddress {
   note?: string;
 }
 
-export interface DayliteContactRecord {
-  self: string;
-  full_name?: string | null;
-  nickname?: string | null;
-  category?: string | null;
+export type DayliteContactRecord = PlanningContactRecord & {
   keywords?: string[];
-  urls?: DayliteUrl[];
   addresses?: DayliteAddress[];
-}
+};
 
 export function isDayliteProjectRecord(
   value: unknown,
-): value is DayliteProjectRecord {
+): value is PlanningProjectRecord {
   if (!isObject(value)) {
     return false;
   }
@@ -67,8 +44,16 @@ export function isDayliteProjectRecord(
     return false;
   }
 
-  if ("status" in value && value.status !== undefined) {
-    return typeof value.status === "string";
+  if (!isPlanningProjectStatus(value.status)) {
+    return false;
+  }
+
+  if (!Array.isArray(value.keywords)) {
+    return false;
+  }
+
+  if (!value.keywords.every((keyword) => typeof keyword === "string")) {
+    return false;
   }
 
   return true;
@@ -77,7 +62,12 @@ export function isDayliteProjectRecord(
 export function isDayliteContactRecord(
   value: unknown,
 ): value is DayliteContactRecord {
-  if (!isObject(value) || typeof value.self !== "string") {
+  if (
+    !isObject(value) ||
+    typeof value.self !== "string" ||
+    !Array.isArray(value.urls) ||
+    !value.urls.every(isDayliteUrlRecord)
+  ) {
     return false;
   }
 
@@ -158,10 +148,10 @@ export function getAbsenceIcalUrlFromContact(
 }
 
 export function upsertDayliteContactIcalUrls(
-  urls: DayliteUrl[] | undefined,
+  urls: DayliteContactUrl[] | undefined,
   primaryIcalUrl: string,
   absenceIcalUrl: string,
-): DayliteUrl[] {
+): DayliteContactUrl[] {
   const preservedUrls = (urls ?? []).filter((candidateUrl) => {
     const label = normalizeLabel(candidateUrl.label);
     if (!label) {
@@ -193,7 +183,7 @@ export function upsertDayliteContactIcalUrls(
 }
 
 function findIcalUrlFromUrls(
-  urls: DayliteUrl[] | undefined,
+  urls: DayliteContactUrl[] | undefined,
   matcher: (normalizedLabel: string) => boolean,
 ): string | undefined {
   if (!urls) {
@@ -249,4 +239,46 @@ function normalizeUrl(url: string | null | undefined): string | undefined {
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+const planningProjectStatuses: Set<PlanningProjectStatus> = new Set([
+  "new_status",
+  "in_progress",
+  "done",
+  "abandoned",
+  "cancelled",
+  "deferred",
+]);
+
+function isPlanningProjectStatus(
+  value: unknown,
+): value is PlanningProjectStatus {
+  return (
+    typeof value === "string" &&
+    planningProjectStatuses.has(value as PlanningProjectStatus)
+  );
+}
+
+function isDayliteUrlRecord(value: unknown): value is DayliteContactUrl {
+  if (!isObject(value)) {
+    return false;
+  }
+
+  if (!isNullableString(value.label)) {
+    return false;
+  }
+
+  if (!isNullableString(value.url)) {
+    return false;
+  }
+
+  if (!isNullableString(value.note)) {
+    return false;
+  }
+
+  return true;
+}
+
+function isNullableString(value: unknown): value is string | null | undefined {
+  return value === undefined || value === null || typeof value === "string";
 }

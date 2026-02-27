@@ -39,6 +39,7 @@ Before introducing a new dependency, always confirm with the user by providing a
 - Display user-friendly error messages in German (UI language)
 - Create the simplest valid and semantic HTML possible
 - Avoid nested `div` and `span` elements
+- YAGNI (You Ain't Gonna Need It): Avoid code that is not required for the current scope
 
 ### React Components
 
