@@ -1,5 +1,7 @@
-import type { DayliteContactRecord } from "../domain/planning";
-import type { PlanningProjectRecord } from "../generated/tauri";
+import type {
+  PlanningContactRecord,
+  PlanningProjectRecord,
+} from "../generated/tauri";
 import { TimetableHeader } from "./components/timetable-header";
 import { TimetableRow } from "./components/timetable-row";
 import { usePlanningEmployees } from "./use-planning-employees";
@@ -147,7 +149,7 @@ export interface PlanningGridProjectsState {
 }
 
 export interface PlanningGridEmployeesState {
-  employees: DayliteContactRecord[];
+  employees: PlanningContactRecord[];
   isLoading: boolean;
   errorMessage: string | null;
   reloadEmployees: () => void;
@@ -196,7 +198,7 @@ function formatGermanDate(isoDate: string | null | undefined): string {
 }
 
 function buildEmployeeRowKey(
-  employee: DayliteContactRecord,
+  employee: PlanningContactRecord,
   index: number,
 ): string {
   const stableReference = employee.self.trim();

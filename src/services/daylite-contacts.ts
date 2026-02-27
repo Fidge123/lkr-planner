@@ -1,10 +1,7 @@
 import {
-  type DayliteContactRecord,
-  getDayliteContactDisplayName,
-} from "../domain/planning";
-import {
   commands,
   type DayliteUpdateContactIcalUrlsInput,
+  type PlanningContactRecord,
 } from "../generated/tauri";
 import {
   normalizeOptionalString,
@@ -16,13 +13,13 @@ export const DEFAULT_DAYLITE_CONTACT_CACHE_TTL_MS = 30_000;
 type DayliteContactsSource = "network" | "cache" | "disk-cache" | "stale-cache";
 
 interface DayliteContactsLoadResult {
-  contacts: DayliteContactRecord[];
+  contacts: PlanningContactRecord[];
   source: DayliteContactsSource;
   errorMessage?: string | null;
 }
 
 interface ContactCacheEntry {
-  contacts: DayliteContactRecord[];
+  contacts: PlanningContactRecord[];
   fetchedAtMs: number;
 }
 
@@ -89,7 +86,7 @@ export async function loadDayliteContacts(
 }
 
 export async function loadCachedDayliteContacts(): Promise<
-  DayliteContactRecord[]
+  PlanningContactRecord[]
 > {
   const result = await commands.dayliteListCachedContacts();
   if (result.status === "error") {
@@ -101,7 +98,7 @@ export async function loadCachedDayliteContacts(): Promise<
 
 export async function updateDayliteContactIcalUrls(
   input: DayliteUpdateContactIcalUrlsInput,
-): Promise<DayliteContactRecord> {
+): Promise<PlanningContactRecord> {
   const result = await commands.dayliteUpdateContactIcalUrls(input);
   if (result.status === "error") {
     throw new Error(
@@ -116,7 +113,7 @@ export async function updateDayliteContactIcalUrls(
   return result.data;
 }
 
-async function fetchContacts(): Promise<DayliteContactRecord[]> {
+async function fetchContacts(): Promise<PlanningContactRecord[]> {
   const result = await commands.dayliteListContacts();
   if (result.status === "error") {
     throw new Error(
@@ -131,7 +128,7 @@ async function fetchContacts(): Promise<DayliteContactRecord[]> {
 }
 
 function updateInMemoryContactCache(
-  updatedContact: DayliteContactRecord,
+  updatedContact: PlanningContactRecord,
 ): void {
   if (!contactCache) {
     return;
@@ -151,16 +148,16 @@ function updateInMemoryContactCache(
   };
 }
 
-function isMonteurContact(contact: DayliteContactRecord): boolean {
+function isMonteurContact(contact: PlanningContactRecord): boolean {
   return normalizeOptionalString(contact.category)?.toLowerCase() === "monteur";
 }
 
 function sortContacts(
-  contacts: DayliteContactRecord[],
-): DayliteContactRecord[] {
+  contacts: PlanningContactRecord[],
+): PlanningContactRecord[] {
   return [...contacts].sort((left, right) =>
-    getDayliteContactDisplayName(left).localeCompare(
-      getDayliteContactDisplayName(right),
+    (left.nickname ?? left.full_name ?? "").localeCompare(
+      right.nickname ?? right.full_name ?? "",
     ),
   );
 }

@@ -1,5 +1,7 @@
-import type { Assignment, DayliteContactRecord } from "../domain/planning";
-import type { PlanningProjectRecord } from "../generated/tauri";
+import type {
+  PlanningContactRecord,
+  PlanningProjectRecord,
+} from "../generated/tauri";
 
 export interface PlanningCellProject {
   id: string;
@@ -14,6 +16,18 @@ interface AssignmentTemplate {
   employeeIds: string[];
 }
 
+interface AssignmentPeriod {
+  startDate: string;
+  endDate: string;
+}
+
+interface Assignment {
+  id: string;
+  employeeId: string;
+  projectId: string;
+  period: AssignmentPeriod;
+}
+
 const projectStatusClasses: Record<string, string> = {
   new_status: "bg-primary",
   in_progress: "bg-secondary",
@@ -24,17 +38,10 @@ const projectStatusClasses: Record<string, string> = {
   unknown: "bg-base-300",
 };
 
-export const employees: DayliteContactRecord[] = [
+export const employees: PlanningContactRecord[] = [
   {
     self: "/v1/contacts/1001",
     full_name: "Anna Schmidt",
-    keywords: ["Backend", "API"],
-    addresses: [
-      {
-        city: "Köln",
-        country: "Deutschland",
-      },
-    ],
     urls: [
       {
         label: "Einsatz iCal",
@@ -49,13 +56,6 @@ export const employees: DayliteContactRecord[] = [
   {
     self: "/v1/contacts/1002",
     full_name: "Max Müller",
-    keywords: ["Projektleitung", "Koordination"],
-    addresses: [
-      {
-        city: "Bonn",
-        country: "Deutschland",
-      },
-    ],
     urls: [
       {
         label: "Einsatz iCal",
@@ -70,13 +70,6 @@ export const employees: DayliteContactRecord[] = [
   {
     self: "/v1/contacts/1003",
     full_name: "Lisa Weber",
-    keywords: ["UI/UX", "Research"],
-    addresses: [
-      {
-        city: "Köln",
-        country: "Deutschland",
-      },
-    ],
     urls: [
       {
         label: "Einsatz iCal",
@@ -92,13 +85,6 @@ export const employees: DayliteContactRecord[] = [
     self: "/v1/contacts/1004",
     full_name: "Tom Fischer",
     nickname: "Tom",
-    keywords: ["Backend", "Datenbank"],
-    addresses: [
-      {
-        city: "Leverkusen",
-        country: "Deutschland",
-      },
-    ],
     urls: [
       {
         label: "Einsatz iCal",
@@ -113,13 +99,6 @@ export const employees: DayliteContactRecord[] = [
   {
     self: "/v1/contacts/1005",
     full_name: "Sarah Koch",
-    keywords: ["QA", "Testautomatisierung"],
-    addresses: [
-      {
-        city: "Düsseldorf",
-        country: "Deutschland",
-      },
-    ],
     urls: [
       {
         label: "Einsatz iCal",
@@ -134,13 +113,6 @@ export const employees: DayliteContactRecord[] = [
   {
     self: "/v1/contacts/1006",
     full_name: "Jan Becker",
-    keywords: ["DevOps", "Security"],
-    addresses: [
-      {
-        city: "Köln",
-        country: "Deutschland",
-      },
-    ],
     urls: [
       {
         label: "Einsatz iCal",
@@ -155,13 +127,6 @@ export const employees: DayliteContactRecord[] = [
   {
     self: "/v1/contacts/1007",
     full_name: "Maria Hofmann",
-    keywords: ["Fullstack", "Performance"],
-    addresses: [
-      {
-        city: "Siegburg",
-        country: "Deutschland",
-      },
-    ],
     urls: [
       {
         label: "Einsatz iCal",
@@ -268,19 +233,18 @@ const assignmentTemplates: AssignmentTemplate[] = [
   },
 ];
 
-export const assignments: Assignment[] = assignmentTemplates.flatMap(
-  (template) =>
-    template.employeeIds.flatMap((employeeId) =>
-      template.days.map((day) => ({
-        id: `${template.id}-${employeeId}-${day}`,
-        employeeId,
-        projectId: template.projectId,
-        period: {
-          startDate: day,
-          endDate: day,
-        },
-      })),
-    ),
+const assignments: Assignment[] = assignmentTemplates.flatMap((template) =>
+  template.employeeIds.flatMap((employeeId) =>
+    template.days.map((day) => ({
+      id: `${template.id}-${employeeId}-${day}`,
+      employeeId,
+      projectId: template.projectId,
+      period: {
+        startDate: day,
+        endDate: day,
+      },
+    })),
+  ),
 );
 
 export function getWorkItemsForCell(

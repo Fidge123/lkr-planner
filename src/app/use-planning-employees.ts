@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import type { DayliteContactRecord } from "../domain/planning";
+import type { PlanningContactRecord } from "../generated/tauri";
 import {
   loadCachedDayliteContacts,
   loadDayliteContacts,
@@ -7,7 +7,7 @@ import {
 import type { PlanningGridEmployeesState } from "./page";
 
 export function usePlanningEmployees(): PlanningGridEmployeesState {
-  const [employees, setEmployees] = useState<DayliteContactRecord[]>([]);
+  const [employees, setEmployees] = useState<PlanningContactRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 

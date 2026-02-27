@@ -1,9 +1,8 @@
 import { getWorkItemsForCell } from "../../data/dummy-data";
-import {
-  type DayliteContactRecord,
-  getDayliteContactDisplayName,
-} from "../../domain/planning";
-import type { PlanningProjectRecord } from "../../generated/tauri";
+import type {
+  PlanningContactRecord,
+  PlanningProjectRecord,
+} from "../../generated/tauri";
 import { isToday } from "../util";
 import { TimetableCell } from "./timetable-cell";
 
@@ -11,7 +10,7 @@ export function TimetableRow({ employee, projects, weekDays }: Props) {
   return (
     <tr key={employee.self}>
       <th className="p-4 align-top font-normal">
-        {getDayliteContactDisplayName(employee)}
+        {employee.nickname ?? employee.full_name ?? "Unbenannter Kontakt"}
       </th>
 
       {weekDays.map((day) => (
@@ -26,7 +25,7 @@ export function TimetableRow({ employee, projects, weekDays }: Props) {
 }
 
 interface Props {
-  employee: DayliteContactRecord;
+  employee: PlanningContactRecord;
   projects: PlanningProjectRecord[];
   weekDays: Date[];
 }
