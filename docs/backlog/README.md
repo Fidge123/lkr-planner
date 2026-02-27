@@ -3,11 +3,9 @@
 ## Guidelines
 - TDD in every task: first failing test, then minimal implementation, then refactor.
 - UI texts and user-facing text ALWAYS in German. Code, technical documentation and backlog in English.
-- API calls via `@tauri-apps/plugin-http`.
 - New dependencies only after explicit decision (prepare options with Pros/Cons).
-- Use OpenAPI files in `docs/` locally, but do not commit them.
 - Daylite is the Source of Truth for projects and employees (local caches only as technical optimization).
-- No offline support for v1 (online-first).
+- YAGNI (You Ain't Gonna Need It): Avoid code that is not required for the current scope
 
 ## Epic Overview
 
