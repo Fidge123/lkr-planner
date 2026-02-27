@@ -14,7 +14,6 @@ pub fn run() {
             integrations::daylite::projects::daylite_search_projects,
             integrations::daylite::contacts::daylite_list_contacts,
             integrations::daylite::contacts::daylite_list_cached_contacts,
-            integrations::daylite::contacts::daylite_search_contacts,
             integrations::daylite::contacts::daylite_update_contact_ical_urls
         ]);
 

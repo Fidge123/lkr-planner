@@ -96,30 +96,6 @@ impl DayliteApiClient {
         })
     }
 
-    pub(super) async fn search_contacts(
-        &self,
-        token_state: DayliteTokenState,
-        search_term: &str,
-        limit: Option<u16>,
-    ) -> Result<DayliteApiResponse<DayliteSearchResult<DayliteContactSummary>>, DayliteApiError>
-    {
-        let mut query = build_limit_query(limit);
-        query.push(("full-records".to_string(), "true".to_string()));
-
-        self.execute_json_request(
-            DayliteHttpMethod::Post,
-            "/contacts/_search",
-            query,
-            Some(json!({
-                "full_name": {
-                    "contains": search_term
-                }
-            })),
-            token_state,
-        )
-        .await
-    }
-
     pub(super) async fn update_contact_ical_urls(
         &self,
         token_state: DayliteTokenState,
@@ -843,57 +819,6 @@ mod tests {
             let requests = transport.requests();
             assert_eq!(requests.len(), 1);
             assert_eq!(requests[0].path, "/projects/_search");
-        });
-    }
-
-    #[test]
-    fn search_contacts_returns_typed_search_result() {
-        tauri::async_runtime::block_on(async {
-            let transport = MockTransport::new(vec![Ok(mock_response(
-                200,
-                vec![],
-                r#"{"results":[{"self":"/v1/contacts/100","first_name":"Max","last_name":"Mustermann"}],"next":"/v1/contacts/_search?start=101"}"#,
-            ))]);
-            let client = DayliteApiClient::with_transport(Arc::new(transport.clone()));
-
-            let result = client
-                .search_contacts(
-                    DayliteTokenState {
-                        access_token: "access-1".to_string(),
-                        refresh_token: "refresh-1".to_string(),
-                        access_token_expires_at_ms: Some(u64::MAX),
-                    },
-                    "Max",
-                    Some(10),
-                )
-                .await
-                .expect("search should succeed");
-
-            assert_eq!(result.data.results.len(), 1);
-            assert_eq!(result.data.results[0].reference, "/v1/contacts/100");
-            assert_eq!(
-                result.data.next,
-                Some("/v1/contacts/_search?start=101".to_string())
-            );
-
-            let requests = transport.requests();
-            assert_eq!(requests.len(), 1);
-            assert_eq!(requests[0].path, "/contacts/_search");
-            assert_eq!(
-                requests[0].query,
-                vec![
-                    ("limit".to_string(), "10".to_string()),
-                    ("full-records".to_string(), "true".to_string())
-                ]
-            );
-            assert_eq!(
-                requests[0].body,
-                Some(json!({
-                    "full_name": {
-                        "contains": "Max"
-                    }
-                }))
-            );
         });
     }
 

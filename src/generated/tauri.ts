@@ -72,14 +72,6 @@ async dayliteListCachedContacts() : Promise<Result<PlanningContactRecord[], Dayl
     else return { status: "error", error: e  as any };
 }
 },
-async dayliteSearchContacts(input: DayliteSearchInput) : Promise<Result<DayliteSearchResult<DayliteContactSummary>, DayliteApiError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("daylite_search_contacts", { input }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
 async dayliteUpdateContactIcalUrls(input: DayliteUpdateContactIcalUrlsInput) : Promise<Result<PlanningContactRecord, DayliteApiError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("daylite_update_contact_ical_urls", { input }) };
@@ -106,7 +98,6 @@ export type DayliteApiError = { code: DayliteApiErrorCode; httpStatus: number | 
 export type DayliteApiErrorCode = "UNAUTHORIZED" | "RATE_LIMITED" | "SERVER_ERROR" | "MISSING_TOKEN" | "INVALID_CONFIGURATION" | "REQUEST_FAILED" | "INVALID_RESPONSE" | "TOKEN_REFRESH_FAILED"
 export type DayliteCache = { lastSyncedAt: string | null; projects: DayliteProjectCacheEntry[]; contacts: DayliteContactCacheEntry[] }
 export type DayliteContactCacheEntry = { reference: string; fullName: string | null; nickname: string | null; category: string | null; urls: DayliteContactUrlCacheEntry[] }
-export type DayliteContactSummary = { self: string; firstName?: string; lastName?: string; fullName?: string | null; nickname?: string | null; category?: string | null; urls?: DayliteContactUrl[] }
 export type DayliteContactUrl = { label?: string | null; url?: string | null; note?: string | null }
 export type DayliteContactUrlCacheEntry = { label: string | null; url: string | null; note: string | null }
 export type DayliteProjectCacheEntry = { reference: string; name: string; status: string }
