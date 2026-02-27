@@ -105,10 +105,10 @@ export type ContactFilter = { activeEmployeeKeyword: string }
 export type DayliteApiError = { code: DayliteApiErrorCode; httpStatus: number | null; userMessage: string; technicalMessage: string }
 export type DayliteApiErrorCode = "UNAUTHORIZED" | "RATE_LIMITED" | "SERVER_ERROR" | "MISSING_TOKEN" | "INVALID_CONFIGURATION" | "REQUEST_FAILED" | "INVALID_RESPONSE" | "TOKEN_REFRESH_FAILED"
 export type DayliteCache = { lastSyncedAt: string | null; projects: DayliteProjectCacheEntry[]; contacts: DayliteContactCacheEntry[] }
-export type DayliteContactCacheEntry = { reference: string; displayName: string; fullName?: string | null; nickname?: string | null; category?: string | null; urls?: DayliteContactUrlCacheEntry[] }
+export type DayliteContactCacheEntry = { reference: string; fullName: string | null; nickname: string | null; category: string | null; urls: DayliteContactUrlCacheEntry[] }
 export type DayliteContactSummary = { self: string; firstName?: string; lastName?: string; fullName?: string | null; nickname?: string | null; category?: string | null; urls?: DayliteContactUrl[] }
 export type DayliteContactUrl = { label?: string | null; url?: string | null; note?: string | null }
-export type DayliteContactUrlCacheEntry = { label?: string | null; url?: string | null; note?: string | null }
+export type DayliteContactUrlCacheEntry = { label: string | null; url: string | null; note: string | null }
 export type DayliteProjectCacheEntry = { reference: string; name: string; status: string }
 export type DayliteProjectSummary = { self: string; name: string; status?: string | null; category?: string | null; keywords?: string[]; due?: string | null; started?: string | null; completed?: string | null; createDate?: string | null; modifyDate?: string | null }
 export type DayliteRefreshTokenRequest = { baseUrl: string; refreshToken: string }
@@ -122,7 +122,7 @@ export type EmployeeSetting = { employeeId: string; dayliteContactReference: str
  */
 export type HealthStatus = { status: HealthStatusEnum; timestamp: string; version: string }
 export type HealthStatusEnum = "healthy" | "unhealthy"
-export type LocalStore = { apiEndpoints: ApiEndpoints; tokenReferences: TokenReferences; employeeSettings: EmployeeSetting[]; standardFilter: StandardFilter; contactFilter: ContactFilter; routingSettings: RoutingSettings; dayliteCache?: DayliteCache }
+export type LocalStore = { apiEndpoints: ApiEndpoints; tokenReferences: TokenReferences; employeeSettings: EmployeeSetting[]; standardFilter: StandardFilter; contactFilter: ContactFilter; routingSettings: RoutingSettings; dayliteCache: DayliteCache }
 export type PlanningContactRecord = { self: string; full_name?: string | null; nickname?: string | null; category?: string | null; urls: DayliteContactUrl[] }
 export type PlanningProjectRecord = { self: string; name: string; status: PlanningProjectStatus; category?: string | null; keywords: string[]; due?: string | null; started?: string | null; completed?: string | null; create_date?: string | null; modify_date?: string | null }
 export type PlanningProjectStatus = "new_status" | "in_progress" | "done" | "abandoned" | "cancelled" | "deferred"
@@ -130,7 +130,7 @@ export type RoutingSettings = { openrouteserviceApiKey: string; openrouteservice
 export type StandardFilter = { pipelines: string[]; columns: string[]; categories: string[]; exclusionStatuses: string[] }
 export type StoreError = { code: StoreErrorCode; userMessage: string; technicalMessage: string }
 export type StoreErrorCode = "READ_FAILED" | "WRITE_FAILED" | "CORRUPT_FILE" | "MISSING_FIELDS"
-export type TokenReferences = { dayliteTokenReference: string; planradarTokenReference: string; dayliteAccessToken?: string; dayliteRefreshToken?: string; dayliteAccessTokenExpiresAtMs?: number | null }
+export type TokenReferences = { dayliteTokenReference: string; planradarTokenReference: string; dayliteAccessToken: string; dayliteRefreshToken: string; dayliteAccessTokenExpiresAtMs: number | null }
 
 /** tauri-specta globals **/
 

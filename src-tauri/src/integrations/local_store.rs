@@ -12,11 +12,9 @@ pub struct LocalStore {
     pub api_endpoints: ApiEndpoints,
     pub token_references: TokenReferences,
     pub employee_settings: Vec<EmployeeSetting>,
-    #[serde(alias = "projectProposalFilters")]
     pub standard_filter: StandardFilter,
     pub contact_filter: ContactFilter,
     pub routing_settings: RoutingSettings,
-    #[serde(default)]
     pub daylite_cache: DayliteCache,
 }
 
@@ -46,11 +44,8 @@ pub struct ApiEndpoints {
 pub struct TokenReferences {
     pub daylite_token_reference: String,
     pub planradar_token_reference: String,
-    #[serde(default)]
     pub daylite_access_token: String,
-    #[serde(default)]
     pub daylite_refresh_token: String,
-    #[serde(default)]
     #[specta(type = Option<f64>)]
     pub daylite_access_token_expires_at_ms: Option<u64>,
 }
@@ -134,25 +129,17 @@ pub struct DayliteProjectCacheEntry {
 #[serde(rename_all = "camelCase")]
 pub struct DayliteContactCacheEntry {
     pub reference: String,
-    pub display_name: String,
-    #[serde(default)]
     pub full_name: Option<String>,
-    #[serde(default)]
     pub nickname: Option<String>,
-    #[serde(default)]
     pub category: Option<String>,
-    #[serde(default)]
     pub urls: Vec<DayliteContactUrlCacheEntry>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct DayliteContactUrlCacheEntry {
-    #[serde(default)]
     pub label: Option<String>,
-    #[serde(default)]
     pub url: Option<String>,
-    #[serde(default)]
     pub note: Option<String>,
 }
 
@@ -328,7 +315,6 @@ mod tests {
                 }],
                 contacts: vec![DayliteContactCacheEntry {
                     reference: "/v1/contacts/1".to_string(),
-                    display_name: "Max Mustermann".to_string(),
                     full_name: Some("Max Mustermann".to_string()),
                     nickname: Some("Max".to_string()),
                     category: Some("Monteur".to_string()),

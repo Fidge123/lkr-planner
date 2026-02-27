@@ -518,11 +518,11 @@ fn merge_contact_ical_urls(
 }
 
 fn is_primary_ical_label(label: &str) -> bool {
-    label.contains("einsatz") || label.contains("termine")
+    label == "einsatz ical"
 }
 
 fn is_absence_ical_label(label: &str) -> bool {
-    label.contains("abwesenheit") || label.contains("fehlzeiten")
+    label == "abwesenheit ical"
 }
 
 fn normalize_label(value: Option<&str>) -> Option<String> {
@@ -947,7 +947,7 @@ mod tests {
     }
 
     #[test]
-    fn update_contact_ical_urls_patches_contact_urls_only() {
+    fn update_contact_ical_urls_only_replaces_managed_ical_labels() {
         tauri::async_runtime::block_on(async {
             let transport = MockTransport::new(vec![
                 Ok(mock_response(
@@ -992,6 +992,10 @@ mod tests {
                         {
                             "label": "Website",
                             "url": "https://example.com"
+                        },
+                        {
+                            "label": "FR-Fehlzeiten",
+                            "url": "https://example.com/old-absence.ics"
                         },
                         {
                             "label": "Einsatz iCal",

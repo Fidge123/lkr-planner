@@ -185,8 +185,7 @@ fn map_daylite_contact_summary(contact: DayliteContactSummary) -> PlanningContac
 fn map_cached_contact(contact: DayliteContactCacheEntry) -> PlanningContactRecord {
     PlanningContactRecord {
         reference: normalize_string(contact.reference),
-        full_name: normalize_optional_string(contact.full_name)
-            .or_else(|| normalize_string_option(Some(contact.display_name))),
+        full_name: normalize_optional_string(contact.full_name),
         nickname: normalize_optional_string(contact.nickname),
         category: normalize_optional_string(contact.category),
         urls: normalize_cached_contact_urls(contact.urls),
@@ -194,10 +193,8 @@ fn map_cached_contact(contact: DayliteContactCacheEntry) -> PlanningContactRecor
 }
 
 fn map_planning_contact_to_cache_entry(contact: PlanningContactRecord) -> DayliteContactCacheEntry {
-    let display_name = contact_display_name(&contact);
     DayliteContactCacheEntry {
         reference: contact.reference,
-        display_name,
         full_name: contact.full_name,
         nickname: contact.nickname,
         category: contact.category,
@@ -377,10 +374,9 @@ mod tests {
     }
 
     #[test]
-    fn maps_cached_contact_with_display_name_fallback() {
+    fn maps_cached_contact_without_display_name_fallback() {
         let cached_contact = DayliteContactCacheEntry {
             reference: "/v1/contacts/2001".to_string(),
-            display_name: "Moritz Monteur".to_string(),
             full_name: None,
             nickname: None,
             category: Some("Monteur".to_string()),
@@ -394,7 +390,7 @@ mod tests {
         let mapped = map_cached_contact(cached_contact);
 
         assert_eq!(mapped.reference, "/v1/contacts/2001");
-        assert_eq!(mapped.full_name, Some("Moritz Monteur".to_string()));
+        assert_eq!(mapped.full_name, None);
         assert_eq!(mapped.category, Some("Monteur".to_string()));
         assert_eq!(
             mapped.urls,
