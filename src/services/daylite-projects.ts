@@ -3,9 +3,9 @@ import { commands, type DayliteApiError } from "../generated/tauri";
 
 export const DEFAULT_DAYLITE_PROJECT_CACHE_TTL_MS = 30_000;
 
-export type DayliteProjectsSource = "network" | "cache" | "stale-cache";
+type DayliteProjectsSource = "network" | "cache" | "stale-cache";
 
-export interface DayliteProjectsLoadResult {
+interface DayliteProjectsLoadResult {
   projects: DayliteProjectRecord[];
   source: DayliteProjectsSource;
   errorMessage: string | null;
@@ -16,7 +16,7 @@ interface ProjectCacheEntry {
   fetchedAtMs: number;
 }
 
-export interface DayliteProjectLoadOptions {
+interface DayliteProjectLoadOptions {
   nowMs?: number;
   forceRefresh?: boolean;
 }
@@ -73,20 +73,6 @@ export async function loadDayliteProjects(
   return inFlightRequest;
 }
 
-export function setDayliteProjectCacheTtlMs(ttlMs: number): void {
-  if (!Number.isFinite(ttlMs) || ttlMs <= 0) {
-    cacheTtlMs = DEFAULT_DAYLITE_PROJECT_CACHE_TTL_MS;
-    return;
-  }
-
-  cacheTtlMs = Math.floor(ttlMs);
-}
-
-export function resetDayliteProjectCacheForTests(): void {
-  projectCache = null;
-  inFlightRequest = null;
-}
-
 async function fetchAndMapProjects(): Promise<DayliteProjectRecord[]> {
   const result = await commands.dayliteListProjects();
   if (result.status === "error") {
@@ -114,4 +100,18 @@ function getErrorMessage(error: unknown): string {
   }
 
   return String(error);
+}
+
+export function test_setDayliteProjectCacheTtlMs(ttlMs: number): void {
+  if (!Number.isFinite(ttlMs) || ttlMs <= 0) {
+    cacheTtlMs = DEFAULT_DAYLITE_PROJECT_CACHE_TTL_MS;
+    return;
+  }
+
+  cacheTtlMs = Math.floor(ttlMs);
+}
+
+export function test_resetDayliteProjectCache(): void {
+  projectCache = null;
+  inFlightRequest = null;
 }

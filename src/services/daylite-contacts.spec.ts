@@ -3,8 +3,8 @@ import {
   DEFAULT_DAYLITE_CONTACT_CACHE_TTL_MS,
   loadCachedDayliteContactsFromStore,
   loadDayliteContacts,
-  resetDayliteContactCacheForTests,
-  setDayliteContactCacheTtlMs,
+  test_resetDayliteContactCache,
+  test_setDayliteContactCacheTtlMs,
   updateDayliteContactIcalUrls,
 } from "./daylite-contacts";
 
@@ -29,8 +29,8 @@ describe("daylite contact service", () => {
     mockDayliteListContacts.mockClear();
     mockDayliteListCachedContacts.mockClear();
     mockDayliteUpdateContactIcalUrls.mockClear();
-    resetDayliteContactCacheForTests();
-    setDayliteContactCacheTtlMs(DEFAULT_DAYLITE_CONTACT_CACHE_TTL_MS);
+    test_resetDayliteContactCache();
+    test_setDayliteContactCacheTtlMs(DEFAULT_DAYLITE_CONTACT_CACHE_TTL_MS);
   });
 
   it("returns planning contacts from backend command", async () => {

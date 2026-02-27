@@ -10,26 +10,20 @@ import {
 
 export const DEFAULT_DAYLITE_CONTACT_CACHE_TTL_MS = 30_000;
 
-export type DayliteContactsSource =
-  | "network"
-  | "cache"
-  | "disk-cache"
-  | "stale-cache";
+type DayliteContactsSource = "network" | "cache" | "disk-cache" | "stale-cache";
 
-export interface DayliteContactsLoadResult {
+interface DayliteContactsLoadResult {
   contacts: DayliteContactRecord[];
   source: DayliteContactsSource;
   errorMessage: string | null;
 }
-
-export type DayliteContactIcalUpdateInput = DayliteUpdateContactIcalUrlsInput;
 
 interface ContactCacheEntry {
   contacts: DayliteContactRecord[];
   fetchedAtMs: number;
 }
 
-export interface DayliteContactsLoadOptions {
+interface DayliteContactsLoadOptions {
   nowMs?: number;
   forceRefresh?: boolean;
 }
@@ -109,7 +103,7 @@ export async function loadCachedDayliteContactsFromStore(): Promise<
 }
 
 export async function updateDayliteContactIcalUrls(
-  input: DayliteContactIcalUpdateInput,
+  input: DayliteUpdateContactIcalUrlsInput,
 ): Promise<DayliteContactRecord> {
   const result = await commands.dayliteUpdateContactIcalUrls(input);
   if (result.status === "error") {
@@ -120,20 +114,6 @@ export async function updateDayliteContactIcalUrls(
   updateInMemoryContactCache(updatedContact);
 
   return updatedContact;
-}
-
-export function setDayliteContactCacheTtlMs(ttlMs: number): void {
-  if (!Number.isFinite(ttlMs) || ttlMs <= 0) {
-    cacheTtlMs = DEFAULT_DAYLITE_CONTACT_CACHE_TTL_MS;
-    return;
-  }
-
-  cacheTtlMs = Math.floor(ttlMs);
-}
-
-export function resetDayliteContactCacheForTests(): void {
-  contactCache = null;
-  inFlightRequest = null;
 }
 
 async function fetchContactsFromBackend(): Promise<DayliteContactRecord[]> {
@@ -211,4 +191,18 @@ function getErrorMessage(error: unknown): string {
   }
 
   return "Die Daten konnten nicht von Daylite geladen werden.";
+}
+
+export function test_setDayliteContactCacheTtlMs(ttlMs: number): void {
+  if (!Number.isFinite(ttlMs) || ttlMs <= 0) {
+    cacheTtlMs = DEFAULT_DAYLITE_CONTACT_CACHE_TTL_MS;
+    return;
+  }
+
+  cacheTtlMs = Math.floor(ttlMs);
+}
+
+export function test_resetDayliteContactCache(): void {
+  contactCache = null;
+  inFlightRequest = null;
 }
