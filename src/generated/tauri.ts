@@ -40,7 +40,7 @@ async dayliteConnectRefreshToken(request: DayliteRefreshTokenRequest) : Promise<
     else return { status: "error", error: e  as any };
 }
 },
-async dayliteListProjects() : Promise<Result<DayliteProjectSummary[], DayliteApiError>> {
+async dayliteListProjects() : Promise<Result<PlanningProjectRecord[], DayliteApiError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("daylite_list_projects") };
 } catch (e) {
@@ -56,9 +56,17 @@ async dayliteSearchProjects(input: DayliteSearchInput) : Promise<Result<DayliteS
     else return { status: "error", error: e  as any };
 }
 },
-async dayliteListContacts() : Promise<Result<DayliteContactSummary[], DayliteApiError>> {
+async dayliteListContacts() : Promise<Result<PlanningContactRecord[], DayliteApiError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("daylite_list_contacts") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async dayliteListCachedContacts() : Promise<Result<PlanningContactRecord[], DayliteApiError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("daylite_list_cached_contacts") };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -72,7 +80,7 @@ async dayliteSearchContacts(input: DayliteSearchInput) : Promise<Result<DayliteS
     else return { status: "error", error: e  as any };
 }
 },
-async dayliteUpdateContactIcalUrls(input: DayliteUpdateContactIcalUrlsInput) : Promise<Result<DayliteContactSummary, DayliteApiError>> {
+async dayliteUpdateContactIcalUrls(input: DayliteUpdateContactIcalUrlsInput) : Promise<Result<PlanningContactRecord, DayliteApiError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("daylite_update_contact_ical_urls", { input }) };
 } catch (e) {
@@ -115,6 +123,9 @@ export type EmployeeSetting = { employeeId: string; dayliteContactReference: str
 export type HealthStatus = { status: HealthStatusEnum; timestamp: string; version: string }
 export type HealthStatusEnum = "healthy" | "unhealthy"
 export type LocalStore = { apiEndpoints: ApiEndpoints; tokenReferences: TokenReferences; employeeSettings: EmployeeSetting[]; standardFilter: StandardFilter; contactFilter: ContactFilter; routingSettings: RoutingSettings; dayliteCache?: DayliteCache }
+export type PlanningContactRecord = { self: string; full_name?: string | null; nickname?: string | null; category?: string | null; urls: DayliteContactUrl[] }
+export type PlanningProjectRecord = { self: string; name: string; status: PlanningProjectStatus; category?: string | null; keywords: string[]; due?: string | null; started?: string | null; completed?: string | null; create_date?: string | null; modify_date?: string | null }
+export type PlanningProjectStatus = "new_status" | "in_progress" | "done" | "abandoned" | "cancelled" | "deferred"
 export type RoutingSettings = { openrouteserviceApiKey: string; openrouteserviceProfile: string }
 export type StandardFilter = { pipelines: string[]; columns: string[]; categories: string[]; exclusionStatuses: string[] }
 export type StoreError = { code: StoreErrorCode; userMessage: string; technicalMessage: string }

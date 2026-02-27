@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
-import type { LocalStore } from "../generated/tauri";
 import {
   DEFAULT_DAYLITE_CONTACT_CACHE_TTL_MS,
   loadCachedDayliteContactsFromStore,
@@ -9,93 +8,45 @@ import {
   updateDayliteContactIcalUrls,
 } from "./daylite-contacts";
 
-const defaultLocalStore: LocalStore = {
-  apiEndpoints: {
-    dayliteBaseUrl: "https://daylite.example/v1",
-    planradarBaseUrl: "",
-  },
-  tokenReferences: {
-    dayliteTokenReference: "",
-    planradarTokenReference: "",
-  },
-  employeeSettings: [],
-  standardFilter: {
-    pipelines: ["Aufträge"],
-    columns: ["Vorbereitung", "Durchführung"],
-    categories: ["Überfällig", "Liefertermin bekannt"],
-    exclusionStatuses: ["Done"],
-  },
-  contactFilter: {
-    activeEmployeeKeyword: "Monteur",
-  },
-  routingSettings: {
-    openrouteserviceApiKey: "",
-    openrouteserviceProfile: "driving-car",
-  },
-  dayliteCache: {
-    lastSyncedAt: null,
-    projects: [],
-    contacts: [],
-  },
-};
-
 const mockDayliteListContacts = mock(() => Promise.resolve({} as unknown));
-const mockDayliteUpdateContactIcalUrls = mock(() =>
+const mockDayliteListCachedContacts = mock(() =>
   Promise.resolve({} as unknown),
 );
-const mockLoadLocalStore = mock(() =>
-  Promise.resolve({
-    status: "ok",
-    data: defaultLocalStore,
-  }),
-);
-const mockSaveLocalStore = mock((_store: LocalStore) =>
-  Promise.resolve({ status: "ok", data: null }),
+const mockDayliteUpdateContactIcalUrls = mock(() =>
+  Promise.resolve({} as unknown),
 );
 
 mock.module("../generated/tauri", () => ({
   commands: {
     dayliteListContacts: mockDayliteListContacts,
+    dayliteListCachedContacts: mockDayliteListCachedContacts,
     dayliteUpdateContactIcalUrls: mockDayliteUpdateContactIcalUrls,
-    loadLocalStore: mockLoadLocalStore,
-    saveLocalStore: mockSaveLocalStore,
   },
 }));
 
 describe("daylite contact service", () => {
   beforeEach(() => {
     mockDayliteListContacts.mockClear();
+    mockDayliteListCachedContacts.mockClear();
     mockDayliteUpdateContactIcalUrls.mockClear();
-    mockLoadLocalStore.mockClear();
-    mockSaveLocalStore.mockClear();
     resetDayliteContactCacheForTests();
     setDayliteContactCacheTtlMs(DEFAULT_DAYLITE_CONTACT_CACHE_TTL_MS);
   });
 
-  it("maps contacts and keeps only category Monteur", async () => {
+  it("returns planning contacts from backend command", async () => {
     mockDayliteListContacts.mockResolvedValue({
       status: "ok",
       data: [
         {
           self: "/v1/contacts/1001",
-          fullName: "Max Mustermann",
+          full_name: "Max Mustermann",
           category: "Monteur",
           urls: [
             {
               label: "Einsatz iCal",
               url: "https://example.com/max-primary.ics",
             },
-            {
-              label: "Abwesenheit iCal",
-              url: "https://example.com/max-absence.ics",
-            },
           ],
-        },
-        {
-          self: "/v1/contacts/1002",
-          fullName: "Anna Vertrieb",
-          category: "Vertrieb",
-          urls: [],
         },
       ],
     });
@@ -104,109 +55,101 @@ describe("daylite contact service", () => {
 
     expect(result.source).toBe("network");
     expect(result.errorMessage).toBeNull();
-    expect(result.contacts.map((contact) => contact.self)).toEqual([
-      "/v1/contacts/1001",
-    ]);
-    expect(result.contacts[0]?.category).toBe("Monteur");
-    expect(result.contacts[0]?.full_name).toBe("Max Mustermann");
-  });
-
-  it("persists mapped monteur contacts to local store cache", async () => {
-    mockDayliteListContacts.mockResolvedValue({
-      status: "ok",
-      data: [
-        {
-          self: "/v1/contacts/2001",
-          fullName: "Mona Monteur",
-          category: "Monteur",
-          urls: [
-            {
-              label: "Einsatz iCal",
-              url: "https://example.com/mona-primary.ics",
-            },
-          ],
-        },
-      ],
-    });
-
-    await loadDayliteContacts({ nowMs: 2_000 });
-
-    expect(mockSaveLocalStore).toHaveBeenCalledTimes(1);
-    const firstSaveCall = mockSaveLocalStore.mock.calls[0];
-    expect(firstSaveCall).toBeDefined();
-    if (!firstSaveCall) {
-      throw new Error("saveLocalStore was not called.");
-    }
-
-    const savedStore = firstSaveCall[0];
-    expect(savedStore.dayliteCache?.contacts).toEqual([
+    expect(result.contacts).toEqual([
       {
-        reference: "/v1/contacts/2001",
-        displayName: "Mona Monteur",
-        fullName: "Mona Monteur",
-        nickname: null,
+        self: "/v1/contacts/1001",
+        full_name: "Max Mustermann",
+        nickname: undefined,
         category: "Monteur",
         urls: [
           {
             label: "Einsatz iCal",
-            url: "https://example.com/mona-primary.ics",
-            note: null,
+            url: "https://example.com/max-primary.ics",
+            note: undefined,
           },
         ],
       },
     ]);
   });
 
-  it("loads cached monteur contacts from persisted local store", async () => {
-    mockLoadLocalStore.mockResolvedValue({
-      status: "ok",
-      data: {
-        ...defaultLocalStore,
-        dayliteCache: {
-          ...defaultLocalStore.dayliteCache,
-          projects: defaultLocalStore.dayliteCache?.projects ?? [],
-          lastSyncedAt: "2026-02-20T08:00:00.000Z",
-          contacts: [
-            {
-              reference: "/v1/contacts/3001",
-              displayName: "Moritz Monteur",
-              fullName: "Moritz Monteur",
-              nickname: null,
-              category: "Monteur",
-              urls: [
-                {
-                  label: "Abwesenheit iCal",
-                  url: "https://example.com/moritz-absence.ics",
-                  note: null,
-                },
-              ],
-            },
-            {
-              reference: "/v1/contacts/3002",
-              displayName: "Claudia Vertrieb",
-              fullName: "Claudia Vertrieb",
-              nickname: null,
-              category: "Vertrieb",
-              urls: [],
-            },
-          ],
-        },
+  it("falls back to cached contacts command when backend fails without memory cache", async () => {
+    mockDayliteListContacts.mockResolvedValue({
+      status: "error",
+      error: {
+        userMessage: "Die Daten konnten nicht von Daylite geladen werden.",
       },
     });
+    mockDayliteListCachedContacts.mockResolvedValue({
+      status: "ok",
+      data: [
+        {
+          self: "/v1/contacts/2001",
+          full_name: "Mona Monteur",
+          category: "Monteur",
+          urls: [],
+        },
+      ],
+    });
 
-    const contacts = await loadCachedDayliteContactsFromStore();
+    const result = await loadDayliteContacts({ nowMs: 2_000 });
 
-    expect(contacts.map((contact) => contact.self)).toEqual([
-      "/v1/contacts/3001",
-    ]);
+    expect(result.source).toBe("disk-cache");
+    expect(result.errorMessage).toBe(
+      "Die Daten konnten nicht von Daylite geladen werden.",
+    );
+    expect(result.contacts[0]?.self).toBe("/v1/contacts/2001");
+    expect(mockDayliteListCachedContacts).toHaveBeenCalledTimes(1);
   });
 
-  it("writes both iCal urls via daylite contact urls command", async () => {
+  it("returns stale in-memory cache on backend failure", async () => {
+    mockDayliteListContacts
+      .mockResolvedValueOnce({
+        status: "ok",
+        data: [
+          {
+            self: "/v1/contacts/3001",
+            full_name: "Moritz Monteur",
+            category: "Monteur",
+            urls: [],
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        status: "error",
+        error: {
+          userMessage: "Die Daten konnten nicht von Daylite geladen werden.",
+        },
+      });
+
+    await loadDayliteContacts({ nowMs: 1_000 });
+    const staleFallback = await loadDayliteContacts({ nowMs: 45_000 });
+
+    expect(staleFallback.source).toBe("stale-cache");
+    expect(staleFallback.contacts[0]?.self).toBe("/v1/contacts/3001");
+    expect(staleFallback.errorMessage).toBe(
+      "Die Daten konnten nicht von Daylite geladen werden.",
+    );
+  });
+
+  it("updates in-memory cache when contact urls are updated", async () => {
+    mockDayliteListContacts.mockResolvedValue({
+      status: "ok",
+      data: [
+        {
+          self: "/v1/contacts/4001",
+          full_name: "Mira Monteur",
+          category: "Monteur",
+          urls: [],
+        },
+      ],
+    });
+    await loadDayliteContacts({ nowMs: 1_000 });
+
     mockDayliteUpdateContactIcalUrls.mockResolvedValue({
       status: "ok",
       data: {
         self: "/v1/contacts/4001",
-        fullName: "Mira Monteur",
+        full_name: "Mira Monteur (Aktualisiert)",
         category: "Monteur",
         urls: [
           {
@@ -227,11 +170,23 @@ describe("daylite contact service", () => {
       absenceIcalUrl: "https://example.com/mira-absence.ics",
     });
 
-    expect(updated.self).toBe("/v1/contacts/4001");
-    expect(mockDayliteUpdateContactIcalUrls).toHaveBeenCalledWith({
-      contactReference: "/v1/contacts/4001",
-      primaryIcalUrl: "https://example.com/mira-primary.ics",
-      absenceIcalUrl: "https://example.com/mira-absence.ics",
+    expect(updated.full_name).toBe("Mira Monteur (Aktualisiert)");
+
+    const cached = await loadDayliteContacts({ nowMs: 1_001 });
+    expect(cached.source).toBe("cache");
+    expect(cached.contacts[0]?.full_name).toBe("Mira Monteur (Aktualisiert)");
+  });
+
+  it("returns an empty list when cached contacts command fails", async () => {
+    mockDayliteListCachedContacts.mockResolvedValue({
+      status: "error",
+      error: {
+        userMessage: "Cache konnte nicht gelesen werden.",
+      },
     });
+
+    const contacts = await loadCachedDayliteContactsFromStore();
+
+    expect(contacts).toEqual([]);
   });
 });

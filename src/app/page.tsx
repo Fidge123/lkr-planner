@@ -178,7 +178,7 @@ function toGermanProjectStatus(status: DayliteProjectRecord["status"]): string {
   return "Unbekannt";
 }
 
-function formatGermanDate(isoDate: string | undefined): string {
+function formatGermanDate(isoDate: string | null | undefined): string {
   if (!isoDate) {
     return "Kein Termin";
   }

@@ -20,19 +20,19 @@ export interface DayliteProjectRecord {
     | "abandoned"
     | "cancelled"
     | "deferred";
-  category?: string;
+  category?: string | null;
   keywords?: string[];
-  due?: string;
-  started?: string;
-  completed?: string;
-  create_date?: string;
-  modify_date?: string;
+  due?: string | null;
+  started?: string | null;
+  completed?: string | null;
+  create_date?: string | null;
+  modify_date?: string | null;
 }
 
 export interface DayliteUrl {
-  label?: string;
-  url?: string;
-  note?: string;
+  label?: string | null;
+  url?: string | null;
+  note?: string | null;
 }
 
 export interface DayliteAddress {
@@ -48,9 +48,9 @@ export interface DayliteAddress {
 
 export interface DayliteContactRecord {
   self: string;
-  full_name?: string;
-  nickname?: string;
-  category?: string;
+  full_name?: string | null;
+  nickname?: string | null;
+  category?: string | null;
   keywords?: string[];
   urls?: DayliteUrl[];
   addresses?: DayliteAddress[];
@@ -82,13 +82,13 @@ export function isDayliteContactRecord(
   }
 
   if ("full_name" in value && value.full_name !== undefined) {
-    if (typeof value.full_name !== "string") {
+    if (value.full_name !== null && typeof value.full_name !== "string") {
       return false;
     }
   }
 
   if ("nickname" in value && value.nickname !== undefined) {
-    if (typeof value.nickname !== "string") {
+    if (value.nickname !== null && typeof value.nickname !== "string") {
       return false;
     }
   }
@@ -229,7 +229,7 @@ function matchesAbsenceIcalLabel(normalizedLabel: string): boolean {
   );
 }
 
-function normalizeLabel(label: string | undefined): string | undefined {
+function normalizeLabel(label: string | null | undefined): string | undefined {
   if (typeof label !== "string") {
     return undefined;
   }
@@ -238,7 +238,7 @@ function normalizeLabel(label: string | undefined): string | undefined {
   return normalized.length > 0 ? normalized : undefined;
 }
 
-function normalizeUrl(url: string | undefined): string | undefined {
+function normalizeUrl(url: string | null | undefined): string | undefined {
   if (typeof url !== "string") {
     return undefined;
   }

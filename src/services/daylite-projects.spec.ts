@@ -21,18 +21,19 @@ describe("daylite project service", () => {
     setDayliteProjectCacheTtlMs(DEFAULT_DAYLITE_PROJECT_CACHE_TTL_MS);
   });
 
-  it("maps and normalizes project status/date fields", async () => {
+  it("passes through planning-ready project status/date fields", async () => {
     mockDayliteListProjects.mockResolvedValue({
       status: "ok",
       data: [
         {
-          reference: "/v1/projects/7000",
+          self: "/v1/projects/7000",
           name: "Projekt Nord",
-          status: "NEW",
+          status: "new_status",
           category: "Überfällig",
-          due: "2026-02-15",
-          createDate: "not-a-date",
-          modifyDate: "2026-02-15T12:45:00+01:00",
+          due: "2026-02-15T00:00:00.000Z",
+          create_date: null,
+          modify_date: "2026-02-15T11:45:00.000Z",
+          keywords: [],
         },
       ],
     });
@@ -47,6 +48,7 @@ describe("daylite project service", () => {
         name: "Projekt Nord",
         status: "new_status",
         due: "2026-02-15T00:00:00.000Z",
+        create_date: null,
         modify_date: "2026-02-15T11:45:00.000Z",
       }),
     ]);
@@ -75,28 +77,28 @@ describe("daylite project service", () => {
       status: "ok",
       data: [
         {
-          reference: "/v1/projects/7101",
+          self: "/v1/projects/7101",
           name: "Projekt Pipeline",
           status: "in_progress",
           keywords: ["Aufträge", "Vorbereitung"],
           category: "Neutral",
         },
         {
-          reference: "/v1/projects/7102",
+          self: "/v1/projects/7102",
           name: "Projekt Kategorie",
-          status: "new",
+          status: "new_status",
           keywords: ["Sonstiges"],
           category: "Überfällig",
         },
         {
-          reference: "/v1/projects/7103",
+          self: "/v1/projects/7103",
           name: "Projekt Erledigt",
           status: "done",
           keywords: ["Aufträge", "Durchführung"],
           category: "Liefertermin bekannt",
         },
         {
-          reference: "/v1/projects/7104",
+          self: "/v1/projects/7104",
           name: "Projekt Ohne Treffer",
           status: "in_progress",
           keywords: ["Sonstiges"],
@@ -120,7 +122,7 @@ describe("daylite project service", () => {
       status: "ok",
       data: [
         {
-          reference: "/v1/projects/7001",
+          self: "/v1/projects/7001",
           name: "Projekt Ost",
           status: "in_progress",
           category: "Liefertermin bekannt",
@@ -141,7 +143,7 @@ describe("daylite project service", () => {
       status: "ok",
       data: [
         {
-          reference: "/v1/projects/7010",
+          self: "/v1/projects/7010",
           name: "Projekt Mehrfachnutzung",
           status: "in_progress",
           keywords: ["Aufträge", "Vorbereitung"],
@@ -163,7 +165,7 @@ describe("daylite project service", () => {
         status: "ok",
         data: [
           {
-            reference: "/v1/projects/7002",
+            self: "/v1/projects/7002",
             name: "Projekt Alt",
             status: "in_progress",
             keywords: ["Aufträge", "Vorbereitung"],
@@ -174,7 +176,7 @@ describe("daylite project service", () => {
         status: "ok",
         data: [
           {
-            reference: "/v1/projects/7003",
+            self: "/v1/projects/7003",
             name: "Projekt Neu",
             status: "in_progress",
             keywords: ["Aufträge", "Durchführung"],
@@ -207,7 +209,7 @@ describe("daylite project service", () => {
       status: "ok",
       data: [
         {
-          reference: "/v1/projects/7004",
+          self: "/v1/projects/7004",
           name: "Projekt Parallel",
           status: "in_progress",
           category: "Liefertermin bekannt",
@@ -228,7 +230,7 @@ describe("daylite project service", () => {
         status: "ok",
         data: [
           {
-            reference: "/v1/projects/7005",
+            self: "/v1/projects/7005",
             name: "Projekt Stabil",
             status: "in_progress",
             category: "Überfällig",
