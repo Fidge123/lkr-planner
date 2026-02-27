@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { DayliteContactRecord } from "../domain/planning";
 import {
-  loadCachedDayliteContactsFromStore,
+  loadCachedDayliteContacts,
   loadDayliteContacts,
 } from "../services/daylite-contacts";
 import type { PlanningGridEmployeesState } from "./page";
@@ -15,7 +15,7 @@ export function usePlanningEmployees(): PlanningGridEmployeesState {
     setIsLoading(true);
 
     if (!forceRefresh) {
-      const cachedEmployees = await loadCachedDayliteContactsFromStore();
+      const cachedEmployees = await loadCachedDayliteContacts();
       if (cachedEmployees.length > 0) {
         setEmployees(cachedEmployees);
       }
@@ -24,7 +24,7 @@ export function usePlanningEmployees(): PlanningGridEmployeesState {
     try {
       const result = await loadDayliteContacts({ forceRefresh });
       setEmployees(result.contacts);
-      setErrorMessage(result.errorMessage);
+      setErrorMessage(result.errorMessage ?? null);
     } catch (error) {
       setErrorMessage(
         error instanceof Error

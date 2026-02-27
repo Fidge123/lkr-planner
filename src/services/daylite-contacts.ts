@@ -15,7 +15,7 @@ type DayliteContactsSource = "network" | "cache" | "disk-cache" | "stale-cache";
 interface DayliteContactsLoadResult {
   contacts: DayliteContactRecord[];
   source: DayliteContactsSource;
-  errorMessage: string | null;
+  errorMessage?: string | null;
 }
 
 interface ContactCacheEntry {
@@ -44,21 +44,15 @@ export async function loadDayliteContacts(
     return {
       contacts: contactCache.contacts,
       source: "cache",
-      errorMessage: null,
     };
   }
 
-  if (inFlightRequest) {
-    return inFlightRequest;
-  }
-
-  inFlightRequest = fetchContactsFromBackend()
+  inFlightRequest ??= fetchContacts()
     .then((contacts) => {
       contactCache = { contacts, fetchedAtMs: nowMs };
       return {
         contacts,
         source: "network",
-        errorMessage: null,
       } satisfies DayliteContactsLoadResult;
     })
     .catch(async (error) => {
@@ -72,7 +66,7 @@ export async function loadDayliteContacts(
         } satisfies DayliteContactsLoadResult;
       }
 
-      const contactsFromStore = await loadCachedDayliteContactsFromStore();
+      const contactsFromStore = await loadCachedDayliteContacts();
       if (contactsFromStore.length > 0) {
         contactCache = { contacts: contactsFromStore, fetchedAtMs: nowMs };
         return {
@@ -91,7 +85,7 @@ export async function loadDayliteContacts(
   return inFlightRequest;
 }
 
-export async function loadCachedDayliteContactsFromStore(): Promise<
+export async function loadCachedDayliteContacts(): Promise<
   DayliteContactRecord[]
 > {
   const result = await commands.dayliteListCachedContacts();
@@ -110,13 +104,11 @@ export async function updateDayliteContactIcalUrls(
     throw new Error(readCommandErrorMessage(result.error));
   }
 
-  const updatedContact = result.data;
-  updateInMemoryContactCache(updatedContact);
-
-  return updatedContact;
+  updateInMemoryContactCache(result.data);
+  return result.data;
 }
 
-async function fetchContactsFromBackend(): Promise<DayliteContactRecord[]> {
+async function fetchContacts(): Promise<DayliteContactRecord[]> {
   const result = await commands.dayliteListContacts();
   if (result.status === "error") {
     throw new Error(readCommandErrorMessage(result.error));
@@ -153,11 +145,9 @@ function isMonteurContact(contact: DayliteContactRecord): boolean {
 function sortContacts(
   contacts: DayliteContactRecord[],
 ): DayliteContactRecord[] {
-  return [...contacts].sort((leftContact, rightContact) =>
-    getDayliteContactDisplayName(leftContact).localeCompare(
-      getDayliteContactDisplayName(rightContact),
-      "de-DE",
-      { sensitivity: "base" },
+  return [...contacts].sort((left, right) =>
+    getDayliteContactDisplayName(left).localeCompare(
+      getDayliteContactDisplayName(right),
     ),
   );
 }

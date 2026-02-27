@@ -33,7 +33,7 @@ export async function loadDayliteProjects({
       source: "cache",
     };
   }
-  inFlightRequest ??= fetchAndMapProjects()
+  inFlightRequest ??= fetchProjects()
     .then((projects) => {
       projectCache = { projects, fetchedAtMs: nowMs };
       return {
@@ -60,7 +60,7 @@ export async function loadDayliteProjects({
   return inFlightRequest;
 }
 
-async function fetchAndMapProjects(): Promise<DayliteProjectRecord[]> {
+async function fetchProjects(): Promise<DayliteProjectRecord[]> {
   const result = await commands.dayliteListProjects();
   if (result.status === "error") {
     throw new Error(readCommandErrorMessage(result.error));

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
 import {
   DEFAULT_DAYLITE_CONTACT_CACHE_TTL_MS,
-  loadCachedDayliteContactsFromStore,
+  loadCachedDayliteContacts,
   loadDayliteContacts,
   test_resetDayliteContactCache,
   test_setDayliteContactCacheTtlMs,
@@ -54,7 +54,7 @@ describe("daylite contact service", () => {
     const result = await loadDayliteContacts({ nowMs: 1_000 });
 
     expect(result.source).toBe("network");
-    expect(result.errorMessage).toBeNull();
+    expect(result.errorMessage).toBeUndefined();
     expect(result.contacts).toEqual([
       {
         self: "/v1/contacts/1001",
@@ -185,7 +185,7 @@ describe("daylite contact service", () => {
       },
     });
 
-    const contacts = await loadCachedDayliteContactsFromStore();
+    const contacts = await loadCachedDayliteContacts();
 
     expect(contacts).toEqual([]);
   });
