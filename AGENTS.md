@@ -19,7 +19,8 @@ Before introducing a new dependency, always confirm with the user by providing a
 - **Framework**: Tauri v2 (Rust backend, web frontend)
 - **Frontend**: React 19 + TypeScript 5.8
 - **Runtime**: Bun (for development and dependency management)
-- **Styling**: Tailwind CSS v4 + DaisyUI components
+- **Styling**: Tailwind CSS v4 + [DaisyUI](https://daisyui.com/llms.txt) components
+- **Icons**: Use Lucide icons
 
 ### Development Tools
 
@@ -29,11 +30,16 @@ Before introducing a new dependency, always confirm with the user by providing a
 
 ## Code Style & Conventions
 
-### Naming Conventions
+### Conventions
 
 - **Files**: kebab-case
 - **Components**: PascalCase function components
 - **Constants**: camelCase
+- All display text in the application must be German, Code and development documentation must be English
+- Display user-friendly error messages in German (UI language)
+- Create the simplest valid and semantic HTML possible
+- Avoid nested `div` and `span` elements
+- YAGNI (You Ain't Gonna Need It): Avoid code that is not required for the current scope
 
 ### React Components
 
@@ -48,11 +54,6 @@ interface Props {
 }
 ```
 
-### Semantic Markup
-
-- Create the simplest valid and semantic HTML possible
-- Avoid nested `div` and `span` elements
-
 ### API Calls
 
 - Use Tauri's `@tauri-apps/plugin-http` for HTTP requests
@@ -66,20 +67,6 @@ interface Props {
 - Mock external APIs when needed
 - Test file naming: `*.spec.ts`
 
-### UI/UX Patterns
-
-- **Language**: All display text in the application must be German, Code and development documentation must be English
-- **Components**: Use DaisyUI if possible, otherwise Tailwind
-- **Styling**: Utility-first Tailwind classes, avoid custom CSS
-- **Icons**: Use Lucide icons
-
-### Error Handling
-
-- Display user-friendly error messages in German (UI language)
-- Include technical details in development/debugging modes
-- Use error boundaries for React error handling
-- Log errors to console for debugging
-
 ## Development Workflow
 
 1. Use `bun tauri dev` for development server
@@ -89,11 +76,21 @@ interface Props {
 
 ## Working with the backlog
 
-Unless otherwise instructed, always work on the highest priority backlog item from `docs/BACKLOG.md`.
+Backlog structure:
+- `docs/backlog/README.md` is the top-level overview and epic context index.
+- Each epic has its own folder (`docs/backlog/epic-XX-...`).
+- Each backlog item (BLI) lives in its own markdown file inside the corresponding epic folder.
 Verify first, if the backlog item contains all information that you need to implement it.
 Check if the acceptance criteria are clear and testable.
+
 Follow Red-Green-Refactor TDD loop.
 Document new architecture decisions as ADRs in `docs/adr`.
+ADRs need to include sections for Context (including evaluated options with pros and cons), Decision, and Consequences.
+
 If you have questions or need clarification, ask the user.
-Once you are done, update the backlog item and move it to the `docs/COMPLETED_BACKLOG.md`.
+Once you are done, remove or update the active BLI in `docs/backlog/` and add a concise implementation summary to `docs/backlog/COMPLETED.md`.
 If there are follow-up tasks necessary, add them to the backlog.
+
+Whenever files in `docs/backlog/` or `docs/adr/` are modified, always run:
+- `bun run test:docs`
+This check is mandatory for every backlog/ADR change.

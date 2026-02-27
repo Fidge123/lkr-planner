@@ -13,6 +13,11 @@ It uses the [Daylite API](https://developer.daylite.app/reference/getting-starte
 Daylite projects are the source of truth for the project data.
 The application will try to create Planradar projects automatically based on the appropriate template.
 
+### Daylite Authentication Setup
+
+End-user authentication flow and token lifecycle are documented in `docs/daylite-authentication-flow.md`.
+The app persists rotated Daylite access/refresh tokens locally and refreshes access tokens before expiry.
+
 ### Basic Employee Management
 
 Status: Not implemented yet
@@ -66,4 +71,3 @@ bun build:macos
 ```
 
 **Note:** The same quality checks (`bun test`, `bun lint`, `bun format:check`) are run in CI/CD, so running them locally ensures your changes will pass automated checks.
-

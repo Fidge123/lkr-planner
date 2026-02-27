@@ -1,8 +1,7 @@
 import type {
-  Assignment,
-  DayliteContactRecord,
-  DayliteProjectRecord,
-} from "../domain/planning";
+  PlanningContactRecord,
+  PlanningProjectRecord,
+} from "../generated/tauri";
 
 export interface PlanningCellProject {
   id: string;
@@ -17,6 +16,18 @@ interface AssignmentTemplate {
   employeeIds: string[];
 }
 
+interface AssignmentPeriod {
+  startDate: string;
+  endDate: string;
+}
+
+interface Assignment {
+  id: string;
+  employeeId: string;
+  projectId: string;
+  period: AssignmentPeriod;
+}
+
 const projectStatusClasses: Record<string, string> = {
   new_status: "bg-primary",
   in_progress: "bg-secondary",
@@ -27,17 +38,10 @@ const projectStatusClasses: Record<string, string> = {
   unknown: "bg-base-300",
 };
 
-export const employees: DayliteContactRecord[] = [
+export const employees: PlanningContactRecord[] = [
   {
     self: "/v1/contacts/1001",
     full_name: "Anna Schmidt",
-    keywords: ["Backend", "API"],
-    addresses: [
-      {
-        city: "Köln",
-        country: "Deutschland",
-      },
-    ],
     urls: [
       {
         label: "Einsatz iCal",
@@ -52,13 +56,6 @@ export const employees: DayliteContactRecord[] = [
   {
     self: "/v1/contacts/1002",
     full_name: "Max Müller",
-    keywords: ["Projektleitung", "Koordination"],
-    addresses: [
-      {
-        city: "Bonn",
-        country: "Deutschland",
-      },
-    ],
     urls: [
       {
         label: "Einsatz iCal",
@@ -73,13 +70,6 @@ export const employees: DayliteContactRecord[] = [
   {
     self: "/v1/contacts/1003",
     full_name: "Lisa Weber",
-    keywords: ["UI/UX", "Research"],
-    addresses: [
-      {
-        city: "Köln",
-        country: "Deutschland",
-      },
-    ],
     urls: [
       {
         label: "Einsatz iCal",
@@ -95,13 +85,6 @@ export const employees: DayliteContactRecord[] = [
     self: "/v1/contacts/1004",
     full_name: "Tom Fischer",
     nickname: "Tom",
-    keywords: ["Backend", "Datenbank"],
-    addresses: [
-      {
-        city: "Leverkusen",
-        country: "Deutschland",
-      },
-    ],
     urls: [
       {
         label: "Einsatz iCal",
@@ -116,13 +99,6 @@ export const employees: DayliteContactRecord[] = [
   {
     self: "/v1/contacts/1005",
     full_name: "Sarah Koch",
-    keywords: ["QA", "Testautomatisierung"],
-    addresses: [
-      {
-        city: "Düsseldorf",
-        country: "Deutschland",
-      },
-    ],
     urls: [
       {
         label: "Einsatz iCal",
@@ -137,13 +113,6 @@ export const employees: DayliteContactRecord[] = [
   {
     self: "/v1/contacts/1006",
     full_name: "Jan Becker",
-    keywords: ["DevOps", "Security"],
-    addresses: [
-      {
-        city: "Köln",
-        country: "Deutschland",
-      },
-    ],
     urls: [
       {
         label: "Einsatz iCal",
@@ -158,13 +127,6 @@ export const employees: DayliteContactRecord[] = [
   {
     self: "/v1/contacts/1007",
     full_name: "Maria Hofmann",
-    keywords: ["Fullstack", "Performance"],
-    addresses: [
-      {
-        city: "Siegburg",
-        country: "Deutschland",
-      },
-    ],
     urls: [
       {
         label: "Einsatz iCal",
@@ -175,34 +137,6 @@ export const employees: DayliteContactRecord[] = [
         url: "https://calendar.example.com/maria/absence.ics",
       },
     ],
-  },
-];
-
-export const projects: DayliteProjectRecord[] = [
-  {
-    self: "/v1/projects/3001",
-    name: "Kundenportal",
-    status: "in_progress",
-  },
-  {
-    self: "/v1/projects/3002",
-    name: "Mobile App",
-    status: "new_status",
-  },
-  {
-    self: "/v1/projects/3003",
-    name: "Intern",
-    status: "done",
-  },
-  {
-    self: "/v1/projects/3004",
-    name: "Altsystem",
-    status: "in_progress",
-  },
-  {
-    self: "/v1/projects/3005",
-    name: "Infrastruktur",
-    status: "new_status",
   },
 ];
 
@@ -299,30 +233,29 @@ const assignmentTemplates: AssignmentTemplate[] = [
   },
 ];
 
-export const assignments: Assignment[] = assignmentTemplates.flatMap(
-  (template) =>
-    template.employeeIds.flatMap((employeeId) =>
-      template.days.map((day) => ({
-        id: `${template.id}-${employeeId}-${day}`,
-        employeeId,
-        projectId: template.projectId,
-        period: {
-          startDate: day,
-          endDate: day,
-        },
-      })),
-    ),
-);
-
-const projectsByReference = new Map(
-  projects.map((project) => [project.self, project]),
+const assignments: Assignment[] = assignmentTemplates.flatMap((template) =>
+  template.employeeIds.flatMap((employeeId) =>
+    template.days.map((day) => ({
+      id: `${template.id}-${employeeId}-${day}`,
+      employeeId,
+      projectId: template.projectId,
+      period: {
+        startDate: day,
+        endDate: day,
+      },
+    })),
+  ),
 );
 
 export function getWorkItemsForCell(
   employeeReference: string,
   day: Date,
+  dayliteProjects: PlanningProjectRecord[],
 ): PlanningCellProject[] {
   const isoDay = day.toISOString().slice(0, 10);
+  const projectsByReference = new Map(
+    dayliteProjects.map((project) => [project.self, project]),
+  );
 
   return assignments
     .filter(

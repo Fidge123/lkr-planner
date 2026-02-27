@@ -15,6 +15,70 @@ async checkHealth() : Promise<Result<HealthStatus, string>> {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+async loadLocalStore() : Promise<Result<LocalStore, StoreError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("load_local_store") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async saveLocalStore(store: LocalStore) : Promise<Result<null, StoreError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("save_local_store", { store }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async dayliteConnectRefreshToken(request: DayliteRefreshTokenRequest) : Promise<Result<DayliteTokenSyncStatus, DayliteApiError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("daylite_connect_refresh_token", { request }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async dayliteListProjects() : Promise<Result<PlanningProjectRecord[], DayliteApiError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("daylite_list_projects") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async dayliteSearchProjects(input: DayliteSearchInput) : Promise<Result<DayliteSearchResult<DayliteProjectSummary>, DayliteApiError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("daylite_search_projects", { input }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async dayliteListContacts() : Promise<Result<PlanningContactRecord[], DayliteApiError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("daylite_list_contacts") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async dayliteListCachedContacts() : Promise<Result<PlanningContactRecord[], DayliteApiError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("daylite_list_cached_contacts") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async dayliteUpdateContactIcalUrls(input: DayliteUpdateContactIcalUrlsInput) : Promise<Result<PlanningContactRecord, DayliteApiError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("daylite_update_contact_ical_urls", { input }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 
@@ -28,11 +92,36 @@ async checkHealth() : Promise<Result<HealthStatus, string>> {
 
 /** user-defined types **/
 
+export type ApiEndpoints = { dayliteBaseUrl: string; planradarBaseUrl: string }
+export type ContactFilter = { activeEmployeeKeyword: string }
+export type DayliteApiError = { code: DayliteApiErrorCode; httpStatus: number | null; userMessage: string; technicalMessage: string }
+export type DayliteApiErrorCode = "UNAUTHORIZED" | "RATE_LIMITED" | "SERVER_ERROR" | "MISSING_TOKEN" | "INVALID_CONFIGURATION" | "REQUEST_FAILED" | "INVALID_RESPONSE" | "TOKEN_REFRESH_FAILED"
+export type DayliteCache = { lastSyncedAt: string | null; projects: DayliteProjectCacheEntry[]; contacts: DayliteContactCacheEntry[] }
+export type DayliteContactCacheEntry = { reference: string; fullName: string | null; nickname: string | null; category: string | null; urls: DayliteContactUrlCacheEntry[] }
+export type DayliteContactUrl = { label?: string | null; url?: string | null; note?: string | null }
+export type DayliteContactUrlCacheEntry = { label: string | null; url: string | null; note: string | null }
+export type DayliteProjectCacheEntry = { reference: string; name: string; status: string }
+export type DayliteProjectSummary = { self: string; name: string; status?: string | null; category?: string | null; keywords?: string[]; due?: string | null; started?: string | null; completed?: string | null; createDate?: string | null; modifyDate?: string | null }
+export type DayliteRefreshTokenRequest = { baseUrl: string; refreshToken: string }
+export type DayliteSearchInput = { searchTerm: string; limit: number | null }
+export type DayliteSearchResult<T> = { results: T[]; next: string | null }
+export type DayliteTokenSyncStatus = { hasAccessToken: boolean; hasRefreshToken: boolean }
+export type DayliteUpdateContactIcalUrlsInput = { contactReference: string; primaryIcalUrl: string; absenceIcalUrl: string }
+export type EmployeeSetting = { employeeId: string; dayliteContactReference: string; primaryIcalUrl: string; absenceIcalUrl: string }
 /**
  * Health status response
  */
 export type HealthStatus = { status: HealthStatusEnum; timestamp: string; version: string }
 export type HealthStatusEnum = "healthy" | "unhealthy"
+export type LocalStore = { apiEndpoints: ApiEndpoints; tokenReferences: TokenReferences; employeeSettings: EmployeeSetting[]; standardFilter: StandardFilter; contactFilter: ContactFilter; routingSettings: RoutingSettings; dayliteCache: DayliteCache }
+export type PlanningContactRecord = { self: string; full_name?: string | null; nickname?: string | null; category?: string | null; urls: DayliteContactUrl[] }
+export type PlanningProjectRecord = { self: string; name: string; status: PlanningProjectStatus; category?: string | null; keywords: string[]; due?: string | null; started?: string | null; completed?: string | null; create_date?: string | null; modify_date?: string | null }
+export type PlanningProjectStatus = "new_status" | "in_progress" | "done" | "abandoned" | "cancelled" | "deferred"
+export type RoutingSettings = { openrouteserviceApiKey: string; openrouteserviceProfile: string }
+export type StandardFilter = { pipelines: string[]; columns: string[]; categories: string[]; exclusionStatuses: string[] }
+export type StoreError = { code: StoreErrorCode; userMessage: string; technicalMessage: string }
+export type StoreErrorCode = "READ_FAILED" | "WRITE_FAILED" | "CORRUPT_FILE" | "MISSING_FIELDS"
+export type TokenReferences = { dayliteTokenReference: string; planradarTokenReference: string; dayliteAccessToken: string; dayliteRefreshToken: string; dayliteAccessTokenExpiresAtMs: number | null }
 
 /** tauri-specta globals **/
 
