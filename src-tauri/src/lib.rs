@@ -29,7 +29,9 @@ pub fn run() {
         .setup(|app| {
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
-                update(handle).await.unwrap();
+                if let Some(message) = format_update_error(update(handle).await) {
+                    eprintln!("{message}");
+                }
             });
             Ok(())
         })
@@ -62,4 +64,10 @@ async fn update(app: tauri::AppHandle) -> tauri_plugin_updater::Result<()> {
     }
 
     Ok(())
+}
+
+fn format_update_error<E: std::fmt::Display>(result: Result<(), E>) -> Option<String> {
+    result
+        .err()
+        .map(|error| format!("Update check failed in background task: {error}"))
 }
