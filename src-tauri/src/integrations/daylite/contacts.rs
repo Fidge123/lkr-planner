@@ -1,11 +1,14 @@
 use super::super::local_store::{DayliteContactCacheEntry, DayliteContactUrlCacheEntry};
+use super::auth_flow::ensure_access_token;
 use super::client::DayliteApiClient;
+use super::client::DayliteHttpMethod;
 use super::shared::{
-    load_daylite_tokens, load_store_or_error, save_store_or_error, store_daylite_tokens,
-    DayliteApiError,
+    load_daylite_tokens, load_store_or_error, parse_success_json_body, save_store_or_error,
+    store_daylite_tokens, DayliteApiError, DayliteApiErrorCode, DayliteSearchResult,
 };
 use chrono::{SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use specta::Type;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
@@ -67,18 +70,36 @@ pub async fn daylite_list_contacts(
 ) -> Result<Vec<PlanningContactRecord>, DayliteApiError> {
     let mut store = load_store_or_error(app.clone())?;
     let client = DayliteApiClient::new(&store.api_endpoints.daylite_base_url)?;
-    let token_state = load_daylite_tokens(&store);
+    let mut token_state = load_daylite_tokens(&store);
+    token_state = ensure_access_token(&client, token_state).await?;
 
-    let response = client.list_contacts(token_state).await?;
+    let response = client
+        .send_request(
+            DayliteHttpMethod::Post,
+            "/contacts/_search",
+            vec![("full-records".to_string(), "true".to_string())],
+            Some(json!({
+                "category": {
+                    "equal": "Monteur"
+                }
+            })),
+            Some(token_state.access_token.clone()),
+        )
+        .await?;
+    let search_result = parse_success_json_body::<DayliteSearchResult<DayliteContactSummary>>(
+        response.status,
+        &response.body,
+        "/contacts/_search",
+    )?;
     let contacts = sort_contacts(filter_monteur_contacts(
-        response
-            .data
+        search_result
+            .results
             .into_iter()
             .map(map_daylite_contact_summary)
             .collect(),
     ));
 
-    store_daylite_tokens(&mut store, &response.token_state);
+    store_daylite_tokens(&mut store, &token_state);
     store.daylite_cache.last_synced_at = Some(current_timestamp_iso8601());
     store.daylite_cache.contacts = contacts
         .iter()
@@ -98,18 +119,47 @@ pub async fn daylite_update_contact_ical_urls(
 ) -> Result<PlanningContactRecord, DayliteApiError> {
     let mut store = load_store_or_error(app.clone())?;
     let client = DayliteApiClient::new(&store.api_endpoints.daylite_base_url)?;
-    let token_state = load_daylite_tokens(&store);
+    let mut token_state = load_daylite_tokens(&store);
+    token_state = ensure_access_token(&client, token_state).await?;
 
-    let response = client
-        .update_contact_ical_urls(
-            token_state,
-            &input.contact_reference,
-            &input.primary_ical_url,
-            &input.absence_ical_url,
+    let contact_id = parse_contact_id(&input.contact_reference)?;
+    let contact_path = format!("/contacts/{contact_id}");
+    let current_contact_response = client
+        .send_request(
+            DayliteHttpMethod::Get,
+            &contact_path,
+            Vec::new(),
+            None,
+            Some(token_state.access_token.clone()),
         )
         .await?;
-
-    let updated_contact = map_daylite_contact_summary(response.data);
+    let current_contact = parse_success_json_body::<DayliteContactSummary>(
+        current_contact_response.status,
+        &current_contact_response.body,
+        &contact_path,
+    )?;
+    let merged_urls = merge_contact_ical_urls(
+        current_contact.urls,
+        &input.primary_ical_url,
+        &input.absence_ical_url,
+    );
+    let update_response = client
+        .send_request(
+            DayliteHttpMethod::Patch,
+            &contact_path,
+            Vec::new(),
+            Some(json!({
+                "urls": merged_urls,
+            })),
+            Some(token_state.access_token.clone()),
+        )
+        .await?;
+    let updated_contact =
+        map_daylite_contact_summary(parse_success_json_body::<DayliteContactSummary>(
+            update_response.status,
+            &update_response.body,
+            &contact_path,
+        )?);
     let mut cached_contacts: Vec<PlanningContactRecord> = store
         .daylite_cache
         .contacts
@@ -123,7 +173,7 @@ pub async fn daylite_update_contact_ical_urls(
         cached_contacts.push(updated_contact.clone());
     }
 
-    store_daylite_tokens(&mut store, &response.token_state);
+    store_daylite_tokens(&mut store, &token_state);
     store.daylite_cache.last_synced_at = Some(current_timestamp_iso8601());
     store.daylite_cache.contacts = sort_contacts(filter_monteur_contacts(cached_contacts))
         .into_iter()
@@ -307,11 +357,85 @@ fn current_timestamp_iso8601() -> String {
     Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true)
 }
 
+fn parse_contact_id(contact_reference: &str) -> Result<u64, DayliteApiError> {
+    let trimmed_reference = contact_reference.trim();
+    let contact_id_raw = trimmed_reference.rsplit('/').next().unwrap_or_default();
+
+    contact_id_raw
+        .parse::<u64>()
+        .map_err(|error| DayliteApiError {
+            code: DayliteApiErrorCode::InvalidResponse,
+            http_status: None,
+            user_message: "Die Daylite-Kontaktreferenz ist ungültig.".to_string(),
+            technical_message: format!("Ungültige Kontaktreferenz `{trimmed_reference}`: {error}"),
+        })
+}
+
+fn merge_contact_ical_urls(
+    existing_urls: Vec<DayliteContactUrl>,
+    primary_ical_url: &str,
+    absence_ical_url: &str,
+) -> Vec<DayliteContactUrl> {
+    let mut merged_urls = existing_urls
+        .into_iter()
+        .filter(|url| {
+            let Some(label) = normalize_url_label(url.label.as_deref()) else {
+                return true;
+            };
+
+            !is_primary_ical_label(&label) && !is_absence_ical_label(&label)
+        })
+        .collect::<Vec<_>>();
+
+    if let Some(primary_url) = normalize_non_empty(primary_ical_url) {
+        merged_urls.push(DayliteContactUrl {
+            label: Some("Einsatz iCal".to_string()),
+            url: Some(primary_url.to_string()),
+            note: None,
+        });
+    }
+
+    if let Some(absence_url) = normalize_non_empty(absence_ical_url) {
+        merged_urls.push(DayliteContactUrl {
+            label: Some("Abwesenheit iCal".to_string()),
+            url: Some(absence_url.to_string()),
+            note: None,
+        });
+    }
+
+    merged_urls
+}
+
+fn is_primary_ical_label(label: &str) -> bool {
+    label == "einsatz ical"
+}
+
+fn is_absence_ical_label(label: &str) -> bool {
+    label == "abwesenheit ical"
+}
+
+fn normalize_url_label(value: Option<&str>) -> Option<String> {
+    value
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(|value| value.to_lowercase())
+}
+
+fn normalize_non_empty(value: &str) -> Option<&str> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    Some(trimmed)
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        filter_monteur_contacts, map_cached_contact, map_daylite_contact_summary, sort_contacts,
-        DayliteContactSummary, DayliteContactUrl, PlanningContactRecord,
+        filter_monteur_contacts, map_cached_contact, map_daylite_contact_summary,
+        merge_contact_ical_urls, parse_contact_id, sort_contacts, DayliteContactSummary,
+        DayliteContactUrl, PlanningContactRecord,
     };
     use crate::integrations::local_store::{DayliteContactCacheEntry, DayliteContactUrlCacheEntry};
 
@@ -414,5 +538,69 @@ mod tests {
         assert_eq!(mapped.len(), 2);
         assert_eq!(mapped[0].reference, "/v1/contacts/3003");
         assert_eq!(mapped[1].reference, "/v1/contacts/3001");
+    }
+
+    #[test]
+    fn merge_contact_ical_urls_keeps_unmanaged_labels() {
+        let existing_urls = vec![
+            DayliteContactUrl {
+                label: Some("Website".to_string()),
+                url: Some("https://example.com".to_string()),
+                note: None,
+            },
+            DayliteContactUrl {
+                label: Some("FR-Fehlzeiten".to_string()),
+                url: Some("https://example.com/old-absence.ics".to_string()),
+                note: None,
+            },
+            DayliteContactUrl {
+                label: Some("Einsatz iCal".to_string()),
+                url: Some("https://example.com/old-primary.ics".to_string()),
+                note: None,
+            },
+        ];
+
+        let merged = merge_contact_ical_urls(
+            existing_urls,
+            "https://example.com/new-primary.ics",
+            "https://example.com/new-absence.ics",
+        );
+
+        assert_eq!(
+            merged,
+            vec![
+                DayliteContactUrl {
+                    label: Some("Website".to_string()),
+                    url: Some("https://example.com".to_string()),
+                    note: None,
+                },
+                DayliteContactUrl {
+                    label: Some("FR-Fehlzeiten".to_string()),
+                    url: Some("https://example.com/old-absence.ics".to_string()),
+                    note: None,
+                },
+                DayliteContactUrl {
+                    label: Some("Einsatz iCal".to_string()),
+                    url: Some("https://example.com/new-primary.ics".to_string()),
+                    note: None,
+                },
+                DayliteContactUrl {
+                    label: Some("Abwesenheit iCal".to_string()),
+                    url: Some("https://example.com/new-absence.ics".to_string()),
+                    note: None,
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn parse_contact_id_rejects_invalid_reference() {
+        let error = parse_contact_id("/v1/contacts/not-a-number")
+            .expect_err("invalid contact reference should fail");
+
+        assert_eq!(
+            error.user_message,
+            "Die Daylite-Kontaktreferenz ist ungültig."
+        );
     }
 }

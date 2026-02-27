@@ -1,10 +1,14 @@
+use super::auth_flow::ensure_access_token;
 use super::client::DayliteApiClient;
+use super::client::DayliteHttpMethod;
 use super::shared::{
-    load_daylite_tokens, load_store_or_error, save_store_or_error, store_daylite_tokens,
-    DayliteApiError, DayliteSearchInput, DayliteSearchResult,
+    build_limit_query, load_daylite_tokens, load_store_or_error, parse_success_json_body,
+    save_store_or_error, store_daylite_tokens, DayliteApiError, DayliteSearchInput,
+    DayliteSearchResult,
 };
 use chrono::{DateTime, NaiveDate, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use specta::Type;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
@@ -71,16 +75,30 @@ pub async fn daylite_list_projects(
 ) -> Result<Vec<PlanningProjectRecord>, DayliteApiError> {
     let mut store = load_store_or_error(app.clone())?;
     let client = DayliteApiClient::new(&store.api_endpoints.daylite_base_url)?;
-    let token_state = load_daylite_tokens(&store);
+    let mut token_state = load_daylite_tokens(&store);
+    token_state = ensure_access_token(&client, token_state).await?;
 
-    let response = client.list_projects(token_state).await?;
-    let projects = response
-        .data
+    let response = client
+        .send_request(
+            DayliteHttpMethod::Post,
+            "/projects/_search",
+            vec![("full-records".to_string(), "true".to_string())],
+            Some(json!({})),
+            Some(token_state.access_token.clone()),
+        )
+        .await?;
+    let search_result = parse_success_json_body::<DayliteSearchResult<DayliteProjectSummary>>(
+        response.status,
+        &response.body,
+        "/projects/_search",
+    )?;
+    let projects = search_result
+        .results
         .into_iter()
         .map(map_daylite_project_summary)
         .collect();
 
-    store_daylite_tokens(&mut store, &response.token_state);
+    store_daylite_tokens(&mut store, &token_state);
     save_store_or_error(app, store)?;
 
     Ok(projects)
@@ -94,15 +112,32 @@ pub async fn daylite_search_projects(
 ) -> Result<DayliteSearchResult<DayliteProjectSummary>, DayliteApiError> {
     let mut store = load_store_or_error(app.clone())?;
     let client = DayliteApiClient::new(&store.api_endpoints.daylite_base_url)?;
-    let token_state = load_daylite_tokens(&store);
+    let mut token_state = load_daylite_tokens(&store);
+    token_state = ensure_access_token(&client, token_state).await?;
 
     let response = client
-        .search_projects(token_state, &input.search_term, input.limit)
+        .send_request(
+            DayliteHttpMethod::Post,
+            "/projects/_search",
+            build_limit_query(input.limit),
+            Some(json!({
+                "name": {
+                    "contains": input.search_term
+                }
+            })),
+            Some(token_state.access_token.clone()),
+        )
         .await?;
-    store_daylite_tokens(&mut store, &response.token_state);
+    let search_result = parse_success_json_body::<DayliteSearchResult<DayliteProjectSummary>>(
+        response.status,
+        &response.body,
+        "/projects/_search",
+    )?;
+
+    store_daylite_tokens(&mut store, &token_state);
     save_store_or_error(app, store)?;
 
-    Ok(response.data)
+    Ok(search_result)
 }
 
 fn map_daylite_project_summary(project: DayliteProjectSummary) -> PlanningProjectRecord {

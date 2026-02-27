@@ -1,0 +1,182 @@
+use super::client::DayliteApiClient;
+use super::client::DayliteHttpMethod;
+use super::shared::{
+    current_epoch_ms, missing_token_error, normalize_http_error, parse_json_body,
+    should_refresh_access_token, truncate_for_log, DayliteApiError, DayliteApiErrorCode,
+    DayliteTokenState,
+};
+use serde::Deserialize;
+
+pub(super) async fn ensure_access_token(
+    client: &DayliteApiClient,
+    mut token_state: DayliteTokenState,
+) -> Result<DayliteTokenState, DayliteApiError> {
+    if token_state.access_token.trim().is_empty() && token_state.refresh_token.trim().is_empty() {
+        return Err(missing_token_error(
+            "Es sind keine Daylite-Zugangsdaten hinterlegt. Bitte ein Refresh-Token hinterlegen.",
+            "Weder Access- noch Refresh-Token sind vorhanden.",
+        ));
+    }
+
+    let now_ms = current_epoch_ms()?;
+    if should_refresh_access_token(&token_state, now_ms) {
+        token_state = refresh_tokens(client, token_state.refresh_token.clone()).await?;
+    }
+
+    Ok(token_state)
+}
+
+pub(super) async fn refresh_tokens(
+    client: &DayliteApiClient,
+    refresh_token: String,
+) -> Result<DayliteTokenState, DayliteApiError> {
+    if refresh_token.trim().is_empty() {
+        return Err(missing_token_error(
+            "Das Daylite-Refresh-Token fehlt. Bitte Refresh-Token hinterlegen.",
+            "Refresh-Token ist leer.",
+        ));
+    }
+
+    let response = client
+        .send_request(
+            DayliteHttpMethod::Get,
+            "/personal_token/refresh_token",
+            vec![("refresh_token".to_string(), refresh_token)],
+            None,
+            None,
+        )
+        .await?;
+
+    if !(200..300).contains(&response.status) {
+        let mut error = normalize_http_error(
+            response.status,
+            &response.body,
+            "/personal_token/refresh_token",
+        );
+        error.code = DayliteApiErrorCode::TokenRefreshFailed;
+        return Err(error);
+    }
+
+    let parsed_refresh = parse_refresh_response_body(response.status, &response.body)?;
+    let access_token = parsed_refresh.access_token.trim().to_string();
+    let refreshed_refresh_token = parsed_refresh.refresh_token.trim().to_string();
+
+    if access_token.is_empty() {
+        return Err(DayliteApiError {
+            code: DayliteApiErrorCode::TokenRefreshFailed,
+            http_status: Some(response.status),
+            user_message: "Das Daylite-Access-Token konnte nicht erneuert werden.".to_string(),
+            technical_message: format!(
+                "Refresh-Antwort enthält ein leeres access_token Feld. body={}",
+                truncate_for_log(&response.body)
+            ),
+        });
+    }
+
+    if refreshed_refresh_token.is_empty() {
+        return Err(DayliteApiError {
+            code: DayliteApiErrorCode::TokenRefreshFailed,
+            http_status: Some(response.status),
+            user_message: "Das Daylite-Refresh-Token konnte nicht erneuert werden.".to_string(),
+            technical_message: format!(
+                "Refresh-Antwort enthält ein leeres refresh_token Feld. body={}",
+                truncate_for_log(&response.body)
+            ),
+        });
+    }
+
+    if parsed_refresh.expires_in == 0 {
+        return Err(DayliteApiError {
+            code: DayliteApiErrorCode::TokenRefreshFailed,
+            http_status: Some(response.status),
+            user_message: "Die Ablaufzeit des Daylite-Access-Tokens ist ungültig.".to_string(),
+            technical_message: format!(
+                "Refresh-Antwort enthält expires_in=0. body={}",
+                truncate_for_log(&response.body)
+            ),
+        });
+    }
+
+    let now_ms = current_epoch_ms()?;
+    let expires_at_ms = now_ms.saturating_add(parsed_refresh.expires_in.saturating_mul(1_000));
+
+    Ok(DayliteTokenState {
+        access_token,
+        refresh_token: refreshed_refresh_token,
+        access_token_expires_at_ms: Some(expires_at_ms),
+    })
+}
+
+#[derive(Debug, Deserialize)]
+struct DayliteRefreshTokenResponse {
+    access_token: String,
+    refresh_token: String,
+    expires_in: u64,
+}
+
+fn parse_refresh_response_body(
+    status: u16,
+    body: &str,
+) -> Result<DayliteRefreshTokenResponse, DayliteApiError> {
+    parse_json_body::<DayliteRefreshTokenResponse>(status, body, "/personal_token/refresh_token")
+        .map_err(|error| DayliteApiError {
+            code: DayliteApiErrorCode::TokenRefreshFailed,
+            http_status: error.http_status,
+            user_message: "Die Daylite-Token-Antwort konnte nicht verarbeitet werden.".to_string(),
+            technical_message: error.technical_message,
+        })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ensure_access_token, refresh_tokens};
+    use crate::integrations::daylite::client::DayliteApiClient;
+    use crate::integrations::daylite::shared::{DayliteApiErrorCode, DayliteTokenState};
+
+    #[test]
+    fn ensure_access_token_returns_missing_token_error_when_both_tokens_are_missing() {
+        tauri::async_runtime::block_on(async {
+            let client =
+                DayliteApiClient::new("https://daylite.example").expect("client should be created");
+
+            let error = ensure_access_token(&client, DayliteTokenState::default())
+                .await
+                .expect_err("missing tokens should fail");
+
+            assert_eq!(error.code, DayliteApiErrorCode::MissingToken);
+        });
+    }
+
+    #[test]
+    fn ensure_access_token_keeps_existing_access_token_when_expiry_is_in_future() {
+        tauri::async_runtime::block_on(async {
+            let client =
+                DayliteApiClient::new("https://daylite.example").expect("client should be created");
+            let original_state = DayliteTokenState {
+                access_token: "existing-access-token".to_string(),
+                refresh_token: "refresh-token".to_string(),
+                access_token_expires_at_ms: Some(u64::MAX),
+            };
+
+            let token_state = ensure_access_token(&client, original_state.clone())
+                .await
+                .expect("existing token should be reused");
+
+            assert_eq!(token_state, original_state);
+        });
+    }
+
+    #[test]
+    fn refresh_tokens_rejects_blank_refresh_token() {
+        tauri::async_runtime::block_on(async {
+            let client =
+                DayliteApiClient::new("https://daylite.example").expect("client should be created");
+
+            let error = refresh_tokens(&client, "   ".to_string())
+                .await
+                .expect_err("blank refresh token should fail");
+
+            assert_eq!(error.code, DayliteApiErrorCode::MissingToken);
+        });
+    }
+}

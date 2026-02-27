@@ -1,5 +1,7 @@
 use super::super::local_store::{self, LocalStore};
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use specta::Type;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -24,13 +26,6 @@ pub struct DayliteTokenSyncStatus {
 pub struct DayliteSearchResult<T> {
     pub results: Vec<T>,
     pub next: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct DayliteApiResponse<T> {
-    pub data: T,
-    pub token_state: DayliteTokenState,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
@@ -150,6 +145,44 @@ pub(super) fn normalize_http_error(status: u16, body: &str, path: &str) -> Dayli
             truncate_for_log(body)
         ),
     }
+}
+
+pub(super) fn parse_success_json_body<T: DeserializeOwned>(
+    status: u16,
+    body: &str,
+    path: &str,
+) -> Result<T, DayliteApiError> {
+    if !(200..300).contains(&status) {
+        return Err(normalize_http_error(status, body, path));
+    }
+
+    parse_json_body(status, body, path)
+}
+
+pub(super) fn parse_json_body<T: DeserializeOwned>(
+    status: u16,
+    body: &str,
+    path: &str,
+) -> Result<T, DayliteApiError> {
+    let raw_json = serde_json::from_str::<Value>(body).map_err(|error| DayliteApiError {
+        code: DayliteApiErrorCode::InvalidResponse,
+        http_status: Some(status),
+        user_message: "Die Antwort von Daylite konnte nicht verarbeitet werden.".to_string(),
+        technical_message: format!(
+            "JSON-Parsing für {path} fehlgeschlagen: {error}; body={}",
+            truncate_for_log(body)
+        ),
+    })?;
+
+    serde_json::from_value::<T>(raw_json).map_err(|error| DayliteApiError {
+        code: DayliteApiErrorCode::InvalidResponse,
+        http_status: Some(status),
+        user_message: "Die Antwort von Daylite konnte nicht verarbeitet werden.".to_string(),
+        technical_message: format!(
+            "JSON-Deserialisierung für {path} fehlgeschlagen: {error}; body={}",
+            truncate_for_log(body)
+        ),
+    })
 }
 
 pub(super) fn missing_token_error(user_message: &str, technical_message: &str) -> DayliteApiError {
