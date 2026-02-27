@@ -8,7 +8,7 @@ type DayliteProjectsSource = "network" | "cache" | "stale-cache";
 interface DayliteProjectsLoadResult {
   projects: DayliteProjectRecord[];
   source: DayliteProjectsSource;
-  errorMessage: string | null;
+  errorMessage?: string | null;
 }
 
 interface ProjectCacheEntry {
@@ -16,20 +16,14 @@ interface ProjectCacheEntry {
   fetchedAtMs: number;
 }
 
-interface DayliteProjectLoadOptions {
-  nowMs?: number;
-  forceRefresh?: boolean;
-}
-
 let cacheTtlMs = DEFAULT_DAYLITE_PROJECT_CACHE_TTL_MS;
 let projectCache: ProjectCacheEntry | null = null;
 let inFlightRequest: Promise<DayliteProjectsLoadResult> | null = null;
 
-export async function loadDayliteProjects(
-  options: DayliteProjectLoadOptions = {},
-): Promise<DayliteProjectsLoadResult> {
-  const nowMs = options.nowMs ?? Date.now();
-  const forceRefresh = options.forceRefresh ?? false;
+export async function loadDayliteProjects({
+  nowMs = Date.now(),
+  forceRefresh = false,
+}): Promise<DayliteProjectsLoadResult> {
   const cacheAgeMs = projectCache ? nowMs - projectCache.fetchedAtMs : Infinity;
   const cacheIsFresh = projectCache !== null && cacheAgeMs < cacheTtlMs;
 
@@ -37,21 +31,14 @@ export async function loadDayliteProjects(
     return {
       projects: projectCache.projects,
       source: "cache",
-      errorMessage: null,
     };
   }
-
-  if (inFlightRequest) {
-    return inFlightRequest;
-  }
-
-  inFlightRequest = fetchAndMapProjects()
+  inFlightRequest ??= fetchAndMapProjects()
     .then((projects) => {
       projectCache = { projects, fetchedAtMs: nowMs };
       return {
         projects,
         source: "network",
-        errorMessage: null,
       } satisfies DayliteProjectsLoadResult;
     })
     .catch((error) => {

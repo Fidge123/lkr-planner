@@ -14,7 +14,7 @@ export function usePlanningProjects(): PlanningGridProjectsState {
     try {
       const result = await loadDayliteProjects({ forceRefresh });
       setProjects(result.projects);
-      setErrorMessage(result.errorMessage);
+      setErrorMessage(result.errorMessage ?? null);
     } catch (error) {
       setErrorMessage(
         error instanceof Error

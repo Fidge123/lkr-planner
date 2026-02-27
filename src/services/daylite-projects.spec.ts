@@ -41,7 +41,7 @@ describe("daylite project service", () => {
     const result = await loadDayliteProjects({ nowMs: 1_000 });
 
     expect(result.source).toBe("network");
-    expect(result.errorMessage).toBeNull();
+    expect(result.errorMessage).toBeUndefined();
     expect(result.projects).toEqual([
       expect.objectContaining({
         self: "/v1/projects/7000",
