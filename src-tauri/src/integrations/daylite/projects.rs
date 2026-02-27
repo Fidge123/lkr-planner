@@ -4,6 +4,7 @@ use super::client::DayliteHttpMethod;
 use super::shared::{
     build_limit_query, load_daylite_tokens, load_store_or_error, save_store_or_error,
     store_daylite_tokens, DayliteApiError, DayliteSearchInput, DayliteSearchResult,
+    DayliteTokenState,
 };
 use chrono::{DateTime, NaiveDate, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
@@ -74,22 +75,7 @@ pub async fn daylite_list_projects(
 ) -> Result<Vec<PlanningProjectRecord>, DayliteApiError> {
     let mut store = load_store_or_error(app.clone())?;
     let client = DayliteApiClient::new(&store.api_endpoints.daylite_base_url)?;
-    let (search_result, token_state) =
-        send_authenticated_json::<DayliteSearchResult<DayliteProjectSummary>>(
-            &client,
-            load_daylite_tokens(&store),
-            DayliteHttpMethod::Post,
-            "/projects/_search",
-            vec![("full-records".to_string(), "true".to_string())],
-            Some(json!({})),
-        )
-        .await?;
-
-    let projects = search_result
-        .results
-        .into_iter()
-        .map(map_daylite_project_summary)
-        .collect();
+    let (projects, token_state) = list_projects_core(&client, load_daylite_tokens(&store)).await?;
 
     store_daylite_tokens(&mut store, &token_state);
     save_store_or_error(app, store)?;
@@ -106,9 +92,53 @@ pub async fn daylite_search_projects(
     let mut store = load_store_or_error(app.clone())?;
     let client = DayliteApiClient::new(&store.api_endpoints.daylite_base_url)?;
     let (search_result, token_state) =
+        search_projects_core(&client, load_daylite_tokens(&store), &input).await?;
+
+    store_daylite_tokens(&mut store, &token_state);
+    save_store_or_error(app, store)?;
+
+    Ok(search_result)
+}
+
+async fn list_projects_core(
+    client: &DayliteApiClient,
+    token_state: DayliteTokenState,
+) -> Result<(Vec<PlanningProjectRecord>, DayliteTokenState), DayliteApiError> {
+    let (search_result, token_state) =
         send_authenticated_json::<DayliteSearchResult<DayliteProjectSummary>>(
-            &client,
-            load_daylite_tokens(&store),
+            client,
+            token_state,
+            DayliteHttpMethod::Post,
+            "/projects/_search",
+            vec![("full-records".to_string(), "true".to_string())],
+            Some(json!({})),
+        )
+        .await?;
+
+    let projects = search_result
+        .results
+        .into_iter()
+        .map(map_daylite_project_summary)
+        .collect();
+
+    Ok((projects, token_state))
+}
+
+async fn search_projects_core(
+    client: &DayliteApiClient,
+    token_state: DayliteTokenState,
+    input: &DayliteSearchInput,
+) -> Result<
+    (
+        DayliteSearchResult<DayliteProjectSummary>,
+        DayliteTokenState,
+    ),
+    DayliteApiError,
+> {
+    let (search_result, token_state) =
+        send_authenticated_json::<DayliteSearchResult<DayliteProjectSummary>>(
+            client,
+            token_state,
             DayliteHttpMethod::Post,
             "/projects/_search",
             build_limit_query(input.limit),
@@ -120,10 +150,7 @@ pub async fn daylite_search_projects(
         )
         .await?;
 
-    store_daylite_tokens(&mut store, &token_state);
-    save_store_or_error(app, store)?;
-
-    Ok(search_result)
+    Ok((search_result, token_state))
 }
 
 fn map_daylite_project_summary(project: DayliteProjectSummary) -> PlanningProjectRecord {
@@ -220,9 +247,18 @@ fn normalize_optional_date(value: Option<String>) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        map_daylite_project_summary, map_project_status, DayliteProjectSummary,
-        PlanningProjectStatus,
+        list_projects_core, map_daylite_project_summary, map_project_status, search_projects_core,
+        DayliteProjectSummary, PlanningProjectStatus,
     };
+    use crate::integrations::daylite::client::{
+        BoxFuture, DayliteApiClient, DayliteHttpMethod, DayliteHttpRequest, DayliteHttpResponse,
+        DayliteHttpTransport,
+    };
+    use crate::integrations::daylite::shared::{
+        DayliteApiError, DayliteSearchInput, DayliteTokenState,
+    };
+    use std::collections::VecDeque;
+    use std::sync::{Arc, Mutex};
 
     #[test]
     fn maps_project_summary_to_planning_project_record() {
@@ -265,5 +301,165 @@ mod tests {
     fn defaults_unknown_project_status_to_new_status() {
         let mapped_status = map_project_status(Some("unknown-status".to_string()));
         assert_eq!(mapped_status, PlanningProjectStatus::NewStatus);
+    }
+
+    #[test]
+    fn list_projects_sends_search_request_and_maps_results() {
+        tauri::async_runtime::block_on(async {
+            let transport = MockTransport::new(vec![Ok(mock_response(
+                200,
+                r#"{"results":[{"self":"/v1/projects/1","name":"Projekt A","status":"in_progress"},{"self":"/v1/projects/2","name":"Projekt B"}],"next":null}"#,
+            ))]);
+            let client = DayliteApiClient::with_transport(Arc::new(transport.clone()));
+
+            let (projects, token_state) = list_projects_core(
+                &client,
+                DayliteTokenState {
+                    access_token: "at".to_string(),
+                    refresh_token: "rt".to_string(),
+                    access_token_expires_at_ms: Some(u64::MAX),
+                },
+            )
+            .await
+            .expect("list should succeed");
+
+            assert_eq!(projects.len(), 2);
+            assert_eq!(projects[0].name, "Projekt A");
+            assert_eq!(projects[0].status, PlanningProjectStatus::InProgress);
+            assert_eq!(projects[1].name, "Projekt B");
+            assert_eq!(projects[1].status, PlanningProjectStatus::NewStatus);
+            assert_eq!(token_state.access_token, "at");
+
+            let requests = transport.requests();
+            assert_eq!(requests.len(), 1);
+            assert_eq!(requests[0].path, "/projects/_search");
+            assert_eq!(requests[0].method, DayliteHttpMethod::Post);
+            assert_eq!(
+                requests[0].query,
+                vec![("full-records".to_string(), "true".to_string())]
+            );
+            assert!(requests[0].body.is_some());
+        });
+    }
+
+    #[test]
+    fn search_projects_sends_correct_body_and_query() {
+        tauri::async_runtime::block_on(async {
+            let transport = MockTransport::new(vec![Ok(mock_response(
+                200,
+                r#"{"results":[{"self":"/v1/projects/10","name":"Projekt Nord"}],"next":"/v1/projects/_search?offset=5"}"#,
+            ))]);
+            let client = DayliteApiClient::with_transport(Arc::new(transport.clone()));
+
+            let (result, _) = search_projects_core(
+                &client,
+                DayliteTokenState {
+                    access_token: "at".to_string(),
+                    refresh_token: "rt".to_string(),
+                    access_token_expires_at_ms: Some(u64::MAX),
+                },
+                &DayliteSearchInput {
+                    search_term: "Nord".to_string(),
+                    limit: Some(5),
+                },
+            )
+            .await
+            .expect("search should succeed");
+
+            assert_eq!(result.results.len(), 1);
+            assert_eq!(result.results[0].name, "Projekt Nord");
+            assert_eq!(
+                result.next,
+                Some("/v1/projects/_search?offset=5".to_string())
+            );
+
+            let requests = transport.requests();
+            assert_eq!(requests.len(), 1);
+            assert_eq!(
+                requests[0].query,
+                vec![("limit".to_string(), "5".to_string())]
+            );
+            let body = requests[0].body.as_ref().expect("should have body");
+            assert_eq!(body["name"]["contains"], "Nord");
+        });
+    }
+
+    #[test]
+    fn list_projects_returns_updated_token_state_after_refresh() {
+        tauri::async_runtime::block_on(async {
+            let transport = MockTransport::new(vec![
+                Ok(mock_response(
+                    200,
+                    r#"{"access_token":"new-at","refresh_token":"new-rt","expires_in":3600}"#,
+                )),
+                Ok(mock_response(200, r#"{"results":[],"next":null}"#)),
+            ]);
+            let client = DayliteApiClient::with_transport(Arc::new(transport));
+
+            let (projects, token_state) = list_projects_core(
+                &client,
+                DayliteTokenState {
+                    access_token: String::new(),
+                    refresh_token: "old-rt".to_string(),
+                    access_token_expires_at_ms: None,
+                },
+            )
+            .await
+            .expect("list after refresh should succeed");
+
+            assert!(projects.is_empty());
+            assert_eq!(token_state.access_token, "new-at");
+            assert_eq!(token_state.refresh_token, "new-rt");
+            assert!(token_state.access_token_expires_at_ms.is_some());
+        });
+    }
+
+    #[derive(Clone)]
+    struct MockTransport {
+        responses: Arc<Mutex<VecDeque<Result<DayliteHttpResponse, DayliteApiError>>>>,
+        requests: Arc<Mutex<Vec<DayliteHttpRequest>>>,
+    }
+
+    impl MockTransport {
+        fn new(responses: Vec<Result<DayliteHttpResponse, DayliteApiError>>) -> Self {
+            Self {
+                responses: Arc::new(Mutex::new(VecDeque::from(responses))),
+                requests: Arc::new(Mutex::new(Vec::new())),
+            }
+        }
+
+        fn requests(&self) -> Vec<DayliteHttpRequest> {
+            self.requests
+                .lock()
+                .expect("request lock should succeed")
+                .clone()
+        }
+    }
+
+    impl DayliteHttpTransport for MockTransport {
+        fn send<'a>(
+            &'a self,
+            request: DayliteHttpRequest,
+        ) -> BoxFuture<'a, Result<DayliteHttpResponse, DayliteApiError>> {
+            Box::pin(async move {
+                self.requests
+                    .lock()
+                    .expect("request lock should succeed")
+                    .push(request);
+
+                self.responses
+                    .lock()
+                    .expect("response lock should succeed")
+                    .pop_front()
+                    .expect("mock should contain enough responses")
+            })
+        }
+    }
+
+    fn mock_response(status: u16, body: &str) -> DayliteHttpResponse {
+        DayliteHttpResponse {
+            status,
+            body: body.to_string(),
+        }
     }
 }

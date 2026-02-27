@@ -1,10 +1,12 @@
-use super::super::local_store::{DayliteContactCacheEntry, DayliteContactUrlCacheEntry};
+use super::super::local_store::{
+    DayliteContactCacheEntry, DayliteContactUrlCacheEntry, LocalStore,
+};
 use super::auth_flow::send_authenticated_json;
 use super::client::DayliteApiClient;
 use super::client::DayliteHttpMethod;
 use super::shared::{
     load_daylite_tokens, load_store_or_error, save_store_or_error, store_daylite_tokens,
-    DayliteApiError, DayliteApiErrorCode, DayliteSearchResult,
+    DayliteApiError, DayliteApiErrorCode, DayliteSearchResult, DayliteTokenState,
 };
 use chrono::{SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
@@ -114,10 +116,26 @@ pub async fn daylite_update_contact_ical_urls(
     let client = DayliteApiClient::new(&store.api_endpoints.daylite_base_url)?;
     let token_state = load_daylite_tokens(&store);
 
+    let (updated_contact, token_state) =
+        update_contact_ical_urls_core(&client, token_state, &mut store, &input).await?;
+
+    store_daylite_tokens(&mut store, &token_state);
+    store.daylite_cache.last_synced_at = Some(current_timestamp_iso8601());
+    save_store_or_error(app, store)?;
+
+    Ok(updated_contact)
+}
+
+async fn update_contact_ical_urls_core(
+    client: &DayliteApiClient,
+    token_state: DayliteTokenState,
+    store: &mut LocalStore,
+    input: &DayliteUpdateContactIcalUrlsInput,
+) -> Result<(PlanningContactRecord, DayliteTokenState), DayliteApiError> {
     let contact_id = parse_contact_id(&input.contact_reference)?;
     let contact_path = format!("/contacts/{contact_id}");
     let (current_contact, token_state) = send_authenticated_json::<DayliteContactSummary>(
-        &client,
+        client,
         token_state,
         DayliteHttpMethod::Get,
         &contact_path,
@@ -131,7 +149,7 @@ pub async fn daylite_update_contact_ical_urls(
         &input.absence_ical_url,
     );
     let (updated_contact, token_state) = send_authenticated_json::<DayliteContactSummary>(
-        &client,
+        client,
         token_state,
         DayliteHttpMethod::Patch,
         &contact_path,
@@ -156,15 +174,12 @@ pub async fn daylite_update_contact_ical_urls(
         cached_contacts.push(updated_contact.clone());
     }
 
-    store_daylite_tokens(&mut store, &token_state);
-    store.daylite_cache.last_synced_at = Some(current_timestamp_iso8601());
     store.daylite_cache.contacts = sort_contacts(filter_monteur_contacts(cached_contacts))
         .into_iter()
         .map(map_planning_contact_to_cache_entry)
         .collect();
-    save_store_or_error(app, store)?;
 
-    Ok(updated_contact)
+    Ok((updated_contact, token_state))
 }
 
 #[tauri::command]
@@ -417,10 +432,20 @@ fn normalize_non_empty(value: &str) -> Option<&str> {
 mod tests {
     use super::{
         filter_monteur_contacts, map_cached_contact, map_daylite_contact_summary,
-        merge_contact_ical_urls, parse_contact_id, sort_contacts, DayliteContactSummary,
-        DayliteContactUrl, PlanningContactRecord,
+        merge_contact_ical_urls, parse_contact_id, sort_contacts, update_contact_ical_urls_core,
+        DayliteContactSummary, DayliteContactUrl, DayliteUpdateContactIcalUrlsInput,
+        PlanningContactRecord,
     };
-    use crate::integrations::local_store::{DayliteContactCacheEntry, DayliteContactUrlCacheEntry};
+    use crate::integrations::daylite::client::{
+        BoxFuture, DayliteApiClient, DayliteHttpMethod, DayliteHttpRequest, DayliteHttpResponse,
+        DayliteHttpTransport,
+    };
+    use crate::integrations::daylite::shared::{DayliteApiError, DayliteTokenState};
+    use crate::integrations::local_store::{
+        DayliteContactCacheEntry, DayliteContactUrlCacheEntry, LocalStore,
+    };
+    use std::collections::VecDeque;
+    use std::sync::{Arc, Mutex};
 
     #[test]
     fn maps_daylite_contact_summary_to_planning_contact_record() {
@@ -585,5 +610,195 @@ mod tests {
             error.user_message,
             "Die Daylite-Kontaktreferenz ist ungültig."
         );
+    }
+
+    #[test]
+    fn update_ical_urls_fetches_merges_and_patches() {
+        tauri::async_runtime::block_on(async {
+            let get_response = mock_response(
+                200,
+                r#"{"self":"/v1/contacts/500","first_name":"Max","last_name":"M","urls":[{"label":"Website","url":"https://example.com"}]}"#,
+            );
+            let patch_response = mock_response(
+                200,
+                r#"{"self":"/v1/contacts/500","first_name":"Max","last_name":"M","category":"Monteur","urls":[{"label":"Website","url":"https://example.com"},{"label":"Einsatz iCal","url":"https://example.com/primary.ics"},{"label":"Abwesenheit iCal","url":"https://example.com/absence.ics"}]}"#,
+            );
+            let transport = MockTransport::new(vec![Ok(get_response), Ok(patch_response)]);
+            let client = DayliteApiClient::with_transport(Arc::new(transport.clone()));
+            let mut store = LocalStore::default();
+
+            let (contact, token_state) = update_contact_ical_urls_core(
+                &client,
+                DayliteTokenState {
+                    access_token: "token".to_string(),
+                    refresh_token: "refresh".to_string(),
+                    access_token_expires_at_ms: Some(u64::MAX),
+                },
+                &mut store,
+                &DayliteUpdateContactIcalUrlsInput {
+                    contact_reference: "/v1/contacts/500".to_string(),
+                    primary_ical_url: "https://example.com/primary.ics".to_string(),
+                    absence_ical_url: "https://example.com/absence.ics".to_string(),
+                },
+            )
+            .await
+            .expect("update should succeed");
+
+            assert_eq!(contact.reference, "/v1/contacts/500");
+            assert_eq!(token_state.access_token, "token");
+
+            let requests = transport.requests();
+            assert_eq!(requests.len(), 2);
+            assert_eq!(requests[0].method, DayliteHttpMethod::Get);
+            assert_eq!(requests[0].path, "/contacts/500");
+            assert_eq!(requests[1].method, DayliteHttpMethod::Patch);
+            assert_eq!(requests[1].path, "/contacts/500");
+
+            let patch_body = requests[1].body.as_ref().expect("PATCH should have body");
+            let urls = patch_body["urls"].as_array().expect("urls should be array");
+            assert_eq!(urls.len(), 3);
+        });
+    }
+
+    #[test]
+    fn update_ical_urls_updates_cache_for_monteur() {
+        tauri::async_runtime::block_on(async {
+            let get_response = mock_response(
+                200,
+                r#"{"self":"/v1/contacts/600","first_name":"Anna","last_name":"B","category":"Monteur","urls":[]}"#,
+            );
+            let patch_response = mock_response(
+                200,
+                r#"{"self":"/v1/contacts/600","first_name":"Anna","last_name":"B","category":"Monteur","urls":[{"label":"Einsatz iCal","url":"https://example.com/anna.ics"}]}"#,
+            );
+            let transport = MockTransport::new(vec![Ok(get_response), Ok(patch_response)]);
+            let client = DayliteApiClient::with_transport(Arc::new(transport));
+            let mut store = LocalStore::default();
+            store.daylite_cache.contacts = vec![DayliteContactCacheEntry {
+                reference: "/v1/contacts/600".to_string(),
+                full_name: Some("Anna B".to_string()),
+                nickname: None,
+                category: Some("Monteur".to_string()),
+                urls: vec![],
+            }];
+
+            let (contact, _) = update_contact_ical_urls_core(
+                &client,
+                DayliteTokenState {
+                    access_token: "token".to_string(),
+                    refresh_token: "refresh".to_string(),
+                    access_token_expires_at_ms: Some(u64::MAX),
+                },
+                &mut store,
+                &DayliteUpdateContactIcalUrlsInput {
+                    contact_reference: "/v1/contacts/600".to_string(),
+                    primary_ical_url: "https://example.com/anna.ics".to_string(),
+                    absence_ical_url: "".to_string(),
+                },
+            )
+            .await
+            .expect("update should succeed");
+
+            assert_eq!(contact.category, Some("Monteur".to_string()));
+            assert_eq!(store.daylite_cache.contacts.len(), 1);
+            assert_eq!(
+                store.daylite_cache.contacts[0].reference,
+                "/v1/contacts/600"
+            );
+            assert_eq!(store.daylite_cache.contacts[0].urls.len(), 1);
+        });
+    }
+
+    #[test]
+    fn update_ical_urls_removes_non_monteur_from_cache() {
+        tauri::async_runtime::block_on(async {
+            let get_response = mock_response(
+                200,
+                r#"{"self":"/v1/contacts/700","first_name":"Kai","last_name":"V","category":"Vertrieb","urls":[]}"#,
+            );
+            let patch_response = mock_response(
+                200,
+                r#"{"self":"/v1/contacts/700","first_name":"Kai","last_name":"V","category":"Vertrieb","urls":[]}"#,
+            );
+            let transport = MockTransport::new(vec![Ok(get_response), Ok(patch_response)]);
+            let client = DayliteApiClient::with_transport(Arc::new(transport));
+            let mut store = LocalStore::default();
+            store.daylite_cache.contacts = vec![DayliteContactCacheEntry {
+                reference: "/v1/contacts/700".to_string(),
+                full_name: Some("Kai V".to_string()),
+                nickname: None,
+                category: Some("Monteur".to_string()),
+                urls: vec![],
+            }];
+
+            let (contact, _) = update_contact_ical_urls_core(
+                &client,
+                DayliteTokenState {
+                    access_token: "token".to_string(),
+                    refresh_token: "refresh".to_string(),
+                    access_token_expires_at_ms: Some(u64::MAX),
+                },
+                &mut store,
+                &DayliteUpdateContactIcalUrlsInput {
+                    contact_reference: "/v1/contacts/700".to_string(),
+                    primary_ical_url: "".to_string(),
+                    absence_ical_url: "".to_string(),
+                },
+            )
+            .await
+            .expect("update should succeed");
+
+            assert_eq!(contact.category, Some("Vertrieb".to_string()));
+            assert!(store.daylite_cache.contacts.is_empty());
+        });
+    }
+
+    #[derive(Clone)]
+    struct MockTransport {
+        responses: Arc<Mutex<VecDeque<Result<DayliteHttpResponse, DayliteApiError>>>>,
+        requests: Arc<Mutex<Vec<DayliteHttpRequest>>>,
+    }
+
+    impl MockTransport {
+        fn new(responses: Vec<Result<DayliteHttpResponse, DayliteApiError>>) -> Self {
+            Self {
+                responses: Arc::new(Mutex::new(VecDeque::from(responses))),
+                requests: Arc::new(Mutex::new(Vec::new())),
+            }
+        }
+
+        fn requests(&self) -> Vec<DayliteHttpRequest> {
+            self.requests
+                .lock()
+                .expect("request lock should succeed")
+                .clone()
+        }
+    }
+
+    impl DayliteHttpTransport for MockTransport {
+        fn send<'a>(
+            &'a self,
+            request: DayliteHttpRequest,
+        ) -> BoxFuture<'a, Result<DayliteHttpResponse, DayliteApiError>> {
+            Box::pin(async move {
+                self.requests
+                    .lock()
+                    .expect("request lock should succeed")
+                    .push(request);
+
+                self.responses
+                    .lock()
+                    .expect("response lock should succeed")
+                    .pop_front()
+                    .expect("mock should contain enough responses")
+            })
+        }
+    }
+
+    fn mock_response(status: u16, body: &str) -> DayliteHttpResponse {
+        DayliteHttpResponse {
+            status,
+            body: body.to_string(),
+        }
     }
 }
