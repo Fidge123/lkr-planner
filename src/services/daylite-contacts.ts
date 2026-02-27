@@ -4,9 +4,12 @@ import {
 } from "../domain/planning";
 import {
   commands,
-  type DayliteApiError,
   type DayliteUpdateContactIcalUrlsInput,
 } from "../generated/tauri";
+import {
+  normalizeOptionalString,
+  readDayliteApiErrorMessage,
+} from "./daylite-service-helpers";
 
 export const DEFAULT_DAYLITE_CONTACT_CACHE_TTL_MS = 30_000;
 
@@ -101,7 +104,12 @@ export async function updateDayliteContactIcalUrls(
 ): Promise<DayliteContactRecord> {
   const result = await commands.dayliteUpdateContactIcalUrls(input);
   if (result.status === "error") {
-    throw new Error(readCommandErrorMessage(result.error));
+    throw new Error(
+      readDayliteApiErrorMessage(
+        result.error,
+        "Die Daten konnten nicht von Daylite geladen werden.",
+      ),
+    );
   }
 
   updateInMemoryContactCache(result.data);
@@ -111,7 +119,12 @@ export async function updateDayliteContactIcalUrls(
 async function fetchContacts(): Promise<DayliteContactRecord[]> {
   const result = await commands.dayliteListContacts();
   if (result.status === "error") {
-    throw new Error(readCommandErrorMessage(result.error));
+    throw new Error(
+      readDayliteApiErrorMessage(
+        result.error,
+        "Die Daten konnten nicht von Daylite geladen werden.",
+      ),
+    );
   }
 
   return result.data;
@@ -150,29 +163,6 @@ function sortContacts(
       getDayliteContactDisplayName(right),
     ),
   );
-}
-
-function normalizeOptionalString(
-  value: string | null | undefined,
-): string | undefined {
-  if (typeof value !== "string") {
-    return undefined;
-  }
-
-  const normalized = value.trim();
-  return normalized.length > 0 ? normalized : undefined;
-}
-
-function readCommandErrorMessage(error: DayliteApiError | string): string {
-  if (typeof error === "string") {
-    return error;
-  }
-
-  if (typeof error.userMessage === "string" && error.userMessage.length > 0) {
-    return error.userMessage;
-  }
-
-  return "Die Daten konnten nicht von Daylite geladen werden.";
 }
 
 function getErrorMessage(error: unknown): string {

@@ -1,8 +1,8 @@
+import { commands, type DayliteRefreshTokenRequest } from "../generated/tauri";
 import {
-  commands,
-  type DayliteApiError,
-  type DayliteRefreshTokenRequest,
-} from "../generated/tauri";
+  normalizeOptionalString,
+  readDayliteApiErrorMessage,
+} from "./daylite-service-helpers";
 
 export const DAYLITE_PERSONAL_TOKEN_URL =
   "https://www.marketcircle.com/account/oauth/authorize?client_id=com.marketcircle.sample&redirect_uri=https://api.marketcircle.net/v1/personal_token/auth_code&response_type=code";
@@ -43,7 +43,12 @@ export async function updateDayliteRefreshToken(
   });
 
   if (result.status === "error") {
-    throw new Error(readDayliteCommandErrorMessage(result.error));
+    throw new Error(
+      readDayliteApiErrorMessage(
+        result.error,
+        "Das Daylite-Refresh-Token konnte nicht gespeichert werden.",
+      ),
+    );
   }
 }
 
@@ -54,27 +59,4 @@ function normalizeBaseUrl(baseUrl: string | null | undefined): string {
   }
 
   return normalizedBaseUrl.replace(/\/+$/, "");
-}
-
-function normalizeOptionalString(
-  value: string | null | undefined,
-): string | undefined {
-  if (typeof value !== "string") {
-    return undefined;
-  }
-
-  const normalized = value.trim();
-  return normalized.length > 0 ? normalized : undefined;
-}
-
-function readDayliteCommandErrorMessage(error: DayliteApiError | string) {
-  if (typeof error === "string") {
-    return error;
-  }
-
-  if (typeof error.userMessage === "string" && error.userMessage.length > 0) {
-    return error.userMessage;
-  }
-
-  return "Das Daylite-Refresh-Token konnte nicht gespeichert werden.";
 }

@@ -1,5 +1,6 @@
 import type { DayliteProjectRecord } from "../domain/planning";
-import { commands, type DayliteApiError } from "../generated/tauri";
+import { commands } from "../generated/tauri";
+import { readDayliteApiErrorMessage } from "./daylite-service-helpers";
 
 export const DEFAULT_DAYLITE_PROJECT_CACHE_TTL_MS = 30_000;
 
@@ -63,22 +64,15 @@ export async function loadDayliteProjects({
 async function fetchProjects(): Promise<DayliteProjectRecord[]> {
   const result = await commands.dayliteListProjects();
   if (result.status === "error") {
-    throw new Error(readCommandErrorMessage(result.error));
+    throw new Error(
+      readDayliteApiErrorMessage(
+        result.error,
+        "Die Daten konnten nicht von Daylite geladen werden.",
+      ),
+    );
   }
 
   return result.data;
-}
-
-function readCommandErrorMessage(error: DayliteApiError | string): string {
-  if (typeof error === "string") {
-    return error;
-  }
-
-  if (typeof error.userMessage === "string" && error.userMessage.length > 0) {
-    return error.userMessage;
-  }
-
-  return "Die Daten konnten nicht von Daylite geladen werden.";
 }
 
 function getErrorMessage(error: unknown): string {
