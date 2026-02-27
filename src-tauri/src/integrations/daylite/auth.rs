@@ -12,7 +12,7 @@ pub async fn daylite_connect_refresh_token(
 ) -> Result<DayliteTokenSyncStatus, DayliteApiError> {
     let base_url = normalize_base_url(&request.base_url)?;
     let client = DayliteApiClient::new(&base_url)?;
-    let token_state = client.exchange_refresh_token(request.refresh_token).await?;
+    let token_state = client.refresh_tokens(request.refresh_token).await?;
 
     let mut store = load_store_or_error(app.clone())?;
     store.api_endpoints.daylite_base_url = base_url;

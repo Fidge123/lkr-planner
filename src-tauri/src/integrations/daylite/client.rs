@@ -31,13 +31,6 @@ impl DayliteApiClient {
         Self { transport }
     }
 
-    pub(super) async fn exchange_refresh_token(
-        &self,
-        refresh_token: String,
-    ) -> Result<DayliteTokenState, DayliteApiError> {
-        self.refresh_tokens(refresh_token).await
-    }
-
     pub(super) async fn list_projects(
         &self,
         token_state: DayliteTokenState,
@@ -226,7 +219,7 @@ impl DayliteApiClient {
         Ok(DayliteApiResponse { data, token_state })
     }
 
-    async fn refresh_tokens(
+    pub(super) async fn refresh_tokens(
         &self,
         refresh_token: String,
     ) -> Result<DayliteTokenState, DayliteApiError> {
