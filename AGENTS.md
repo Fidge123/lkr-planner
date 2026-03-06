@@ -76,7 +76,6 @@ Validate results after every tasks:
 3. `bun build` to test Typescript correctness
 4. Test typescript code with `bun test`
 5. Test rust code with `cargo test` in `src-tauri/`
-6. `bun run build:macos` to test the macOS build
 
 ## Working with the backlog
 

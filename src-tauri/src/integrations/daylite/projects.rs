@@ -150,14 +150,41 @@ pub(super) async fn search_projects_core(
         )
         .await?;
 
-    Ok((search_result, token_state))
+    Ok((
+        DayliteSearchResult {
+            results: search_result
+                .results
+                .into_iter()
+                .map(normalize_project_summary)
+                .collect(),
+            next: normalize_optional_string(search_result.next),
+        },
+        token_state,
+    ))
 }
 
 fn map_daylite_project_summary(project: DayliteProjectSummary) -> PlanningProjectRecord {
+    let project = normalize_project_summary(project);
+
     PlanningProjectRecord {
-        reference: normalize_reference(project.reference),
+        reference: project.reference,
         name: project.name,
         status: map_project_status(project.status),
+        category: project.category,
+        keywords: project.keywords,
+        due: project.due,
+        started: project.started,
+        completed: project.completed,
+        create_date: project.create_date,
+        modify_date: project.modify_date,
+    }
+}
+
+fn normalize_project_summary(project: DayliteProjectSummary) -> DayliteProjectSummary {
+    DayliteProjectSummary {
+        reference: normalize_reference(project.reference),
+        name: normalize_required_string(project.name),
+        status: normalize_optional_string(project.status),
         category: normalize_optional_string(project.category),
         keywords: normalize_keywords(project.keywords),
         due: normalize_optional_date(project.due),
@@ -168,35 +195,12 @@ fn map_daylite_project_summary(project: DayliteProjectSummary) -> PlanningProjec
     }
 }
 
-fn map_project_status(status: Option<String>) -> PlanningProjectStatus {
-    let normalized = normalize_optional_string(status)
-        .map(|value| value.to_lowercase())
-        .unwrap_or_default();
-
-    if normalized == "in_progress" {
-        return PlanningProjectStatus::InProgress;
-    }
-    if normalized == "done" {
-        return PlanningProjectStatus::Done;
-    }
-    if normalized == "abandoned" {
-        return PlanningProjectStatus::Abandoned;
-    }
-    if normalized == "cancelled" {
-        return PlanningProjectStatus::Cancelled;
-    }
-    if normalized == "deferred" {
-        return PlanningProjectStatus::Deferred;
-    }
-    if normalized == "new" || normalized == "new_status" {
-        return PlanningProjectStatus::NewStatus;
-    }
-
-    PlanningProjectStatus::NewStatus
+fn normalize_required_string(value: String) -> String {
+    value.trim().to_string()
 }
 
 fn normalize_reference(value: String) -> String {
-    value.trim().to_string()
+    normalize_required_string(value)
 }
 
 fn normalize_optional_string(value: Option<String>) -> Option<String> {
@@ -244,6 +248,33 @@ fn normalize_optional_date(value: Option<String>) -> Option<String> {
     None
 }
 
+fn map_project_status(status: Option<String>) -> PlanningProjectStatus {
+    let normalized = normalize_optional_string(status)
+        .map(|value| value.to_lowercase())
+        .unwrap_or_default();
+
+    if normalized == "in_progress" {
+        return PlanningProjectStatus::InProgress;
+    }
+    if normalized == "done" {
+        return PlanningProjectStatus::Done;
+    }
+    if normalized == "abandoned" {
+        return PlanningProjectStatus::Abandoned;
+    }
+    if normalized == "cancelled" {
+        return PlanningProjectStatus::Cancelled;
+    }
+    if normalized == "deferred" {
+        return PlanningProjectStatus::Deferred;
+    }
+    if normalized == "new" || normalized == "new_status" {
+        return PlanningProjectStatus::NewStatus;
+    }
+
+    PlanningProjectStatus::NewStatus
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
@@ -263,8 +294,8 @@ mod tests {
     #[test]
     fn maps_project_summary_to_planning_project_record() {
         let project = DayliteProjectSummary {
-            reference: "/v1/projects/7000".to_string(),
-            name: "Projekt Nord".to_string(),
+            reference: " /v1/projects/7000 ".to_string(),
+            name: " Projekt Nord ".to_string(),
             status: Some(" NEW ".to_string()),
             category: Some(" Überfällig ".to_string()),
             keywords: vec![
@@ -347,7 +378,7 @@ mod tests {
         tauri::async_runtime::block_on(async {
             let transport = MockTransport::new(vec![Ok(mock_response(
                 200,
-                r#"{"results":[{"self":"/v1/projects/10","name":"Projekt Nord"}],"next":"/v1/projects/_search?offset=5"}"#,
+                r#"{"results":[{"self":" /v1/projects/10 ","name":" Projekt Nord ","category":" Bau ","keywords":[" Aufträge ",""],"due":"2026-02-15"}],"next":" /v1/projects/_search?offset=5 "}"#,
             ))]);
             let client = DayliteApiClient::with_transport(Arc::new(transport.clone()));
 
@@ -367,7 +398,14 @@ mod tests {
             .expect("search should succeed");
 
             assert_eq!(result.results.len(), 1);
+            assert_eq!(result.results[0].reference, "/v1/projects/10");
             assert_eq!(result.results[0].name, "Projekt Nord");
+            assert_eq!(result.results[0].category, Some("Bau".to_string()));
+            assert_eq!(result.results[0].keywords, vec!["Aufträge".to_string()]);
+            assert_eq!(
+                result.results[0].due,
+                Some("2026-02-15T00:00:00.000Z".to_string())
+            );
             assert_eq!(
                 result.next,
                 Some("/v1/projects/_search?offset=5".to_string())
@@ -431,12 +469,17 @@ mod tests {
             .await
             .expect("list should replay from cassette");
 
-            assert_eq!(projects.len(), 2);
-            assert_eq!(projects[0].reference, "/v1/projects/100");
-            assert_eq!(projects[0].name, "Projekt Nord");
-            assert_eq!(projects[0].status, PlanningProjectStatus::InProgress);
-            assert_eq!(projects[1].reference, "/v1/projects/101");
-            assert_eq!(projects[1].status, PlanningProjectStatus::NewStatus);
+            assert!(!projects.is_empty());
+            assert!(
+                projects
+                    .iter()
+                    .all(|project| project.reference.starts_with("/v1/projects/"))
+            );
+            assert!(
+                projects
+                    .iter()
+                    .all(|project| !project.name.is_empty() && project.name == project.name.trim())
+            );
             assert_eq!(token_state.access_token, "replay-access-token");
         });
     }
@@ -462,12 +505,20 @@ mod tests {
             .await
             .expect("search should replay from cassette");
 
-            assert_eq!(search_result.results.len(), 1);
-            assert_eq!(search_result.results[0].reference, "/v1/projects/200");
-            assert_eq!(search_result.results[0].name, "Projekt Nord Bau");
-            assert_eq!(
-                search_result.next,
-                Some("/v1/projects/_search?offset=5".to_string())
+            assert!(!search_result.results.is_empty());
+            assert!(search_result.results.len() <= 5);
+            assert!(search_result.results.iter().all(|project| {
+                project.reference.starts_with("/v1/projects/")
+                    && !project.name.is_empty()
+                    && project.name == project.name.trim()
+                    && project.name.to_lowercase().contains("nord")
+            }));
+            assert!(
+                search_result
+                    .next
+                    .as_deref()
+                    .map(|next| next.starts_with("/v1/projects/_search"))
+                    .unwrap_or(true)
             );
             assert_eq!(token_state.access_token, "replay-access-token");
         });

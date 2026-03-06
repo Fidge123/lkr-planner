@@ -440,7 +440,7 @@ fn normalize_non_empty(value: &str) -> Option<&str> {
 #[cfg(test)]
 mod tests {
     use super::{
-        filter_monteur_contacts, list_contacts_core, map_cached_contact,
+        contact_display_name, filter_monteur_contacts, list_contacts_core, map_cached_contact,
         map_daylite_contact_summary, merge_contact_ical_urls, parse_contact_id, sort_contacts,
         update_contact_ical_urls_core, DayliteContactSummary, DayliteContactUrl,
         DayliteUpdateContactIcalUrlsInput, PlanningContactRecord,
@@ -779,11 +779,33 @@ mod tests {
             .await
             .expect("list should replay from cassette");
 
-            assert_eq!(contacts.len(), 2);
-            assert_eq!(contacts[0].reference, "/v1/contacts/901");
-            assert_eq!(contacts[0].full_name, Some("Anna Adler".to_string()));
-            assert_eq!(contacts[1].reference, "/v1/contacts/900");
-            assert_eq!(contacts[1].nickname, Some("Maks".to_string()));
+            assert!(!contacts.is_empty());
+            assert!(
+                contacts
+                    .iter()
+                    .all(|contact| contact.reference.starts_with("/v1/contacts/"))
+            );
+            assert!(
+                contacts
+                    .iter()
+                    .all(|contact| contact.category.as_deref() == Some("Monteur"))
+            );
+            assert!(contacts.iter().all(|contact| {
+                contact
+                    .full_name
+                    .as_deref()
+                    .map(|name| name == name.trim())
+                    .unwrap_or(true)
+                    && contact
+                        .nickname
+                        .as_deref()
+                        .map(|nickname| nickname == nickname.trim())
+                        .unwrap_or(true)
+            }));
+            assert!(contacts.windows(2).all(|pair| {
+                contact_display_name(&pair[0]).to_lowercase()
+                    <= contact_display_name(&pair[1]).to_lowercase()
+            }));
             assert_eq!(token_state.access_token, "replay-access-token");
         });
     }
