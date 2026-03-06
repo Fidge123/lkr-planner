@@ -437,6 +437,22 @@ mod tests {
         });
     }
 
+    #[test]
+    fn refresh_tokens_replays_vcr_cassette() {
+        tauri::async_runtime::block_on(async {
+            let client = DayliteApiClient::with_replay_cassette("daylite-refresh-tokens.json")
+                .expect("replay client should be created");
+
+            let token_state = refresh_tokens(&client, "dummy-refresh-token".to_string())
+                .await
+                .expect("refresh should replay from cassette");
+
+            assert_eq!(token_state.access_token, "replayed-access-token");
+            assert_eq!(token_state.refresh_token, "replayed-refresh-token");
+            assert!(token_state.access_token_expires_at_ms.is_some());
+        });
+    }
+
     #[derive(Clone)]
     struct MockTransport {
         responses: Arc<

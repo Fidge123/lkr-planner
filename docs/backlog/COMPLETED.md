@@ -59,10 +59,14 @@ It is intended for understanding past decisions, not for detailed task specifica
 - Status: Completed (2026-02-15)
 - Summary: Added a Daylite project overview section below the planning table using existing in-memory data without extra backend requests.
 
-# BL-011: Mapping Rules Daylite Project -> Planradar Template
+### BL-039: Implement Secure Record & Replay HTTP Testing Infrastructure
+- Status: Completed (2026-03-06)
+- Summary: Added Rust cassette replay/record support for the Daylite HTTP transport, checked in a replay fixture under `tests/cassettes`, and wired repository/CI git-crypt protection for cassette files.
+
+### BL-011: Mapping Rules Daylite Project -> Planradar Template
 - Status: Abandoned (2026-02-20)
 - Summary: Mapping between Daylite and Planradar templates was abandoned as it was not required for the initial release.
 
-# BL-018: Manual Week-Based Planradar Trigger
+### BL-018: Manual Week-Based Planradar Trigger
 - Status: Abandoned (2026-02-20)
 - Summary: No week-based Planradar trigger was added as it was not required for the initial release.
