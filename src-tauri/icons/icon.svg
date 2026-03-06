@@ -1,24 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
-  <g>
-    <title>App Icon (w/ Shadow)</title>
-    <g>
-      <title>Background (Masked)</title>
-      <path style="stroke-width: 3px; fill: #4A90E2;"
-        d="M 100 724 L 100 300 C 100 185.001 170 99.995 300.026 100 L 724 99.995 C 854 100 924 185.001 924 300 L 924 724 C 924 839.001 854 923.995 724 924 L 300.026 924 C 170 924 100 839.001 100 724 Z">
-        <title>Icon Shape</title>
-      </path>
-    </g>
-  </g>
-
-  <text
-    x="512"
-    y="512"
-    font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif"
-    font-size="620"
-    font-weight="700"
-    fill="white"
-    text-anchor="middle"
-    dominant-baseline="central"
-  >R</text>
+  <title>LKR Planner App Icon</title>
+  <path fill="#4A90E2" d="M 100 724 L 100 300 C 100 185.001 170 99.995 300.026 100 L 724 99.995 C 854 100 924 185.001 924 300 L 924 724 C 924 839.001 854 923.995 724 924 L 300.026 924 C 170 924 100 839.001 100 724 Z" />
+  <path fill="#FFFFFF" data-font="HelveticaNeue-Bold" d="M226 391 L226 592 L398 592 Q452 592 479 568.5 Q506 545 506 493 Q506 439 479 415 Q452 391 398 391 Z M69 714 L69 0 L226 0 L226 279 L383 279 Q442 279 468 253 Q494 227 502 171 Q508 128 511 81 Q514 34 527 0 L684 0 Q673 15 667.5 36.5 Q662 58 659.5 82 Q657 106 656 129 Q655 152 654 169 Q652 196 646.5 223 Q641 250 629 272.5 Q617 295 598 311.5 Q579 328 550 336 L550 338 Q610 362 636.5 408 Q663 454 663 517 Q663 558 648.5 593.5 Q634 629 606.5 656 Q579 683 540.5 698.5 Q502 714 454 714 Z" transform="translate(275.765 736) scale(0.627 -0.627)" />
 </svg>
