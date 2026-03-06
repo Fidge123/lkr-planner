@@ -33,6 +33,10 @@ impl RecordReplayConfig {
         }
     }
 
+    pub(crate) fn from_env(cassette_path: PathBuf) -> Self {
+        Self::new(cassette_path, VcrMode::from_env())
+    }
+
     pub(crate) fn mode(&self) -> VcrMode {
         self.mode
     }

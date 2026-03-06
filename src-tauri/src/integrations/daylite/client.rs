@@ -278,10 +278,14 @@ mod tests {
 
     #[test]
     fn records_sanitized_cassette_in_record_mode() {
+        let _guard = env_lock().lock().expect("env lock should not be poisoned");
         let cassette_path = cassette_path("daylite-record-mode-generated.json");
         remove_cassette_if_present(&cassette_path);
+        unsafe {
+            std::env::set_var("VCR_MODE", "record");
+        }
 
-        let config = RecordReplayConfig::new(cassette_path.clone(), VcrMode::Record);
+        let config = RecordReplayConfig::from_env(cassette_path.clone());
         config
             .record(RecordedInteraction {
                 request: to_recorded_request(&DayliteHttpRequest {
@@ -305,14 +309,21 @@ mod tests {
         assert!(!cassette.contains("top-secret-token"));
 
         remove_cassette_if_present(&cassette_path);
+        unsafe {
+            std::env::remove_var("VCR_MODE");
+        }
     }
 
     #[test]
     fn replays_recorded_response_without_network_call() {
+        let _guard = env_lock().lock().expect("env lock should not be poisoned");
         let cassette_path = cassette_path("daylite-client-replay.json");
+        unsafe {
+            std::env::remove_var("VCR_MODE");
+        }
         let transport = ReqwestTransport::new_with_record_replay(
             "http://127.0.0.1:9",
-            RecordReplayConfig::new(cassette_path, VcrMode::Replay),
+            RecordReplayConfig::from_env(cassette_path),
         )
         .expect("replay transport should be created");
         let request = DayliteHttpRequest {

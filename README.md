@@ -82,6 +82,66 @@ bun format:check
 bun format
 ```
 
+### HTTP Cassette Tests
+
+Rust HTTP cassette tests use JSON fixtures in `tests/cassettes/`.
+Replay mode is the default.
+Record mode is enabled with `VCR_MODE=record`.
+
+#### Dependencies
+
+- `git-crypt` must be installed locally to unlock encrypted cassette files.
+- CI also requires `git-crypt` plus a repository secret named `GIT_CRYPT_KEY_B64`.
+
+```bash
+# macOS
+brew install git-crypt
+
+git-crypt init
+```
+
+If your checkout is locked, unlock cassette files before running Rust tests:
+
+```bash
+git-crypt unlock /path/to/git-crypt-key
+```
+
+#### Run Replay Mode
+
+```bash
+# Full Rust suite (default replay mode)
+cargo test --manifest-path src-tauri/Cargo.toml
+
+# Replay-only cassette test
+cargo test --manifest-path src-tauri/Cargo.toml \
+  integrations::daylite::client::tests::replays_recorded_response_without_network_call
+```
+
+#### Run Record Mode
+
+```bash
+VCR_MODE=record cargo test --manifest-path src-tauri/Cargo.toml \
+  integrations::daylite::client::tests::records_sanitized_cassette_in_record_mode
+```
+
+When adding or refreshing committed cassette files, keep them under `tests/cassettes/` so `.gitattributes` applies `git-crypt` automatically.
+
+#### Create the CI Secret
+
+Create a symmetric git-crypt key, base64-encode it, and store the encoded value as the GitHub Actions repository secret `GIT_CRYPT_KEY_B64`:
+
+```bash
+git-crypt export-key /tmp/lkr-planner-git-crypt.key
+base64 < /tmp/lkr-planner-git-crypt.key | tr -d '\n'
+rm /tmp/lkr-planner-git-crypt.key
+```
+
+On macOS, instead of printing the encoded value to stdout, you can copy it directly into the clipboard before deleting the key file:
+
+```bash
+base64 < /tmp/lkr-planner-git-crypt.key | tr -d '\n' | pbcopy
+```
+
 ### Running the Application
 
 ```bash
