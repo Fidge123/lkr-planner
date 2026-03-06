@@ -27,6 +27,26 @@ impl DayliteApiClient {
         Self { transport }
     }
 
+    #[cfg(test)]
+    pub(super) fn with_replay_cassette(cassette_file_name: &str) -> Result<Self, DayliteApiError> {
+        Self::with_cassette("http://127.0.0.1:9", cassette_file_name, VcrMode::Replay)
+    }
+
+    #[cfg(test)]
+    pub(super) fn with_env_cassette(
+        base_url: &str,
+        cassette_file_name: &str,
+    ) -> Result<Self, DayliteApiError> {
+        let transport = ReqwestTransport::new_with_record_replay(
+            base_url,
+            RecordReplayConfig::from_env(cassette_path_for_test(cassette_file_name)),
+        )?;
+
+        Ok(Self {
+            transport: Arc::new(transport),
+        })
+    }
+
     pub(super) async fn send_request(
         &self,
         method: DayliteHttpMethod,
@@ -44,6 +64,22 @@ impl DayliteApiClient {
                 access_token,
             })
             .await
+    }
+
+    #[cfg(test)]
+    fn with_cassette(
+        base_url: &str,
+        cassette_file_name: &str,
+        mode: VcrMode,
+    ) -> Result<Self, DayliteApiError> {
+        let transport = ReqwestTransport::new_with_record_replay(
+            base_url,
+            RecordReplayConfig::new(cassette_path_for_test(cassette_file_name), mode),
+        )?;
+
+        Ok(Self {
+            transport: Arc::new(transport),
+        })
     }
 }
 
@@ -269,6 +305,13 @@ fn to_recorded_request(request: &DayliteHttpRequest) -> RecordedRequest {
 }
 
 #[cfg(test)]
+fn cassette_path_for_test(file_name: &str) -> std::path::PathBuf {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../tests/cassettes")
+        .join(file_name)
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use std::fs;
@@ -366,9 +409,7 @@ mod tests {
     }
 
     fn cassette_path(file_name: &str) -> PathBuf {
-        Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../tests/cassettes")
-            .join(file_name)
+        cassette_path_for_test(file_name)
     }
 
     fn remove_cassette_if_present(path: &Path) {

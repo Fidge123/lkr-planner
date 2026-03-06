@@ -96,9 +96,10 @@ Record mode is enabled with `VCR_MODE=record`.
 ```bash
 # macOS
 brew install git-crypt
-
-git-crypt init
 ```
+
+The repository is already configured for `git-crypt`.
+Most contributors only need to install it and unlock the checkout.
 
 If your checkout is locked, unlock cassette files before running Rust tests:
 
@@ -125,6 +126,78 @@ VCR_MODE=record cargo test --manifest-path src-tauri/Cargo.toml \
 ```
 
 When adding or refreshing committed cassette files, keep them under `tests/cassettes/` so `.gitattributes` applies `git-crypt` automatically.
+
+#### Record Live Daylite Cassettes
+
+The live-record harness is an ignored Rust test in [recording_harness.rs](/Users/flori/dev/lkr-planner/src-tauri/src/integrations/daylite/recording_harness.rs#L74).
+It writes the standard Daylite cassette files in `tests/cassettes/` using the real API.
+
+Required environment variables:
+
+- `VCR_MODE=record`
+- `DAYLITE_BASE_URL`
+- `DAYLITE_REFRESH_TOKEN`
+- `DAYLITE_VCR_PROJECT_SEARCH_TERM`
+
+Optional environment variables:
+
+- `DAYLITE_VCR_SCOPE=readonly|all`
+- `DAYLITE_VCR_CONTACT_REFERENCE`
+- `DAYLITE_VCR_PRIMARY_ICAL_URL`
+- `DAYLITE_VCR_ABSENCE_ICAL_URL`
+
+`DAYLITE_VCR_SCOPE` defaults to `readonly`.
+That records only the read-only cassettes:
+
+- `daylite-refresh-tokens.json`
+- `daylite-list-projects.json`
+- `daylite-search-projects.json`
+- `daylite-list-contacts.json`
+
+Use `DAYLITE_VCR_SCOPE=all` only when you intentionally want to refresh the mutating cassette `daylite-update-contact-ical-urls.json`.
+For that mode you must also provide `DAYLITE_VCR_CONTACT_REFERENCE`, `DAYLITE_VCR_PRIMARY_ICAL_URL`, and `DAYLITE_VCR_ABSENCE_ICAL_URL`.
+
+Read-only recording example:
+
+```bash
+VCR_MODE=record \
+DAYLITE_VCR_SCOPE=readonly \
+DAYLITE_BASE_URL="https://app.daylite.app/api/v1" \
+DAYLITE_REFRESH_TOKEN="..." \
+DAYLITE_VCR_PROJECT_SEARCH_TERM="Nord" \
+cargo test --manifest-path src-tauri/Cargo.toml \
+  record_daylite_cassettes_from_live_api -- --ignored --nocapture
+```
+
+Record all cassettes, including the live contact PATCH cassette:
+
+```bash
+VCR_MODE=record \
+DAYLITE_VCR_SCOPE=all \
+DAYLITE_BASE_URL="https://app.daylite.app/api/v1" \
+DAYLITE_REFRESH_TOKEN="..." \
+DAYLITE_VCR_PROJECT_SEARCH_TERM="Nord" \
+DAYLITE_VCR_CONTACT_REFERENCE="/v1/contacts/500" \
+DAYLITE_VCR_PRIMARY_ICAL_URL="https://example.com/primary.ics" \
+DAYLITE_VCR_ABSENCE_ICAL_URL="https://example.com/absence.ics" \
+cargo test --manifest-path src-tauri/Cargo.toml \
+  record_daylite_cassettes_from_live_api -- --ignored --nocapture
+```
+
+After recording:
+
+1. Inspect the updated cassette JSON and confirm no `Authorization`, `Cookie`, or `x-api-key` values were written.
+2. Replay the full Rust suite without `VCR_MODE`:
+
+```bash
+cargo test --manifest-path src-tauri/Cargo.toml
+```
+
+3. Confirm Git still treats the fixtures as encrypted:
+
+```bash
+git-crypt status -e tests/cassettes
+```
 
 #### Create the CI Secret
 
