@@ -25,13 +25,12 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - name: Verify cassettes are encrypted before unlock
+        run: bash scripts/assert-cassette-encrypted.sh --encrypted tests/cassettes
+
       - name: Install git-crypt
         if: ${{ secrets.GIT_CRYPT_KEY_B64 != '' }}
         run: brew install git-crypt
-
-      - name: Verify encrypted cassette checkout
-        if: ${{ secrets.GIT_CRYPT_KEY_B64 != '' }}
-        run: bash scripts/assert-cassette-encrypted.sh tests/cassettes/daylite-client-replay.json
 
       - name: Unlock git-crypt cassettes
         if: ${{ secrets.GIT_CRYPT_KEY_B64 != '' }}
@@ -46,6 +45,10 @@ jobs:
           fi
           git-crypt unlock "$temp_key"
           rm -f "$temp_key"
+
+      - name: Verify cassettes are readable after unlock
+        if: ${{ secrets.GIT_CRYPT_KEY_B64 != '' }}
+        run: bash scripts/assert-cassette-encrypted.sh --decrypted tests/cassettes
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
