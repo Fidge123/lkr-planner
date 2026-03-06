@@ -1,0 +1,1 @@
+tests/cassettes/** filter=git-crypt diff=git-crypt

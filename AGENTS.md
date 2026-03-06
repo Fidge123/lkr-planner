@@ -69,10 +69,14 @@ interface Props {
 
 ## Development Workflow
 
-1. Use `bun tauri dev` for development server
-2. To bundle the macOS app use `bun build:macos`
-3. `bun lint` and `bun format` for code quality
-4. Test with `bun test` before committing
+Validate results after every tasks:
+
+1. `bun lint` for code quality and formatting
+2. `cargo check` in `src-tauri/` to test Rust correctness
+3. `bun build` to test Typescript correctness
+4. Test typescript code with `bun test`
+5. Test rust code with `cargo test` in `src-tauri/`
+6. `bun run build:macos` to test the macOS build
 
 ## Working with the backlog
 

@@ -1,4 +1,8 @@
 use super::shared::{normalize_base_url, DayliteApiError, DayliteApiErrorCode};
+#[cfg(test)]
+use crate::integrations::http_record_replay::{
+    RecordReplayConfig, RecordedInteraction, RecordedRequest, RecordedResponse, VcrMode,
+};
 use serde_json::Value;
 use std::future::Future;
 use std::pin::Pin;
@@ -68,7 +72,7 @@ pub(super) struct DayliteHttpRequest {
     pub access_token: Option<String>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct DayliteHttpResponse {
     pub status: u16,
     pub body: String,
@@ -78,6 +82,8 @@ pub(super) struct DayliteHttpResponse {
 struct ReqwestTransport {
     base_url: String,
     http_client: reqwest::Client,
+    #[cfg(test)]
+    record_replay: Option<RecordReplayConfig>,
 }
 
 impl ReqwestTransport {
@@ -96,7 +102,19 @@ impl ReqwestTransport {
         Ok(Self {
             base_url: normalized_base_url,
             http_client,
+            #[cfg(test)]
+            record_replay: None,
         })
+    }
+
+    #[cfg(test)]
+    fn new_with_record_replay(
+        base_url: &str,
+        record_replay: RecordReplayConfig,
+    ) -> Result<Self, DayliteApiError> {
+        let mut transport = Self::new(base_url)?;
+        transport.record_replay = Some(record_replay);
+        Ok(transport)
     }
 }
 
@@ -106,6 +124,51 @@ impl DayliteHttpTransport for ReqwestTransport {
         request: DayliteHttpRequest,
     ) -> BoxFuture<'a, Result<DayliteHttpResponse, DayliteApiError>> {
         Box::pin(async move {
+            #[cfg(test)]
+            let recorded_request = self
+                .record_replay
+                .as_ref()
+                .map(|_| to_recorded_request(&request));
+
+            #[cfg(test)]
+            if let Some(record_replay) = &self.record_replay {
+                if record_replay.mode() == VcrMode::Replay {
+                    let response = record_replay
+                        .replay(
+                            recorded_request
+                                .as_ref()
+                                .expect("recorded request should exist"),
+                        )
+                        .map_err(|error| DayliteApiError {
+                            code: DayliteApiErrorCode::RequestFailed,
+                            http_status: None,
+                            user_message:
+                                "Die Testkassette fuer Daylite konnte nicht geladen werden."
+                                    .to_string(),
+                            technical_message: format!(
+                                "Cassette replay for {} failed: {error}",
+                                request.path
+                            ),
+                        })?
+                        .ok_or_else(|| DayliteApiError {
+                            code: DayliteApiErrorCode::RequestFailed,
+                            http_status: None,
+                            user_message: "Die passende Daylite-Testkassette wurde nicht gefunden."
+                                .to_string(),
+                            technical_message: format!(
+                                "No cassette interaction matched {} {}",
+                                request.method.as_str(),
+                                request.path
+                            ),
+                        })?;
+
+                    return Ok(DayliteHttpResponse {
+                        status: response.status,
+                        body: response.body,
+                    });
+                }
+            }
+
             let mut url = reqwest::Url::parse(&format!("{}{}", self.base_url, request.path))
                 .map_err(|error| DayliteApiError {
                     code: DayliteApiErrorCode::InvalidConfiguration,
@@ -154,7 +217,155 @@ impl DayliteHttpTransport for ReqwestTransport {
                 technical_message: format!("Antworttext konnte nicht gelesen werden: {error}"),
             })?;
 
+            #[cfg(test)]
+            if let Some(record_replay) = &self.record_replay {
+                if record_replay.mode() == VcrMode::Record {
+                    record_replay
+                        .record(RecordedInteraction {
+                            request: recorded_request.expect("recorded request should exist"),
+                            response: RecordedResponse {
+                                status,
+                                body: body.clone(),
+                            },
+                        })
+                        .map_err(|error| DayliteApiError {
+                            code: DayliteApiErrorCode::RequestFailed,
+                            http_status: None,
+                            user_message:
+                                "Die Daylite-Testkassette konnte nicht gespeichert werden."
+                                    .to_string(),
+                            technical_message: format!(
+                                "Cassette recording for {} failed: {error}",
+                                request.path
+                            ),
+                        })?;
+                }
+            }
+
             Ok(DayliteHttpResponse { status, body })
         })
+    }
+}
+
+#[cfg(test)]
+impl DayliteHttpMethod {
+    fn as_str(&self) -> &'static str {
+        match self {
+            Self::Get => "GET",
+            Self::Post => "POST",
+            Self::Patch => "PATCH",
+        }
+    }
+}
+
+#[cfg(test)]
+fn to_recorded_request(request: &DayliteHttpRequest) -> RecordedRequest {
+    RecordedRequest {
+        method: request.method.as_str().to_string(),
+        path: request.path.clone(),
+        query: request.query.clone(),
+        body: request.body.clone(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use std::path::{Path, PathBuf};
+    use std::sync::{Mutex, OnceLock};
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn records_sanitized_cassette_in_record_mode() {
+        let cassette_path = cassette_path("daylite-record-mode-generated.json");
+        remove_cassette_if_present(&cassette_path);
+
+        let config = RecordReplayConfig::new(cassette_path.clone(), VcrMode::Record);
+        config
+            .record(RecordedInteraction {
+                request: to_recorded_request(&DayliteHttpRequest {
+                    method: DayliteHttpMethod::Get,
+                    path: "/projects".to_string(),
+                    query: vec![("full-records".to_string(), "true".to_string())],
+                    body: None,
+                    access_token: Some("top-secret-token".to_string()),
+                }),
+                response: RecordedResponse {
+                    status: 200,
+                    body: r#"{"data":[{"name":"Recorded Project"}]}"#.to_string(),
+                },
+            })
+            .expect("cassette should be written in record mode");
+
+        let cassette = fs::read_to_string(&cassette_path).expect("cassette should be written");
+        assert!(!cassette.contains("Authorization"));
+        assert!(!cassette.contains("Cookie"));
+        assert!(!cassette.contains("x-api-key"));
+        assert!(!cassette.contains("top-secret-token"));
+
+        remove_cassette_if_present(&cassette_path);
+    }
+
+    #[test]
+    fn replays_recorded_response_without_network_call() {
+        let cassette_path = cassette_path("daylite-client-replay.json");
+        let transport = ReqwestTransport::new_with_record_replay(
+            "http://127.0.0.1:9",
+            RecordReplayConfig::new(cassette_path, VcrMode::Replay),
+        )
+        .expect("replay transport should be created");
+        let request = DayliteHttpRequest {
+            method: DayliteHttpMethod::Get,
+            path: "/projects".to_string(),
+            query: vec![("full-records".to_string(), "true".to_string())],
+            body: None,
+            access_token: Some("ignored-in-replay".to_string()),
+        };
+
+        let started_at = Instant::now();
+        let first = tauri::async_runtime::block_on(async { transport.send(request.clone()).await })
+            .expect("first replay should succeed");
+        let second = tauri::async_runtime::block_on(async { transport.send(request).await })
+            .expect("second replay should succeed");
+
+        assert_eq!(first.status, 200);
+        assert_eq!(first, second);
+        assert!(started_at.elapsed() < Duration::from_millis(200));
+    }
+
+    #[test]
+    fn derives_vcr_mode_from_environment() {
+        let _guard = env_lock().lock().expect("env lock should not be poisoned");
+
+        unsafe {
+            std::env::set_var("VCR_MODE", "record");
+        }
+        assert_eq!(VcrMode::from_env(), VcrMode::Record);
+
+        unsafe {
+            std::env::set_var("VCR_MODE", "unexpected");
+        }
+        assert_eq!(VcrMode::from_env(), VcrMode::Replay);
+
+        unsafe {
+            std::env::remove_var("VCR_MODE");
+        }
+        assert_eq!(VcrMode::from_env(), VcrMode::Replay);
+    }
+
+    fn cassette_path(file_name: &str) -> PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../tests/cassettes")
+            .join(file_name)
+    }
+
+    fn remove_cassette_if_present(path: &Path) {
+        let _ = fs::remove_file(path);
+    }
+
+    fn env_lock() -> &'static Mutex<()> {
+        static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        ENV_LOCK.get_or_init(|| Mutex::new(()))
     }
 }

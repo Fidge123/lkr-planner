@@ -11,4 +11,6 @@
 /// - Each integration exposes Tauri commands for the frontend service layer
 pub mod daylite;
 pub mod health;
+#[cfg(test)]
+pub(crate) mod http_record_replay;
 pub mod local_store;

@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "interactions": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/projects",
+        "query": [["full-records", "true"]],
+        "body": null
+      },
+      "response": {
+        "status": 200,
+        "body": "{\"data\":[{\"name\":\"Replayed Project\"}]}"
+      }
+    }
+  ]
+}
