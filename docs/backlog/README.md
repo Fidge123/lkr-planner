@@ -36,3 +36,9 @@ This epic defines the core planning user flow: assignment modal behavior, cell i
 Large items were split into smaller BLIs to reduce delivery risk.
 
 Folder: `backlog/epic-06-planning-logic-and-calendar-sync`
+
+### EPIC 7: Engineering Excellence
+
+This epic covers topics regarding testing, security and code quality.
+
+Folder: `backlog/epic-07-engineering-excellence`

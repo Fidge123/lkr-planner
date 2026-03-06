@@ -100,7 +100,7 @@ pub async fn daylite_search_projects(
     Ok(search_result)
 }
 
-async fn list_projects_core(
+pub(super) async fn list_projects_core(
     client: &DayliteApiClient,
     token_state: DayliteTokenState,
 ) -> Result<(Vec<PlanningProjectRecord>, DayliteTokenState), DayliteApiError> {
@@ -124,7 +124,7 @@ async fn list_projects_core(
     Ok((projects, token_state))
 }
 
-async fn search_projects_core(
+pub(super) async fn search_projects_core(
     client: &DayliteApiClient,
     token_state: DayliteTokenState,
     input: &DayliteSearchInput,
@@ -411,6 +411,65 @@ mod tests {
             assert_eq!(token_state.access_token, "new-at");
             assert_eq!(token_state.refresh_token, "new-rt");
             assert!(token_state.access_token_expires_at_ms.is_some());
+        });
+    }
+
+    #[test]
+    fn list_projects_replays_vcr_cassette() {
+        tauri::async_runtime::block_on(async {
+            let client = DayliteApiClient::with_replay_cassette("daylite-list-projects.json")
+                .expect("replay client should be created");
+
+            let (projects, token_state) = list_projects_core(
+                &client,
+                DayliteTokenState {
+                    access_token: "replay-access-token".to_string(),
+                    refresh_token: "replay-refresh-token".to_string(),
+                    access_token_expires_at_ms: Some(u64::MAX),
+                },
+            )
+            .await
+            .expect("list should replay from cassette");
+
+            assert_eq!(projects.len(), 2);
+            assert_eq!(projects[0].reference, "/v1/projects/100");
+            assert_eq!(projects[0].name, "Projekt Nord");
+            assert_eq!(projects[0].status, PlanningProjectStatus::InProgress);
+            assert_eq!(projects[1].reference, "/v1/projects/101");
+            assert_eq!(projects[1].status, PlanningProjectStatus::NewStatus);
+            assert_eq!(token_state.access_token, "replay-access-token");
+        });
+    }
+
+    #[test]
+    fn search_projects_replays_vcr_cassette() {
+        tauri::async_runtime::block_on(async {
+            let client = DayliteApiClient::with_replay_cassette("daylite-search-projects.json")
+                .expect("replay client should be created");
+
+            let (search_result, token_state) = search_projects_core(
+                &client,
+                DayliteTokenState {
+                    access_token: "replay-access-token".to_string(),
+                    refresh_token: "replay-refresh-token".to_string(),
+                    access_token_expires_at_ms: Some(u64::MAX),
+                },
+                &DayliteSearchInput {
+                    search_term: "Nord".to_string(),
+                    limit: Some(5),
+                },
+            )
+            .await
+            .expect("search should replay from cassette");
+
+            assert_eq!(search_result.results.len(), 1);
+            assert_eq!(search_result.results[0].reference, "/v1/projects/200");
+            assert_eq!(search_result.results[0].name, "Projekt Nord Bau");
+            assert_eq!(
+                search_result.next,
+                Some("/v1/projects/_search?offset=5".to_string())
+            );
+            assert_eq!(token_state.access_token, "replay-access-token");
         });
     }
 
