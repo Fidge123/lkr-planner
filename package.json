@@ -12,6 +12,7 @@
     "test": "bun test",
     "test:docs": "bun test scripts/backlog-format.spec.ts scripts/adr-format.spec.ts",
     "test:watch": "bun test --watch",
+    "icon:generate": "bun run scripts/regenerate-app-icon.ts",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
