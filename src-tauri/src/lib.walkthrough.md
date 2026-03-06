@@ -1,80 +1,86 @@
-# Walkthrough: `lib.rs`
+# Walkthrough: `src-tauri/src/lib.rs`
 
-This file is the core configuration and setup for the Tauri application.
+## Purpose
 
-```rust
-use tauri_plugin_updater::UpdaterExt;
+This is the real application entry point. It wires Tauri commands, exports TypeScript bindings in debug builds, starts the desktop runtime, and triggers a background updater task.
 
-mod integrations;
-```
-`use` brings the `UpdaterExt` trait into scope, providing methods for auto-updating on Tauri variables.
-`mod integrations;` declares that there is a module named `integrations` in this project. Rust will look for an `integrations.rs` file or an `integrations/mod.rs` file to construct this module scope.
+## Block by block
 
-```rust
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
-pub fn run() {
-```
-The `run` function is the main entry point called by `main()`. The `cfg_attr` macro ensures that if this code compiles for mobile environments, it gets appropriately annotated as the entrypoint for mobile targets.
+### Imports and module declaration (`lines 1-3`)
 
-```rust
-    let specta_builder =
-        tauri_specta::Builder::<tauri::Wry>::new().commands(tauri_specta::collect_commands![
-            integrations::health::check_health,
-            // ... lots of other commands
-        ]);
-```
-`tauri_specta` is a library used to generate TypeScript types automatically from Rust functions. This creates a builder and registers an explicit list of functions out of the locally-defined `integrations` module that the frontend is authorized to call (e.g. `check_health`).
+- `use tauri_plugin_updater::UpdaterExt;` brings a trait into scope so `AppHandle` gains the `.updater()` method.
+- `mod integrations;` tells Rust to compile the sibling module tree from `src-tauri/src/integrations/`.
 
-```rust
-    specta_builder
-        .export(
-            specta_typescript::Typescript::default().header("// @ts-nocheck"),
-            "../src/generated/tauri.ts",
-        )
-        .expect("failed to export tauri specta bindings");
-```
-Here, `specta_builder` writes those exported TypeScript types/commands directly to `../src/generated/tauri.ts`. 
-The `.expect(...)` allows it to handle error unpacking cleanly. If exporting fails, the application panics with the custom error message. Otherwise, it strips out the successful value.
+Rust syntax to notice:
+- Trait imports often unlock methods on existing types.
+- `mod` is a compile-time module declaration, not a runtime import.
 
-```rust
-    tauri::Builder::default()
-        .setup(|app| {
-            let handle = app.handle().clone();
-            tauri::async_runtime::spawn(async move {
-                if let Some(message) = format_update_error(update(handle).await) {
-                    eprintln!("{message}");
-                }
-            });
-            Ok(())
-        })
-```
-This is where Tauri is initialized. 
-The `.setup()` hook runs right after the logic context wraps up but before windows display. Inside, an asynchronous background task is created using `tauri::async_runtime::spawn`. Code here creates a clone of the `AppHandle` and checks for auto-updates.
+### Public `run` entry point (`lines 5-18`)
 
-```rust
-        .plugin(tauri_plugin_updater::Builder::new().build())
-        .plugin(tauri_plugin_http::init())
-        .plugin(tauri_plugin_opener::init())
-        .invoke_handler(specta_builder.invoke_handler())
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
-```
-This registers various Tauri plugins (auto-updating, HTTP requests bypass for frontend CORS, and system interaction links).
-`specta_builder.invoke_handler()` translates the previously defined types directly into standard Tauri IPC format.
-Finally, `.run(tauri::generate_context!())` boots the OS windows and locks the thread in its event listener lifecycle.
+- `#[cfg_attr(mobile, tauri::mobile_entry_point)]` conditionally adds a mobile-only attribute when compiling for a mobile target.
+- `pub fn run()` is the function called by `main.rs`.
+- Inside `run`, a `tauri_specta::Builder` is created and populated with every Tauri command the frontend is allowed to invoke.
 
-```rust
-async fn update(app: tauri::AppHandle) -> tauri_plugin_updater::Result<()> {
-// ... block
-}
-```
-An asynchronous helper function checking if an application update is available via `app.updater()?.check().await?`. Notice the specific usage of the `?` question mark operator. It replaces explicitly returning an error manually. If one line errors, everything returns `Err immediately`. Otherwise, it unpacks its contents cleanly.
+Rust syntax to notice:
+- `cfg_attr` is conditional compilation: "apply this attribute only when the condition is true."
+- `collect_commands![...]` is a macro that expands into command metadata at compile time.
+- The turbofish-like `Builder::<tauri::Wry>` makes the backend runtime type explicit.
 
-```rust
-fn format_update_error<E: std::fmt::Display>(result: Result<(), E>) -> Option<String> {
-    result
-        .err()
-        .map(|error| format!("Update check failed in background task: {error}"))
-}
-```
-This function receives a functional generic parameter representing any error (`E` mapping to trait constraint `std::fmt::Display` indicating the error stringifies safely). It checks the generic `Result`, transforming it to a literal `None` safely or formatting string variables directly like C-Style format injections into `Some(String)` instances.
+Best practice:
+- Keeping the command list centralized makes the Rust/TypeScript boundary easy to audit.
+
+### Debug-only TypeScript export (`lines 20-26`)
+
+- `#[cfg(debug_assertions)]` means this block only exists in debug builds.
+- `specta_builder.export(...)` writes generated Tauri command bindings to `../src/generated/tauri.ts`.
+- `.expect(...)` crashes immediately if code generation fails, which is reasonable during development because stale bindings are worse than a loud failure.
+
+Rust syntax to notice:
+- Builder chains return `self`, so methods can be stacked fluently.
+- `expect` unwraps a `Result` and panics with a custom message on failure.
+
+### Tauri application builder (`lines 28-43`)
+
+- `tauri::Builder::default()` starts the runtime configuration.
+- `.setup(|app| { ... })` registers a closure that runs before the window loop starts.
+- Inside `setup`, the code clones the `AppHandle`, spawns an async task, runs `update(handle).await`, and prints an error only when one exists.
+- The builder then registers updater, HTTP, and opener plugins, installs the invoke handler generated by Specta, and starts the app with `generate_context!()`.
+
+Rust syntax to notice:
+- Closures use `|args| { ... }`.
+- `async move` means the spawned future owns captured values like `handle`.
+- `if let Some(message) = ...` is a concise pattern match for the success branch the code cares about.
+
+Best practice:
+- Long-running work is pushed into a background task so startup stays responsive.
+
+### Background updater helper (`lines 46-67`)
+
+- `async fn update(...)` checks whether an update exists.
+- `app.updater()?.check().await?` uses the `?` operator twice: once for creating the updater handle and once for the network check.
+- If an update is available, the code downloads and installs it while reporting progress through two closures.
+- After installation it restarts the app.
+
+Rust syntax to notice:
+- `if let Some(update) = ...` handles the optional update case cleanly.
+- The two closures passed into `download_and_install` capture `downloaded` mutably.
+- `Result<()>` means "this function returns success with no useful payload."
+
+Best practice:
+- The helper is small and single-purpose, which makes failure handling easier to test and reason about.
+
+### Error formatting helper (`lines 69-73`)
+
+- `format_update_error` accepts any `Result<(), E>` where `E: Display`.
+- It converts only the error case into a user-readable `String`.
+
+Rust syntax to notice:
+- `E: std::fmt::Display` is a generic trait bound.
+- `.err().map(...)` is a common way to transform only the `Err` branch of a `Result`.
+
+## Best practices this file demonstrates
+
+- Keep the binary bootstrap (`main.rs`) tiny and move real setup into the library crate.
+- Use conditional compilation for platform-specific or debug-only behavior.
+- Spawn background tasks for non-critical startup work.
+- Centralize the frontend/backend command contract in one place.

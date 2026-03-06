@@ -1,16 +1,24 @@
-# Walkthrough: `integrations/daylite/mod.rs`
+# Walkthrough: `src-tauri/src/integrations/daylite/mod.rs`
 
-This file serves as the module declaration point for the `daylite` subsystem. Because it resides in `integrations/daylite/mod.rs`, it represents the `daylite` module defined back in `integrations/mod.rs`.
+## Purpose
 
-```rust
-pub mod auth;
-mod auth_flow;
-mod client;
-pub mod contacts;
-pub mod projects;
-pub mod shared;
-```
-Here, we expose distinct internal modules for the Daylite API integration. Notice that some are `pub mod` while others are just `mod`.
+This file is the namespace root for the Daylite integration. It decides which submodules are public API, which are internal plumbing, and which helpers exist only for tests.
 
-- `pub mod auth`, `contacts`, `projects`, `shared`: These are public. Anything calling the `daylite` module from the outside (like `lib.rs`) is allowed to see and interact with these components directly. `lib.rs` exports their commands directly to Tauri.
-- `mod auth_flow` and `mod client`: These lack the `pub` keyword, making them private. They handle sensitive backend business logic (like HTTP clients and auth loop behaviors) that should only be visible internally mapped inside the `daylite` module.
+## Block by block
+
+### Module declarations (`lines 1-8`)
+
+- `pub mod auth;`, `pub mod contacts;`, `pub mod projects;`, and `pub mod shared;` are the public Daylite-facing modules.
+- `mod auth_flow;` and `mod client;` are internal helpers used by the public modules.
+- `#[cfg(test)] mod recording_harness;` keeps the live-cassette recorder out of production builds.
+
+Rust syntax to notice:
+- `pub mod` exports a module.
+- Plain `mod` keeps the module private to its parent unless specific items are re-exported elsewhere.
+- `#[cfg(test)]` is a compile-time gate, not a runtime `if`.
+
+## Best practices this file demonstrates
+
+- Keep the public API surface small.
+- Separate command handlers from transport and auth plumbing.
+- Keep test-only tooling out of release binaries.

@@ -1,39 +1,34 @@
-# Walkthrough: `integrations/daylite/auth.rs`
+# Walkthrough: `src-tauri/src/integrations/daylite/auth.rs`
 
-This is a tiny edge integration file hooking frontend commands natively cleanly over Rust logic architectures mappings properly seamlessly!
+## Purpose
 
-```rust
-use super::auth_flow::refresh_tokens;
-// ... imports
-```
-Brings core internal boundaries mapped seamlessly securely.
+This file exposes the Tauri command that accepts a Daylite base URL plus refresh token, refreshes credentials immediately, and stores the resulting token state in the local store.
 
-```rust
-#[tauri::command]
-#[specta::specta]
-pub async fn daylite_connect_refresh_token(
-    app: tauri::AppHandle,
-    request: DayliteRefreshTokenRequest,
-) -> Result<DayliteTokenSyncStatus, DayliteApiError> {
-```
-This maps standard endpoint execution dynamically. The Typescript application calls `daylite_connect_refresh_token` providing base connection parameters seamlessly inherently!
+## Block by block
 
-```rust
-    let base_url = normalize_base_url(&request.base_url)?;
-    let client = DayliteApiClient::new(&base_url)?;
-    let token_state = refresh_tokens(&client, request.refresh_token).await?;
-```
-Creates local payload contexts mapping execution contexts securely internally explicitly validating mappings seamlessly formatting natively securely properly seamlessly.
+### Imports (`lines 1-6`)
 
-```rust
-    let mut store = load_store_or_error(app.clone())?;
-    store.api_endpoints.daylite_base_url = base_url;
-    store_daylite_tokens(&mut store, &token_state);
-    save_store_or_error(app, store)?;
-```
-Takes valid results dynamically binding payloads strictly cleanly caching mapping outputs mapping transparently safely formatting standard payload outputs gracefully bypassing state desync correctly implicitly elegantly seamlessly mapped!
+- `refresh_tokens` performs the OAuth-like refresh flow.
+- `DayliteApiClient` sends HTTP requests.
+- The shared helpers load and save the local store, normalize the base URL, and copy token fields into the persisted store.
 
-```rust
-    Ok(DayliteTokenSyncStatus { ... })
-```
-Passes status outputs cleanly!
+### Tauri command (`lines 8-27`)
+
+- `daylite_connect_refresh_token` is the frontend entry point.
+- The command first normalizes the base URL, then creates a client for that URL.
+- It calls `refresh_tokens` with the provided refresh token.
+- On success, it loads the local store, writes the normalized base URL and refreshed token state back into it, saves the store, and returns booleans describing whether access and refresh tokens are now present.
+
+Rust syntax to notice:
+- `pub async fn ... -> Result<..., DayliteApiError>` is the standard shape for an async command that can fail.
+- `app.clone()` is needed because the same `AppHandle` is used for both reading and writing.
+- `?` keeps the function linear by returning early on any failure.
+
+Best practice:
+- Validate and normalize inputs before persisting them.
+- Refreshing immediately is safer than storing an unverified refresh token.
+
+## Best practices this file demonstrates
+
+- Keep command handlers thin and delegate domain logic to helpers.
+- Persist only verified token state.

@@ -1,53 +1,68 @@
-# Walkthrough: `integrations/daylite/shared.rs`
+# Walkthrough: `src-tauri/src/integrations/daylite/shared.rs`
 
-The `shared.rs` file acts as the general data models library and utility bucket used strictly around Daylite implementations minimizing code reuse overheads!
+## Purpose
 
-```rust
-#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct DayliteTokenState {
-    pub access_token: String,
-    pub refresh_token: String,
-    #[serde(default)]
-    pub access_token_expires_at_ms: Option<u64>,
-}
-```
-Standard Rust data representations configured via Serde mapped internally to Type boundaries. By labeling `#[serde(default)]`, JSON parsables lacking `access_token_expires_at_ms` parse explicitly to their native `None` default rather than erroring out validation pipelines implicitly.
+This file is the shared utility layer for the Daylite integration. It defines common DTOs, token helpers, JSON parsing helpers, and the standard Daylite error model.
 
-```rust
-pub enum DayliteApiErrorCode {
-    Unauthorized,
-    RateLimited,
-    ServerError,
-    MissingToken, ...
-}
-```
-A strictly typed Error system preventing explicitly leaking strings out directly. The Rust code enforces explicit validations tracking failure boundaries safely formatting natively over `DayliteApiError` payloads.
+## Block by block
 
-```rust
-pub(super) fn normalize_base_url(base_url: &str) -> Result<String, DayliteApiError> {
-    // ...
-```
-The `pub(super)` modifier means this function is only accessible to the parent wrapper globally (meaning everything bound strictly inside `integrations/daylite/` scope limiters!). Useful internal helper that cleans stray spaces or explicit trailing slashes avoiding malformed web requests mappings implicitly securely natively.
+### Imports (`lines 1-6`)
 
-```rust
-pub(super) fn store_daylite_tokens(...) -> ...
-pub(super) fn load_store_or_error(...) -> ...
-```
-These are simple wrappers seamlessly integrating directly with `local_store.rs`, mitigating duplicate boilerplate context mapping safely! 
+- The file depends on the local store module, Serde traits, `serde_json::Value`, `specta::Type`, and `SystemTime`.
 
-```rust
-pub(super) fn normalize_http_error(status: u16, body: &str, path: &str) -> DayliteApiError {
-```
-Translates HTTP Status Codes natively seamlessly mapped directly down to custom Type enums representing user boundary behaviors explicitly contextually. Ex: returning `DayliteApiErrorCode::Unauthorized` if explicit bounds throw `401`.
+### Shared DTOs (`lines 8-65`)
 
-```rust
-pub(super) fn parse_success_json_body<T: DeserializeOwned>(
-```
-A highly generic functional payload validating explicitly. `T: DeserializeOwned` means "This function can map output to any struct type `T`, as long as `T` knows how to accept parsed JSON."
-It validates strict behaviors natively validating bounds matching HTTP successful boundaries (200..300) before parsing representations out internally implicitly explicitly! 
+- `DayliteTokenState` stores the current access token, refresh token, and optional expiry timestamp.
+- `DayliteTokenSyncStatus` is the small success response used by the refresh-token connect command.
+- `DayliteSearchResult<T>` is a reusable generic wrapper for paginated search responses.
+- `DayliteApiError` and `DayliteApiErrorCode` standardize error handling across all Daylite modules.
+- `DayliteRefreshTokenRequest` and `DayliteSearchInput` are frontend command payloads.
 
-```rust
-pub(super) fn should_refresh_access_token(token_state: &DayliteTokenState, now_ms: u64) -> bool {
-```
-Evaluates expiration timestamps manually padding boundaries with a `10_000` ms grace period gracefully natively handling token invalidations safely!
+Rust syntax to notice:
+- Generic structs like `DayliteSearchResult<T>` let one response shape wrap many payload types.
+- `#[serde(rename_all = "SCREAMING_SNAKE_CASE")]` ensures enum variants serialize as API-friendly constants.
+
+Best practice:
+- Centralize shared request and error types so modules cannot drift apart in behavior.
+
+### Small utility helpers (`lines 67-114`)
+
+- `build_limit_query` only emits a `limit` query parameter when one is present.
+- `normalize_base_url` trims whitespace and trailing slashes and rejects an empty result.
+- `load_daylite_tokens` and `store_daylite_tokens` translate between the store schema and the runtime token struct.
+- `load_store_or_error` and `save_store_or_error` adapt local-store failures into the Daylite error type.
+
+Rust syntax to notice:
+- `if let Some(limit) = limit` is a direct way to handle optional inputs.
+- Borrowing `&LocalStore` for reads and `&mut LocalStore` for writes makes ownership intent explicit.
+
+### HTTP and JSON error normalization (`lines 116-186`)
+
+- `normalize_http_error` maps status codes into domain-specific Daylite error codes and German user messages.
+- `parse_success_json_body` enforces a 2xx status before delegating to the raw JSON parser.
+- `parse_json_body` first parses into `serde_json::Value` and then deserializes into `T`, producing detailed technical messages for both failure stages.
+
+Rust syntax to notice:
+- `DeserializeOwned` is important for generic deserialization helpers that must return owned data.
+- The code uses `format!` plus `truncate_for_log` to keep diagnostic messages useful without dumping arbitrarily large bodies.
+
+Best practice:
+- Keep user messages stable and friendly while still preserving detailed technical context for logs.
+
+### Token and time helpers (`lines 188-244`)
+
+- `missing_token_error` creates a consistent missing-credential error.
+- `should_refresh_access_token` returns `true` when the access token is blank, missing an expiry, or within ten seconds of expiry.
+- `current_epoch_ms` converts `SystemTime` into a `u64` millisecond timestamp with error handling.
+- `truncate_for_log` limits logged bodies to 400 characters.
+- `map_store_error` is the final adapter between local-store errors and Daylite errors.
+
+Rust syntax to notice:
+- `saturating_add(10_000)` is used to avoid overflow when computing the refresh buffer.
+- `u64::try_from(...)` makes the integer conversion explicit and checked.
+
+## Best practices this file demonstrates
+
+- Hide repetitive parsing and error-mapping logic behind small shared helpers.
+- Keep token state handling separate from endpoint-specific logic.
+- Make helper functions return domain errors directly so callers stay focused on business flow.

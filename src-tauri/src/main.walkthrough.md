@@ -1,16 +1,31 @@
-# Walkthrough: `main.rs`
+# Walkthrough: `src-tauri/src/main.rs`
 
-This is the entry point for the rust side of the Tauri application.
+## Purpose
 
-```rust
-// Prevents additional console window on Windows in release, DO NOT REMOVE!!
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-```
-This is a rust attribute. `#![...]` applies the attribute to the whole file/crate (because of the `!`). `cfg_attr` conditionally compiles an attribute. Here, if we are *not* in debug mode (`not(debug_assertions)`), it sets the Windows subsystem to "windows", which hides the terminal window that would otherwise pop up when running a graphical application on Windows.
+This file is the thin executable entry point. It applies one Windows-specific build attribute and then hands control to the library crate.
 
-```rust
-fn main() {
-    lkr_planner_lib::run()
-}
-```
-This is the main function. It simply delegates execution to the `run` function defined in the library crate (`lib.rs`). This is a common pattern in Rust (and Tauri): keeping `main.rs` extremely thin and putting the actual initialization and application logic in `lib.rs`, making the code more easily testable or reusable like a typical library.
+## Block by block
+
+### Windows subsystem attribute (`lines 1-2`)
+
+- The comment warns that the next line is intentional.
+- `#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]` is a crate-level attribute.
+- In release builds on Windows, it prevents an extra console window from appearing next to the desktop app.
+
+Rust syntax to notice:
+- `#![...]` applies an inner attribute to the whole crate, not just the next item.
+- `not(debug_assertions)` flips the condition, so the attribute is skipped in debug builds.
+
+### Delegating `main` function (`lines 4-6`)
+
+- `fn main()` is the executable entry point the operating system launches.
+- `lkr_planner_lib::run()` delegates to the library crate, where the real Tauri setup lives.
+
+Rust syntax to notice:
+- `crate_name::function()` calls into another crate target from the same package.
+- The function body has only one expression, so the file stays intentionally minimal.
+
+## Best practices this file demonstrates
+
+- Keep `main.rs` tiny so platform quirks stay isolated.
+- Put application logic in `lib.rs`, which is easier to test and reuse.

@@ -1,13 +1,31 @@
-# Walkthrough: `integrations/mod.rs`
+# Walkthrough: `src-tauri/src/integrations/mod.rs`
 
-This file serves as the entry point for the `integrations` module.
+## Purpose
 
-```rust
-pub mod daylite;
-pub mod health;
-pub mod local_store;
-```
-In Rust, whenever a folder is declared as a module (e.g., `mod integrations;` in `lib.rs`), Rust looks for `integrations/mod.rs` to understand what that module physically contains.
+This module is the namespace root for backend integrations. It exposes the production-facing modules and hides test-only helpers behind conditional compilation.
 
-The `pub mod` declarations instruct the compiler that three separate components map inside the `integrations/` folder namespaces. These represent adjacent files (e.g. `health.rs`, `local_store.rs`) or entire directories wrapping to `daylite/mod.rs`. 
-The `pub` keyword makes these submodules public. Because Rust module scope defaults to `private` out of self-preservation, this instructs the application structure to map these folders outward so they correspond appropriately to external dependencies!
+## Block by block
+
+### Module-level documentation (`lines 1-11`)
+
+- The `///` comments are Rust doc comments. They describe the architectural role of the integration layer.
+- The key idea is that Rust owns secrets, network calls, and external API coordination, while the frontend talks to Rust through Tauri commands.
+
+Rust syntax to notice:
+- `///` attaches documentation to the next item.
+- These comments can be rendered by `cargo doc`.
+
+### Public module exports (`lines 12-16`)
+
+- `pub mod daylite;`, `pub mod health;`, and `pub mod local_store;` make those modules available outside this module tree.
+- `#[cfg(test)] pub(crate) mod http_record_replay;` compiles the cassette helper only for tests and keeps it visible only inside the current crate.
+
+Rust syntax to notice:
+- `pub` means visible to other modules and crates that can reach this module.
+- `pub(crate)` means visible anywhere inside the current crate, but not outside it.
+- `#[cfg(test)]` strips code out of non-test builds entirely.
+
+## Best practices this file demonstrates
+
+- Use the module root to enforce architecture boundaries.
+- Keep test infrastructure out of production binaries with `#[cfg(test)]`.

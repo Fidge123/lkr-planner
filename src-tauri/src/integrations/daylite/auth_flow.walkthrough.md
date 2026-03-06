@@ -1,49 +1,89 @@
-# Walkthrough: `integrations/daylite/auth_flow.rs`
+# Walkthrough: `src-tauri/src/integrations/daylite/auth_flow.rs`
 
-This file contains the internal business logic managing OAuth token lifecycles implicitly orchestrating interactions correctly securely!
+## Purpose
 
-```rust
-pub(super) async fn ensure_access_token(
-    client: &DayliteApiClient,
-    mut token_state: DayliteTokenState,
-) -> Result<DayliteTokenState, DayliteApiError> {
-```
-Called before any secure request. Validates whether `token_state` retains valid metrics formatting securely cleanly. If expiration bounds trigger validation metrics securely, it internally executes `refresh_tokens`.
+This file owns the Daylite authentication workflow after a refresh token already exists. It decides when to refresh, performs the refresh request, and provides a generic helper for sending authenticated JSON requests.
 
-```rust
-pub(super) async fn refresh_tokens(...) -> Result<DayliteTokenState, DayliteApiError> {
-```
-Dispatches native mappings formatting internally querying the Daylite `/personal_token/refresh_token` backend explicit bounds checking natively appropriately mapped.
+## Block by block
 
-```rust
-    if !(200..300).contains(&response.status) {
-```
-Checks bounds tracking status boundaries transparently logging structured mapping implicitly tracking metrics over error conversions gracefully internally cleanly mapping errors!
+### Imports (`lines 1-10`)
 
-```rust
-    let access_token = parsed_refresh.access_token.trim().to_string();
-```
-Cleans string mutations internally logging bounds securely enforcing behaviors correctly explicitly mappings.
+- The file depends on the Daylite client, HTTP method enum, and shared error/token helpers.
+- `DeserializeOwned` and `serde_json::Value` make the request helper generic over any JSON response body.
 
-```rust
-    let now_ms = current_epoch_ms()?;
-    let expires_at_ms = now_ms.saturating_add(parsed_refresh.expires_in.saturating_mul(1_000));
-```
-Calculates metrics determining lifetime configurations securely mappings. Notice `saturating_add` and `saturating_mul`. In standard operators `+` and `*`, reaching max integer bounds triggers hard panics mapping crashes natively explicitly gracefully! Saturating operators instead gracefully cap out safely at MAX limits inherently bypassing panics implicitly correctly inherently properly mapped!
+Rust syntax to notice:
+- `T: DeserializeOwned` means "any type that can be fully deserialized without borrowing from the input string."
 
-```rust
-pub(super) async fn send_authenticated_json<T: DeserializeOwned>(
-    client: &DayliteApiClient,
-    token_state: DayliteTokenState,
-    method: DayliteHttpMethod,
-    path: &str,
-    query: Vec<(String, String)>,
-    body: Option<Value>,
-) -> Result<(T, DayliteTokenState), DayliteApiError> {
-```
-This is the core execution function!
-1. Invokes tracking natively mapping `ensure_access_token` seamlessly properly configured validating tokens transparently.
-2. Formats and sends HTTP payloads explicitly automatically injecting verified bearer tokens natively mapping securely!
-3. Formats parsing boundaries safely explicitly unpacking structures strictly cleanly natively properly mapped correctly explicitly cleanly securely.
+### `ensure_access_token` (`lines 12-29`)
 
-The remainder of the file defines extensive Mock architectures contextually verifying lifecycle operations securely mapped in testing suites cleanly explicitly bypassing Network overhead seamlessly!
+- This function accepts a possibly stale `DayliteTokenState`.
+- If both access and refresh tokens are blank, it returns a missing-token error immediately.
+- Otherwise it reads the current time and asks `should_refresh_access_token` whether a refresh is needed.
+- If so, it replaces the token state by awaiting `refresh_tokens`.
+
+Rust syntax to notice:
+- `mut token_state` means the local binding can be reassigned.
+- Returning the token state, even when unchanged, makes the caller's next step explicit.
+
+Best practice:
+- Centralize refresh policy in one helper so other request code stays simple.
+
+### `refresh_tokens` (`lines 31-110`)
+
+- Blank refresh tokens are rejected before any network call.
+- The function sends `GET /personal_token/refresh_token` with the refresh token as a query parameter.
+- Non-2xx responses are normalized into `DayliteApiError`, then reclassified specifically as `TokenRefreshFailed`.
+- The body is parsed into `DayliteRefreshTokenResponse`.
+- The code trims and validates `access_token`, `refresh_token`, and `expires_in`.
+- Finally it computes `access_token_expires_at_ms` with `saturating_add` and `saturating_mul` to avoid integer overflow.
+
+Rust syntax to notice:
+- `if !(200..300).contains(&response.status)` is a readable range check.
+- `format!(...)` builds detailed technical messages without mixing them into the user-facing text.
+- `Some(expires_at_ms)` wraps the computed timestamp in an `Option`.
+
+Best practice:
+- Validate server responses defensively even after successful HTTP status codes.
+
+### `send_authenticated_json` (`lines 112-133`)
+
+- This generic helper is the normal path for authenticated Daylite requests.
+- It first ensures an access token exists and is fresh.
+- It then forwards the request through the client, attaching the access token.
+- `parse_success_json_body::<T>` validates the HTTP status and deserializes the response into the caller's target type.
+- The function returns both the parsed payload and the possibly refreshed token state.
+
+Rust syntax to notice:
+- Returning `(T, DayliteTokenState)` is a tuple return type.
+- `::<T>` makes the generic type parameter explicit for the parser call.
+
+Best practice:
+- Return updated auth state together with the payload so callers cannot forget to persist refreshed tokens.
+
+### Refresh DTO and parser (`lines 135-153`)
+
+- `DayliteRefreshTokenResponse` is private because only this file needs it.
+- `parse_refresh_response_body` reuses the generic JSON parser but rewrites any parse failure into the refresh-specific error code and message.
+
+Rust syntax to notice:
+- A private `struct` is often the cleanest way to model a one-endpoint response.
+- `map_err(...)` is used here to remap a shared error into a more precise domain error.
+
+### Tests (`lines 155-520`)
+
+- The tests cover missing tokens, token reuse, refresh validation, request behavior, malformed responses, VCR replay, and the mock transport implementation.
+- `MockTransport` stores queued responses in a `VecDeque` and records all outgoing requests for assertions.
+- `tauri::async_runtime::block_on` lets plain unit tests execute async code.
+
+Rust syntax to notice:
+- `Arc<Mutex<...>>` is a standard pattern for shared mutable test state.
+- `Box::pin(async move { ... })` is how the mock implements the transport's boxed-future API.
+
+Best practice:
+- Test both success paths and defensive validation branches for auth code.
+
+## Best practices this file demonstrates
+
+- Keep refresh logic separate from endpoint-specific business logic.
+- Preserve user-friendly and technical error messages separately.
+- Use small generic helpers to eliminate repeated auth boilerplate.
