@@ -22,6 +22,8 @@ jobs:
 
   rust:
     runs-on: "macos-latest"
+    env:
+      HAS_GIT_CRYPT_KEY: ${{ secrets.GIT_CRYPT_KEY_B64 != '' && 'true' || 'false' }}
     steps:
       - uses: actions/checkout@v6
 
@@ -29,11 +31,11 @@ jobs:
         run: bash scripts/assert-cassette-encrypted.sh --encrypted tests/cassettes
 
       - name: Install git-crypt
-        if: ${{ secrets.GIT_CRYPT_KEY_B64 != '' }}
+        if: ${{ env.HAS_GIT_CRYPT_KEY == 'true' }}
         run: brew install git-crypt
 
       - name: Unlock git-crypt cassettes
-        if: ${{ secrets.GIT_CRYPT_KEY_B64 != '' }}
+        if: ${{ env.HAS_GIT_CRYPT_KEY == 'true' }}
         env:
           GIT_CRYPT_KEY_B64: ${{ secrets.GIT_CRYPT_KEY_B64 }}
         run: |
@@ -47,7 +49,7 @@ jobs:
           rm -f "$temp_key"
 
       - name: Verify cassettes are readable after unlock
-        if: ${{ secrets.GIT_CRYPT_KEY_B64 != '' }}
+        if: ${{ env.HAS_GIT_CRYPT_KEY == 'true' }}
         run: bash scripts/assert-cassette-encrypted.sh --decrypted tests/cassettes
 
       - name: Install Rust stable
