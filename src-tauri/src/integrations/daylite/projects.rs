@@ -75,9 +75,9 @@ pub async fn daylite_list_projects(
 ) -> Result<Vec<PlanningProjectRecord>, DayliteApiError> {
     let mut store = load_store_or_error(app.clone())?;
     let client = DayliteApiClient::new(&store.api_endpoints.daylite_base_url)?;
-    let (projects, token_state) = list_projects_core(&client, load_daylite_tokens(&store)).await?;
+    let (projects, token_state) = list_projects_core(&client, load_daylite_tokens(&store)?).await?;
 
-    store_daylite_tokens(&mut store, &token_state);
+    store_daylite_tokens(&mut store, &token_state)?;
     save_store_or_error(app, store)?;
 
     Ok(projects)
@@ -92,9 +92,9 @@ pub async fn daylite_search_projects(
     let mut store = load_store_or_error(app.clone())?;
     let client = DayliteApiClient::new(&store.api_endpoints.daylite_base_url)?;
     let (search_result, token_state) =
-        search_projects_core(&client, load_daylite_tokens(&store), &input).await?;
+        search_projects_core(&client, load_daylite_tokens(&store)?, &input).await?;
 
-    store_daylite_tokens(&mut store, &token_state);
+    store_daylite_tokens(&mut store, &token_state)?;
     save_store_or_error(app, store)?;
 
     Ok(search_result)

@@ -1,7 +1,7 @@
 use tauri_plugin_updater::UpdaterExt;
 
 mod integrations;
-
+pub mod secret_manager;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let specta_builder =
@@ -14,7 +14,12 @@ pub fn run() {
             integrations::daylite::projects::daylite_search_projects,
             integrations::daylite::contacts::daylite_list_contacts,
             integrations::daylite::contacts::daylite_list_cached_contacts,
-            integrations::daylite::contacts::daylite_update_contact_ical_urls
+            integrations::daylite::contacts::daylite_update_contact_ical_urls,
+            integrations::local_store::migrate_legacy_tokens,
+            secret_manager::set_token,
+            secret_manager::get_token,
+            secret_manager::delete_token,
+            secret_manager::check_token
         ]);
 
     #[cfg(debug_assertions)]

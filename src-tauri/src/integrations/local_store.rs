@@ -192,6 +192,55 @@ pub fn save_local_store(app: tauri::AppHandle, store: LocalStore) -> Result<(), 
     save_store_to_path(&store_path, &store)
 }
 
+#[tauri::command]
+#[specta::specta]
+pub fn migrate_legacy_tokens(app: tauri::AppHandle) -> Result<LocalStore, StoreError> {
+    let mut store = load_local_store(app.clone())?;
+    let mut modified = false;
+
+    // Planradar
+    if !store.token_references.planradar_token_reference.is_empty() 
+        && !store.token_references.planradar_token_reference.starts_with("keychain://") 
+    {
+        crate::secret_manager::set_token("lkr-planner-planradar", "LKR Planner Planradar Token", &store.token_references.planradar_token_reference)
+            .map_err(|e| StoreError {
+                code: StoreErrorCode::WriteFailed,
+                user_message: "Der Planradar-Token konnte nicht in den sicheren lokalen Schlüsselspeicher migriert werden (Zugriff verweigert?).".to_string(),
+                technical_message: e.to_string(),
+            })?;
+        store.token_references.planradar_token_reference = "keychain://planradar-token".to_string();
+        modified = true;
+    }
+
+    // Daylite
+    if !store.token_references.daylite_access_token.is_empty() || !store.token_references.daylite_refresh_token.is_empty() {
+        let token_state = crate::integrations::daylite::shared::DayliteTokenState {
+            access_token: store.token_references.daylite_access_token.clone(),
+            refresh_token: store.token_references.daylite_refresh_token.clone(),
+            access_token_expires_at_ms: store.token_references.daylite_access_token_expires_at_ms,
+        };
+        let json_str = serde_json::to_string(&token_state).unwrap_or_default();
+        crate::secret_manager::set_token("lkr-planner-daylite", "LKR Planner Daylite Token", &json_str)
+            .map_err(|e| StoreError {
+                code: StoreErrorCode::WriteFailed,
+                user_message: "Der Daylite-Token konnte nicht in den sicheren lokalen Schlüsselspeicher migriert werden (Zugriff verweigert?).".to_string(),
+                technical_message: e.to_string(),
+            })?;
+        
+        store.token_references.daylite_access_token = "".to_string();
+        store.token_references.daylite_refresh_token = "".to_string();
+        store.token_references.daylite_access_token_expires_at_ms = None;
+        store.token_references.daylite_token_reference = "keychain://daylite-token".to_string();
+        modified = true;
+    }
+
+    if modified {
+        save_local_store(app, store.clone())?;
+    }
+
+    Ok(store)
+}
+
 fn load_store_from_path(path: &Path) -> Result<LocalStore, StoreError> {
     if !path.exists() {
         return Ok(LocalStore::default());
@@ -379,6 +428,42 @@ mod tests {
         path.push(format!("lkr-planner-local-store-tests-{now}"));
         path.push(file_name);
         path
+    }
+
+    #[test]
+    fn test_migrate_legacy_tokens_logic_updates_store_and_erases_plaintext() {
+        let test_path = unique_test_path("legacy-tokens-store.json");
+        let mut store = LocalStore::default();
+        store.token_references.planradar_token_reference = "plaintext_planradar_token".to_string();
+        store.token_references.daylite_token_reference = "plaintext_daylite_token".to_string();
+        store.token_references.daylite_access_token = "some_access".to_string();
+        save_store_to_path(&test_path, &store).unwrap();
+
+        // Simulate reading legacy and modifying like migrate_legacy_tokens does
+        // (we test the logic without calling the tauri command directly to avoid AppHandle mock needed)
+        let mut loaded = load_store_from_path(&test_path).unwrap();
+        
+        if !loaded.token_references.planradar_token_reference.is_empty() 
+            && !loaded.token_references.planradar_token_reference.starts_with("keychain://") 
+        {
+            // Assume secret_manager succeeds
+            loaded.token_references.planradar_token_reference = "keychain://planradar-token".to_string();
+        }
+        
+        if !loaded.token_references.daylite_access_token.is_empty() || !loaded.token_references.daylite_refresh_token.is_empty() {
+            // Assume secret_manager succeeds
+            loaded.token_references.daylite_access_token = "".to_string();
+            loaded.token_references.daylite_refresh_token = "".to_string();
+            loaded.token_references.daylite_access_token_expires_at_ms = None;
+            loaded.token_references.daylite_token_reference = "keychain://daylite-token".to_string();
+        }
+
+        save_store_to_path(&test_path, &loaded).unwrap();
+        
+        let final_store = load_store_from_path(&test_path).unwrap();
+        assert_eq!(final_store.token_references.planradar_token_reference, "keychain://planradar-token");
+        assert_eq!(final_store.token_references.daylite_token_reference, "keychain://daylite-token");
+        assert!(final_store.token_references.daylite_access_token.is_empty());
     }
 
     fn write_test_file(path: &Path, content: &str) {

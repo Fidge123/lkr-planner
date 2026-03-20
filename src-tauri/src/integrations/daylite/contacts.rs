@@ -72,9 +72,9 @@ pub async fn daylite_list_contacts(
 ) -> Result<Vec<PlanningContactRecord>, DayliteApiError> {
     let mut store = load_store_or_error(app.clone())?;
     let client = DayliteApiClient::new(&store.api_endpoints.daylite_base_url)?;
-    let (contacts, token_state) = list_contacts_core(&client, load_daylite_tokens(&store)).await?;
+    let (contacts, token_state) = list_contacts_core(&client, load_daylite_tokens(&store)?).await?;
 
-    store_daylite_tokens(&mut store, &token_state);
+    store_daylite_tokens(&mut store, &token_state)?;
     store.daylite_cache.last_synced_at = Some(current_timestamp_iso8601());
     store.daylite_cache.contacts = contacts
         .iter()
@@ -94,12 +94,12 @@ pub async fn daylite_update_contact_ical_urls(
 ) -> Result<PlanningContactRecord, DayliteApiError> {
     let mut store = load_store_or_error(app.clone())?;
     let client = DayliteApiClient::new(&store.api_endpoints.daylite_base_url)?;
-    let token_state = load_daylite_tokens(&store);
+    let token_state = load_daylite_tokens(&store)?;
 
     let (updated_contact, token_state) =
         update_contact_ical_urls_core(&client, token_state, &mut store, &input).await?;
 
-    store_daylite_tokens(&mut store, &token_state);
+    store_daylite_tokens(&mut store, &token_state)?;
     store.daylite_cache.last_synced_at = Some(current_timestamp_iso8601());
     save_store_or_error(app, store)?;
 

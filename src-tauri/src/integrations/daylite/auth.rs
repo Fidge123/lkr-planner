@@ -17,7 +17,7 @@ pub async fn daylite_connect_refresh_token(
 
     let mut store = load_store_or_error(app.clone())?;
     store.api_endpoints.daylite_base_url = base_url;
-    store_daylite_tokens(&mut store, &token_state);
+    store_daylite_tokens(&mut store, &token_state)?;
     save_store_or_error(app, store)?;
 
     Ok(DayliteTokenSyncStatus {
