@@ -56,7 +56,8 @@ interface Props {
 
 ### API Calls
 
-- Use Tauri's `@tauri-apps/plugin-http` for HTTP requests
+- All third-party API logic must be implemented in the Rust backend
+- The frontend should only communicate with the backend via Tauri commands (`invoke`)
 - Handle errors with try/catch or `.catch()` promise chains
 - Return specific typed responses
 - Include proper error messages with status codes
@@ -79,21 +80,11 @@ Validate results after every tasks:
 
 ## Working with the backlog
 
-Backlog structure:
-- `docs/backlog/README.md` is the top-level overview and epic context index.
-- Each epic has its own folder (`docs/backlog/epic-XX-...`).
-- Each backlog item (BLI) lives in its own markdown file inside the corresponding epic folder.
-Verify first, if the backlog item contains all information that you need to implement it.
-Check if the acceptance criteria are clear and testable.
-
+This project uses openspec.
 Follow Red-Green-Refactor TDD loop.
 Document new architecture decisions as ADRs in `docs/adr`.
 ADRs need to include sections for Context (including evaluated options with pros and cons), Decision, and Consequences.
 
-If you have questions or need clarification, ask the user.
-Once you are done, remove or update the active BLI in `docs/backlog/` and add a concise implementation summary to `docs/backlog/COMPLETED.md`.
-If there are follow-up tasks necessary, add them to the backlog.
-
-Whenever files in `docs/backlog/` or `docs/adr/` are modified, always run:
+Whenever files in `docs/adr/` are modified, always run:
 - `bun run test:docs`
-This check is mandatory for every backlog/ADR change.
+This check is mandatory for every ADR change.

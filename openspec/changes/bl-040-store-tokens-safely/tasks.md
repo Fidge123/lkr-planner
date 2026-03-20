@@ -1,29 +1,23 @@
 ## 1. Secure Storage Module
 
-- [ ] 1.1 Add keyring crate to Cargo.toml
-- [ ] 1.2 Create secret_manager module in Rust backend
-- [ ] 1.3 Implement `set_token(service, token)` function
-- [ ] 1.4 Implement `get_token(service)` function
-- [ ] 1.5 Implement `delete_token(service)` function
+- [ ] 1.1 Add keyring crate to Cargo.toml and scaffold `secret_manager` module
+- [ ] 1.2 Write failing unit tests for `set_token`, `get_token`, and `delete_token`
+- [ ] 1.3 Implement `set_token`, `get_token`, and `delete_token` to make tests pass
+- [ ] 1.4 Refactor `secret_manager` module as needed
 
-## 2. Token Migration
+## 2. Token Migration & Error Handling
 
-- [ ] 2.1 Add startup hook in Tauri setup
-- [ ] 2.2 Check legacy store for plain text tokens
-- [ ] 2.3 Write tokens to secure storage
-- [ ] 2.4 Delete plain text entries after migration
-- [ ] 2.5 Log migration actions
+- [ ] 2.1 Write failing test: keychain access denied returns correct strongly-typed error
+- [ ] 2.2 Implement robust error handling for keychain access denial to make test pass
+- [ ] 2.3 Write failing test for dev manual migration command `migrate_legacy_tokens`
+- [ ] 2.4 Implement logic to read legacy store and write to secure storage in dev command
+- [ ] 2.5 Ensure plain text entries are deleted after successful manual migration
 
-## 3. Tauri Command Updates
+## 3. Tauri Command Updates & Integration Validation
 
-- [ ] 3.1 Update get-token command to use secure storage
-- [ ] 3.2 Update set-token command to use secure storage
-- [ ] 3.3 Update delete-token command to use secure storage
-- [ ] 3.4 Ensure frontend uses commands instead of localStorage
-
-## 4. Testing
-
-- [ ] 4.1 Write integration test: save token, verify not in store file
-- [ ] 4.2 Write migration test: legacy token moves to secure storage
-- [ ] 4.3 Write unit test for set_token/get_token/delete_token
-- [ ] 4.4 Write test for migration with no legacy tokens
+- [ ] 3.1 Write failing integration test: saving a token does NOT write to local plain text store
+- [ ] 3.2 Update `set-token` and `delete-token` Tauri commands to use secure storage to make test pass
+- [ ] 3.3 Write failing test and implement `check-token` command (returns boolean, not the actual token)
+- [ ] 3.4 Migrate any remaining third-party API requests to Rust backend to isolate tokens
+- [ ] 3.5 Remove any frontend commands that retrieve the actual token
+- [ ] 3.6 Implement user-friendly frontend error UI for missing keychain permissions

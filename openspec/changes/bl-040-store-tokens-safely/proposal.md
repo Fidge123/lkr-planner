@@ -6,14 +6,15 @@ API tokens stored in plain text files are vulnerable to exposure. We need to use
 
 - Integrate keyring crate for OS secure storage
 - Create secret management module in Rust backend
-- Migrate existing plain text tokens to secure store on startup
-- Update Tauri commands to use secure storage
+- Move all third-party API logic to the Rust backend
+- Provide a developer-only manual migration command
+- Display clear errors if OS keychain access is denied
 
 ## Capabilities
 
 ### New Capabilities
 - `secure-token-storage`: Store tokens in OS keychain
-- `token-migration`: Migrate plain text tokens to secure storage
+- `token-migration-dev`: Manual migration tool for developers
 
 ### Modified Capabilities
 - `token-management`: Extended to use secure storage

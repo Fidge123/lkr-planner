@@ -24,17 +24,18 @@ Authentication tokens for external APIs should not be stored in plain text. macO
 - Alternative: tauri-plugin-stronghold for more features
 
 ### Token Migration
-**Decision**: Migrate on application startup
-- Check legacy store for plain text tokens
-- If found, write to secure storage
-- Delete plain text entry after successful migration
-- Log migration actions
+**Decision**: No automatic startup migration
+- The app requires keychain access to function; no fallback is provided
+- If keychain access is denied, return a localized error to the frontend and show a warning
+- Provide a manual dev-only Tauri command (`migrate_legacy_tokens`) for local migration of legacy plain text tokens
+- Delete plain text entry after successful manual migration
 
 ### Frontend Access
-**Decision**: Frontend never stores tokens directly
-- All token operations go through Tauri commands
-- Tokens stored in memory only during session
-- Frontend receives token only when making API call
+**Decision**: Frontend never handles tokens after creation
+- All third-party API logic (Daylite, Planradar) is implemented in the Rust backend
+- Frontend only handles the token during the initial login/creation input
+- After initial creation, tokens are never passed back to the frontend
+- Frontend communicates with backend exclusively via Tauri commands (`invoke`)
 
 ### Service Naming
 **Decision**: Use service identifier for keyring entries
