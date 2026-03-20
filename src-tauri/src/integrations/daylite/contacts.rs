@@ -72,27 +72,7 @@ pub async fn daylite_list_contacts(
 ) -> Result<Vec<PlanningContactRecord>, DayliteApiError> {
     let mut store = load_store_or_error(app.clone())?;
     let client = DayliteApiClient::new(&store.api_endpoints.daylite_base_url)?;
-    let (search_result, token_state) =
-        send_authenticated_json::<DayliteSearchResult<DayliteContactSummary>>(
-            &client,
-            load_daylite_tokens(&store),
-            DayliteHttpMethod::Post,
-            "/contacts/_search",
-            vec![("full-records".to_string(), "true".to_string())],
-            Some(json!({
-                "category": {
-                    "equal": "Monteur"
-                }
-            })),
-        )
-        .await?;
-    let contacts = sort_contacts(filter_monteur_contacts(
-        search_result
-            .results
-            .into_iter()
-            .map(map_daylite_contact_summary)
-            .collect(),
-    ));
+    let (contacts, token_state) = list_contacts_core(&client, load_daylite_tokens(&store)).await?;
 
     store_daylite_tokens(&mut store, &token_state);
     store.daylite_cache.last_synced_at = Some(current_timestamp_iso8601());
@@ -126,7 +106,7 @@ pub async fn daylite_update_contact_ical_urls(
     Ok(updated_contact)
 }
 
-async fn update_contact_ical_urls_core(
+pub(super) async fn update_contact_ical_urls_core(
     client: &DayliteApiClient,
     token_state: DayliteTokenState,
     store: &mut LocalStore,
@@ -180,6 +160,35 @@ async fn update_contact_ical_urls_core(
         .collect();
 
     Ok((updated_contact, token_state))
+}
+
+pub(super) async fn list_contacts_core(
+    client: &DayliteApiClient,
+    token_state: DayliteTokenState,
+) -> Result<(Vec<PlanningContactRecord>, DayliteTokenState), DayliteApiError> {
+    let (search_result, token_state) =
+        send_authenticated_json::<DayliteSearchResult<DayliteContactSummary>>(
+            client,
+            token_state,
+            DayliteHttpMethod::Post,
+            "/contacts/_search",
+            vec![("full-records".to_string(), "true".to_string())],
+            Some(json!({
+                "category": {
+                    "equal": "Monteur"
+                }
+            })),
+        )
+        .await?;
+    let contacts = sort_contacts(filter_monteur_contacts(
+        search_result
+            .results
+            .into_iter()
+            .map(map_daylite_contact_summary)
+            .collect(),
+    ));
+
+    Ok((contacts, token_state))
 }
 
 #[tauri::command]
@@ -431,10 +440,10 @@ fn normalize_non_empty(value: &str) -> Option<&str> {
 #[cfg(test)]
 mod tests {
     use super::{
-        filter_monteur_contacts, map_cached_contact, map_daylite_contact_summary,
-        merge_contact_ical_urls, parse_contact_id, sort_contacts, update_contact_ical_urls_core,
-        DayliteContactSummary, DayliteContactUrl, DayliteUpdateContactIcalUrlsInput,
-        PlanningContactRecord,
+        contact_display_name, filter_monteur_contacts, list_contacts_core, map_cached_contact,
+        map_daylite_contact_summary, merge_contact_ical_urls, parse_contact_id, sort_contacts,
+        update_contact_ical_urls_core, DayliteContactSummary, DayliteContactUrl,
+        DayliteUpdateContactIcalUrlsInput, PlanningContactRecord,
     };
     use crate::integrations::daylite::client::{
         BoxFuture, DayliteApiClient, DayliteHttpMethod, DayliteHttpRequest, DayliteHttpResponse,
@@ -750,6 +759,91 @@ mod tests {
 
             assert_eq!(contact.category, Some("Vertrieb".to_string()));
             assert!(store.daylite_cache.contacts.is_empty());
+        });
+    }
+
+    #[test]
+    fn list_contacts_replays_vcr_cassette() {
+        tauri::async_runtime::block_on(async {
+            let client = DayliteApiClient::with_replay_cassette("daylite-list-contacts.json")
+                .expect("replay client should be created");
+
+            let (contacts, token_state) = list_contacts_core(
+                &client,
+                DayliteTokenState {
+                    access_token: "replay-access-token".to_string(),
+                    refresh_token: "replay-refresh-token".to_string(),
+                    access_token_expires_at_ms: Some(u64::MAX),
+                },
+            )
+            .await
+            .expect("list should replay from cassette");
+
+            assert!(!contacts.is_empty());
+            assert!(
+                contacts
+                    .iter()
+                    .all(|contact| contact.reference.starts_with("/v1/contacts/"))
+            );
+            assert!(
+                contacts
+                    .iter()
+                    .all(|contact| contact.category.as_deref() == Some("Monteur"))
+            );
+            assert!(contacts.iter().all(|contact| {
+                contact
+                    .full_name
+                    .as_deref()
+                    .map(|name| name == name.trim())
+                    .unwrap_or(true)
+                    && contact
+                        .nickname
+                        .as_deref()
+                        .map(|nickname| nickname == nickname.trim())
+                        .unwrap_or(true)
+            }));
+            assert!(contacts.windows(2).all(|pair| {
+                contact_display_name(&pair[0]).to_lowercase()
+                    <= contact_display_name(&pair[1]).to_lowercase()
+            }));
+            assert_eq!(token_state.access_token, "replay-access-token");
+        });
+    }
+
+    #[test]
+    fn update_ical_urls_replays_vcr_cassette() {
+        tauri::async_runtime::block_on(async {
+            let client =
+                DayliteApiClient::with_replay_cassette("daylite-update-contact-ical-urls.json")
+                    .expect("replay client should be created");
+            let mut store = LocalStore::default();
+
+            let (contact, token_state) = update_contact_ical_urls_core(
+                &client,
+                DayliteTokenState {
+                    access_token: "replay-access-token".to_string(),
+                    refresh_token: "replay-refresh-token".to_string(),
+                    access_token_expires_at_ms: Some(u64::MAX),
+                },
+                &mut store,
+                &DayliteUpdateContactIcalUrlsInput {
+                    contact_reference: "/v1/contacts/500".to_string(),
+                    primary_ical_url: "https://example.com/primary.ics".to_string(),
+                    absence_ical_url: "https://example.com/absence.ics".to_string(),
+                },
+            )
+            .await
+            .expect("update should replay from cassette");
+
+            assert_eq!(contact.reference, "/v1/contacts/500");
+            assert_eq!(contact.category, Some("Monteur".to_string()));
+            assert_eq!(contact.urls.len(), 3);
+            assert_eq!(token_state.access_token, "replay-access-token");
+            assert_eq!(store.daylite_cache.contacts.len(), 1);
+            assert_eq!(
+                store.daylite_cache.contacts[0].reference,
+                "/v1/contacts/500"
+            );
         });
     }
 
