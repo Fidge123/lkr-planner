@@ -1,59 +1,90 @@
-## 1. URL Validation
+## 1. ZEP Admin Credentials
 
-- [ ] 1.1 Implement URL format validation (HTTP/HTTPS check)
-- [ ] 1.2 Reject invalid URLs before network call
+- [ ] 1.1 Define keychain service/account identifiers for ZEP root URL, username, and password
+- [ ] 1.2 Implement Tauri command to save ZEP admin credentials to macOS keychain
+- [ ] 1.3 Implement Tauri command to load ZEP admin credentials from keychain
+- [ ] 1.4 Implement Tauri command to test ZEP admin credentials (PROPFIND on root URL with Basic Auth)
+- [ ] 1.5 Map credential test errors to German messages (401 → auth error, network → connection error)
 
-## 2. Connection Testing
+## 2. CalDAV Calendar Discovery
 
-- [ ] 2.1 Implement HTTP request for iCal URL
-- [ ] 2.2 Add independent test for primary iCal
-- [ ] 2.3 Add independent test for absence iCal
-- [ ] 2.4 Parse response to verify iCal content (check Content-Type: text/calendar or BEGIN:VCALENDAR in body)
+- [ ] 2.1 Implement PROPFIND request to ZEP CalDAV root URL with admin Basic Auth header
+- [ ] 2.2 Parse PROPFIND response to extract calendar names/paths
+- [ ] 2.3 Implement Tauri command `zep_discover_calendars` returning the list of available calendars
+- [ ] 2.4 Cache discovery result for the duration of the app session
+- [ ] 2.5 Map discovery errors to German messages (auth failure, network error, parse error)
 
-## 3. German Error Messages
+## 3. Calendar Selection Validation
 
-- [ ] 3.1 Map connection timeout to German message
-- [ ] 3.2 Map SSL/certificate errors to German message
-- [ ] 3.3 Map invalid response to German message
-- [ ] 3.4 Add actionable hints for each error type
+- [ ] 3.1 Validate that a calendar name is selected (not None/empty) before "Speichern & Testen"
+- [ ] 3.2 Map validation failure to German message ("Bitte einen Kalender auswählen.")
 
-## 4. Store Schema & Timestamp Persistence
+## 4. CalDAV Connection Testing
 
-- [ ] 4.1 Add `primary_ical_last_tested_at: Option<String>` to `EmployeeSetting`
-- [ ] 4.2 Add `absence_ical_last_tested_at: Option<String>` to `EmployeeSetting`
-- [ ] 4.3 Clear timestamp for a source when its URL is changed
-- [ ] 4.4 Store test timestamp after each test (success or failure)
+- [ ] 4.1 Implement CalDAV GET request with `Authorization: Basic` header for a given calendar
+- [ ] 4.2 Construct full calendar URL from root URL + calendar name at test time
+- [ ] 4.3 Add independent test for primary calendar (`zep_primary_calendar`)
+- [ ] 4.4 Add independent test for absence calendar (`zep_absence_calendar`)
+- [ ] 4.5 Parse response to verify iCal content (Content-Type: text/calendar or BEGIN:VCALENDAR in body)
+- [ ] 4.6 Map HTTP errors to German messages:
+  - 401 → "Authentifizierung fehlgeschlagen. ZEP-Zugangsdaten prüfen."
+  - 404 → "Kalender nicht gefunden. Kalender-Zuweisung prüfen."
+  - timeout → "Verbindung Zeitüberschreitung. Bitte Verbindung prüfen."
+  - invalid response → "Ungültige Antwort. Keine gültige iCal-Datei."
 
-## 5. "Speichern & Testen" Command
+## 5. Store Schema & Timestamp Persistence
 
-- [ ] 5.1 Implement combined save-and-test Tauri command for a single iCal source
-- [ ] 5.2 Step 1: validate URL format
-- [ ] 5.3 Step 2: sync URL to Daylite (`daylite_update_contact_ical_urls`), abort on failure
-- [ ] 5.4 Step 3: save URL and clear timestamp in local store
-- [ ] 5.5 Step 4: run HTTP connection test
-- [ ] 5.6 Step 5: store result timestamp in local store
+- [ ] 5.1 Rename `primary_ical_url` → `zep_primary_calendar: Option<String>` in `EmployeeSetting`
+- [ ] 5.2 Rename `absence_ical_url` → `zep_absence_calendar: Option<String>` in `EmployeeSetting`
+- [ ] 5.3 Add `primary_ical_last_tested_at: Option<String>` to `EmployeeSetting`
+- [ ] 5.4 Add `absence_ical_last_tested_at: Option<String>` to `EmployeeSetting`
+- [ ] 5.5 Clear timestamp for a source when its calendar assignment changes
+- [ ] 5.6 Store test timestamp after each test (success or failure)
+- [ ] 5.7 Document migration: old `primary_ical_url`/`absence_ical_url` URL values cannot be migrated to calendar names automatically; employees must be remapped after update
 
-## 6. UI: Timetable Row Indicator
+## 6. "Speichern & Testen" Command
 
-- [ ] 6.1 Add clickable wrapper to employee name cell for all employees
-- [ ] 6.2 Show ⚠ icon when primary iCal has no URL, is untested, or last test failed
-- [ ] 6.3 No icon shown when last primary iCal test passed
+- [ ] 6.1 Implement combined save-and-test Tauri command for a single calendar source
+- [ ] 6.2 Step 1: validate calendar selection is not None
+- [ ] 6.3 Step 2: construct full URL; sync to Daylite (`daylite_update_contact_ical_urls`), abort on failure
+- [ ] 6.4 Step 3: save calendar name to local store and clear timestamp
+- [ ] 6.5 Step 4: run CalDAV connection test with admin credentials from keychain
+- [ ] 6.6 Step 5: store result timestamp in local store
 
-## 7. UI: Per-Employee iCal Dialog
+## 7. UI: ZEP Credentials Settings
 
-- [ ] 7.1 Create dialog component with two independent sections (Einsatz / Abwesenheit)
-- [ ] 7.2 Each section: URL input field, "Speichern & Testen" button, status display
-- [ ] 7.3 Status display: success with timestamp, failure with German error + hint, or "Nicht getestet"
-- [ ] 7.4 Disable "Speichern & Testen" while request is in flight
-- [ ] 7.5 Clear section status when URL input changes (reflect that re-test is needed)
-- [ ] 7.6 Show absence section as optional (label + empty state explains no absence sync)
+- [ ] 7.1 Add "ZEP-Verbindung" section to app settings (accessible from gear icon, alongside Daylite token)
+- [ ] 7.2 Input fields: ZEP root URL, ZEP admin username, ZEP admin password
+- [ ] 7.3 "Verbindung testen" button: triggers credential test, shows German success/error feedback
+- [ ] 7.4 On successful test: save credentials to keychain, show calendar count as confirmation
+- [ ] 7.5 Disable "Verbindung testen" while request is in flight
 
-## 8. Testing
+## 8. UI: Timetable Row Indicator
 
-- [ ] 8.1 Validation tests for allowed/disallowed URL formats
-- [ ] 8.2 Backend tests for independent primary vs absence test execution
-- [ ] 8.3 Backend tests: Daylite sync failure aborts before test runs
-- [ ] 8.4 Backend tests: timestamp cleared when URL changes
-- [ ] 8.5 UI tests: ⚠ icon shown/hidden based on primary iCal state
-- [ ] 8.6 UI tests: dialog sections operate independently
-- [ ] 8.7 UI tests: in-flight state disables button, result shown after completion
+- [ ] 8.1 Add clickable wrapper to employee name cell for all employees
+- [ ] 8.2 Show ⚠ icon when primary calendar is unset, untested, or last test failed
+- [ ] 8.3 No icon shown when last primary calendar test passed
+
+## 9. UI: Per-Employee iCal Dialog
+
+- [ ] 9.1 Create dialog component with two independent sections (Einsatz / Abwesenheit)
+- [ ] 9.2 Trigger CalDAV discovery on dialog open; use session cache if available
+- [ ] 9.3 Each section: calendar selector (dropdown from discovered list) + "Speichern & Testen" button + status display
+- [ ] 9.4 Status display: success with timestamp, failure with German error + hint, or "Nicht getestet"
+- [ ] 9.5 Disable "Speichern & Testen" while request is in flight
+- [ ] 9.6 Clear section status when calendar selection changes (re-test required)
+- [ ] 9.7 Show absence section as optional (label + empty-state explains no absence sync)
+- [ ] 9.8 Show "Kalender neu laden" button when discovery failed or to force refresh
+
+## 10. Testing
+
+- [ ] 10.1 Backend tests: credential save/load round-trip via keychain
+- [ ] 10.2 Backend tests: CalDAV discovery parses PROPFIND response correctly
+- [ ] 10.3 Backend tests: full URL construction from root URL + calendar name
+- [ ] 10.4 Backend tests: connection test with 401 response maps to correct German error
+- [ ] 10.5 Backend tests: Daylite sync failure aborts before connection test runs
+- [ ] 10.6 Backend tests: timestamp cleared when calendar assignment changes
+- [ ] 10.7 UI tests: ⚠ icon shown/hidden based on primary calendar state
+- [ ] 10.8 UI tests: dialog sections operate independently
+- [ ] 10.9 UI tests: in-flight state disables button; result shown after completion
+- [ ] 10.10 UI tests: selector disabled and error shown when discovery fails
