@@ -91,7 +91,12 @@ pub(super) fn load_daylite_tokens(
     _store: &LocalStore,
 ) -> Result<DayliteTokenState, DayliteApiError> {
     match crate::secret_manager::get_token("lkr-planner-daylite", "LKR Planner Daylite Token") {
-        Ok(json_str) => Ok(serde_json::from_str(&json_str).unwrap_or_default()),
+        Ok(json_str) => serde_json::from_str(&json_str).map_err(|e| DayliteApiError {
+            code: DayliteApiErrorCode::InvalidConfiguration,
+            http_status: None,
+            user_message: "Die gespeicherten Daylite-Zugangsdaten sind beschädigt. Bitte verbinde dich erneut.".to_string(),
+            technical_message: format!("Token-JSON konnte nicht deserialisiert werden: {e}"),
+        }),
         Err(crate::secret_manager::SecretError::NotFound) => Ok(DayliteTokenState::default()),
         Err(e) => Err(DayliteApiError {
             code: DayliteApiErrorCode::InvalidConfiguration,
