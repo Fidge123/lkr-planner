@@ -86,6 +86,26 @@ pub async fn daylite_list_contacts(
     Ok(contacts)
 }
 
+/// Public helper for other modules (e.g., ZEP) to sync iCal URLs to Daylite
+/// without going through a Tauri command round-trip.
+pub async fn sync_contact_ical_urls(
+    app: tauri::AppHandle,
+    input: DayliteUpdateContactIcalUrlsInput,
+) -> Result<(), DayliteApiError> {
+    let mut store = load_store_or_error(app.clone())?;
+    let client = DayliteApiClient::new(&store.api_endpoints.daylite_base_url)?;
+    let token_state = load_daylite_tokens()?;
+
+    let (_, token_state) =
+        update_contact_ical_urls_core(&client, token_state, &mut store, &input).await?;
+
+    store_daylite_tokens(&token_state)?;
+    store.daylite_cache.last_synced_at = Some(current_timestamp_iso8601());
+    save_store_or_error(app, store)?;
+
+    Ok(())
+}
+
 #[tauri::command]
 #[specta::specta]
 pub async fn daylite_update_contact_ical_urls(
@@ -780,16 +800,12 @@ mod tests {
             .expect("list should replay from cassette");
 
             assert!(!contacts.is_empty());
-            assert!(
-                contacts
-                    .iter()
-                    .all(|contact| contact.reference.starts_with("/v1/contacts/"))
-            );
-            assert!(
-                contacts
-                    .iter()
-                    .all(|contact| contact.category.as_deref() == Some("Monteur"))
-            );
+            assert!(contacts
+                .iter()
+                .all(|contact| contact.reference.starts_with("/v1/contacts/")));
+            assert!(contacts
+                .iter()
+                .all(|contact| contact.category.as_deref() == Some("Monteur")));
             assert!(contacts.iter().all(|contact| {
                 contact
                     .full_name

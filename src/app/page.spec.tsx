@@ -20,6 +20,11 @@ const defaultEmployeeState: PlanningGridEmployeesState = {
   reloadEmployees: () => {},
 };
 
+const defaultIcalProps = {
+  employeeSettings: [] as import("../generated/tauri").EmployeeSetting[],
+  onOpenIcalDialog: () => {},
+};
+
 describe("planning grid project loading states", () => {
   beforeAll(() => {
     setSystemTime(new Date(2026, 0, 28, 9, 0, 0));
@@ -31,6 +36,7 @@ describe("planning grid project loading states", () => {
         weekOffset={0}
         projectState={{ ...defaultState, isLoading: true }}
         employeeState={{ ...defaultEmployeeState }}
+        {...defaultIcalProps}
       />,
     );
 
@@ -47,6 +53,7 @@ describe("planning grid project loading states", () => {
           errorMessage: "Die Daten konnten nicht von Daylite geladen werden.",
         }}
         employeeState={{ ...defaultEmployeeState }}
+        {...defaultIcalProps}
       />,
     );
 
@@ -72,6 +79,7 @@ describe("planning grid project loading states", () => {
           ],
         }}
         employeeState={{ ...defaultEmployeeState }}
+        {...defaultIcalProps}
       />,
     );
 
@@ -85,6 +93,7 @@ describe("planning grid project loading states", () => {
         weekOffset={0}
         projectState={{ ...defaultState }}
         employeeState={{ ...defaultEmployeeState }}
+        {...defaultIcalProps}
       />,
     );
 
@@ -114,6 +123,7 @@ describe("planning grid project loading states", () => {
           ],
         }}
         employeeState={{ ...defaultEmployeeState }}
+        {...defaultIcalProps}
       />,
     );
 
@@ -135,6 +145,7 @@ describe("planning grid project loading states", () => {
           ],
         }}
         employeeState={{ ...defaultEmployeeState }}
+        {...defaultIcalProps}
       />,
     );
 
@@ -158,6 +169,7 @@ describe("planning grid project loading states", () => {
             },
           ],
         }}
+        {...defaultIcalProps}
       />,
     );
 
