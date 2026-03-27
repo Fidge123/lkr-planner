@@ -120,4 +120,18 @@ mod tests {
             assert_eq!(pw, "my-secret");
         });
     }
+
+    #[test]
+    fn delete_nonexistent_token_returns_not_found() {
+        with_mock_keyring(|| {
+            let err = delete_token("absent_service", "nobody").unwrap_err();
+            assert_eq!(err, SecretError::NotFound);
+        });
+    }
+
+    #[test]
+    fn map_keyring_error_maps_unexpected_error_to_other() {
+        let err = map_keyring_error(keyring::Error::TooLong("field".to_string(), 0));
+        assert!(matches!(err, SecretError::Other(_)));
+    }
 }
