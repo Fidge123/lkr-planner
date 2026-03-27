@@ -87,9 +87,7 @@ pub(super) fn normalize_base_url(base_url: &str) -> Result<String, DayliteApiErr
     Ok(trimmed.to_string())
 }
 
-pub(super) fn load_daylite_tokens(
-    _store: &LocalStore,
-) -> Result<DayliteTokenState, DayliteApiError> {
+pub(super) fn load_daylite_tokens() -> Result<DayliteTokenState, DayliteApiError> {
     match crate::secret_manager::get_token("lkr-planner-daylite", "LKR Planner Daylite Token") {
         Ok(json_str) => serde_json::from_str(&json_str).map_err(|e| DayliteApiError {
             code: DayliteApiErrorCode::InvalidConfiguration,
@@ -107,8 +105,7 @@ pub(super) fn load_daylite_tokens(
     }
 }
 
-
-pub(super) fn store_daylite_tokens(_store: &mut LocalStore, token_state: &DayliteTokenState) -> Result<(), DayliteApiError> {
+pub(super) fn store_daylite_tokens(token_state: &DayliteTokenState) -> Result<(), DayliteApiError> {
     let json_str = serde_json::to_string(token_state).map_err(|e| DayliteApiError {
         code: DayliteApiErrorCode::ServerError,
         http_status: None,
@@ -116,10 +113,17 @@ pub(super) fn store_daylite_tokens(_store: &mut LocalStore, token_state: &Daylit
         technical_message: format!("Token serialization failed: {e}"),
     })?;
 
-    crate::secret_manager::set_token("lkr-planner-daylite", "LKR Planner Daylite Token", &json_str).map_err(|e| DayliteApiError {
-        code: DayliteApiErrorCode::InvalidConfiguration,
+    crate::secret_manager::set_token(
+        "lkr-planner-daylite",
+        "LKR Planner Daylite Token",
+        &json_str,
+    )
+    .map_err(|e| DayliteApiError {
+        code: DayliteApiErrorCode::ServerError,
         http_status: None,
-        user_message: "Auf den sicheren Speicher konnte nicht zugegriffen werden (Keychain verweigert?).".to_string(),
+        user_message:
+            "Auf den sicheren Speicher konnte nicht zugegriffen werden (Keychain verweigert?)."
+                .to_string(),
         technical_message: e.to_string(),
     })
 }

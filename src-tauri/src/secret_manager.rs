@@ -30,8 +30,8 @@ fn map_keyring_error(err: KeyringError) -> SecretError {
         KeyringError::PlatformFailure(ref e) => {
             let error_msg = e.to_string().to_lowercase();
             // A simple heuristic for mapping common OS access denied messages
-            if error_msg.contains("access denied") 
-                || error_msg.contains("auth") 
+            if error_msg.contains("access denied")
+                || error_msg.contains("authentication")
                 || error_msg.contains("not permitted")
                 || error_msg.contains("user canceled")
             {
@@ -44,29 +44,21 @@ fn map_keyring_error(err: KeyringError) -> SecretError {
     }
 }
 
-#[tauri::command]
-#[specta::specta]
 pub fn set_token(service: &str, username: &str, token: &str) -> Result<(), SecretError> {
     let entry = Entry::new(service, username).map_err(|e| map_keyring_error(e))?;
     entry.set_password(token).map_err(map_keyring_error)
 }
 
-#[tauri::command]
-#[specta::specta]
 pub fn get_token(service: &str, username: &str) -> Result<String, SecretError> {
     let entry = Entry::new(service, username).map_err(|e| map_keyring_error(e))?;
     entry.get_password().map_err(map_keyring_error)
 }
 
-#[tauri::command]
-#[specta::specta]
 pub fn delete_token(service: &str, username: &str) -> Result<(), SecretError> {
     let entry = Entry::new(service, username).map_err(|e| map_keyring_error(e))?;
     entry.delete_credential().map_err(map_keyring_error)
 }
 
-#[tauri::command]
-#[specta::specta]
 pub fn check_token(service: &str, username: &str) -> Result<bool, SecretError> {
     let entry = Entry::new(service, username).map_err(|e| map_keyring_error(e))?;
     match entry.get_password() {
@@ -81,6 +73,8 @@ mod tests {
     use super::*;
     use keyring::mock;
 
+    // Note: `set_default_credential_builder` mutates global state. Tests using
+    // `with_mock_keyring` must not run concurrently with other keyring tests.
     fn with_mock_keyring<T>(f: impl FnOnce() -> T) -> T {
         keyring::set_default_credential_builder(mock::default_credential_builder());
         f()
