@@ -470,16 +470,12 @@ mod tests {
             .expect("list should replay from cassette");
 
             assert!(!projects.is_empty());
-            assert!(
-                projects
-                    .iter()
-                    .all(|project| project.reference.starts_with("/v1/projects/"))
-            );
-            assert!(
-                projects
-                    .iter()
-                    .all(|project| !project.name.is_empty() && project.name == project.name.trim())
-            );
+            assert!(projects
+                .iter()
+                .all(|project| project.reference.starts_with("/v1/projects/")));
+            assert!(projects
+                .iter()
+                .all(|project| !project.name.is_empty() && project.name == project.name.trim()));
             assert_eq!(token_state.access_token, "replay-access-token");
         });
     }
@@ -513,13 +509,11 @@ mod tests {
                     && project.name == project.name.trim()
                     && project.name.to_lowercase().contains("nord")
             }));
-            assert!(
-                search_result
-                    .next
-                    .as_deref()
-                    .map(|next| next.starts_with("/v1/projects/_search"))
-                    .unwrap_or(true)
-            );
+            assert!(search_result
+                .next
+                .as_deref()
+                .map(|next| next.starts_with("/v1/projects/_search"))
+                .unwrap_or(true));
             assert_eq!(token_state.access_token, "replay-access-token");
         });
     }
