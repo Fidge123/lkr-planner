@@ -73,11 +73,11 @@ pub struct PlanningProjectRecord {
 pub async fn daylite_list_projects(
     app: tauri::AppHandle,
 ) -> Result<Vec<PlanningProjectRecord>, DayliteApiError> {
-    let mut store = load_store_or_error(app.clone())?;
+    let store = load_store_or_error(app.clone())?;
     let client = DayliteApiClient::new(&store.api_endpoints.daylite_base_url)?;
-    let (projects, token_state) = list_projects_core(&client, load_daylite_tokens(&store)?).await?;
+    let (projects, token_state) = list_projects_core(&client, load_daylite_tokens()?).await?;
 
-    store_daylite_tokens(&mut store, &token_state)?;
+    store_daylite_tokens(&token_state)?;
     save_store_or_error(app, store)?;
 
     Ok(projects)
@@ -89,12 +89,12 @@ pub async fn daylite_search_projects(
     app: tauri::AppHandle,
     input: DayliteSearchInput,
 ) -> Result<DayliteSearchResult<DayliteProjectSummary>, DayliteApiError> {
-    let mut store = load_store_or_error(app.clone())?;
+    let store = load_store_or_error(app.clone())?;
     let client = DayliteApiClient::new(&store.api_endpoints.daylite_base_url)?;
     let (search_result, token_state) =
-        search_projects_core(&client, load_daylite_tokens(&store)?, &input).await?;
+        search_projects_core(&client, load_daylite_tokens()?, &input).await?;
 
-    store_daylite_tokens(&mut store, &token_state)?;
+    store_daylite_tokens(&token_state)?;
     save_store_or_error(app, store)?;
 
     Ok(search_result)
