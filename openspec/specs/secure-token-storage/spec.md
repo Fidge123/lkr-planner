@@ -20,22 +20,6 @@ The system SHALL store tokens in OS-level secure storage.
 - **WHEN** deleting token
 - **THEN** token is removed from secure storage
 
-### Requirement: Token migration
-The system SHALL migrate plain text tokens to secure storage.
-
-#### Scenario: Migrate legacy token on startup
-- **GIVEN** plain text token exists in legacy store
-- **WHEN** application starts
-- **THEN** token is read from legacy store
-- **AND** written to secure storage
-- **AND** removed from legacy store
-
-#### Scenario: No migration needed
-- **GIVEN** no plain text tokens exist
-- **WHEN** application starts
-- **THEN** migration is skipped
-- **AND** no changes made
-
 ### Requirement: Plain text absence
 The system SHALL ensure tokens are not visible in plain text files.
 
