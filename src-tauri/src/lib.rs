@@ -1,6 +1,7 @@
 use tauri_plugin_updater::UpdaterExt;
 
 mod integrations;
+pub mod secret_manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -14,7 +15,8 @@ pub fn run() {
             integrations::daylite::projects::daylite_search_projects,
             integrations::daylite::contacts::daylite_list_contacts,
             integrations::daylite::contacts::daylite_list_cached_contacts,
-            integrations::daylite::contacts::daylite_update_contact_ical_urls
+            integrations::daylite::contacts::daylite_update_contact_ical_urls,
+            integrations::local_store::migrate_legacy_tokens
         ]);
 
     #[cfg(debug_assertions)]
