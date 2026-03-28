@@ -85,6 +85,6 @@
 - [x] 10.5 Backend tests: Daylite sync failure aborts before connection test runs
 - [x] 10.6 Backend tests: timestamp cleared when calendar assignment changes
 - [x] 10.7 UI tests: ⚠ icon shown/hidden based on primary calendar state
-- [ ] 10.8 UI tests: dialog sections operate independently
-- [ ] 10.9 UI tests: in-flight state disables button; result shown after completion
-- [ ] 10.10 UI tests: selector disabled and error shown when discovery fails
+- [x] 10.8 UI tests: dialog sections operate independently
+- [x] 10.9 UI tests: in-flight state disables button; result shown after completion
+- [x] 10.10 UI tests: selector disabled and error shown when discovery fails
