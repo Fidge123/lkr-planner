@@ -1,16 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
 import "./app.css";
 import { ChevronLeft, ChevronRight, Settings } from "lucide-react";
+import { DayliteTokenModal } from "./app/components/daylite-token-modal";
+import { EmployeeIcalDialog } from "./app/components/employee-ical-dialog";
+import { ZepCredentialsModal } from "./app/components/zep-credentials-modal";
+import { PlanningGrid } from "./app/page";
 import type {
   EmployeeSetting,
   PlanningContactRecord,
   ZepCalendar,
 } from "./generated/tauri";
 import { commands } from "./generated/tauri";
-import { DayliteTokenModal } from "./app/components/daylite-token-modal";
-import { EmployeeIcalDialog } from "./app/components/employee-ical-dialog";
-import { ZepCredentialsModal } from "./app/components/zep-credentials-modal";
-import { PlanningGrid } from "./app/page";
 import { discoverZepCalendars } from "./services/zep";
 
 function App() {

@@ -32,12 +32,18 @@ export function ZepCredentialsModal({
     const username = usernameInput.trim();
 
     if (!rootUrl) {
-      setStatus({ type: "error", message: "Bitte eine ZEP CalDAV-URL eingeben." });
+      setStatus({
+        type: "error",
+        message: "Bitte eine ZEP CalDAV-URL eingeben.",
+      });
       setIsSaving(false);
       return;
     }
     if (!username) {
-      setStatus({ type: "error", message: "Bitte einen Benutzernamen eingeben." });
+      setStatus({
+        type: "error",
+        message: "Bitte einen Benutzernamen eingeben.",
+      });
       setIsSaving(false);
       return;
     }
@@ -48,7 +54,11 @@ export function ZepCredentialsModal({
     }
 
     try {
-      const testResult = await testZepCredentials(rootUrl, username, passwordInput);
+      const testResult = await testZepCredentials(
+        rootUrl,
+        username,
+        passwordInput,
+      );
       await saveZepCredentials(rootUrl, username, passwordInput);
       setStatus({
         type: "success",

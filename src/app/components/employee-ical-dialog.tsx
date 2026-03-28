@@ -21,8 +21,12 @@ export function EmployeeIcalDialog({
 
   const [primaryUrl, setPrimaryUrl] = useState("");
   const [absenceUrl, setAbsenceUrl] = useState("");
-  const [primaryStatus, setPrimaryStatus] = useState<SectionStatus | null>(null);
-  const [absenceStatus, setAbsenceStatus] = useState<SectionStatus | null>(null);
+  const [primaryStatus, setPrimaryStatus] = useState<SectionStatus | null>(
+    null,
+  );
+  const [absenceStatus, setAbsenceStatus] = useState<SectionStatus | null>(
+    null,
+  );
   const [isPrimarySubmitting, setIsPrimarySubmitting] = useState(false);
   const [isAbsenceSubmitting, setIsAbsenceSubmitting] = useState(false);
 
@@ -35,7 +39,7 @@ export function EmployeeIcalDialog({
     setAbsenceUrl(employeeSetting?.zepAbsenceCalendar ?? "");
     setPrimaryStatus(null);
     setAbsenceStatus(null);
-  }, [isOpen, employee?.self, employeeSetting]);
+  }, [isOpen, employeeSetting]);
 
   if (!isOpen || employee === null) {
     return null;
@@ -103,10 +107,7 @@ export function EmployeeIcalDialog({
       aria-labelledby="employee-ical-dialog-title"
     >
       <section className="modal-box max-w-xl">
-        <h2
-          id="employee-ical-dialog-title"
-          className="text-lg font-semibold"
-        >
+        <h2 id="employee-ical-dialog-title" className="text-lg font-semibold">
           iCal-Konfiguration: {employeeName}
         </h2>
 
@@ -150,7 +151,8 @@ export function EmployeeIcalDialog({
         </section>
 
         <section className="mt-6 flex items-center justify-between gap-2">
-          {(calendarsError !== null || (!isLoadingCalendars && zepCalendars !== null)) ? (
+          {calendarsError !== null ||
+          (!isLoadingCalendars && zepCalendars !== null) ? (
             <button
               type="button"
               className="btn btn-ghost btn-sm"
@@ -246,7 +248,9 @@ function CalendarSection({
           <span className="text-sm">{status.message}</span>
         </section>
       ) : (
-        !isOptional && !isDisabled && !isSubmitting && (
+        !isOptional &&
+        !isDisabled &&
+        !isSubmitting && (
           <p className="text-xs text-base-content/60 mt-1">Nicht getestet.</p>
         )
       )}

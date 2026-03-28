@@ -82,7 +82,7 @@ pub enum IcalSource {
 // ── Internal credential storage ───────────────────────────────────────────────
 
 #[derive(Debug, Serialize, Deserialize)]
-struct ZepStoredCredentials {
+pub(crate) struct ZepStoredCredentials {
     username: String,
     password: String,
 }
@@ -182,7 +182,7 @@ async fn propfind(url: &str, username: &str, password: &str) -> Result<String, Z
                 technical_message: format!("PROPFIND returned HTTP 404 for {url}"),
             });
         }
-        200..=299 | 207 => {}
+        200..=299 => {}
         _ => {
             return Err(ZepError {
                 code: ZepErrorCode::NetworkError,

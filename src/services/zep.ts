@@ -3,8 +3,8 @@ import {
   type IcalSource,
   type ZepCalendar,
   type ZepCalendarTestResult,
-  type ZepCredentialTestResult,
   type ZepCredentialsInfo,
+  type ZepCredentialTestResult,
 } from "../generated/tauri";
 
 function readZepErrorMessage(error: unknown, fallback: string): string {
@@ -90,10 +90,7 @@ export async function saveAndTestCalendar(
   );
   if (result.status === "error") {
     throw new Error(
-      readZepErrorMessage(
-        result.error,
-        "Speichern und Testen fehlgeschlagen.",
-      ),
+      readZepErrorMessage(result.error, "Speichern und Testen fehlgeschlagen."),
     );
   }
   return result.data;
