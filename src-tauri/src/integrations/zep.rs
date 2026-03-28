@@ -208,6 +208,9 @@ async fn propfind(url: &str, username: &str, password: &str) -> Result<String, Z
     })
 }
 
+/// Verify that a specific CalDAV calendar URL is accessible by issuing a PROPFIND Depth:0.
+/// Using PROPFIND is the CalDAV-idiomatic probe — a plain GET on a collection URL often
+/// returns 405 Method Not Allowed from CalDAV servers including ZEP.
 async fn get_calendar(url: &str, username: &str, password: &str) -> Result<(), ZepError> {
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(30))
@@ -218,61 +221,41 @@ async fn get_calendar(url: &str, username: &str, password: &str) -> Result<(), Z
             technical_message: format!("Client::build fehlgeschlagen: {e}"),
         })?;
     let response = client
-        .get(url)
+        .request(
+            Method::from_bytes(b"PROPFIND").expect("PROPFIND is a valid HTTP method"),
+            url,
+        )
         .basic_auth(username, Some(password))
+        .header("Depth", "0")
+        .header("Content-Type", "application/xml; charset=utf-8")
+        .body(PROPFIND_BODY)
         .send()
         .await
         .map_err(|e| ZepError {
             code: ZepErrorCode::NetworkError,
-            user_message: "Verbindung Zeitüberschreitung. Bitte Verbindung prüfen.".to_string(),
-            technical_message: format!("GET fehlgeschlagen für {url}: {e}"),
+            user_message: "ZEP CalDAV-Server ist nicht erreichbar.".to_string(),
+            technical_message: format!("PROPFIND Depth:0 fehlgeschlagen für {url}: {e}"),
         })?;
 
     let status = response.status().as_u16();
     match status {
-        401 => {
-            return Err(ZepError {
-                code: ZepErrorCode::Unauthorized,
-                user_message: "Authentifizierung fehlgeschlagen. ZEP-Zugangsdaten prüfen."
-                    .to_string(),
-                technical_message: format!("GET returned HTTP 401 for {url}"),
-            });
-        }
-        404 => {
-            return Err(ZepError {
-                code: ZepErrorCode::NotFound,
-                user_message: "Kalender nicht gefunden. Kalender-Zuweisung prüfen.".to_string(),
-                technical_message: format!("GET returned HTTP 404 for {url}"),
-            });
-        }
-        200..=299 => {}
-        _ => {
-            return Err(ZepError {
-                code: ZepErrorCode::NetworkError,
-                user_message: "ZEP CalDAV-Server hat einen Fehler zurückgegeben.".to_string(),
-                technical_message: format!("GET returned HTTP {status} for {url}"),
-            });
-        }
+        401 => Err(ZepError {
+            code: ZepErrorCode::Unauthorized,
+            user_message: "Authentifizierung fehlgeschlagen. ZEP-Zugangsdaten prüfen.".to_string(),
+            technical_message: format!("PROPFIND Depth:0 returned HTTP 401 for {url}"),
+        }),
+        404 => Err(ZepError {
+            code: ZepErrorCode::NotFound,
+            user_message: "Kalender nicht gefunden. Kalender-Zuweisung prüfen.".to_string(),
+            technical_message: format!("PROPFIND Depth:0 returned HTTP 404 for {url}"),
+        }),
+        200..=299 => Ok(()),
+        _ => Err(ZepError {
+            code: ZepErrorCode::NetworkError,
+            user_message: "ZEP CalDAV-Server hat einen Fehler zurückgegeben.".to_string(),
+            technical_message: format!("PROPFIND Depth:0 returned HTTP {status} for {url}"),
+        }),
     }
-
-    let body = response.text().await.map_err(|e| ZepError {
-        code: ZepErrorCode::InvalidResponse,
-        user_message: "Die Antwort des ZEP-Kalenders konnte nicht gelesen werden.".to_string(),
-        technical_message: format!("Response body read fehlgeschlagen: {e}"),
-    })?;
-
-    if !body.contains("BEGIN:VCALENDAR") {
-        return Err(ZepError {
-            code: ZepErrorCode::InvalidResponse,
-            user_message: "Ungültige Antwort. Keine gültige iCal-Datei.".to_string(),
-            technical_message: format!(
-                "Response does not contain BEGIN:VCALENDAR (first 100 chars: {})",
-                body.chars().take(100).collect::<String>()
-            ),
-        });
-    }
-
-    Ok(())
 }
 
 // ── PROPFIND XML parsing ──────────────────────────────────────────────────────
