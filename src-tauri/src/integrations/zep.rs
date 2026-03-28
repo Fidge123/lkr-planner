@@ -6,6 +6,7 @@ use crate::secret_manager;
 use chrono::{SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
 use specta::Type;
+use std::time::Duration;
 use tauri_plugin_http::reqwest;
 use tauri_plugin_http::reqwest::Method;
 
@@ -74,10 +75,19 @@ pub enum IcalSource {
 
 // ── Internal credential storage ───────────────────────────────────────────────
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub(crate) struct ZepStoredCredentials {
     username: String,
     password: String,
+}
+
+impl std::fmt::Debug for ZepStoredCredentials {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ZepStoredCredentials")
+            .field("username", &self.username)
+            .field("password", &"[REDACTED]")
+            .finish()
+    }
 }
 
 fn save_zep_credentials_to_keychain(username: &str, password: &str) -> Result<(), ZepError> {
@@ -139,7 +149,14 @@ const PROPFIND_BODY: &str = r#"<?xml version="1.0" encoding="utf-8"?>
 </d:propfind>"#;
 
 async fn propfind(url: &str, username: &str, password: &str) -> Result<String, ZepError> {
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .build()
+        .map_err(|e| ZepError {
+            code: ZepErrorCode::NetworkError,
+            user_message: "HTTP-Client konnte nicht initialisiert werden.".to_string(),
+            technical_message: format!("Client::build fehlgeschlagen: {e}"),
+        })?;
     let response = client
         .request(
             Method::from_bytes(b"PROPFIND").expect("PROPFIND is a valid HTTP method"),
@@ -192,7 +209,14 @@ async fn propfind(url: &str, username: &str, password: &str) -> Result<String, Z
 }
 
 async fn get_calendar(url: &str, username: &str, password: &str) -> Result<(), ZepError> {
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .build()
+        .map_err(|e| ZepError {
+            code: ZepErrorCode::NetworkError,
+            user_message: "HTTP-Client konnte nicht initialisiert werden.".to_string(),
+            technical_message: format!("Client::build fehlgeschlagen: {e}"),
+        })?;
     let response = client
         .get(url)
         .basic_auth(username, Some(password))
@@ -531,14 +555,15 @@ pub async fn zep_save_and_test_calendar(
         });
     };
 
-    // Step 2: Sync to Daylite — look up the "other" calendar URL to preserve it
-    let store =
+    // Load local store once — all in-memory mutations use this copy.
+    let mut store =
         crate::integrations::local_store::load_local_store(app.clone()).map_err(|e| ZepError {
             code: ZepErrorCode::InvalidConfiguration,
             user_message: e.user_message,
             technical_message: e.technical_message,
         })?;
 
+    // Step 2: Sync to Daylite — look up the "other" calendar URL to preserve it
     let current_setting =
         find_or_default_setting(&store.employee_settings, &daylite_contact_reference);
     let (primary_url, absence_url) = match source {
@@ -574,13 +599,6 @@ pub async fn zep_save_and_test_calendar(
     })?;
 
     // Step 3: Save calendar URL to local store, clear old timestamp
-    let mut store =
-        crate::integrations::local_store::load_local_store(app.clone()).map_err(|e| ZepError {
-            code: ZepErrorCode::InvalidConfiguration,
-            user_message: e.user_message,
-            technical_message: e.technical_message,
-        })?;
-
     update_setting(
         &mut store.employee_settings,
         &daylite_contact_reference,
@@ -598,13 +616,13 @@ pub async fn zep_save_and_test_calendar(
         },
     );
 
-    crate::integrations::local_store::save_local_store(app.clone(), store).map_err(|e| {
-        ZepError {
+    crate::integrations::local_store::save_local_store(app.clone(), store.clone()).map_err(
+        |e| ZepError {
             code: ZepErrorCode::InvalidConfiguration,
             user_message: e.user_message,
             technical_message: e.technical_message,
-        }
-    })?;
+        },
+    )?;
 
     // Step 4: Run CalDAV GET test
     let creds = load_zep_credentials_from_keychain()?;
@@ -616,13 +634,6 @@ pub async fn zep_save_and_test_calendar(
     };
 
     // Step 5: Store result timestamp
-    let mut store =
-        crate::integrations::local_store::load_local_store(app.clone()).map_err(|e| ZepError {
-            code: ZepErrorCode::InvalidConfiguration,
-            user_message: e.user_message,
-            technical_message: e.technical_message,
-        })?;
-
     update_setting(
         &mut store.employee_settings,
         &daylite_contact_reference,
@@ -780,6 +791,35 @@ mod tests {
         assert_eq!(
             calendars[1].url,
             "https://app.zep.de/caldav/admin/john-abwesenheit/"
+        );
+    }
+
+    #[test]
+    fn parse_propfind_accepts_207_multistatus_body() {
+        // CalDAV PROPFIND normatively returns 207 Multi-Status.
+        // The HTTP status check (200..=299) covers 207.
+        // This test verifies the XML body of a 207 response is parsed correctly.
+        let body = r#"<?xml version="1.0" encoding="utf-8"?>
+<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
+  <d:response>
+    <d:href>/caldav/admin/anna-einsatz/</d:href>
+    <d:propstat>
+      <d:prop>
+        <d:displayname>Anna B - Einsatz</d:displayname>
+        <d:resourcetype><d:collection/><c:calendar/></d:resourcetype>
+      </d:prop>
+      <d:status>HTTP/1.1 200 OK</d:status>
+    </d:propstat>
+  </d:response>
+</d:multistatus>"#;
+
+        let calendars = parse_propfind_calendars(body, "https://app.zep.de/caldav/admin");
+
+        assert_eq!(calendars.len(), 1);
+        assert_eq!(calendars[0].display_name, "Anna B - Einsatz");
+        assert_eq!(
+            calendars[0].url,
+            "https://app.zep.de/caldav/admin/anna-einsatz/"
         );
     }
 

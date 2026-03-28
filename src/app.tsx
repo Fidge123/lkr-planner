@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import "./app.css";
 import { ChevronLeft, ChevronRight, Settings } from "lucide-react";
-import { DayliteTokenModal } from "./app/components/daylite-token-modal";
 import { EmployeeIcalDialog } from "./app/components/employee-ical-dialog";
-import { ZepCredentialsModal } from "./app/components/zep-credentials-modal";
+import { SettingsDialog } from "./app/components/settings-dialog";
 import { PlanningGrid } from "./app/page";
 import type {
   EmployeeSetting,
@@ -15,15 +14,16 @@ import { discoverZepCalendars } from "./services/zep";
 
 function App() {
   const [weekOffset, setWeekOffset] = useState(0);
-  const [isDayliteTokenModalOpen, setIsDayliteTokenModalOpen] = useState(false);
-  const [isZepCredentialsModalOpen, setIsZepCredentialsModalOpen] =
-    useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [icalDialogEmployee, setIcalDialogEmployee] =
     useState<PlanningContactRecord | null>(null);
 
   const [employeeSettings, setEmployeeSettings] = useState<EmployeeSetting[]>(
     [],
   );
+  const [employeeSettingsError, setEmployeeSettingsError] = useState<
+    string | null
+  >(null);
   const [zepCalendars, setZepCalendars] = useState<ZepCalendar[] | null>(null);
   const [isLoadingCalendars, setIsLoadingCalendars] = useState(false);
   const [calendarsError, setCalendarsError] = useState<string | null>(null);
@@ -32,6 +32,9 @@ function App() {
     const result = await commands.loadLocalStore();
     if (result.status === "ok") {
       setEmployeeSettings(result.data.employeeSettings);
+      setEmployeeSettingsError(null);
+    } else {
+      setEmployeeSettingsError(result.error.userMessage);
     }
   }, []);
 
@@ -79,29 +82,14 @@ function App() {
       <header className="navbar p-4 shadow-sm border-b border-base-300">
         <div className="navbar-start gap-2">
           <h1 className="text-2xl font-bold">Wochenplanung</h1>
-          <details className="dropdown">
-            <summary className="btn btn-ghost px-2 list-none">
-              <Settings className="size-6 text-base-content/50" />
-            </summary>
-            <ul className="dropdown-content menu bg-base-100 rounded-box z-10 w-52 p-2 shadow border border-base-300">
-              <li>
-                <button
-                  type="button"
-                  onClick={() => setIsDayliteTokenModalOpen(true)}
-                >
-                  Daylite-Konfiguration
-                </button>
-              </li>
-              <li>
-                <button
-                  type="button"
-                  onClick={() => setIsZepCredentialsModalOpen(true)}
-                >
-                  ZEP-Verbindung
-                </button>
-              </li>
-            </ul>
-          </details>
+          <button
+            type="button"
+            className="btn btn-ghost px-2"
+            onClick={() => setIsSettingsOpen(true)}
+            aria-label="Einstellungen öffnen"
+          >
+            <Settings className="size-6 text-base-content/50" />
+          </button>
         </div>
         <nav className="navbar-end gap-2">
           <button
@@ -131,6 +119,14 @@ function App() {
       </header>
 
       <main className="flex-1 overflow-hidden">
+        {employeeSettingsError ? (
+          <section className="alert alert-error m-4">
+            <span>
+              Einstellungen konnten nicht geladen werden:{" "}
+              {employeeSettingsError}
+            </span>
+          </section>
+        ) : null}
         <PlanningGrid
           weekOffset={weekOffset}
           employeeSettings={employeeSettings}
@@ -138,14 +134,9 @@ function App() {
         />
       </main>
 
-      <DayliteTokenModal
-        isOpen={isDayliteTokenModalOpen}
-        onClose={() => setIsDayliteTokenModalOpen(false)}
-      />
-
-      <ZepCredentialsModal
-        isOpen={isZepCredentialsModalOpen}
-        onClose={() => setIsZepCredentialsModalOpen(false)}
+      <SettingsDialog
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
       />
 
       <EmployeeIcalDialog

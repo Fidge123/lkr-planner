@@ -22,7 +22,7 @@ export function TimetableRow({
       <th className="p-0 align-top font-normal">
         <button
           type="button"
-          className="w-full h-full p-4 text-left flex items-start gap-1.5 hover:bg-base-200 cursor-pointer"
+          className="w-full h-full p-4 text-left flex items-center justify-between gap-2 hover:bg-base-200 cursor-pointer"
           onClick={() => onOpenIcalDialog(employee)}
         >
           <span>
