@@ -211,7 +211,7 @@ async fn propfind(url: &str, username: &str, password: &str) -> Result<String, Z
 /// Verify that a specific CalDAV calendar URL is accessible by issuing a PROPFIND Depth:0.
 /// Using PROPFIND is the CalDAV-idiomatic probe — a plain GET on a collection URL often
 /// returns 405 Method Not Allowed from CalDAV servers including ZEP.
-async fn get_calendar(url: &str, username: &str, password: &str) -> Result<(), ZepError> {
+async fn probe_calendar(url: &str, username: &str, password: &str) -> Result<(), ZepError> {
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(30))
         .build()
@@ -415,8 +415,7 @@ pub fn zep_save_credentials(
         });
     }
 
-    save_zep_credentials_to_keychain(&username, &password)?;
-
+    // Write the store first so that a keychain failure leaves no orphaned credential entry.
     let mut store =
         crate::integrations::local_store::load_local_store(app.clone()).map_err(|e| ZepError {
             code: ZepErrorCode::InvalidConfiguration,
@@ -429,6 +428,8 @@ pub fn zep_save_credentials(
         user_message: e.user_message,
         technical_message: e.technical_message,
     })?;
+
+    save_zep_credentials_to_keychain(&username, &password)?;
 
     Ok(())
 }
@@ -610,7 +611,7 @@ pub async fn zep_save_and_test_calendar(
     // Step 4: Run CalDAV GET test
     let creds = load_zep_credentials_from_keychain()?;
     let timestamp = current_timestamp();
-    let test_result = get_calendar(cal_url, &creds.username, &creds.password).await;
+    let test_result = probe_calendar(cal_url, &creds.username, &creds.password).await;
     let (success, error_message) = match &test_result {
         Ok(()) => (true, None),
         Err(e) => (false, Some(e.user_message.clone())),

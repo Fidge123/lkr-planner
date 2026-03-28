@@ -24,6 +24,8 @@ function App() {
   const [employeeSettingsError, setEmployeeSettingsError] = useState<
     string | null
   >(null);
+  // Session cache for discovered ZEP calendars (task 2.4). Not persisted across restarts;
+  // null means "not yet fetched", [] means "fetched but empty".
   const [zepCalendars, setZepCalendars] = useState<ZepCalendar[] | null>(null);
   const [isLoadingCalendars, setIsLoadingCalendars] = useState(false);
   const [calendarsError, setCalendarsError] = useState<string | null>(null);
