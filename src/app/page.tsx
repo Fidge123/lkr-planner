@@ -73,7 +73,7 @@ export function PlanningGridTable({
       <table className="table table-fixed border-collapse">
         <thead className="text-base-content">
           <tr>
-            <th className="w-36 p-4 font-bold">Mitarbeiter</th>
+            <th className="w-40 p-4 font-bold">Mitarbeiter</th>
             {weekDays.map((day) => (
               <TimetableHeader key={day.getTime()} day={day} />
             ))}
