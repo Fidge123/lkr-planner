@@ -845,7 +845,9 @@ mod tests {
             zep_primary_calendar: None,
             zep_absence_calendar: None,
             primary_ical_last_tested_at: Some("2026-01-01T00:00:00Z".to_string()),
+            primary_ical_last_test_passed: Some(true),
             absence_ical_last_tested_at: None,
+            absence_ical_last_test_passed: None,
         }];
         update_setting(&mut settings, "/v1/contacts/42", |s| {
             s.zep_primary_calendar = Some("https://cal.example/".to_string());
