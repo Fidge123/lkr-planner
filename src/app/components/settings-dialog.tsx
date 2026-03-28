@@ -16,7 +16,8 @@ import {
 type SettingsSection = "daylite" | "zep";
 
 export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
-  const [activeSection, setActiveSection] = useState<SettingsSection>("daylite");
+  const [activeSection, setActiveSection] =
+    useState<SettingsSection>("daylite");
 
   if (!isOpen) {
     return null;
