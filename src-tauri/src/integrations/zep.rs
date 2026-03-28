@@ -37,24 +37,19 @@ pub enum ZepErrorCode {
     DayliteSyncFailed,
 }
 
-/// A calendar discovered via CalDAV PROPFIND.
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ZepCalendar {
-    /// Human-readable display name from `<displayname>`.
     pub display_name: String,
-    /// Full absolute URL of the calendar (used for connection tests and stored in EmployeeSetting).
     pub url: String,
 }
 
-/// Returned by the credential test command: number of calendars discovered.
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ZepCredentialTestResult {
     pub calendar_count: u32,
 }
 
-/// Publicly visible credential info (root URL + username, no password).
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ZepCredentialsInfo {
@@ -62,7 +57,6 @@ pub struct ZepCredentialsInfo {
     pub username: String,
 }
 
-/// Result of a combined save-and-test action for one calendar source.
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ZepCalendarTestResult {
@@ -71,7 +65,6 @@ pub struct ZepCalendarTestResult {
     pub error_message: Option<String>,
 }
 
-/// Which iCal source is being acted upon.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Type, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum IcalSource {
@@ -145,7 +138,6 @@ const PROPFIND_BODY: &str = r#"<?xml version="1.0" encoding="utf-8"?>
   </d:prop>
 </d:propfind>"#;
 
-/// Issue a PROPFIND request with Basic Auth and return the XML response body.
 async fn propfind(url: &str, username: &str, password: &str) -> Result<String, ZepError> {
     let client = reqwest::Client::new();
     let response = client
@@ -199,7 +191,6 @@ async fn propfind(url: &str, username: &str, password: &str) -> Result<String, Z
     })
 }
 
-/// Issue a GET with Basic Auth to test a calendar URL and verify iCal content.
 async fn get_calendar(url: &str, username: &str, password: &str) -> Result<(), ZepError> {
     let client = reqwest::Client::new();
     let response = client
@@ -262,8 +253,6 @@ async fn get_calendar(url: &str, username: &str, password: &str) -> Result<(), Z
 
 // ── PROPFIND XML parsing ──────────────────────────────────────────────────────
 
-/// Parse CalDAV PROPFIND multistatus XML and extract calendars.
-/// Uses simple string matching to avoid an XML parser dependency.
 pub(crate) fn parse_propfind_calendars(body: &str, root_url: &str) -> Vec<ZepCalendar> {
     let base_origin = extract_origin(root_url);
     collect_response_blocks(body)
@@ -290,7 +279,6 @@ pub(crate) fn parse_propfind_calendars(body: &str, root_url: &str) -> Vec<ZepCal
         .collect()
 }
 
-/// Split XML body into individual `<*:response>` or `<response>` blocks.
 fn collect_response_blocks(body: &str) -> Vec<&str> {
     let mut blocks = Vec::new();
     let mut remaining = body;
@@ -310,7 +298,6 @@ fn collect_response_blocks(body: &str) -> Vec<&str> {
     blocks
 }
 
-/// Find the byte offset of the next `<*response` open tag.
 fn find_response_open(text: &str) -> Option<usize> {
     // Match <response or <PREFIX:response
     let mut search = text;
@@ -334,7 +321,6 @@ fn find_response_open(text: &str) -> Option<usize> {
     None
 }
 
-/// Find the byte offset past the closing `</response>` or `</PREFIX:response>` tag.
 fn find_response_close(text: &str) -> Option<usize> {
     let mut search = text;
     let mut offset = 0;
@@ -352,7 +338,6 @@ fn find_response_close(text: &str) -> Option<usize> {
     None
 }
 
-/// Extract text content of an XML element by local name (ignoring namespace prefix).
 pub(crate) fn extract_xml_text(text: &str, tag: &str) -> Option<String> {
     // Try without namespace prefix: <tag>content</tag>
     let direct_open = format!("<{tag}>");
@@ -391,7 +376,6 @@ pub(crate) fn extract_xml_text(text: &str, tag: &str) -> Option<String> {
     None
 }
 
-/// Extract scheme + host from a URL ("https://app.zep.de/caldav/admin" → "https://app.zep.de").
 fn extract_origin(url: &str) -> String {
     if let Some(scheme_end) = url.find("://") {
         let after_scheme = &url[scheme_end + 3..];
@@ -407,7 +391,6 @@ fn current_timestamp() -> String {
 
 // ── Tauri commands ────────────────────────────────────────────────────────────
 
-/// Save ZEP admin credentials: root URL stored in local store; username+password in keychain.
 #[tauri::command]
 #[specta::specta]
 pub fn zep_save_credentials(
@@ -443,8 +426,6 @@ pub fn zep_save_credentials(
     Ok(())
 }
 
-/// Load publicly visible ZEP credential info (root URL + username, no password).
-/// Returns None if not yet configured.
 #[tauri::command]
 #[specta::specta]
 pub fn zep_load_credentials(app: tauri::AppHandle) -> Result<Option<ZepCredentialsInfo>, ZepError> {
@@ -469,8 +450,6 @@ pub fn zep_load_credentials(app: tauri::AppHandle) -> Result<Option<ZepCredentia
     }
 }
 
-/// Test ZEP admin credentials by issuing a PROPFIND. Returns the calendar count on success.
-/// Does NOT save credentials — call `zep_save_credentials` after a successful test.
 #[tauri::command]
 #[specta::specta]
 pub async fn zep_test_credentials(
@@ -495,8 +474,6 @@ pub async fn zep_test_credentials(
     })
 }
 
-/// Discover all CalDAV calendars using the stored admin credentials.
-/// The frontend should cache the result for the session and call this on-demand.
 #[tauri::command]
 #[specta::specta]
 pub async fn zep_discover_calendars(app: tauri::AppHandle) -> Result<Vec<ZepCalendar>, ZepError> {

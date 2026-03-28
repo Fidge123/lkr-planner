@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
-/// Health status response
 #[derive(Debug, Serialize, Deserialize, Type)]
 pub struct HealthStatus {
     pub status: HealthStatusEnum,
@@ -16,7 +15,6 @@ pub enum HealthStatusEnum {
     Unhealthy,
 }
 
-/// Check the health status of the application
 #[tauri::command]
 #[specta::specta]
 pub fn check_health() -> Result<HealthStatus, String> {

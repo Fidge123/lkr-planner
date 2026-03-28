@@ -86,8 +86,6 @@ pub async fn daylite_list_contacts(
     Ok(contacts)
 }
 
-/// Public helper for other modules (e.g., ZEP) to sync iCal URLs to Daylite
-/// without going through a Tauri command round-trip.
 pub async fn sync_contact_ical_urls(
     app: tauri::AppHandle,
     input: DayliteUpdateContactIcalUrlsInput,
