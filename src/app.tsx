@@ -79,14 +79,10 @@ function App() {
       <header className="navbar p-4 shadow-sm border-b border-base-300">
         <div className="navbar-start gap-2">
           <h1 className="text-2xl font-bold">Wochenplanung</h1>
-          <div className="dropdown">
-            <button
-              type="button"
-              className="btn btn-ghost px-2"
-              aria-label="Einstellungen öffnen"
-            >
+          <details className="dropdown">
+            <summary className="btn btn-ghost px-2 list-none">
               <Settings className="size-6 text-base-content/50" />
-            </button>
+            </summary>
             <ul className="dropdown-content menu bg-base-100 rounded-box z-10 w-52 p-2 shadow border border-base-300">
               <li>
                 <button
@@ -105,7 +101,7 @@ function App() {
                 </button>
               </li>
             </ul>
-          </div>
+          </details>
         </div>
         <nav className="navbar-end gap-2">
           <button
