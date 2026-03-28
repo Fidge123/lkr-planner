@@ -568,7 +568,7 @@ pub async fn zep_save_and_test_calendar(
     };
 
     sync_contact_ical_urls(
-        app.clone(),
+        &mut store,
         DayliteUpdateContactIcalUrlsInput {
             contact_reference: daylite_contact_reference.clone(),
             primary_ical_url: primary_url,

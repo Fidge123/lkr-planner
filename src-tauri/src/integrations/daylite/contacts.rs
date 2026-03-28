@@ -87,20 +87,19 @@ pub async fn daylite_list_contacts(
 }
 
 pub async fn sync_contact_ical_urls(
-    app: tauri::AppHandle,
+    store: &mut LocalStore,
     input: DayliteUpdateContactIcalUrlsInput,
 ) -> Result<(), DayliteApiError> {
-    let mut store = load_store_or_error(app.clone())?;
-    let client = DayliteApiClient::new(&store.api_endpoints.daylite_base_url)?;
+    let daylite_base_url = store.api_endpoints.daylite_base_url.clone();
+    let client = DayliteApiClient::new(&daylite_base_url)?;
     let token_state = load_daylite_tokens()?;
 
     let (_, token_state) =
-        update_contact_ical_urls_core(&client, token_state, &mut store, &input).await?;
+        update_contact_ical_urls_core(&client, token_state, store, &input).await?;
 
     store_daylite_tokens(&token_state)?;
     store.daylite_cache.last_synced_at = Some(current_timestamp_iso8601());
-    save_store_or_error(app, store)?;
-
+    // Caller is responsible for saving the store.
     Ok(())
 }
 

@@ -185,7 +185,7 @@ export function EmployeeIcalDialog({
   );
 }
 
-function CalendarSection({
+export function CalendarSection({
   title,
   calendars,
   selectedUrl,
@@ -338,7 +338,7 @@ interface Props {
   onReloadCalendars: () => void;
 }
 
-interface CalendarSectionProps {
+export interface CalendarSectionProps {
   title: string;
   source: IcalSource;
   calendars: ZepCalendar[] | null;
@@ -351,7 +351,7 @@ interface CalendarSectionProps {
   isOptional?: boolean;
 }
 
-interface SectionStatus {
+export interface SectionStatus {
   type: "success" | "error";
   message: string;
 }
