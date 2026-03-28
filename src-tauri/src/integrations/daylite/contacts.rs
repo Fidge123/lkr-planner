@@ -1,7 +1,7 @@
 use super::super::local_store::{
     DayliteContactCacheEntry, DayliteContactUrlCacheEntry, LocalStore,
 };
-use super::auth_flow::send_authenticated_json;
+use super::auth_flow::{send_authenticated_json, send_authenticated_request};
 use super::client::DayliteApiClient;
 use super::client::DayliteHttpMethod;
 use super::shared::{
@@ -142,11 +142,13 @@ pub(super) async fn update_contact_ical_urls_core(
     )
     .await?;
     let merged_urls = merge_contact_ical_urls(
-        current_contact.urls,
+        current_contact.urls.clone(),
         &input.primary_ical_url,
         &input.absence_ical_url,
     );
-    let (updated_contact, token_state) = send_authenticated_json::<DayliteContactSummary>(
+    // PATCH the contact URLs. Daylite may return 204 No Content (empty body),
+    // so we only verify the status and construct the result from the GET data + merged URLs.
+    let token_state = send_authenticated_request(
         client,
         token_state,
         DayliteHttpMethod::Patch,
@@ -157,7 +159,10 @@ pub(super) async fn update_contact_ical_urls_core(
         })),
     )
     .await?;
-    let updated_contact = map_daylite_contact_summary(updated_contact);
+    let updated_contact = map_daylite_contact_summary(DayliteContactSummary {
+        urls: merged_urls,
+        ..current_contact
+    });
 
     let mut cached_contacts: Vec<PlanningContactRecord> = store
         .daylite_cache
@@ -684,6 +689,47 @@ mod tests {
             let patch_body = requests[1].body.as_ref().expect("PATCH should have body");
             let urls = patch_body["urls"].as_array().expect("urls should be array");
             assert_eq!(urls.len(), 3);
+        });
+    }
+
+    #[test]
+    fn update_ical_urls_handles_204_no_content_from_patch() {
+        // Daylite returns 204 No Content (empty body) for PATCH /contacts/:id.
+        // The result must still be correct (built from GET data + merged URLs).
+        tauri::async_runtime::block_on(async {
+            let get_response = mock_response(
+                200,
+                r#"{"self":"/v1/contacts/800","first_name":"Karl","last_name":"G","category":"Monteur","urls":[]}"#,
+            );
+            let patch_response = mock_response(204, "");
+            let transport = MockTransport::new(vec![Ok(get_response), Ok(patch_response)]);
+            let client = DayliteApiClient::with_transport(Arc::new(transport));
+            let mut store = LocalStore::default();
+
+            let (contact, _) = update_contact_ical_urls_core(
+                &client,
+                DayliteTokenState {
+                    access_token: "token".to_string(),
+                    refresh_token: "refresh".to_string(),
+                    access_token_expires_at_ms: Some(u64::MAX),
+                },
+                &mut store,
+                &DayliteUpdateContactIcalUrlsInput {
+                    contact_reference: "/v1/contacts/800".to_string(),
+                    primary_ical_url: "https://example.com/primary.ics".to_string(),
+                    absence_ical_url: "".to_string(),
+                },
+            )
+            .await
+            .expect("update should succeed even when PATCH returns 204 No Content");
+
+            assert_eq!(contact.reference, "/v1/contacts/800");
+            assert_eq!(contact.category, Some("Monteur".to_string()));
+            assert_eq!(contact.urls.len(), 1);
+            assert_eq!(
+                contact.urls[0].url,
+                Some("https://example.com/primary.ics".to_string())
+            );
         });
     }
 
