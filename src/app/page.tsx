@@ -1,4 +1,5 @@
 import type {
+  EmployeeSetting,
   PlanningContactRecord,
   PlanningProjectRecord,
 } from "../generated/tauri";
@@ -12,6 +13,8 @@ export function PlanningGrid({
   weekOffset,
   projectState,
   employeeState,
+  employeeSettings,
+  onOpenIcalDialog,
 }: Props) {
   const planningProjectsState = usePlanningProjects();
   const planningEmployeesState = usePlanningEmployees();
@@ -23,6 +26,8 @@ export function PlanningGrid({
       weekOffset={weekOffset}
       projectState={resolvedProjectState}
       employeeState={resolvedEmployeeState}
+      employeeSettings={employeeSettings ?? []}
+      onOpenIcalDialog={onOpenIcalDialog ?? (() => {})}
     />
   );
 }
@@ -31,6 +36,8 @@ export function PlanningGridTable({
   weekOffset,
   projectState,
   employeeState,
+  employeeSettings,
+  onOpenIcalDialog,
 }: PlanningGridTableProps) {
   const weekDays = getWeekDays(weekOffset);
   const { projects, isLoading, errorMessage, reloadProjects } = projectState;
@@ -66,7 +73,7 @@ export function PlanningGridTable({
       <table className="table table-fixed border-collapse">
         <thead className="text-base-content">
           <tr>
-            <th className="w-36 p-4 font-bold">Mitarbeiter</th>
+            <th className="w-40 p-4 font-bold">Mitarbeiter</th>
             {weekDays.map((day) => (
               <TimetableHeader key={day.getTime()} day={day} />
             ))}
@@ -79,6 +86,12 @@ export function PlanningGridTable({
               employee={employee}
               projects={projects}
               weekDays={weekDays}
+              employeeSetting={
+                employeeSettings.find(
+                  (s) => s.dayliteContactReference === employee.self,
+                ) ?? null
+              }
+              onOpenIcalDialog={onOpenIcalDialog}
             />
           ))}
           {!isEmployeeLoading && employees.length === 0 ? (
@@ -133,12 +146,16 @@ interface Props {
   weekOffset: number;
   projectState?: PlanningGridProjectsState;
   employeeState?: PlanningGridEmployeesState;
+  employeeSettings?: EmployeeSetting[];
+  onOpenIcalDialog?: (employee: PlanningContactRecord) => void;
 }
 
 interface PlanningGridTableProps {
   weekOffset: number;
   projectState: PlanningGridProjectsState;
   employeeState: PlanningGridEmployeesState;
+  employeeSettings: EmployeeSetting[];
+  onOpenIcalDialog: (employee: PlanningContactRecord) => void;
 }
 
 export interface PlanningGridProjectsState {

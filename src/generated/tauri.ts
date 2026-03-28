@@ -5,9 +5,6 @@
 
 
 export const commands = {
-/**
- * Check the health status of the application
- */
 async checkHealth() : Promise<Result<HealthStatus, string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("check_health") };
@@ -79,6 +76,56 @@ async dayliteUpdateContactIcalUrls(input: DayliteUpdateContactIcalUrlsInput) : P
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+async zepSaveCredentials(rootUrl: string, username: string, password: string) : Promise<Result<null, ZepError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("zep_save_credentials", { rootUrl, username, password }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async zepLoadCredentials() : Promise<Result<ZepCredentialsInfo | null, ZepError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("zep_load_credentials") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async zepTestCredentials(rootUrl: string, username: string, password: string) : Promise<Result<ZepCredentialTestResult, ZepError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("zep_test_credentials", { rootUrl, username, password }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async zepDiscoverCalendars() : Promise<Result<ZepCalendar[], ZepError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("zep_discover_calendars") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Save a ZEP calendar URL for one source (Primary or Absence) and test the connection.
+ * 
+ * Steps:
+ * 1. Validate calendar_url is not None/empty
+ * 2. Sync to Daylite (abort on failure, local store unchanged)
+ * 3. Save calendar URL to local store, clear old timestamp
+ * 4. Run CalDAV GET with admin credentials
+ * 5. Store result timestamp
+ */
+async zepSaveAndTestCalendar(dayliteContactReference: string, source: IcalSource, calendarUrl: string | null) : Promise<Result<ZepCalendarTestResult, ZepError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("zep_save_and_test_calendar", { dayliteContactReference, source, calendarUrl }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 
@@ -92,7 +139,7 @@ async dayliteUpdateContactIcalUrls(input: DayliteUpdateContactIcalUrlsInput) : P
 
 /** user-defined types **/
 
-export type ApiEndpoints = { dayliteBaseUrl: string; planradarBaseUrl: string }
+export type ApiEndpoints = { dayliteBaseUrl: string; planradarBaseUrl: string; zepCaldavRootUrl?: string }
 export type ContactFilter = { activeEmployeeKeyword: string }
 export type DayliteApiError = { code: DayliteApiErrorCode; httpStatus: number | null; userMessage: string; technicalMessage: string }
 export type DayliteApiErrorCode = "UNAUTHORIZED" | "RATE_LIMITED" | "SERVER_ERROR" | "MISSING_TOKEN" | "INVALID_CONFIGURATION" | "REQUEST_FAILED" | "INVALID_RESPONSE" | "TOKEN_REFRESH_FAILED"
@@ -107,12 +154,40 @@ export type DayliteSearchInput = { searchTerm: string; limit: number | null }
 export type DayliteSearchResult<T> = { results: T[]; next: string | null }
 export type DayliteTokenSyncStatus = { hasAccessToken: boolean; hasRefreshToken: boolean }
 export type DayliteUpdateContactIcalUrlsInput = { contactReference: string; primaryIcalUrl: string; absenceIcalUrl: string }
-export type EmployeeSetting = { employeeId: string; dayliteContactReference: string; primaryIcalUrl: string; absenceIcalUrl: string }
+export type EmployeeSetting = { employeeId: string; dayliteContactReference: string; 
 /**
- * Health status response
+ * Full CalDAV URL of the primary (Einsatz) calendar, discovered via PROPFIND.
+ * None = no calendar assigned. Old `primaryIcalUrl` values are not migrated automatically.
  */
+zepPrimaryCalendar?: string | null; 
+/**
+ * Full CalDAV URL of the absence (Abwesenheit) calendar, discovered via PROPFIND.
+ * None = no absence calendar (intentional, not an error).
+ */
+zepAbsenceCalendar?: string | null; 
+/**
+ * ISO 8601 timestamp of the last connection test for the primary calendar.
+ * None = never tested (or URL changed since last test).
+ */
+primaryIcalLastTestedAt?: string | null; 
+/**
+ * Whether the last connection test for the primary calendar succeeded.
+ * None if never tested or URL changed since last test.
+ */
+primaryIcalLastTestPassed?: boolean | null; 
+/**
+ * ISO 8601 timestamp of the last connection test for the absence calendar.
+ * None = never tested (or URL changed since last test).
+ */
+absenceIcalLastTestedAt?: string | null; 
+/**
+ * Whether the last connection test for the absence calendar succeeded.
+ * None if never tested or URL changed since last test.
+ */
+absenceIcalLastTestPassed?: boolean | null }
 export type HealthStatus = { status: HealthStatusEnum; timestamp: string; version: string }
 export type HealthStatusEnum = "healthy" | "unhealthy"
+export type IcalSource = "primary" | "absence"
 export type LocalStore = { apiEndpoints: ApiEndpoints; tokenReferences: TokenReferences; employeeSettings: EmployeeSetting[]; standardFilter: StandardFilter; contactFilter: ContactFilter; routingSettings: RoutingSettings; dayliteCache: DayliteCache }
 export type PlanningContactRecord = { self: string; full_name?: string | null; nickname?: string | null; category?: string | null; urls: DayliteContactUrl[] }
 export type PlanningProjectRecord = { self: string; name: string; status: PlanningProjectStatus; category?: string | null; keywords: string[]; due?: string | null; started?: string | null; completed?: string | null; create_date?: string | null; modify_date?: string | null }
@@ -122,6 +197,12 @@ export type StandardFilter = { pipelines: string[]; columns: string[]; categorie
 export type StoreError = { code: StoreErrorCode; userMessage: string; technicalMessage: string }
 export type StoreErrorCode = "READ_FAILED" | "WRITE_FAILED" | "CORRUPT_FILE" | "MISSING_FIELDS"
 export type TokenReferences = { dayliteTokenReference: string; planradarTokenReference: string; dayliteAccessToken: string; dayliteRefreshToken: string; dayliteAccessTokenExpiresAtMs: number | null }
+export type ZepCalendar = { displayName: string; url: string }
+export type ZepCalendarTestResult = { success: boolean; timestamp: string; errorMessage: string | null }
+export type ZepCredentialTestResult = { calendarCount: number }
+export type ZepCredentialsInfo = { rootUrl: string; username: string }
+export type ZepError = { code: ZepErrorCode; userMessage: string; technicalMessage: string }
+export type ZepErrorCode = "KEYCHAIN_ERROR" | "MISSING_CREDENTIALS" | "UNAUTHORIZED" | "NOT_FOUND" | "NETWORK_ERROR" | "INVALID_RESPONSE" | "INVALID_CONFIGURATION" | "DAYLITE_SYNC_FAILED"
 
 /** tauri-specta globals **/
 
