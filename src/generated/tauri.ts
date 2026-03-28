@@ -80,14 +80,6 @@ async dayliteUpdateContactIcalUrls(input: DayliteUpdateContactIcalUrlsInput) : P
     else return { status: "error", error: e  as any };
 }
 },
-async migrateLegacyTokens() : Promise<Result<LocalStore, StoreError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("migrate_legacy_tokens") };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
 async zepSaveCredentials(rootUrl: string, username: string, password: string) : Promise<Result<null, ZepError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("zep_save_credentials", { rootUrl, username, password }) };
@@ -123,38 +115,6 @@ async zepDiscoverCalendars() : Promise<Result<ZepCalendar[], ZepError>> {
 async zepSaveAndTestCalendar(dayliteContactReference: string, source: IcalSource, calendarUrl: string | null) : Promise<Result<ZepCalendarTestResult, ZepError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("zep_save_and_test_calendar", { dayliteContactReference, source, calendarUrl }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async setToken(service: string, username: string, token: string) : Promise<Result<null, SecretError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("set_token", { service, username, token }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async getToken(service: string, username: string) : Promise<Result<string, SecretError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("get_token", { service, username }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async deleteToken(service: string, username: string) : Promise<Result<null, SecretError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("delete_token", { service, username }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async checkToken(service: string, username: string) : Promise<Result<boolean, SecretError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("check_token", { service, username }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -199,7 +159,6 @@ export type PlanningContactRecord = { self: string; full_name?: string | null; n
 export type PlanningProjectRecord = { self: string; name: string; status: PlanningProjectStatus; category?: string | null; keywords: string[]; due?: string | null; started?: string | null; completed?: string | null; create_date?: string | null; modify_date?: string | null }
 export type PlanningProjectStatus = "new_status" | "in_progress" | "done" | "abandoned" | "cancelled" | "deferred"
 export type RoutingSettings = { openrouteserviceApiKey: string; openrouteserviceProfile: string }
-export type SecretError = { type: "AccessDenied"; message: string } | { type: "NotFound" } | { type: "Other"; message: string }
 export type StandardFilter = { pipelines: string[]; columns: string[]; categories: string[]; exclusionStatuses: string[] }
 export type StoreError = { code: StoreErrorCode; userMessage: string; technicalMessage: string }
 export type StoreErrorCode = "READ_FAILED" | "WRITE_FAILED" | "CORRUPT_FILE" | "MISSING_FIELDS"

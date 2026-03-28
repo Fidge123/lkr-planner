@@ -16,7 +16,6 @@ pub fn run() {
             integrations::daylite::contacts::daylite_list_contacts,
             integrations::daylite::contacts::daylite_list_cached_contacts,
             integrations::daylite::contacts::daylite_update_contact_ical_urls,
-            integrations::local_store::migrate_legacy_tokens,
             integrations::zep::zep_save_credentials,
             integrations::zep::zep_load_credentials,
             integrations::zep::zep_test_credentials,
