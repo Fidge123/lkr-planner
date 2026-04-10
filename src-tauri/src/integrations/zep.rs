@@ -10,12 +10,8 @@ use std::time::Duration;
 use tauri_plugin_http::reqwest;
 use tauri_plugin_http::reqwest::Method;
 
-// ── Keychain identifiers ─────────────────────────────────────────────────────
-
 const ZEP_KEYCHAIN_SERVICE: &str = "lkr-planner-zep";
 const ZEP_KEYCHAIN_ACCOUNT: &str = "LKR Planner ZEP Admin";
-
-// ── Public types ─────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -72,8 +68,6 @@ pub enum IcalSource {
     Primary,
     Absence,
 }
-
-// ── Internal credential storage ───────────────────────────────────────────────
 
 #[derive(Serialize, Deserialize)]
 pub(crate) struct ZepStoredCredentials {
@@ -137,8 +131,6 @@ pub(crate) fn load_zep_credentials_from_keychain() -> Result<ZepStoredCredential
         technical_message: format!("Deserialisierung fehlgeschlagen: {e}"),
     })
 }
-
-// ── CalDAV HTTP helpers ───────────────────────────────────────────────────────
 
 const PROPFIND_BODY: &str = r#"<?xml version="1.0" encoding="utf-8"?>
 <d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
@@ -208,9 +200,6 @@ async fn propfind(url: &str, username: &str, password: &str) -> Result<String, Z
     })
 }
 
-/// Verify that a specific CalDAV calendar URL is accessible by issuing a PROPFIND Depth:0.
-/// Using PROPFIND is the CalDAV-idiomatic probe — a plain GET on a collection URL often
-/// returns 405 Method Not Allowed from CalDAV servers including ZEP.
 async fn probe_calendar(url: &str, username: &str, password: &str) -> Result<(), ZepError> {
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(30))
@@ -257,8 +246,6 @@ async fn probe_calendar(url: &str, username: &str, password: &str) -> Result<(),
         }),
     }
 }
-
-// ── PROPFIND XML parsing ──────────────────────────────────────────────────────
 
 pub(crate) fn parse_propfind_calendars(body: &str, root_url: &str) -> Vec<ZepCalendar> {
     let base_origin = extract_origin(root_url);
@@ -396,8 +383,6 @@ fn current_timestamp() -> String {
     Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true)
 }
 
-// ── Tauri commands ────────────────────────────────────────────────────────────
-
 #[tauri::command]
 #[specta::specta]
 pub fn zep_save_credentials(
@@ -509,13 +494,6 @@ pub async fn zep_discover_calendars(app: tauri::AppHandle) -> Result<Vec<ZepCale
 }
 
 /// Save a ZEP calendar URL for one source (Primary or Absence) and test the connection.
-///
-/// Steps:
-/// 1. Validate calendar_url is not None/empty
-/// 2. Sync to Daylite (abort on failure, local store unchanged)
-/// 3. Save calendar URL to local store, clear old timestamp
-/// 4. Run CalDAV GET with admin credentials
-/// 5. Store result timestamp
 #[tauri::command]
 #[specta::specta]
 pub async fn zep_save_and_test_calendar(
@@ -608,7 +586,7 @@ pub async fn zep_save_and_test_calendar(
         },
     )?;
 
-    // Step 4: Run CalDAV GET test
+    // Step 4: Run CalDAV test
     let creds = load_zep_credentials_from_keychain()?;
     let timestamp = current_timestamp();
     let test_result = probe_calendar(cal_url, &creds.username, &creds.password).await;
@@ -646,8 +624,6 @@ pub async fn zep_save_and_test_calendar(
     })
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
 fn find_or_default_setting(
     settings: &[EmployeeSetting],
     daylite_contact_reference: &str,
@@ -681,8 +657,6 @@ fn update_setting(
         settings.push(new_setting);
     }
 }
-
-// ── Tests ─────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
 mod tests {
