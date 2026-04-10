@@ -58,27 +58,27 @@ pub struct EmployeeSetting {
     pub daylite_contact_reference: String,
     /// Full CalDAV URL of the primary (Einsatz) calendar, discovered via PROPFIND.
     /// None = no calendar assigned. Old `primaryIcalUrl` values are not migrated automatically.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     pub zep_primary_calendar: Option<String>,
     /// Full CalDAV URL of the absence (Abwesenheit) calendar, discovered via PROPFIND.
     /// None = no absence calendar (intentional, not an error).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     pub zep_absence_calendar: Option<String>,
     /// ISO 8601 timestamp of the last connection test for the primary calendar.
     /// None = never tested (or URL changed since last test).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     pub primary_ical_last_tested_at: Option<String>,
     /// Whether the last connection test for the primary calendar succeeded.
     /// None if never tested or URL changed since last test.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     pub primary_ical_last_test_passed: Option<bool>,
     /// ISO 8601 timestamp of the last connection test for the absence calendar.
     /// None = never tested (or URL changed since last test).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     pub absence_ical_last_tested_at: Option<String>,
     /// Whether the last connection test for the absence calendar succeeded.
     /// None if never tested or URL changed since last test.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     pub absence_ical_last_test_passed: Option<bool>,
 }
 
