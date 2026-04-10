@@ -886,7 +886,7 @@ mod tests {
                 },
                 &mut store,
                 &DayliteUpdateContactIcalUrlsInput {
-                    contact_reference: "/v1/contacts/500".to_string(),
+                    contact_reference: "/v1/contacts/1029".to_string(),
                     primary_ical_url: "https://example.com/primary.ics".to_string(),
                     absence_ical_url: "https://example.com/absence.ics".to_string(),
                 },
@@ -894,14 +894,14 @@ mod tests {
             .await
             .expect("update should replay from cassette");
 
-            assert_eq!(contact.reference, "/v1/contacts/500");
+            assert_eq!(contact.reference, "/v1/contacts/1029");
             assert_eq!(contact.category, Some("Monteur".to_string()));
-            assert_eq!(contact.urls.len(), 3);
+            assert_eq!(contact.urls.len(), 2);
             assert_eq!(token_state.access_token, "replay-access-token");
             assert_eq!(store.daylite_cache.contacts.len(), 1);
             assert_eq!(
                 store.daylite_cache.contacts[0].reference,
-                "/v1/contacts/500"
+                "/v1/contacts/1029"
             );
         });
     }
