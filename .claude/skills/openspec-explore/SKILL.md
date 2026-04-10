@@ -2,7 +2,6 @@
 name: openspec-explore
 description: Enter explore mode - a thinking partner for exploring ideas, investigating problems, and clarifying requirements. Use when the user wants to think through something before or during a change.
 license: MIT
-compatibility: Requires openspec CLI.
 metadata:
   author: openspec
   version: "1.0"
@@ -83,7 +82,7 @@ You have full context of the OpenSpec system. Use it naturally, don't force it.
 
 At the start, quickly check what exists:
 ```bash
-openspec list --json
+bunx openspec list --json
 ```
 
 This tells you:
@@ -115,7 +114,7 @@ If the user mentions a change or you detect one is relevant:
 3. **Offer to capture when decisions are made**
 
    | Insight Type | Where to Capture |
-   |--------------|------------------|
+   | -------------------------- | ---------------------------- |
    | New requirement discovered | `specs/<capability>/spec.md` |
    | Requirement changed | `specs/<capability>/spec.md` |
    | Design decision made | `design.md` |
