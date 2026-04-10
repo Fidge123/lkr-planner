@@ -275,6 +275,51 @@ fn map_project_status(status: Option<String>) -> PlanningProjectStatus {
     PlanningProjectStatus::NewStatus
 }
 
+/// Fetches a single project by its Daylite reference (e.g. "/v1/projects/3001") and returns
+/// `(name, status_string)`. Returns `None` on any error so callers can show a placeholder instead.
+/// Intended for use as a cache fallback in other integrations.
+pub(crate) async fn fetch_project_by_reference(
+    app: tauri::AppHandle,
+    project_ref: &str,
+) -> Option<(String, String)> {
+    // The project_ref is an absolute API path like "/v1/projects/3001".
+    // The DayliteApiClient base_url already includes the version prefix, so strip "/v1".
+    let path = project_ref.strip_prefix("/v1").unwrap_or(project_ref);
+    if path.is_empty() {
+        return None;
+    }
+
+    let store = crate::integrations::local_store::load_local_store(app).ok()?;
+    let client = DayliteApiClient::new(&store.api_endpoints.daylite_base_url).ok()?;
+    let tokens = load_daylite_tokens().ok()?;
+
+    let (summary, _): (DayliteProjectSummary, _) = send_authenticated_json(
+        &client,
+        tokens,
+        DayliteHttpMethod::Get,
+        path,
+        vec![],
+        None,
+    )
+    .await
+    .ok()?;
+
+    let mapped = map_daylite_project_summary(summary);
+    let status_str = project_status_to_string(&mapped.status);
+    Some((mapped.name, status_str.to_string()))
+}
+
+fn project_status_to_string(status: &PlanningProjectStatus) -> &'static str {
+    match status {
+        PlanningProjectStatus::InProgress => "in_progress",
+        PlanningProjectStatus::Done => "done",
+        PlanningProjectStatus::Abandoned => "abandoned",
+        PlanningProjectStatus::Cancelled => "cancelled",
+        PlanningProjectStatus::Deferred => "deferred",
+        PlanningProjectStatus::NewStatus => "new_status",
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{

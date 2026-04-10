@@ -1,6 +1,8 @@
 import { beforeAll, describe, expect, it, setSystemTime } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
+import type { CalendarCellEvent } from "../generated/tauri";
 import {
+  type PlanningGridAssignmentState,
   type PlanningGridEmployeesState,
   type PlanningGridProjectsState,
   PlanningGridTable,
@@ -20,6 +22,13 @@ const defaultEmployeeState: PlanningGridEmployeesState = {
   reloadEmployees: () => {},
 };
 
+const defaultAssignmentState: PlanningGridAssignmentState = {
+  eventsByEmployee: {},
+  isLoading: false,
+  errorMessage: null,
+  reloadAssignments: () => {},
+};
+
 const defaultIcalProps = {
   employeeSettings: [] as import("../generated/tauri").EmployeeSetting[],
   onOpenIcalDialog: () => {},
@@ -36,6 +45,7 @@ describe("planning grid project loading states", () => {
         weekOffset={0}
         projectState={{ ...defaultState, isLoading: true }}
         employeeState={{ ...defaultEmployeeState }}
+        assignmentState={{ ...defaultAssignmentState }}
         {...defaultIcalProps}
       />,
     );
@@ -53,6 +63,7 @@ describe("planning grid project loading states", () => {
           errorMessage: "Die Daten konnten nicht von Daylite geladen werden.",
         }}
         employeeState={{ ...defaultEmployeeState }}
+        assignmentState={{ ...defaultAssignmentState }}
         {...defaultIcalProps}
       />,
     );
@@ -79,6 +90,7 @@ describe("planning grid project loading states", () => {
           ],
         }}
         employeeState={{ ...defaultEmployeeState }}
+        assignmentState={{ ...defaultAssignmentState }}
         {...defaultIcalProps}
       />,
     );
@@ -93,6 +105,7 @@ describe("planning grid project loading states", () => {
         weekOffset={0}
         projectState={{ ...defaultState }}
         employeeState={{ ...defaultEmployeeState }}
+        assignmentState={{ ...defaultAssignmentState }}
         {...defaultIcalProps}
       />,
     );
@@ -123,6 +136,7 @@ describe("planning grid project loading states", () => {
           ],
         }}
         employeeState={{ ...defaultEmployeeState }}
+        assignmentState={{ ...defaultAssignmentState }}
         {...defaultIcalProps}
       />,
     );
@@ -145,6 +159,7 @@ describe("planning grid project loading states", () => {
           ],
         }}
         employeeState={{ ...defaultEmployeeState }}
+        assignmentState={{ ...defaultAssignmentState }}
         {...defaultIcalProps}
       />,
     );
@@ -169,11 +184,143 @@ describe("planning grid project loading states", () => {
             },
           ],
         }}
+        assignmentState={{ ...defaultAssignmentState }}
         {...defaultIcalProps}
       />,
     );
 
     expect(html).toContain("Monteur Aus Daylite");
     expect(html).not.toContain("Anna Schmidt");
+  });
+});
+
+describe("planning grid assignment states", () => {
+  beforeAll(() => {
+    setSystemTime(new Date(2026, 0, 28, 9, 0, 0));
+  });
+
+  it("shows german loading state when assignments are loading", () => {
+    const html = renderToStaticMarkup(
+      <PlanningGridTable
+        weekOffset={0}
+        projectState={{ ...defaultState }}
+        employeeState={{ ...defaultEmployeeState }}
+        assignmentState={{ ...defaultAssignmentState, isLoading: true }}
+        {...defaultIcalProps}
+      />,
+    );
+
+    expect(html).toContain("Einsätze werden geladen...");
+  });
+
+  it("shows german error banner with retry when assignment fetch fails", () => {
+    const html = renderToStaticMarkup(
+      <PlanningGridTable
+        weekOffset={0}
+        projectState={{ ...defaultState }}
+        employeeState={{ ...defaultEmployeeState }}
+        assignmentState={{
+          ...defaultAssignmentState,
+          errorMessage: "Die Einsätze konnten nicht geladen werden.",
+        }}
+        {...defaultIcalProps}
+      />,
+    );
+
+    expect(html).toContain("Die Einsätze konnten nicht geladen werden.");
+    expect(html).toContain("Erneut laden");
+  });
+
+  it("renders lkr-planner assignment event in cell with project color", () => {
+    const employee = {
+      self: "/v1/contacts/9001",
+      full_name: "Monteur Aus Daylite",
+      category: "Monteur",
+      urls: [],
+    };
+    const assignmentEvent: CalendarCellEvent = {
+      uid: "event-uid-1",
+      kind: "assignment",
+      title: "Projekt Nord",
+      projectStatus: "in_progress",
+      date: "2026-01-26",
+    };
+
+    const html = renderToStaticMarkup(
+      <PlanningGridTable
+        weekOffset={0}
+        projectState={{ ...defaultState }}
+        employeeState={{ ...defaultEmployeeState, employees: [employee] }}
+        assignmentState={{
+          ...defaultAssignmentState,
+          eventsByEmployee: {
+            "/v1/contacts/9001": [assignmentEvent],
+          },
+        }}
+        {...defaultIcalProps}
+      />,
+    );
+
+    expect(html).toContain("Projekt Nord");
+    expect(html).toContain("bg-secondary");
+  });
+
+  it("renders bare event in cell with neutral style and no edit affordance", () => {
+    const employee = {
+      self: "/v1/contacts/9001",
+      full_name: "Monteur Aus Daylite",
+      category: "Monteur",
+      urls: [],
+    };
+    const bareEvent: CalendarCellEvent = {
+      uid: "bare-uid-1",
+      kind: "bare",
+      title: "Auto Werkstatt",
+      projectStatus: null,
+      date: "2026-01-26",
+    };
+
+    const html = renderToStaticMarkup(
+      <PlanningGridTable
+        weekOffset={0}
+        projectState={{ ...defaultState }}
+        employeeState={{ ...defaultEmployeeState, employees: [employee] }}
+        assignmentState={{
+          ...defaultAssignmentState,
+          eventsByEmployee: {
+            "/v1/contacts/9001": [bareEvent],
+          },
+        }}
+        {...defaultIcalProps}
+      />,
+    );
+
+    expect(html).toContain("Auto Werkstatt");
+    expect(html).toContain("btn-ghost");
+    expect(html).not.toContain("bg-secondary");
+    expect(html).not.toContain("bg-primary");
+  });
+
+  it("renders empty cells when no events exist for the week", () => {
+    const employee = {
+      self: "/v1/contacts/9001",
+      full_name: "Monteur Aus Daylite",
+      category: "Monteur",
+      urls: [],
+    };
+
+    const html = renderToStaticMarkup(
+      <PlanningGridTable
+        weekOffset={0}
+        projectState={{ ...defaultState }}
+        employeeState={{ ...defaultEmployeeState, employees: [employee] }}
+        assignmentState={{ ...defaultAssignmentState, eventsByEmployee: {} }}
+        {...defaultIcalProps}
+      />,
+    );
+
+    // Employee row exists but no project events in it
+    expect(html).toContain("Monteur Aus Daylite");
+    expect(html).not.toContain("bg-secondary");
   });
 });
