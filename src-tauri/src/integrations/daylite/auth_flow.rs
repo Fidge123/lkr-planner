@@ -121,7 +121,13 @@ pub(super) async fn send_authenticated_request(
 ) -> Result<DayliteTokenState, DayliteApiError> {
     let token_state = ensure_access_token(client, token_state).await?;
     let response = client
-        .send_request(method, path, query, body, Some(token_state.access_token.clone()))
+        .send_request(
+            method,
+            path,
+            query,
+            body,
+            Some(token_state.access_token.clone()),
+        )
         .await?;
     if !(200..300).contains(&response.status) {
         return Err(normalize_http_error(response.status, &response.body, path));
