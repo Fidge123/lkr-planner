@@ -46,7 +46,7 @@ pub struct EmployeeWeekEvents {
 
 /// A raw VEVENT as parsed from iCal text.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-struct RawVEvent {
+pub(crate) struct RawVEvent {
     uid: String,
     summary: String,
     description: String,
