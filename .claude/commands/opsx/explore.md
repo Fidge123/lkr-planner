@@ -86,7 +86,7 @@ You have full context of the OpenSpec system. Use it naturally, don't force it.
 
 At the start, quickly check what exists:
 ```bash
-openspec list --json
+bunx openspec list --json
 ```
 
 This tells you:
@@ -120,7 +120,7 @@ If the user mentions a change or you detect one is relevant:
 3. **Offer to capture when decisions are made**
 
    | Insight Type | Where to Capture |
-   |--------------|------------------|
+   | -------------------------- | ---------------------------- |
    | New requirement discovered | `specs/<capability>/spec.md` |
    | Requirement changed | `specs/<capability>/spec.md` |
    | Design decision made | `design.md` |
