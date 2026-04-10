@@ -19,6 +19,6 @@ The weekly planning table currently uses dummy/hardcoded assignment data. This p
 
 ## Impact
 
-- Code: Update planning table to use persistent store
-- Storage: Local JSON store or backend command for assignments
-- Dependencies: Stable assignment persistence contract
+- Code: New CalDAV REPORT reading in Tauri backend; frontend hook replacing dummy data
+- Storage: Employee primary CalDAV calendars (ZEP) — no additions to LocalStore
+- Dependencies: BL-017 for CalDAV write operations (create/edit/delete)
