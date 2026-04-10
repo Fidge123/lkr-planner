@@ -657,7 +657,6 @@ fn find_or_default_setting(
         .find(|s| s.daylite_contact_reference == daylite_contact_reference)
         .cloned()
         .unwrap_or_else(|| EmployeeSetting {
-            employee_id: daylite_contact_reference.to_string(),
             daylite_contact_reference: daylite_contact_reference.to_string(),
             ..Default::default()
         })
@@ -675,7 +674,6 @@ fn update_setting(
         update(setting);
     } else {
         let mut new_setting = EmployeeSetting {
-            employee_id: daylite_contact_reference.to_string(),
             daylite_contact_reference: daylite_contact_reference.to_string(),
             ..Default::default()
         };
@@ -841,7 +839,6 @@ mod tests {
     #[test]
     fn update_setting_updates_existing_entry_and_clears_timestamp() {
         let mut settings = vec![EmployeeSetting {
-            employee_id: "/v1/contacts/42".to_string(),
             daylite_contact_reference: "/v1/contacts/42".to_string(),
             zep_primary_calendar: None,
             zep_absence_calendar: None,

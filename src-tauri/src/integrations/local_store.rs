@@ -55,7 +55,6 @@ pub struct TokenReferences {
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct EmployeeSetting {
-    pub employee_id: String,
     pub daylite_contact_reference: String,
     /// Full CalDAV URL of the primary (Einsatz) calendar, discovered via PROPFIND.
     /// None = no calendar assigned. Old `primaryIcalUrl` values are not migrated automatically.
@@ -313,7 +312,6 @@ mod tests {
                 daylite_access_token_expires_at_ms: Some(1_761_200_000_000),
             },
             employee_settings: vec![EmployeeSetting {
-                employee_id: "emp-1".to_string(),
                 daylite_contact_reference: "/v1/contacts/100".to_string(),
                 zep_primary_calendar: Some(
                     "https://app.zep.de/caldav/admin/emp-1-primary/".to_string(),

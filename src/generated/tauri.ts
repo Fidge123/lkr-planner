@@ -154,7 +154,7 @@ export type DayliteSearchInput = { searchTerm: string; limit: number | null }
 export type DayliteSearchResult<T> = { results: T[]; next: string | null }
 export type DayliteTokenSyncStatus = { hasAccessToken: boolean; hasRefreshToken: boolean }
 export type DayliteUpdateContactIcalUrlsInput = { contactReference: string; primaryIcalUrl: string; absenceIcalUrl: string }
-export type EmployeeSetting = { employeeId: string; dayliteContactReference: string; 
+export type EmployeeSetting = { dayliteContactReference: string;
 /**
  * Full CalDAV URL of the primary (Einsatz) calendar, discovered via PROPFIND.
  * None = no calendar assigned. Old `primaryIcalUrl` values are not migrated automatically.
