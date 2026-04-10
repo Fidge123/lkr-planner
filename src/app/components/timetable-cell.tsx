@@ -7,10 +7,7 @@ export function TimetableCell({ highlight = false, events }: Props) {
         {events.map((event) =>
           event.kind === "bare" ? (
             <li key={event.uid}>
-              <span
-                className="btn btn-block btn-ghost text-base-content/50 p-2 rounded-lg cursor-default"
-                aria-label={event.title}
-              >
+              <span className="btn btn-block btn-ghost text-base-content/50 p-2 rounded-lg cursor-default">
                 <h4 className="truncate flex-1 font-normal text-sm">
                   {event.title}
                 </h4>

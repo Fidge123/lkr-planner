@@ -9,7 +9,9 @@ export interface PlanningAssignmentsState {
   reloadAssignments: () => void;
 }
 
-export function usePlanningAssignments(weekStart: string): PlanningAssignmentsState {
+export function usePlanningAssignments(
+  weekStart: string,
+): PlanningAssignmentsState {
   const [eventsByEmployee, setEventsByEmployee] = useState<
     Record<string, CalendarCellEvent[]>
   >({});
