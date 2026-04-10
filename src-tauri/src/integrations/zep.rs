@@ -1,0 +1,784 @@
+use crate::integrations::daylite::contacts::{
+    sync_contact_ical_urls, DayliteUpdateContactIcalUrlsInput,
+};
+use crate::integrations::local_store::EmployeeSetting;
+use crate::secret_manager;
+use chrono::{SecondsFormat, Utc};
+use serde::{Deserialize, Serialize};
+use specta::Type;
+use std::time::Duration;
+use tauri_plugin_http::reqwest;
+use tauri_plugin_http::reqwest::Method;
+
+const ZEP_KEYCHAIN_SERVICE: &str = "lkr-planner-zep";
+const ZEP_KEYCHAIN_ACCOUNT: &str = "LKR Planner ZEP Admin";
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ZepError {
+    pub code: ZepErrorCode,
+    pub user_message: String,
+    pub technical_message: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum ZepErrorCode {
+    KeychainError,
+    MissingCredentials,
+    Unauthorized,
+    NotFound,
+    NetworkError,
+    InvalidResponse,
+    InvalidConfiguration,
+    DayliteSyncFailed,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ZepCalendar {
+    pub display_name: String,
+    pub url: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ZepCredentialTestResult {
+    pub calendar_count: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ZepCredentialsInfo {
+    pub root_url: String,
+    pub username: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ZepCalendarTestResult {
+    pub success: bool,
+    pub timestamp: String,
+    pub error_message: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Type, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum IcalSource {
+    Primary,
+    Absence,
+}
+
+#[derive(Serialize, Deserialize)]
+pub(crate) struct ZepStoredCredentials {
+    username: String,
+    password: String,
+}
+
+impl std::fmt::Debug for ZepStoredCredentials {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ZepStoredCredentials")
+            .field("username", &self.username)
+            .field("password", &"[REDACTED]")
+            .finish()
+    }
+}
+
+fn save_zep_credentials_to_keychain(username: &str, password: &str) -> Result<(), ZepError> {
+    let payload = serde_json::to_string(&ZepStoredCredentials {
+        username: username.to_string(),
+        password: password.to_string(),
+    })
+    .map_err(|e| ZepError {
+        code: ZepErrorCode::KeychainError,
+        user_message: "Die ZEP-Zugangsdaten konnten nicht gespeichert werden.".to_string(),
+        technical_message: format!("Serialisierung fehlgeschlagen: {e}"),
+    })?;
+
+    secret_manager::set_token(ZEP_KEYCHAIN_SERVICE, ZEP_KEYCHAIN_ACCOUNT, &payload).map_err(
+        |e| ZepError {
+            code: ZepErrorCode::KeychainError,
+            user_message: "Die ZEP-Zugangsdaten konnten nicht im Keychain gespeichert werden (Zugriff verweigert?).".to_string(),
+            technical_message: e.to_string(),
+        },
+    )
+}
+
+pub(crate) fn load_zep_credentials_from_keychain() -> Result<ZepStoredCredentials, ZepError> {
+    let json_str = secret_manager::get_token(ZEP_KEYCHAIN_SERVICE, ZEP_KEYCHAIN_ACCOUNT).map_err(
+        |e| match e {
+            secret_manager::SecretError::NotFound => ZepError {
+                code: ZepErrorCode::MissingCredentials,
+                user_message:
+                    "Keine ZEP-Zugangsdaten hinterlegt. Bitte ZEP-Verbindung konfigurieren."
+                        .to_string(),
+                technical_message: "Kein Keychain-Eintrag für ZEP-Zugangsdaten.".to_string(),
+            },
+            _ => ZepError {
+                code: ZepErrorCode::KeychainError,
+                user_message:
+                    "Auf die ZEP-Zugangsdaten im Keychain konnte nicht zugegriffen werden."
+                        .to_string(),
+                technical_message: e.to_string(),
+            },
+        },
+    )?;
+
+    serde_json::from_str::<ZepStoredCredentials>(&json_str).map_err(|e| ZepError {
+        code: ZepErrorCode::KeychainError,
+        user_message: "Die gespeicherten ZEP-Zugangsdaten sind beschädigt. Bitte neu eingeben."
+            .to_string(),
+        technical_message: format!("Deserialisierung fehlgeschlagen: {e}"),
+    })
+}
+
+const PROPFIND_BODY: &str = r#"<?xml version="1.0" encoding="utf-8"?>
+<d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
+  <d:prop>
+    <d:displayname/>
+    <d:resourcetype/>
+  </d:prop>
+</d:propfind>"#;
+
+async fn propfind(url: &str, username: &str, password: &str) -> Result<String, ZepError> {
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .build()
+        .map_err(|e| ZepError {
+            code: ZepErrorCode::NetworkError,
+            user_message: "HTTP-Client konnte nicht initialisiert werden.".to_string(),
+            technical_message: format!("Client::build fehlgeschlagen: {e}"),
+        })?;
+    let response = client
+        .request(
+            Method::from_bytes(b"PROPFIND").expect("PROPFIND is a valid HTTP method"),
+            url,
+        )
+        .basic_auth(username, Some(password))
+        .header("Depth", "1")
+        .header("Content-Type", "application/xml; charset=utf-8")
+        .body(PROPFIND_BODY)
+        .send()
+        .await
+        .map_err(|e| ZepError {
+            code: ZepErrorCode::NetworkError,
+            user_message: "ZEP CalDAV-Server ist nicht erreichbar.".to_string(),
+            technical_message: format!("PROPFIND fehlgeschlagen für {url}: {e}"),
+        })?;
+
+    let status = response.status().as_u16();
+    match status {
+        401 => {
+            return Err(ZepError {
+                code: ZepErrorCode::Unauthorized,
+                user_message: "Authentifizierung fehlgeschlagen. ZEP-Zugangsdaten prüfen."
+                    .to_string(),
+                technical_message: format!("PROPFIND returned HTTP 401 for {url}"),
+            });
+        }
+        404 => {
+            return Err(ZepError {
+                code: ZepErrorCode::NotFound,
+                user_message: "ZEP CalDAV-URL nicht gefunden. Root-URL prüfen.".to_string(),
+                technical_message: format!("PROPFIND returned HTTP 404 for {url}"),
+            });
+        }
+        200..=299 => {}
+        _ => {
+            return Err(ZepError {
+                code: ZepErrorCode::NetworkError,
+                user_message: "ZEP CalDAV-Server hat einen Fehler zurückgegeben.".to_string(),
+                technical_message: format!("PROPFIND returned HTTP {status} for {url}"),
+            });
+        }
+    }
+
+    response.text().await.map_err(|e| ZepError {
+        code: ZepErrorCode::InvalidResponse,
+        user_message: "Die Antwort des ZEP CalDAV-Servers konnte nicht gelesen werden.".to_string(),
+        technical_message: format!("Response body read fehlgeschlagen: {e}"),
+    })
+}
+
+async fn probe_calendar(url: &str, username: &str, password: &str) -> Result<(), ZepError> {
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .build()
+        .map_err(|e| ZepError {
+            code: ZepErrorCode::NetworkError,
+            user_message: "HTTP-Client konnte nicht initialisiert werden.".to_string(),
+            technical_message: format!("Client::build fehlgeschlagen: {e}"),
+        })?;
+    let response = client
+        .request(
+            Method::from_bytes(b"PROPFIND").expect("PROPFIND is a valid HTTP method"),
+            url,
+        )
+        .basic_auth(username, Some(password))
+        .header("Depth", "0")
+        .header("Content-Type", "application/xml; charset=utf-8")
+        .body(PROPFIND_BODY)
+        .send()
+        .await
+        .map_err(|e| ZepError {
+            code: ZepErrorCode::NetworkError,
+            user_message: "ZEP CalDAV-Server ist nicht erreichbar.".to_string(),
+            technical_message: format!("PROPFIND Depth:0 fehlgeschlagen für {url}: {e}"),
+        })?;
+
+    let status = response.status().as_u16();
+    match status {
+        401 => Err(ZepError {
+            code: ZepErrorCode::Unauthorized,
+            user_message: "Authentifizierung fehlgeschlagen. ZEP-Zugangsdaten prüfen.".to_string(),
+            technical_message: format!("PROPFIND Depth:0 returned HTTP 401 for {url}"),
+        }),
+        404 => Err(ZepError {
+            code: ZepErrorCode::NotFound,
+            user_message: "Kalender nicht gefunden. Kalender-Zuweisung prüfen.".to_string(),
+            technical_message: format!("PROPFIND Depth:0 returned HTTP 404 for {url}"),
+        }),
+        200..=299 => Ok(()),
+        _ => Err(ZepError {
+            code: ZepErrorCode::NetworkError,
+            user_message: "ZEP CalDAV-Server hat einen Fehler zurückgegeben.".to_string(),
+            technical_message: format!("PROPFIND Depth:0 returned HTTP {status} for {url}"),
+        }),
+    }
+}
+
+pub(crate) fn parse_propfind_calendars(body: &str, root_url: &str) -> Vec<ZepCalendar> {
+    let base_origin = extract_origin(root_url);
+    let Ok(doc) = roxmltree::Document::parse(body) else {
+        return vec![];
+    };
+
+    doc.root()
+        .descendants()
+        .filter(|n| n.has_tag_name(("DAV:", "response")))
+        .filter_map(|response| {
+            let is_calendar = response
+                .descendants()
+                .any(|n| n.has_tag_name(("urn:ietf:params:xml:ns:caldav", "calendar")));
+            if !is_calendar {
+                return None;
+            }
+            let href = response
+                .descendants()
+                .find(|n| n.has_tag_name(("DAV:", "href")))?
+                .text()?
+                .trim()
+                .to_string();
+            if href.is_empty() {
+                return None;
+            }
+            let display_name = response
+                .descendants()
+                .find(|n| n.has_tag_name(("DAV:", "displayname")))?
+                .text()?
+                .trim()
+                .to_string();
+            if display_name.is_empty() {
+                return None;
+            }
+            let url = if href.starts_with("http://") || href.starts_with("https://") {
+                href
+            } else {
+                format!("{}{}", base_origin, href)
+            };
+            Some(ZepCalendar { display_name, url })
+        })
+        .collect()
+}
+
+fn extract_origin(url: &str) -> String {
+    if let Some(scheme_end) = url.find("://") {
+        let after_scheme = &url[scheme_end + 3..];
+        let host_end = after_scheme.find('/').unwrap_or(after_scheme.len());
+        return format!("{}://{}", &url[..scheme_end], &after_scheme[..host_end]);
+    }
+    url.to_string()
+}
+
+fn current_timestamp() -> String {
+    Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn zep_save_credentials(
+    app: tauri::AppHandle,
+    root_url: String,
+    username: String,
+    password: String,
+) -> Result<(), ZepError> {
+    let root_url = root_url.trim().trim_end_matches('/').to_string();
+    if root_url.is_empty() {
+        return Err(ZepError {
+            code: ZepErrorCode::InvalidConfiguration,
+            user_message: "Die ZEP CalDAV-URL darf nicht leer sein.".to_string(),
+            technical_message: "root_url is empty".to_string(),
+        });
+    }
+
+    // Write the store first so that a keychain failure leaves no orphaned credential entry.
+    let mut store =
+        crate::integrations::local_store::load_local_store(app.clone()).map_err(|e| ZepError {
+            code: ZepErrorCode::InvalidConfiguration,
+            user_message: e.user_message,
+            technical_message: e.technical_message,
+        })?;
+    store.api_endpoints.zep_caldav_root_url = root_url;
+    crate::integrations::local_store::save_local_store(app, store).map_err(|e| ZepError {
+        code: ZepErrorCode::InvalidConfiguration,
+        user_message: e.user_message,
+        technical_message: e.technical_message,
+    })?;
+
+    save_zep_credentials_to_keychain(&username, &password)?;
+
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn zep_load_credentials(app: tauri::AppHandle) -> Result<Option<ZepCredentialsInfo>, ZepError> {
+    let store = crate::integrations::local_store::load_local_store(app).map_err(|e| ZepError {
+        code: ZepErrorCode::InvalidConfiguration,
+        user_message: e.user_message,
+        technical_message: e.technical_message,
+    })?;
+
+    let root_url = store.api_endpoints.zep_caldav_root_url.trim().to_string();
+    if root_url.is_empty() {
+        return Ok(None);
+    }
+
+    match load_zep_credentials_from_keychain() {
+        Ok(creds) => Ok(Some(ZepCredentialsInfo {
+            root_url,
+            username: creds.username,
+        })),
+        Err(e) if e.code == ZepErrorCode::MissingCredentials => Ok(None),
+        Err(e) => Err(e),
+    }
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn zep_test_credentials(
+    root_url: String,
+    username: String,
+    password: String,
+) -> Result<ZepCredentialTestResult, ZepError> {
+    let root_url = root_url.trim().trim_end_matches('/').to_string();
+    if root_url.is_empty() {
+        return Err(ZepError {
+            code: ZepErrorCode::InvalidConfiguration,
+            user_message: "Die ZEP CalDAV-URL darf nicht leer sein.".to_string(),
+            technical_message: "root_url is empty".to_string(),
+        });
+    }
+
+    let body = propfind(&root_url, &username, &password).await?;
+    let calendars = parse_propfind_calendars(&body, &root_url);
+
+    Ok(ZepCredentialTestResult {
+        calendar_count: calendars.len() as u32,
+    })
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn zep_discover_calendars(app: tauri::AppHandle) -> Result<Vec<ZepCalendar>, ZepError> {
+    let store = crate::integrations::local_store::load_local_store(app).map_err(|e| ZepError {
+        code: ZepErrorCode::InvalidConfiguration,
+        user_message: e.user_message,
+        technical_message: e.technical_message,
+    })?;
+
+    let root_url = store.api_endpoints.zep_caldav_root_url.trim().to_string();
+    if root_url.is_empty() {
+        return Err(ZepError {
+            code: ZepErrorCode::MissingCredentials,
+            user_message: "ZEP CalDAV-URL nicht konfiguriert. Bitte ZEP-Verbindung einrichten."
+                .to_string(),
+            technical_message: "zep_caldav_root_url is empty in local store".to_string(),
+        });
+    }
+
+    let creds = load_zep_credentials_from_keychain()?;
+    let body = propfind(&root_url, &creds.username, &creds.password).await?;
+    let calendars = parse_propfind_calendars(&body, &root_url);
+
+    Ok(calendars)
+}
+
+/// Save a ZEP calendar URL for one source (Primary or Absence) and test the connection.
+#[tauri::command]
+#[specta::specta]
+pub async fn zep_save_and_test_calendar(
+    app: tauri::AppHandle,
+    daylite_contact_reference: String,
+    source: IcalSource,
+    calendar_url: Option<String>,
+) -> Result<ZepCalendarTestResult, ZepError> {
+    // Step 1: Validate selection
+    let calendar_url = calendar_url
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(ToString::to_string);
+
+    let Some(ref cal_url) = calendar_url else {
+        return Err(ZepError {
+            code: ZepErrorCode::InvalidConfiguration,
+            user_message: "Bitte einen Kalender auswählen.".to_string(),
+            technical_message: "calendar_url is None or empty".to_string(),
+        });
+    };
+
+    // Load local store once — all in-memory mutations use this copy.
+    let mut store =
+        crate::integrations::local_store::load_local_store(app.clone()).map_err(|e| ZepError {
+            code: ZepErrorCode::InvalidConfiguration,
+            user_message: e.user_message,
+            technical_message: e.technical_message,
+        })?;
+
+    // Step 2: Sync to Daylite — look up the "other" calendar URL to preserve it
+    let current_setting =
+        find_or_default_setting(&store.employee_settings, &daylite_contact_reference);
+    let (primary_url, absence_url) = match source {
+        IcalSource::Primary => (
+            cal_url.clone(),
+            current_setting
+                .zep_absence_calendar
+                .clone()
+                .unwrap_or_default(),
+        ),
+        IcalSource::Absence => (
+            current_setting
+                .zep_primary_calendar
+                .clone()
+                .unwrap_or_default(),
+            cal_url.clone(),
+        ),
+    };
+
+    sync_contact_ical_urls(
+        &mut store,
+        DayliteUpdateContactIcalUrlsInput {
+            contact_reference: daylite_contact_reference.clone(),
+            primary_ical_url: primary_url,
+            absence_ical_url: absence_url,
+        },
+    )
+    .await
+    .map_err(|e| ZepError {
+        code: ZepErrorCode::DayliteSyncFailed,
+        user_message: format!("Daylite-Synchronisation fehlgeschlagen: {}", e.user_message),
+        technical_message: e.technical_message,
+    })?;
+
+    // Step 3: Save calendar URL to local store, clear old timestamp
+    update_setting(
+        &mut store.employee_settings,
+        &daylite_contact_reference,
+        |s| match source {
+            IcalSource::Primary => {
+                s.zep_primary_calendar = Some(cal_url.clone());
+                s.primary_ical_last_tested_at = None;
+                s.primary_ical_last_test_passed = None;
+            }
+            IcalSource::Absence => {
+                s.zep_absence_calendar = Some(cal_url.clone());
+                s.absence_ical_last_tested_at = None;
+                s.absence_ical_last_test_passed = None;
+            }
+        },
+    );
+
+    crate::integrations::local_store::save_local_store(app.clone(), store.clone()).map_err(
+        |e| ZepError {
+            code: ZepErrorCode::InvalidConfiguration,
+            user_message: e.user_message,
+            technical_message: e.technical_message,
+        },
+    )?;
+
+    // Step 4: Run CalDAV test
+    let creds = load_zep_credentials_from_keychain()?;
+    let timestamp = current_timestamp();
+    let test_result = probe_calendar(cal_url, &creds.username, &creds.password).await;
+    let (success, error_message) = match &test_result {
+        Ok(()) => (true, None),
+        Err(e) => (false, Some(e.user_message.clone())),
+    };
+
+    // Step 5: Store result timestamp
+    update_setting(
+        &mut store.employee_settings,
+        &daylite_contact_reference,
+        |s| match source {
+            IcalSource::Primary => {
+                s.primary_ical_last_tested_at = Some(timestamp.clone());
+                s.primary_ical_last_test_passed = Some(success);
+            }
+            IcalSource::Absence => {
+                s.absence_ical_last_tested_at = Some(timestamp.clone());
+                s.absence_ical_last_test_passed = Some(success);
+            }
+        },
+    );
+
+    crate::integrations::local_store::save_local_store(app, store).map_err(|e| ZepError {
+        code: ZepErrorCode::InvalidConfiguration,
+        user_message: e.user_message,
+        technical_message: e.technical_message,
+    })?;
+
+    Ok(ZepCalendarTestResult {
+        success,
+        timestamp,
+        error_message,
+    })
+}
+
+fn find_or_default_setting(
+    settings: &[EmployeeSetting],
+    daylite_contact_reference: &str,
+) -> EmployeeSetting {
+    settings
+        .iter()
+        .find(|s| s.daylite_contact_reference == daylite_contact_reference)
+        .cloned()
+        .unwrap_or_else(|| EmployeeSetting {
+            daylite_contact_reference: daylite_contact_reference.to_string(),
+            ..Default::default()
+        })
+}
+
+fn update_setting(
+    settings: &mut Vec<EmployeeSetting>,
+    daylite_contact_reference: &str,
+    update: impl FnOnce(&mut EmployeeSetting),
+) {
+    if let Some(setting) = settings
+        .iter_mut()
+        .find(|s| s.daylite_contact_reference == daylite_contact_reference)
+    {
+        update(setting);
+    } else {
+        let mut new_setting = EmployeeSetting {
+            daylite_contact_reference: daylite_contact_reference.to_string(),
+            ..Default::default()
+        };
+        update(&mut new_setting);
+        settings.push(new_setting);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn extract_origin_parses_https_url_with_path() {
+        assert_eq!(
+            extract_origin("https://app.zep.de/caldav/admin"),
+            "https://app.zep.de"
+        );
+    }
+
+    #[test]
+    fn extract_origin_handles_url_without_path() {
+        assert_eq!(extract_origin("https://app.zep.de"), "https://app.zep.de");
+    }
+
+    #[test]
+    fn parse_propfind_calendars_extracts_calendar_entries() {
+        let body = r#"<?xml version="1.0" encoding="utf-8"?>
+<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
+  <d:response>
+    <d:href>/caldav/admin/</d:href>
+    <d:propstat>
+      <d:prop>
+        <d:displayname>admin</d:displayname>
+        <d:resourcetype><d:collection/></d:resourcetype>
+      </d:prop>
+      <d:status>HTTP/1.1 200 OK</d:status>
+    </d:propstat>
+  </d:response>
+  <d:response>
+    <d:href>/caldav/admin/john-einsatz/</d:href>
+    <d:propstat>
+      <d:prop>
+        <d:displayname>John Doe - Einsatz</d:displayname>
+        <d:resourcetype><d:collection/><c:calendar/></d:resourcetype>
+      </d:prop>
+      <d:status>HTTP/1.1 200 OK</d:status>
+    </d:propstat>
+  </d:response>
+  <d:response>
+    <d:href>/caldav/admin/john-abwesenheit/</d:href>
+    <d:propstat>
+      <d:prop>
+        <d:displayname>John Doe - Abwesenheit</d:displayname>
+        <d:resourcetype><d:collection/><c:calendar/></d:resourcetype>
+      </d:prop>
+      <d:status>HTTP/1.1 200 OK</d:status>
+    </d:propstat>
+  </d:response>
+</d:multistatus>"#;
+
+        let calendars = parse_propfind_calendars(body, "https://app.zep.de/caldav/admin");
+
+        assert_eq!(calendars.len(), 2);
+        assert_eq!(calendars[0].display_name, "John Doe - Einsatz");
+        assert_eq!(
+            calendars[0].url,
+            "https://app.zep.de/caldav/admin/john-einsatz/"
+        );
+        assert_eq!(calendars[1].display_name, "John Doe - Abwesenheit");
+        assert_eq!(
+            calendars[1].url,
+            "https://app.zep.de/caldav/admin/john-abwesenheit/"
+        );
+    }
+
+    #[test]
+    fn parse_propfind_accepts_207_multistatus_body() {
+        // CalDAV PROPFIND normatively returns 207 Multi-Status.
+        // The HTTP status check (200..=299) covers 207.
+        // This test verifies the XML body of a 207 response is parsed correctly.
+        let body = r#"<?xml version="1.0" encoding="utf-8"?>
+<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
+  <d:response>
+    <d:href>/caldav/admin/anna-einsatz/</d:href>
+    <d:propstat>
+      <d:prop>
+        <d:displayname>Anna B - Einsatz</d:displayname>
+        <d:resourcetype><d:collection/><c:calendar/></d:resourcetype>
+      </d:prop>
+      <d:status>HTTP/1.1 200 OK</d:status>
+    </d:propstat>
+  </d:response>
+</d:multistatus>"#;
+
+        let calendars = parse_propfind_calendars(body, "https://app.zep.de/caldav/admin");
+
+        assert_eq!(calendars.len(), 1);
+        assert_eq!(calendars[0].display_name, "Anna B - Einsatz");
+        assert_eq!(
+            calendars[0].url,
+            "https://app.zep.de/caldav/admin/anna-einsatz/"
+        );
+    }
+
+    #[test]
+    fn parse_propfind_skips_non_calendar_collections() {
+        let body = r#"<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
+  <d:response>
+    <d:href>/caldav/admin/</d:href>
+    <d:propstat>
+      <d:prop>
+        <d:displayname>Root</d:displayname>
+        <d:resourcetype><d:collection/></d:resourcetype>
+      </d:prop>
+    </d:propstat>
+  </d:response>
+</d:multistatus>"#;
+
+        let calendars = parse_propfind_calendars(body, "https://app.zep.de/caldav/admin");
+        assert!(calendars.is_empty());
+    }
+
+    // ── VCR tests (recorded PROPFIND response bodies) ─────────────────────────
+
+    #[test]
+    fn vcr_typical_multi_employee_response_extracts_all_calendars() {
+        let body = include_str!("zep_vcr/propfind_typical_multi_employee.xml");
+        let calendars = parse_propfind_calendars(body, "https://app.zep.de/caldav/admin");
+
+        assert_eq!(calendars.len(), 6);
+        assert_eq!(calendars[0].display_name, "Max Mustermann - Einsatz");
+        assert_eq!(
+            calendars[0].url,
+            "https://app.zep.de/caldav/admin/max-mustermann-einsatz/"
+        );
+        assert_eq!(calendars[1].display_name, "Max Mustermann - Abwesenheit");
+        assert_eq!(calendars[2].display_name, "Anna Bauer - Einsatz");
+        assert_eq!(calendars[3].display_name, "Anna Bauer - Abwesenheit");
+        assert_eq!(calendars[4].display_name, "Klaus Weber - Einsatz");
+        assert_eq!(calendars[5].display_name, "Klaus Weber - Abwesenheit");
+    }
+
+    #[test]
+    fn vcr_umlaut_display_names_are_preserved_and_entities_decoded() {
+        let body = include_str!("zep_vcr/propfind_umlaut_and_entity_names.xml");
+        let calendars = parse_propfind_calendars(body, "https://app.zep.de/caldav/admin");
+
+        assert_eq!(calendars.len(), 3);
+        assert_eq!(calendars[0].display_name, "Jörg Schröder - Einsatz");
+        // XML entity &amp; must be decoded to & by the parser, not returned literally
+        assert_eq!(calendars[1].display_name, "Müller & Söhne - Einsatz");
+        assert_eq!(calendars[2].display_name, "Günther Weiß - Einsatz");
+    }
+
+    #[test]
+    fn vcr_alternate_namespace_prefix_is_handled_correctly() {
+        // Uses xmlns:dav="DAV:" and xmlns:caldav="urn:ietf:params:xml:ns:caldav"
+        // instead of the typical d:/c: prefixes. The parser matches by namespace
+        // URI, not prefix string.
+        let body = include_str!("zep_vcr/propfind_alternate_ns_prefix.xml");
+        let calendars = parse_propfind_calendars(body, "https://app.zep.de/caldav/admin");
+
+        assert_eq!(calendars.len(), 2);
+        assert_eq!(calendars[0].display_name, "Test Mitarbeiter - Einsatz");
+        assert_eq!(calendars[1].display_name, "Test Mitarbeiter - Abwesenheit");
+    }
+
+    #[test]
+    fn parse_propfind_returns_empty_for_invalid_xml() {
+        let calendars =
+            parse_propfind_calendars("not xml {{ at all", "https://app.zep.de/caldav/admin");
+        assert!(calendars.is_empty());
+    }
+
+    #[test]
+    fn update_setting_creates_new_entry_when_not_found() {
+        let mut settings: Vec<EmployeeSetting> = vec![];
+        update_setting(&mut settings, "/v1/contacts/42", |s| {
+            s.zep_primary_calendar = Some("https://app.zep.de/cal/".to_string());
+        });
+        assert_eq!(settings.len(), 1);
+        assert_eq!(
+            settings[0].zep_primary_calendar,
+            Some("https://app.zep.de/cal/".to_string())
+        );
+    }
+
+    #[test]
+    fn update_setting_updates_existing_entry_and_clears_timestamp() {
+        let mut settings = vec![EmployeeSetting {
+            daylite_contact_reference: "/v1/contacts/42".to_string(),
+            zep_primary_calendar: None,
+            zep_absence_calendar: None,
+            primary_ical_last_tested_at: Some("2026-01-01T00:00:00Z".to_string()),
+            primary_ical_last_test_passed: Some(true),
+            absence_ical_last_tested_at: None,
+            absence_ical_last_test_passed: None,
+        }];
+        update_setting(&mut settings, "/v1/contacts/42", |s| {
+            s.zep_primary_calendar = Some("https://cal.example/".to_string());
+            s.primary_ical_last_tested_at = None;
+        });
+        assert_eq!(settings.len(), 1);
+        assert_eq!(
+            settings[0].zep_primary_calendar,
+            Some("https://cal.example/".to_string())
+        );
+        assert_eq!(settings[0].primary_ical_last_tested_at, None);
+    }
+}

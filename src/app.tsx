@@ -1,12 +1,83 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import "./app.css";
 import { ChevronLeft, ChevronRight, Settings } from "lucide-react";
-import { DayliteTokenModal } from "./app/components/daylite-token-modal";
+import { EmployeeIcalDialog } from "./app/components/employee-ical-dialog";
+import { SettingsDialog } from "./app/components/settings-dialog";
 import { PlanningGrid } from "./app/page";
+import type {
+  EmployeeSetting,
+  PlanningContactRecord,
+  ZepCalendar,
+} from "./generated/tauri";
+import { commands } from "./generated/tauri";
+import { discoverZepCalendars } from "./services/zep";
 
 function App() {
   const [weekOffset, setWeekOffset] = useState(0);
-  const [isDayliteTokenModalOpen, setIsDayliteTokenModalOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [icalDialogEmployee, setIcalDialogEmployee] =
+    useState<PlanningContactRecord | null>(null);
+
+  const [employeeSettings, setEmployeeSettings] = useState<EmployeeSetting[]>(
+    [],
+  );
+  const [employeeSettingsError, setEmployeeSettingsError] = useState<
+    string | null
+  >(null);
+  // Session cache for discovered ZEP calendars (task 2.4). Not persisted across restarts;
+  // null means "not yet fetched", [] means "fetched but empty".
+  const [zepCalendars, setZepCalendars] = useState<ZepCalendar[] | null>(null);
+  const [isLoadingCalendars, setIsLoadingCalendars] = useState(false);
+  const [calendarsError, setCalendarsError] = useState<string | null>(null);
+
+  const loadEmployeeSettings = useCallback(async () => {
+    const result = await commands.loadLocalStore();
+    if (result.status === "ok") {
+      setEmployeeSettings(result.data.employeeSettings);
+      setEmployeeSettingsError(null);
+    } else {
+      setEmployeeSettingsError(result.error.userMessage);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadEmployeeSettings();
+  }, [loadEmployeeSettings]);
+
+  const loadZepCalendars = useCallback(async () => {
+    setIsLoadingCalendars(true);
+    setCalendarsError(null);
+    try {
+      const calendars = await discoverZepCalendars();
+      setZepCalendars(calendars);
+    } catch (error) {
+      setCalendarsError(
+        error instanceof Error
+          ? error.message
+          : "Die ZEP-Kalender konnten nicht geladen werden.",
+      );
+    } finally {
+      setIsLoadingCalendars(false);
+    }
+  }, []);
+
+  const handleOpenIcalDialog = useCallback(
+    (employee: PlanningContactRecord) => {
+      setIcalDialogEmployee(employee);
+      if (zepCalendars === null && !isLoadingCalendars) {
+        void loadZepCalendars();
+      }
+    },
+    [zepCalendars, isLoadingCalendars, loadZepCalendars],
+  );
+
+  const handleIcalDialogClose = () => {
+    setIcalDialogEmployee(null);
+  };
+
+  const handleSettingsSaved = useCallback(() => {
+    void loadEmployeeSettings();
+  }, [loadEmployeeSettings]);
 
   return (
     <article className="min-h-screen flex flex-col">
@@ -16,7 +87,8 @@ function App() {
           <button
             type="button"
             className="btn btn-ghost px-2"
-            onClick={() => setIsDayliteTokenModalOpen(true)}
+            onClick={() => setIsSettingsOpen(true)}
+            aria-label="Einstellungen öffnen"
           >
             <Settings className="size-6 text-base-content/50" />
           </button>
@@ -49,12 +121,41 @@ function App() {
       </header>
 
       <main className="flex-1 overflow-hidden">
-        <PlanningGrid weekOffset={weekOffset} />
+        {employeeSettingsError ? (
+          <section className="alert alert-error m-4">
+            <span>
+              Einstellungen konnten nicht geladen werden:{" "}
+              {employeeSettingsError}
+            </span>
+          </section>
+        ) : null}
+        <PlanningGrid
+          weekOffset={weekOffset}
+          employeeSettings={employeeSettings}
+          onOpenIcalDialog={handleOpenIcalDialog}
+        />
       </main>
 
-      <DayliteTokenModal
-        isOpen={isDayliteTokenModalOpen}
-        onClose={() => setIsDayliteTokenModalOpen(false)}
+      <SettingsDialog
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+      />
+
+      <EmployeeIcalDialog
+        employee={icalDialogEmployee}
+        employeeSetting={
+          icalDialogEmployee
+            ? (employeeSettings.find(
+                (s) => s.dayliteContactReference === icalDialogEmployee.self,
+              ) ?? null)
+            : null
+        }
+        onClose={handleIcalDialogClose}
+        onSettingsSaved={handleSettingsSaved}
+        zepCalendars={zepCalendars}
+        isLoadingCalendars={isLoadingCalendars}
+        calendarsError={calendarsError}
+        onReloadCalendars={loadZepCalendars}
       />
     </article>
   );

@@ -1,7 +1,7 @@
 use super::super::local_store::{
     DayliteContactCacheEntry, DayliteContactUrlCacheEntry, LocalStore,
 };
-use super::auth_flow::send_authenticated_json;
+use super::auth_flow::{send_authenticated_json, send_authenticated_request};
 use super::client::DayliteApiClient;
 use super::client::DayliteHttpMethod;
 use super::shared::{
@@ -35,11 +35,11 @@ pub struct DayliteContactSummary {
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct DayliteContactUrl {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     pub label: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     pub url: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     pub note: Option<String>,
 }
 
@@ -55,13 +55,13 @@ pub struct DayliteUpdateContactIcalUrlsInput {
 pub struct PlanningContactRecord {
     #[serde(rename = "self")]
     pub reference: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     pub full_name: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     pub nickname: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     pub category: Option<String>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
     pub urls: Vec<DayliteContactUrl>,
 }
 
@@ -84,6 +84,23 @@ pub async fn daylite_list_contacts(
     save_store_or_error(app, store)?;
 
     Ok(contacts)
+}
+
+pub async fn sync_contact_ical_urls(
+    store: &mut LocalStore,
+    input: DayliteUpdateContactIcalUrlsInput,
+) -> Result<(), DayliteApiError> {
+    let daylite_base_url = store.api_endpoints.daylite_base_url.clone();
+    let client = DayliteApiClient::new(&daylite_base_url)?;
+    let token_state = load_daylite_tokens()?;
+
+    let (_, token_state) =
+        update_contact_ical_urls_core(&client, token_state, store, &input).await?;
+
+    store_daylite_tokens(&token_state)?;
+    store.daylite_cache.last_synced_at = Some(current_timestamp_iso8601());
+    // Caller is responsible for saving the store.
+    Ok(())
 }
 
 #[tauri::command]
@@ -124,11 +141,13 @@ pub(super) async fn update_contact_ical_urls_core(
     )
     .await?;
     let merged_urls = merge_contact_ical_urls(
-        current_contact.urls,
+        current_contact.urls.clone(),
         &input.primary_ical_url,
         &input.absence_ical_url,
     );
-    let (updated_contact, token_state) = send_authenticated_json::<DayliteContactSummary>(
+    // PATCH the contact URLs. Daylite may return 204 No Content (empty body),
+    // so we only verify the status and construct the result from the GET data + merged URLs.
+    let token_state = send_authenticated_request(
         client,
         token_state,
         DayliteHttpMethod::Patch,
@@ -139,7 +158,10 @@ pub(super) async fn update_contact_ical_urls_core(
         })),
     )
     .await?;
-    let updated_contact = map_daylite_contact_summary(updated_contact);
+    let updated_contact = map_daylite_contact_summary(DayliteContactSummary {
+        urls: merged_urls,
+        ..current_contact
+    });
 
     let mut cached_contacts: Vec<PlanningContactRecord> = store
         .daylite_cache
@@ -670,6 +692,47 @@ mod tests {
     }
 
     #[test]
+    fn update_ical_urls_handles_204_no_content_from_patch() {
+        // Daylite returns 204 No Content (empty body) for PATCH /contacts/:id.
+        // The result must still be correct (built from GET data + merged URLs).
+        tauri::async_runtime::block_on(async {
+            let get_response = mock_response(
+                200,
+                r#"{"self":"/v1/contacts/800","first_name":"Karl","last_name":"G","category":"Monteur","urls":[]}"#,
+            );
+            let patch_response = mock_response(204, "");
+            let transport = MockTransport::new(vec![Ok(get_response), Ok(patch_response)]);
+            let client = DayliteApiClient::with_transport(Arc::new(transport));
+            let mut store = LocalStore::default();
+
+            let (contact, _) = update_contact_ical_urls_core(
+                &client,
+                DayliteTokenState {
+                    access_token: "token".to_string(),
+                    refresh_token: "refresh".to_string(),
+                    access_token_expires_at_ms: Some(u64::MAX),
+                },
+                &mut store,
+                &DayliteUpdateContactIcalUrlsInput {
+                    contact_reference: "/v1/contacts/800".to_string(),
+                    primary_ical_url: "https://example.com/primary.ics".to_string(),
+                    absence_ical_url: "".to_string(),
+                },
+            )
+            .await
+            .expect("update should succeed even when PATCH returns 204 No Content");
+
+            assert_eq!(contact.reference, "/v1/contacts/800");
+            assert_eq!(contact.category, Some("Monteur".to_string()));
+            assert_eq!(contact.urls.len(), 1);
+            assert_eq!(
+                contact.urls[0].url,
+                Some("https://example.com/primary.ics".to_string())
+            );
+        });
+    }
+
+    #[test]
     fn update_ical_urls_updates_cache_for_monteur() {
         tauri::async_runtime::block_on(async {
             let get_response = mock_response(
@@ -780,16 +843,12 @@ mod tests {
             .expect("list should replay from cassette");
 
             assert!(!contacts.is_empty());
-            assert!(
-                contacts
-                    .iter()
-                    .all(|contact| contact.reference.starts_with("/v1/contacts/"))
-            );
-            assert!(
-                contacts
-                    .iter()
-                    .all(|contact| contact.category.as_deref() == Some("Monteur"))
-            );
+            assert!(contacts
+                .iter()
+                .all(|contact| contact.reference.starts_with("/v1/contacts/")));
+            assert!(contacts
+                .iter()
+                .all(|contact| contact.category.as_deref() == Some("Monteur")));
             assert!(contacts.iter().all(|contact| {
                 contact
                     .full_name
@@ -827,7 +886,7 @@ mod tests {
                 },
                 &mut store,
                 &DayliteUpdateContactIcalUrlsInput {
-                    contact_reference: "/v1/contacts/500".to_string(),
+                    contact_reference: "/v1/contacts/1029".to_string(),
                     primary_ical_url: "https://example.com/primary.ics".to_string(),
                     absence_ical_url: "https://example.com/absence.ics".to_string(),
                 },
@@ -835,14 +894,14 @@ mod tests {
             .await
             .expect("update should replay from cassette");
 
-            assert_eq!(contact.reference, "/v1/contacts/500");
+            assert_eq!(contact.reference, "/v1/contacts/1029");
             assert_eq!(contact.category, Some("Monteur".to_string()));
-            assert_eq!(contact.urls.len(), 3);
+            assert_eq!(contact.urls.len(), 2);
             assert_eq!(token_state.access_token, "replay-access-token");
             assert_eq!(store.daylite_cache.contacts.len(), 1);
             assert_eq!(
                 store.daylite_cache.contacts[0].reference,
-                "/v1/contacts/500"
+                "/v1/contacts/1029"
             );
         });
     }

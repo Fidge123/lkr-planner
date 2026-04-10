@@ -52,19 +52,19 @@ pub struct PlanningProjectRecord {
     pub reference: String,
     pub name: String,
     pub status: PlanningProjectStatus,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     pub category: Option<String>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
     pub keywords: Vec<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     pub due: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     pub started: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     pub completed: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     pub create_date: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     pub modify_date: Option<String>,
 }
 
@@ -470,16 +470,12 @@ mod tests {
             .expect("list should replay from cassette");
 
             assert!(!projects.is_empty());
-            assert!(
-                projects
-                    .iter()
-                    .all(|project| project.reference.starts_with("/v1/projects/"))
-            );
-            assert!(
-                projects
-                    .iter()
-                    .all(|project| !project.name.is_empty() && project.name == project.name.trim())
-            );
+            assert!(projects
+                .iter()
+                .all(|project| project.reference.starts_with("/v1/projects/")));
+            assert!(projects
+                .iter()
+                .all(|project| !project.name.is_empty() && project.name == project.name.trim()));
             assert_eq!(token_state.access_token, "replay-access-token");
         });
     }
@@ -513,13 +509,11 @@ mod tests {
                     && project.name == project.name.trim()
                     && project.name.to_lowercase().contains("nord")
             }));
-            assert!(
-                search_result
-                    .next
-                    .as_deref()
-                    .map(|next| next.starts_with("/v1/projects/_search"))
-                    .unwrap_or(true)
-            );
+            assert!(search_result
+                .next
+                .as_deref()
+                .map(|next| next.starts_with("/v1/projects/_search"))
+                .unwrap_or(true));
             assert_eq!(token_state.access_token, "replay-access-token");
         });
     }

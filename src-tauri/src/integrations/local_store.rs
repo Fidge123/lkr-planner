@@ -37,6 +37,8 @@ impl Default for LocalStore {
 pub struct ApiEndpoints {
     pub daylite_base_url: String,
     pub planradar_base_url: String,
+    #[serde(default)]
+    pub zep_caldav_root_url: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq, Default)]
@@ -53,10 +55,31 @@ pub struct TokenReferences {
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct EmployeeSetting {
-    pub employee_id: String,
     pub daylite_contact_reference: String,
-    pub primary_ical_url: String,
-    pub absence_ical_url: String,
+    /// Full CalDAV URL of the primary (Einsatz) calendar, discovered via PROPFIND.
+    /// None = no calendar assigned. Old `primaryIcalUrl` values are not migrated automatically.
+    #[serde(default)]
+    pub zep_primary_calendar: Option<String>,
+    /// Full CalDAV URL of the absence (Abwesenheit) calendar, discovered via PROPFIND.
+    /// None = no absence calendar (intentional, not an error).
+    #[serde(default)]
+    pub zep_absence_calendar: Option<String>,
+    /// ISO 8601 timestamp of the last connection test for the primary calendar.
+    /// None = never tested (or URL changed since last test).
+    #[serde(default)]
+    pub primary_ical_last_tested_at: Option<String>,
+    /// Whether the last connection test for the primary calendar succeeded.
+    /// None if never tested or URL changed since last test.
+    #[serde(default)]
+    pub primary_ical_last_test_passed: Option<bool>,
+    /// ISO 8601 timestamp of the last connection test for the absence calendar.
+    /// None = never tested (or URL changed since last test).
+    #[serde(default)]
+    pub absence_ical_last_tested_at: Option<String>,
+    /// Whether the last connection test for the absence calendar succeeded.
+    /// None if never tested or URL changed since last test.
+    #[serde(default)]
+    pub absence_ical_last_test_passed: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
@@ -279,6 +302,7 @@ mod tests {
             api_endpoints: ApiEndpoints {
                 daylite_base_url: "https://daylite.example/v1".to_string(),
                 planradar_base_url: "https://planradar.example/api".to_string(),
+                zep_caldav_root_url: "https://app.zep.de/caldav/admin".to_string(),
             },
             token_references: TokenReferences {
                 daylite_token_reference: "keychain://daylite-token".to_string(),
@@ -288,10 +312,15 @@ mod tests {
                 daylite_access_token_expires_at_ms: Some(1_761_200_000_000),
             },
             employee_settings: vec![EmployeeSetting {
-                employee_id: "emp-1".to_string(),
                 daylite_contact_reference: "/v1/contacts/100".to_string(),
-                primary_ical_url: "https://example.com/primary.ics".to_string(),
-                absence_ical_url: "https://example.com/absence.ics".to_string(),
+                zep_primary_calendar: Some(
+                    "https://app.zep.de/caldav/admin/emp-1-primary/".to_string(),
+                ),
+                zep_absence_calendar: None,
+                primary_ical_last_tested_at: Some("2026-03-01T10:00:00Z".to_string()),
+                primary_ical_last_test_passed: Some(true),
+                absence_ical_last_tested_at: None,
+                absence_ical_last_test_passed: None,
             }],
             standard_filter: StandardFilter {
                 pipelines: vec!["Aufträge".to_string()],

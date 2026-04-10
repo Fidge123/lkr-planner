@@ -109,6 +109,26 @@ pub(super) async fn refresh_tokens(
     })
 }
 
+/// Send an authenticated request and verify success (2xx status), ignoring the response body.
+/// Use for PATCH/PUT endpoints that may return 204 No Content instead of a JSON body.
+pub(super) async fn send_authenticated_request(
+    client: &DayliteApiClient,
+    token_state: DayliteTokenState,
+    method: DayliteHttpMethod,
+    path: &str,
+    query: Vec<(String, String)>,
+    body: Option<Value>,
+) -> Result<DayliteTokenState, DayliteApiError> {
+    let token_state = ensure_access_token(client, token_state).await?;
+    let response = client
+        .send_request(method, path, query, body, Some(token_state.access_token.clone()))
+        .await?;
+    if !(200..300).contains(&response.status) {
+        return Err(normalize_http_error(response.status, &response.body, path));
+    }
+    Ok(token_state)
+}
+
 pub(super) async fn send_authenticated_json<T: DeserializeOwned>(
     client: &DayliteApiClient,
     token_state: DayliteTokenState,
