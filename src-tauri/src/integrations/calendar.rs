@@ -80,29 +80,29 @@ pub async fn load_week_events(
     let week_start_date = NaiveDate::parse_from_str(&week_start, "%Y-%m-%d")
         .map_err(|_| format!("Ungültiges Wochenstartdatum: {week_start}"))?;
 
-    let (username, password) =
-        match crate::integrations::zep::load_zep_credentials_from_keychain() {
-            Ok(c) => (c.username, c.password),
-            Err(e) => {
-                // No credentials: return error for every employee with a calendar URL
-                let results = store
-                    .employee_settings
-                    .iter()
-                    .filter(|s| {
-                        s.zep_primary_calendar
-                            .as_deref()
-                            .map(|u| !u.is_empty())
-                            .unwrap_or(false)
-                    })
-                    .map(|s| EmployeeWeekEvents {
-                        employee_reference: s.daylite_contact_reference.clone(),
-                        events: vec![],
-                        error: Some(e.user_message.clone()),
-                    })
-                    .collect();
-                return Ok(results);
-            }
-        };
+    let (username, password) = match crate::integrations::zep::load_zep_credentials_from_keychain()
+    {
+        Ok(c) => (c.username, c.password),
+        Err(e) => {
+            // No credentials: return error for every employee with a calendar URL
+            let results = store
+                .employee_settings
+                .iter()
+                .filter(|s| {
+                    s.zep_primary_calendar
+                        .as_deref()
+                        .map(|u| !u.is_empty())
+                        .unwrap_or(false)
+                })
+                .map(|s| EmployeeWeekEvents {
+                    employee_reference: s.daylite_contact_reference.clone(),
+                    events: vec![],
+                    error: Some(e.user_message.clone()),
+                })
+                .collect();
+            return Ok(results);
+        }
+    };
 
     // First pass: fetch CalDAV events per employee and classify against the local cache.
     let mut pending_per_employee: Vec<(String, Vec<PendingEvent>)> = Vec::new();
@@ -256,8 +256,7 @@ fn parse_caldav_report(xml_text: &str) -> Result<Vec<RawVEvent>, String> {
 
     let mut events = Vec::new();
     for node in doc.descendants() {
-        let is_caldav =
-            node.has_tag_name(("urn:ietf:params:xml:ns:caldav", "calendar-data"));
+        let is_caldav = node.has_tag_name(("urn:ietf:params:xml:ns:caldav", "calendar-data"));
         let is_bare = !is_caldav && node.tag_name().name() == "calendar-data";
         if is_caldav || is_bare {
             if let Some(text) = node.text() {
@@ -351,10 +350,7 @@ fn classify_event(event: RawVEvent) -> PendingEvent {
     };
 
     // iCal encodes literal newlines in property values as backslash-n.
-    let description_unescaped = event
-        .description
-        .replace("\\n", "\n")
-        .replace("\\N", "\n");
+    let description_unescaped = event.description.replace("\\n", "\n").replace("\\N", "\n");
 
     let first_line = description_unescaped.lines().next().unwrap_or("").trim();
 
@@ -477,7 +473,8 @@ mod tests {
     #[test]
     fn unfolds_crlf_folded_lines() {
         let folded = "DESCRIPTION:This is a very long description that has been\r\n folded here\r\n and here";
-        let expected = "DESCRIPTION:This is a very long description that has been folded hereand here";
+        let expected =
+            "DESCRIPTION:This is a very long description that has been folded hereand here";
 
         assert_eq!(unfold_ical_lines(folded), expected);
     }

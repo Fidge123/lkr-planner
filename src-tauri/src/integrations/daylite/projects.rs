@@ -293,16 +293,10 @@ pub(crate) async fn fetch_project_by_reference(
     let client = DayliteApiClient::new(&store.api_endpoints.daylite_base_url).ok()?;
     let tokens = load_daylite_tokens().ok()?;
 
-    let (summary, _): (DayliteProjectSummary, _) = send_authenticated_json(
-        &client,
-        tokens,
-        DayliteHttpMethod::Get,
-        path,
-        vec![],
-        None,
-    )
-    .await
-    .ok()?;
+    let (summary, _): (DayliteProjectSummary, _) =
+        send_authenticated_json(&client, tokens, DayliteHttpMethod::Get, path, vec![], None)
+            .await
+            .ok()?;
 
     let mapped = map_daylite_project_summary(summary);
     let status_str = project_status_to_string(&mapped.status);
