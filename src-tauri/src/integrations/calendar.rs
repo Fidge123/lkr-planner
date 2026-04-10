@@ -1,4 +1,5 @@
 use chrono::NaiveDate;
+use icalendar::{Calendar, CalendarComponent, CalendarDateTime, Component, DatePerhapsTime};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use std::collections::HashMap;
@@ -45,8 +46,9 @@ pub struct EmployeeWeekEvents {
 // ── Internal types ────────────────────────────────────────────────────────────
 
 /// A raw VEVENT as parsed from iCal text.
+/// `dtstart` holds an ISO date string in the form `yyyy-MM-dd` (already formatted).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub(crate) struct RawVEvent {
+struct RawVEvent {
     uid: String,
     summary: String,
     description: String,
@@ -269,78 +271,50 @@ fn parse_caldav_report(xml_text: &str) -> Result<Vec<RawVEvent>, String> {
 }
 
 /// Parses iCal text and returns all VEVENT entries found.
-pub(crate) fn parse_ical_events(ical_text: &str) -> Vec<RawVEvent> {
-    let unfolded = unfold_ical_lines(ical_text);
-    let mut events = Vec::new();
-    let mut in_vevent = false;
-    let mut current = RawVEvent::default();
+/// Uses the `icalendar` crate for RFC 5545-compliant parsing (line unfolding,
+/// text unescaping, typed DTSTART). `RawVEvent.dtstart` is already in `yyyy-MM-dd` format.
+fn parse_ical_events(ical_text: &str) -> Vec<RawVEvent> {
+    let calendar: Calendar = match ical_text.parse() {
+        Ok(cal) => cal,
+        Err(_) => return vec![],
+    };
 
-    for line in unfolded.lines() {
-        if line == "BEGIN:VEVENT" {
-            in_vevent = true;
-            current = RawVEvent::default();
-        } else if line == "END:VEVENT" && in_vevent {
-            in_vevent = false;
-            // Only keep events with a parseable date
-            if parse_ical_date(&current.dtstart).is_some() {
-                events.push(current);
-            }
-            current = RawVEvent::default();
-        } else if in_vevent {
-            if let Some((name, value)) = parse_property_line(line) {
-                match name.as_str() {
-                    "UID" => current.uid = value,
-                    "SUMMARY" => current.summary = value,
-                    "DESCRIPTION" => current.description = value,
-                    "DTSTART" => current.dtstart = value,
-                    _ => {}
+    calendar
+        .components
+        .into_iter()
+        .filter_map(|component| {
+            let CalendarComponent::Event(event) = component else {
+                return None;
+            };
+
+            let date = match event.get_start()? {
+                DatePerhapsTime::Date(d) => d.format("%Y-%m-%d").to_string(),
+                DatePerhapsTime::DateTime(CalendarDateTime::Floating(dt)) => {
+                    dt.date().format("%Y-%m-%d").to_string()
                 }
-            }
-        }
-    }
+                DatePerhapsTime::DateTime(CalendarDateTime::Utc(dt)) => {
+                    dt.date_naive().format("%Y-%m-%d").to_string()
+                }
+                DatePerhapsTime::DateTime(CalendarDateTime::WithTimezone { date_time, .. }) => {
+                    date_time.date().format("%Y-%m-%d").to_string()
+                }
+            };
 
-    events
-}
-
-/// Removes iCal line folding: CRLF or LF followed by a single space or tab is a continuation.
-fn unfold_ical_lines(text: &str) -> String {
-    text.replace("\r\n ", "")
-        .replace("\r\n\t", "")
-        .replace("\n ", "")
-        .replace("\n\t", "")
-}
-
-/// Parses an iCal property line into `(name, value)`.
-/// Property parameters (e.g. `DTSTART;VALUE=DATE:20260126`) are stripped from the name.
-fn parse_property_line(line: &str) -> Option<(String, String)> {
-    let colon_pos = line.find(':')?;
-    let name_part = &line[..colon_pos];
-    let value = line[colon_pos + 1..].to_string();
-    let name = name_part.split(';').next()?.to_uppercase();
-    Some((name, value))
-}
-
-/// Extracts an ISO date (yyyy-MM-dd) from an iCal DTSTART value.
-/// Handles both `VALUE=DATE` format (`20260126`) and datetime format (`20260126T080000[Z]`).
-pub(crate) fn parse_ical_date(dtstart: &str) -> Option<String> {
-    let date_part = dtstart.split('T').next()?;
-    if date_part.len() == 8 && date_part.chars().all(|c| c.is_ascii_digit()) {
-        Some(format!(
-            "{}-{}-{}",
-            &date_part[0..4],
-            &date_part[4..6],
-            &date_part[6..8]
-        ))
-    } else {
-        None
-    }
+            Some(RawVEvent {
+                uid: event.get_uid().unwrap_or("").to_string(),
+                summary: event.get_summary().unwrap_or("").to_string(),
+                description: event.get_description().unwrap_or("").to_string(),
+                dtstart: date,
+            })
+        })
+        .collect()
 }
 
 // ── Event classification ──────────────────────────────────────────────────────
 
 /// Classifies a raw VEVENT as a lkr-planner assignment or a bare calendar event.
 fn classify_event(event: RawVEvent) -> PendingEvent {
-    let date = parse_ical_date(&event.dtstart).unwrap_or_default();
+    let date = event.dtstart;
 
     let uid = if event.uid.is_empty() {
         // Synthesise a stable-ish UID from the event content when none is provided.
@@ -349,10 +323,7 @@ fn classify_event(event: RawVEvent) -> PendingEvent {
         event.uid
     };
 
-    // iCal encodes literal newlines in property values as backslash-n.
-    let description_unescaped = event.description.replace("\\n", "\n").replace("\\N", "\n");
-
-    let first_line = description_unescaped.lines().next().unwrap_or("").trim();
+    let first_line = event.description.lines().next().unwrap_or("").trim();
 
     let project_ref = if first_line.starts_with(DAYLITE_DESCRIPTION_PREFIX) {
         let raw_ref = first_line[DAYLITE_DESCRIPTION_PREFIX.len()..].trim();
@@ -447,7 +418,7 @@ mod tests {
         assert_eq!(events[0].uid, "test-uid-1");
         assert_eq!(events[0].summary, "Projekt Nord");
         assert_eq!(events[0].description, "daylite:/v1/projects/3001");
-        assert_eq!(events[0].dtstart, "20260126");
+        assert_eq!(events[0].dtstart, "2026-01-26");
     }
 
     #[test]
@@ -470,50 +441,6 @@ mod tests {
         assert!(events.is_empty());
     }
 
-    #[test]
-    fn unfolds_crlf_folded_lines() {
-        let folded = "DESCRIPTION:This is a very long description that has been\r\n folded here\r\n and here";
-        let expected =
-            "DESCRIPTION:This is a very long description that has been folded hereand here";
-
-        assert_eq!(unfold_ical_lines(folded), expected);
-    }
-
-    #[test]
-    fn unfolds_lf_folded_lines() {
-        let folded = "SUMMARY:Folded\n line";
-        let expected = "SUMMARY:Foldedline";
-
-        assert_eq!(unfold_ical_lines(folded), expected);
-    }
-
-    #[test]
-    fn parses_date_only_dtstart() {
-        assert_eq!(parse_ical_date("20260126"), Some("2026-01-26".to_string()));
-    }
-
-    #[test]
-    fn parses_datetime_dtstart() {
-        assert_eq!(
-            parse_ical_date("20260126T080000"),
-            Some("2026-01-26".to_string())
-        );
-    }
-
-    #[test]
-    fn parses_datetime_utc_dtstart() {
-        assert_eq!(
-            parse_ical_date("20260126T080000Z"),
-            Some("2026-01-26".to_string())
-        );
-    }
-
-    #[test]
-    fn returns_none_for_invalid_dtstart() {
-        assert_eq!(parse_ical_date("not-a-date"), None);
-        assert_eq!(parse_ical_date(""), None);
-    }
-
     // ── Event classification ──
 
     #[test]
@@ -522,7 +449,7 @@ mod tests {
             uid: "uid-1".to_string(),
             summary: "Projekt Nord".to_string(),
             description: "daylite:/v1/projects/3001".to_string(),
-            dtstart: "20260126".to_string(),
+            dtstart: "2026-01-26".to_string(),
         };
 
         let pending = classify_event(event);
@@ -538,7 +465,7 @@ mod tests {
             uid: "uid-2".to_string(),
             summary: "Auto Werkstatt".to_string(),
             description: "Bitte Auto abholen".to_string(),
-            dtstart: "20260127".to_string(),
+            dtstart: "2026-01-27".to_string(),
         };
 
         let pending = classify_event(event);
@@ -553,7 +480,7 @@ mod tests {
             uid: "uid-3".to_string(),
             summary: "Blockertermin".to_string(),
             description: String::new(),
-            dtstart: "20260128".to_string(),
+            dtstart: "2026-01-28".to_string(),
         };
 
         let pending = classify_event(event);
@@ -566,8 +493,8 @@ mod tests {
         let event = RawVEvent {
             uid: "uid-4".to_string(),
             summary: "Projekt Süd".to_string(),
-            description: "daylite:/v1/projects/4001\\nZusätzliche Notizen hier".to_string(),
-            dtstart: "20260129".to_string(),
+            description: "daylite:/v1/projects/4001\nZusätzliche Notizen hier".to_string(),
+            dtstart: "2026-01-29".to_string(),
         };
 
         let pending = classify_event(event);
@@ -581,7 +508,7 @@ mod tests {
             uid: String::new(),
             summary: "Ohne UID".to_string(),
             description: String::new(),
-            dtstart: "20260126".to_string(),
+            dtstart: "2026-01-26".to_string(),
         };
 
         let pending = classify_event(event);
