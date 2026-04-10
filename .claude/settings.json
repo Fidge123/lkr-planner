@@ -1,0 +1,28 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|MultiEdit|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun format; cargo fmt --manifest-path src-tauri/Cargo.toml",
+            "statusMessage": "Formatting..."
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun lint && bun test && cargo test --manifest-path src-tauri/Cargo.toml",
+            "timeout": 30,
+            "statusMessage": "Running lint and tests..."
+          }
+        ]
+      }
+    ]
+  }
+}
