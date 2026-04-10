@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<dav:multistatus xmlns:dav="DAV:" xmlns:caldav="urn:ietf:params:xml:ns:caldav">
+  <dav:response>
+    <dav:href>/caldav/admin/</dav:href>
+    <dav:propstat>
+      <dav:prop>
+        <dav:displayname>admin</dav:displayname>
+        <dav:resourcetype>
+          <dav:collection/>
+        </dav:resourcetype>
+      </dav:prop>
+      <dav:status>HTTP/1.1 200 OK</dav:status>
+    </dav:propstat>
+  </dav:response>
+  <dav:response>
+    <dav:href>/caldav/admin/test-einsatz/</dav:href>
+    <dav:propstat>
+      <dav:prop>
+        <dav:displayname>Test Mitarbeiter - Einsatz</dav:displayname>
+        <dav:resourcetype>
+          <dav:collection/>
+          <caldav:calendar/>
+        </dav:resourcetype>
+      </dav:prop>
+      <dav:status>HTTP/1.1 200 OK</dav:status>
+    </dav:propstat>
+  </dav:response>
+  <dav:response>
+    <dav:href>/caldav/admin/test-abwesenheit/</dav:href>
+    <dav:propstat>
+      <dav:prop>
+        <dav:displayname>Test Mitarbeiter - Abwesenheit</dav:displayname>
+        <dav:resourcetype>
+          <dav:collection/>
+          <caldav:calendar/>
+        </dav:resourcetype>
+      </dav:prop>
+      <dav:status>HTTP/1.1 200 OK</dav:status>
+    </dav:propstat>
+  </dav:response>
+</dav:multistatus>

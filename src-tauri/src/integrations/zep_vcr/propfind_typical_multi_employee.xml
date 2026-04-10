@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8"?>
+<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
+  <d:response>
+    <d:href>/caldav/admin/</d:href>
+    <d:propstat>
+      <d:prop>
+        <d:displayname>admin</d:displayname>
+        <d:resourcetype>
+          <d:collection/>
+        </d:resourcetype>
+      </d:prop>
+      <d:status>HTTP/1.1 200 OK</d:status>
+    </d:propstat>
+  </d:response>
+  <d:response>
+    <d:href>/caldav/admin/max-mustermann-einsatz/</d:href>
+    <d:propstat>
+      <d:prop>
+        <d:displayname>Max Mustermann - Einsatz</d:displayname>
+        <d:resourcetype>
+          <d:collection/>
+          <c:calendar/>
+        </d:resourcetype>
+      </d:prop>
+      <d:status>HTTP/1.1 200 OK</d:status>
+    </d:propstat>
+  </d:response>
+  <d:response>
+    <d:href>/caldav/admin/max-mustermann-abwesenheit/</d:href>
+    <d:propstat>
+      <d:prop>
+        <d:displayname>Max Mustermann - Abwesenheit</d:displayname>
+        <d:resourcetype>
+          <d:collection/>
+          <c:calendar/>
+        </d:resourcetype>
+      </d:prop>
+      <d:status>HTTP/1.1 200 OK</d:status>
+    </d:propstat>
+  </d:response>
+  <d:response>
+    <d:href>/caldav/admin/anna-bauer-einsatz/</d:href>
+    <d:propstat>
+      <d:prop>
+        <d:displayname>Anna Bauer - Einsatz</d:displayname>
+        <d:resourcetype>
+          <d:collection/>
+          <c:calendar/>
+        </d:resourcetype>
+      </d:prop>
+      <d:status>HTTP/1.1 200 OK</d:status>
+    </d:propstat>
+  </d:response>
+  <d:response>
+    <d:href>/caldav/admin/anna-bauer-abwesenheit/</d:href>
+    <d:propstat>
+      <d:prop>
+        <d:displayname>Anna Bauer - Abwesenheit</d:displayname>
+        <d:resourcetype>
+          <d:collection/>
+          <c:calendar/>
+        </d:resourcetype>
+      </d:prop>
+      <d:status>HTTP/1.1 200 OK</d:status>
+    </d:propstat>
+  </d:response>
+  <d:response>
+    <d:href>/caldav/admin/klaus-weber-einsatz/</d:href>
+    <d:propstat>
+      <d:prop>
+        <d:displayname>Klaus Weber - Einsatz</d:displayname>
+        <d:resourcetype>
+          <d:collection/>
+          <c:calendar/>
+        </d:resourcetype>
+      </d:prop>
+      <d:status>HTTP/1.1 200 OK</d:status>
+    </d:propstat>
+  </d:response>
+  <d:response>
+    <d:href>/caldav/admin/klaus-weber-abwesenheit/</d:href>
+    <d:propstat>
+      <d:prop>
+        <d:displayname>Klaus Weber - Abwesenheit</d:displayname>
+        <d:resourcetype>
+          <d:collection/>
+          <c:calendar/>
+        </d:resourcetype>
+      </d:prop>
+      <d:status>HTTP/1.1 200 OK</d:status>
+    </d:propstat>
+  </d:response>
+</d:multistatus>

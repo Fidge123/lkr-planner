@@ -249,125 +249,46 @@ async fn probe_calendar(url: &str, username: &str, password: &str) -> Result<(),
 
 pub(crate) fn parse_propfind_calendars(body: &str, root_url: &str) -> Vec<ZepCalendar> {
     let base_origin = extract_origin(root_url);
-    collect_response_blocks(body)
-        .into_iter()
-        .filter_map(|block| {
-            let is_calendar = block.contains("calendar/>")
-                || block.contains("calendar />")
-                || block.contains(":calendar/>")
-                || block.contains(":calendar />");
+    let Ok(doc) = roxmltree::Document::parse(body) else {
+        return vec![];
+    };
+
+    doc.root()
+        .descendants()
+        .filter(|n| n.has_tag_name(("DAV:", "response")))
+        .filter_map(|response| {
+            let is_calendar = response
+                .descendants()
+                .any(|n| n.has_tag_name(("urn:ietf:params:xml:ns:caldav", "calendar")));
             if !is_calendar {
                 return None;
             }
-            let href = extract_xml_text(block, "href")?;
-            let display_name = extract_xml_text(block, "displayname")?;
-
+            let href = response
+                .descendants()
+                .find(|n| n.has_tag_name(("DAV:", "href")))?
+                .text()?
+                .trim()
+                .to_string();
+            if href.is_empty() {
+                return None;
+            }
+            let display_name = response
+                .descendants()
+                .find(|n| n.has_tag_name(("DAV:", "displayname")))?
+                .text()?
+                .trim()
+                .to_string();
+            if display_name.is_empty() {
+                return None;
+            }
             let url = if href.starts_with("http://") || href.starts_with("https://") {
                 href
             } else {
                 format!("{}{}", base_origin, href)
             };
-
             Some(ZepCalendar { display_name, url })
         })
         .collect()
-}
-
-fn collect_response_blocks(body: &str) -> Vec<&str> {
-    let mut blocks = Vec::new();
-    let mut remaining = body;
-
-    while !remaining.is_empty() {
-        let Some(start) = find_response_open(remaining) else {
-            break;
-        };
-        let after_open = &remaining[start..];
-        let Some(end) = find_response_close(after_open) else {
-            break;
-        };
-        blocks.push(&after_open[..end]);
-        remaining = &after_open[end..];
-    }
-
-    blocks
-}
-
-fn find_response_open(text: &str) -> Option<usize> {
-    // Match <response or <PREFIX:response
-    let mut search = text;
-    let mut offset = 0;
-    while let Some(lt) = search.find('<') {
-        let after_lt = &search[lt + 1..];
-        let tag_content = after_lt.splitn(2, '>').next().unwrap_or("");
-        let local = tag_content
-            .split(':')
-            .last()
-            .unwrap_or("")
-            .split_whitespace()
-            .next()
-            .unwrap_or("");
-        if local == "response" && !tag_content.starts_with('/') {
-            return Some(offset + lt);
-        }
-        offset += lt + 1;
-        search = after_lt;
-    }
-    None
-}
-
-fn find_response_close(text: &str) -> Option<usize> {
-    let mut search = text;
-    let mut offset = 0;
-    while let Some(lt) = search.find("</") {
-        let after = &search[lt + 2..];
-        let tag_content = after.splitn(2, '>').next().unwrap_or("");
-        let local = tag_content.split(':').last().unwrap_or("").trim();
-        if local == "response" {
-            let end = offset + lt + 2 + tag_content.len() + 1;
-            return Some(end);
-        }
-        offset += lt + 2;
-        search = after;
-    }
-    None
-}
-
-pub(crate) fn extract_xml_text(text: &str, tag: &str) -> Option<String> {
-    // Try without namespace prefix: <tag>content</tag>
-    let direct_open = format!("<{tag}>");
-    if let Some(start) = text.find(&direct_open) {
-        let after = &text[start + direct_open.len()..];
-        let close = format!("</{tag}>");
-        if let Some(end) = after.find(&close) {
-            let content = after[..end].trim().to_string();
-            return if content.is_empty() {
-                None
-            } else {
-                Some(content)
-            };
-        }
-    }
-
-    // Try with namespace prefix: <prefix:tag>content</prefix:tag>
-    let ns_open_suffix = format!(":{tag}>");
-    let mut search = text;
-    while let Some(colon_pos) = search.find(&ns_open_suffix) {
-        let after_open = &search[colon_pos + ns_open_suffix.len()..];
-        let close_suffix = format!(":{tag}>");
-        if let Some(close_colon) = after_open.find(&close_suffix) {
-            if let Some(slash_pos) = after_open[..close_colon].rfind("</") {
-                let content = after_open[..slash_pos].trim().to_string();
-                return if content.is_empty() {
-                    None
-                } else {
-                    Some(content)
-                };
-            }
-        }
-        search = &search[colon_pos + ns_open_suffix.len()..];
-    }
-
-    None
 }
 
 fn extract_origin(url: &str) -> String {
@@ -676,30 +597,6 @@ mod tests {
     }
 
     #[test]
-    fn extract_xml_text_handles_direct_tag() {
-        let xml = "<displayname>John Doe - Einsatz</displayname>";
-        assert_eq!(
-            extract_xml_text(xml, "displayname"),
-            Some("John Doe - Einsatz".to_string())
-        );
-    }
-
-    #[test]
-    fn extract_xml_text_handles_namespaced_tag() {
-        let xml = "<d:displayname>Max Muster</d:displayname>";
-        assert_eq!(
-            extract_xml_text(xml, "displayname"),
-            Some("Max Muster".to_string())
-        );
-    }
-
-    #[test]
-    fn extract_xml_text_returns_none_for_empty_content() {
-        let xml = "<d:displayname>   </d:displayname>";
-        assert_eq!(extract_xml_text(xml, "displayname"), None);
-    }
-
-    #[test]
     fn parse_propfind_calendars_extracts_calendar_entries() {
         let body = r#"<?xml version="1.0" encoding="utf-8"?>
 <d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
@@ -794,6 +691,58 @@ mod tests {
 </d:multistatus>"#;
 
         let calendars = parse_propfind_calendars(body, "https://app.zep.de/caldav/admin");
+        assert!(calendars.is_empty());
+    }
+
+    // ── VCR tests (recorded PROPFIND response bodies) ─────────────────────────
+
+    #[test]
+    fn vcr_typical_multi_employee_response_extracts_all_calendars() {
+        let body = include_str!("zep_vcr/propfind_typical_multi_employee.xml");
+        let calendars = parse_propfind_calendars(body, "https://app.zep.de/caldav/admin");
+
+        assert_eq!(calendars.len(), 6);
+        assert_eq!(calendars[0].display_name, "Max Mustermann - Einsatz");
+        assert_eq!(
+            calendars[0].url,
+            "https://app.zep.de/caldav/admin/max-mustermann-einsatz/"
+        );
+        assert_eq!(calendars[1].display_name, "Max Mustermann - Abwesenheit");
+        assert_eq!(calendars[2].display_name, "Anna Bauer - Einsatz");
+        assert_eq!(calendars[3].display_name, "Anna Bauer - Abwesenheit");
+        assert_eq!(calendars[4].display_name, "Klaus Weber - Einsatz");
+        assert_eq!(calendars[5].display_name, "Klaus Weber - Abwesenheit");
+    }
+
+    #[test]
+    fn vcr_umlaut_display_names_are_preserved_and_entities_decoded() {
+        let body = include_str!("zep_vcr/propfind_umlaut_and_entity_names.xml");
+        let calendars = parse_propfind_calendars(body, "https://app.zep.de/caldav/admin");
+
+        assert_eq!(calendars.len(), 3);
+        assert_eq!(calendars[0].display_name, "Jörg Schröder - Einsatz");
+        // XML entity &amp; must be decoded to & by the parser, not returned literally
+        assert_eq!(calendars[1].display_name, "Müller & Söhne - Einsatz");
+        assert_eq!(calendars[2].display_name, "Günther Weiß - Einsatz");
+    }
+
+    #[test]
+    fn vcr_alternate_namespace_prefix_is_handled_correctly() {
+        // Uses xmlns:dav="DAV:" and xmlns:caldav="urn:ietf:params:xml:ns:caldav"
+        // instead of the typical d:/c: prefixes. The parser matches by namespace
+        // URI, not prefix string.
+        let body = include_str!("zep_vcr/propfind_alternate_ns_prefix.xml");
+        let calendars = parse_propfind_calendars(body, "https://app.zep.de/caldav/admin");
+
+        assert_eq!(calendars.len(), 2);
+        assert_eq!(calendars[0].display_name, "Test Mitarbeiter - Einsatz");
+        assert_eq!(calendars[1].display_name, "Test Mitarbeiter - Abwesenheit");
+    }
+
+    #[test]
+    fn parse_propfind_returns_empty_for_invalid_xml() {
+        let calendars =
+            parse_propfind_calendars("not xml {{ at all", "https://app.zep.de/caldav/admin");
         assert!(calendars.is_empty());
     }
 
