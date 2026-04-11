@@ -8,6 +8,7 @@ export const commands = {
 	checkHealth: () => typedError<HealthStatus, string>(__TAURI_INVOKE("check_health")),
 	loadLocalStore: () => typedError<LocalStore, StoreError>(__TAURI_INVOKE("load_local_store")),
 	saveLocalStore: (store: LocalStore) => typedError<null, StoreError>(__TAURI_INVOKE("save_local_store", { store })),
+	loadWeekEvents: (weekStart: string) => typedError<EmployeeWeekEvents[], string>(__TAURI_INVOKE("load_week_events", { weekStart })),
 	dayliteConnectRefreshToken: (request: DayliteRefreshTokenRequest) => typedError<DayliteTokenSyncStatus, DayliteApiError>(__TAURI_INVOKE("daylite_connect_refresh_token", { request })),
 	dayliteListProjects: () => typedError<PlanningProjectRecord[], DayliteApiError>(__TAURI_INVOKE("daylite_list_projects")),
 	dayliteSearchProjects: (input: DayliteSearchInput) => typedError<DayliteSearchResult<DayliteProjectSummary>, DayliteApiError>(__TAURI_INVOKE("daylite_search_projects", { input })),
@@ -26,6 +27,24 @@ export const commands = {
 };
 
 /* Types */
+export type CalendarEventKind = "assignment" | "bare";
+
+export type CalendarCellEvent = {
+	uid: string,
+	kind: CalendarEventKind,
+	title: string,
+	projectStatus: string | null,
+	/** ISO date yyyy-MM-dd */
+	date: string,
+};
+
+export type EmployeeWeekEvents = {
+	employeeReference: string,
+	events: CalendarCellEvent[],
+	/** Set when the CalDAV fetch for this employee failed entirely. */
+	error: string | null,
+};
+
 export type ApiEndpoints = {
 	dayliteBaseUrl: string,
 	planradarBaseUrl: string,

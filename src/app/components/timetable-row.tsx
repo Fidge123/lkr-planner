@@ -1,16 +1,16 @@
 import { TriangleAlert } from "lucide-react";
-import { getWorkItemsForCell } from "../../data/dummy-data";
 import type {
+  CalendarCellEvent,
   EmployeeSetting,
   PlanningContactRecord,
-  PlanningProjectRecord,
 } from "../../generated/tauri";
+import { toCellEvent } from "../types";
 import { isToday } from "../util";
 import { TimetableCell } from "./timetable-cell";
 
 export function TimetableRow({
   employee,
-  projects,
+  calendarEvents,
   weekDays,
   employeeSetting,
   onOpenIcalDialog,
@@ -37,13 +37,19 @@ export function TimetableRow({
         </button>
       </th>
 
-      {weekDays.map((day) => (
-        <TimetableCell
-          key={day.toISOString()}
-          highlight={isToday(day)}
-          projects={getWorkItemsForCell(employee.self, day, projects)}
-        />
-      ))}
+      {weekDays.map((day) => {
+        const isoDay = day.toISOString().slice(0, 10);
+        const dayEvents = calendarEvents
+          .filter((e) => e.date === isoDay)
+          .map(toCellEvent);
+        return (
+          <TimetableCell
+            key={day.toISOString()}
+            highlight={isToday(day)}
+            events={dayEvents}
+          />
+        );
+      })}
     </tr>
   );
 }
@@ -67,7 +73,7 @@ function needsAttention(setting: EmployeeSetting | null | undefined): boolean {
 
 interface Props {
   employee: PlanningContactRecord;
-  projects: PlanningProjectRecord[];
+  calendarEvents: CalendarCellEvent[];
   weekDays: Date[];
   employeeSetting: EmployeeSetting | null;
   onOpenIcalDialog: (employee: PlanningContactRecord) => void;

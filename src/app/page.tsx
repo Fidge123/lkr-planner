@@ -1,10 +1,12 @@
 import type {
+  CalendarCellEvent,
   EmployeeSetting,
   PlanningContactRecord,
   PlanningProjectRecord,
 } from "../generated/tauri";
 import { TimetableHeader } from "./components/timetable-header";
 import { TimetableRow } from "./components/timetable-row";
+import { usePlanningAssignments } from "./use-planning-assignments";
 import { usePlanningEmployees } from "./use-planning-employees";
 import { usePlanningProjects } from "./use-planning-projects";
 import { getWeekDays } from "./util";
@@ -13,19 +15,27 @@ export function PlanningGrid({
   weekOffset,
   projectState,
   employeeState,
+  assignmentState,
   employeeSettings,
   onOpenIcalDialog,
 }: Props) {
+  const weekDays = getWeekDays(weekOffset);
+  const weekStart = weekDays[0].toISOString().slice(0, 10);
+
   const planningProjectsState = usePlanningProjects();
   const planningEmployeesState = usePlanningEmployees();
+  const planningAssignmentsState = usePlanningAssignments(weekStart);
+
   const resolvedProjectState = projectState ?? planningProjectsState;
   const resolvedEmployeeState = employeeState ?? planningEmployeesState;
+  const resolvedAssignmentState = assignmentState ?? planningAssignmentsState;
 
   return (
     <PlanningGridTable
       weekOffset={weekOffset}
       projectState={resolvedProjectState}
       employeeState={resolvedEmployeeState}
+      assignmentState={resolvedAssignmentState}
       employeeSettings={employeeSettings ?? []}
       onOpenIcalDialog={onOpenIcalDialog ?? (() => {})}
     />
@@ -36,6 +46,7 @@ export function PlanningGridTable({
   weekOffset,
   projectState,
   employeeState,
+  assignmentState,
   employeeSettings,
   onOpenIcalDialog,
 }: PlanningGridTableProps) {
@@ -47,6 +58,12 @@ export function PlanningGridTable({
     errorMessage: employeeErrorMessage,
     reloadEmployees,
   } = employeeState;
+  const {
+    eventsByEmployee,
+    isLoading: isAssignmentsLoading,
+    errorMessage: assignmentErrorMessage,
+    reloadAssignments,
+  } = assignmentState;
 
   return (
     <section className="w-full h-full overflow-auto">
@@ -70,6 +87,18 @@ export function PlanningGridTable({
           </button>
         </section>
       ) : null}
+      {assignmentErrorMessage ? (
+        <section className="alert alert-error m-4">
+          <span>{assignmentErrorMessage}</span>
+          <button
+            type="button"
+            className="btn btn-sm"
+            onClick={reloadAssignments}
+          >
+            Erneut laden
+          </button>
+        </section>
+      ) : null}
       <table className="table table-fixed border-collapse">
         <thead className="text-base-content">
           <tr>
@@ -84,7 +113,7 @@ export function PlanningGridTable({
             <TimetableRow
               key={buildEmployeeRowKey(employee, index)}
               employee={employee}
-              projects={projects}
+              calendarEvents={eventsByEmployee[employee.self] ?? []}
               weekDays={weekDays}
               employeeSetting={
                 employeeSettings.find(
@@ -112,6 +141,11 @@ export function PlanningGridTable({
         {isLoading ? (
           <p className="mt-2 text-base-content/70">
             Projekte werden geladen...
+          </p>
+        ) : null}
+        {isAssignmentsLoading ? (
+          <p className="mt-2 text-base-content/70">
+            Einsätze werden geladen...
           </p>
         ) : null}
         {!isLoading && projects.length === 0 ? (
@@ -146,6 +180,7 @@ interface Props {
   weekOffset: number;
   projectState?: PlanningGridProjectsState;
   employeeState?: PlanningGridEmployeesState;
+  assignmentState?: PlanningGridAssignmentState;
   employeeSettings?: EmployeeSetting[];
   onOpenIcalDialog?: (employee: PlanningContactRecord) => void;
 }
@@ -154,6 +189,7 @@ interface PlanningGridTableProps {
   weekOffset: number;
   projectState: PlanningGridProjectsState;
   employeeState: PlanningGridEmployeesState;
+  assignmentState: PlanningGridAssignmentState;
   employeeSettings: EmployeeSetting[];
   onOpenIcalDialog: (employee: PlanningContactRecord) => void;
 }
@@ -170,6 +206,13 @@ export interface PlanningGridEmployeesState {
   isLoading: boolean;
   errorMessage: string | null;
   reloadEmployees: () => void;
+}
+
+export interface PlanningGridAssignmentState {
+  eventsByEmployee: Record<string, CalendarCellEvent[]>;
+  isLoading: boolean;
+  errorMessage: string | null;
+  reloadAssignments: () => void;
 }
 
 function toGermanProjectStatus(

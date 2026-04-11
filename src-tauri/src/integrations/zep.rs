@@ -71,8 +71,8 @@ pub enum IcalSource {
 
 #[derive(Serialize, Deserialize)]
 pub(crate) struct ZepStoredCredentials {
-    username: String,
-    password: String,
+    pub(crate) username: String,
+    pub(crate) password: String,
 }
 
 impl std::fmt::Debug for ZepStoredCredentials {
