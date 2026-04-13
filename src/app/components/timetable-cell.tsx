@@ -8,7 +8,7 @@ export function TimetableCell({ highlight = false, events }: Props) {
           event.kind === "bare" ? (
             <li key={event.uid}>
               <span
-                className={`flex items-center w-full gap-2 p-2 rounded-lg cursor-default text-base-content transition-colors hover:bg-base-300 ${event.color}`}
+                className={`flex items-center w-full gap-4 p-2 rounded-lg cursor-default text-base-content transition-colors hover:bg-base-300 ${event.color}`}
               >
                 <EventTime
                   startTime={event.startTime}
@@ -23,7 +23,7 @@ export function TimetableCell({ highlight = false, events }: Props) {
             <li key={event.uid}>
               <button
                 type="button"
-                className={`btn btn-block text-base-100 p-2 rounded-lg transition-all hover:brightness-90 active:brightness-75 ${event.color}`}
+                className={`btn btn-block justify-start gap-4 text-base-100 p-2 rounded-lg transition-all hover:brightness-90 active:brightness-75 ${event.color}`}
               >
                 <EventTime
                   startTime={event.startTime}
