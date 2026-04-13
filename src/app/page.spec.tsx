@@ -244,6 +244,8 @@ describe("planning grid assignment states", () => {
       title: "Projekt Nord",
       projectStatus: "in_progress",
       date: "2026-01-26",
+      startTime: null,
+      endTime: null,
     };
 
     const html = renderToStaticMarkup(
@@ -278,6 +280,8 @@ describe("planning grid assignment states", () => {
       title: "Auto Werkstatt",
       projectStatus: null,
       date: "2026-01-26",
+      startTime: null,
+      endTime: null,
     };
 
     const html = renderToStaticMarkup(
@@ -296,7 +300,7 @@ describe("planning grid assignment states", () => {
     );
 
     expect(html).toContain("Auto Werkstatt");
-    expect(html).toContain("btn-ghost");
+    expect(html).toContain("bg-base-200");
     expect(html).not.toContain("bg-secondary");
     // Note: bg-primary legitimately appears in the TimetableHeader for today's column;
     // the bare event cell itself does not use any bg-primary class.
