@@ -23,7 +23,7 @@ export function TimetableCell({ highlight = false, events }: Props) {
             <li key={event.uid}>
               <button
                 type="button"
-                className={`btn btn-block justify-start gap-4 text-base-100 p-2 rounded-lg transition-all hover:brightness-90 active:brightness-75 ${event.color}`}
+                className={`btn btn-block h-auto justify-start gap-4 text-base-100 p-2 rounded-lg transition-all hover:brightness-90 active:brightness-75 ${event.color}`}
               >
                 <EventTime
                   startTime={event.startTime}
