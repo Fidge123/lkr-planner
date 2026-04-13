@@ -36,6 +36,10 @@ export type CalendarCellEvent = {
 	projectStatus: string | null,
 	/** ISO date yyyy-MM-dd */
 	date: string,
+	/** Start time in HH:MM format. Null for all-day events. */
+	startTime: string | null,
+	/** End time in HH:MM format. Null for all-day events. */
+	endTime: string | null,
 };
 
 export type EmployeeWeekEvents = {

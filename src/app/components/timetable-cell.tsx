@@ -7,7 +7,13 @@ export function TimetableCell({ highlight = false, events }: Props) {
         {events.map((event) =>
           event.kind === "bare" ? (
             <li key={event.uid}>
-              <span className="btn btn-block btn-ghost text-base-content/50 p-2 rounded-lg cursor-default">
+              <span
+                className={`flex items-center w-full gap-2 p-2 rounded-lg cursor-default text-base-content ${event.color}`}
+              >
+                <EventTime
+                  startTime={event.startTime}
+                  endTime={event.endTime}
+                />
                 <h4 className="truncate flex-1 font-normal text-sm">
                   {event.title}
                 </h4>
@@ -19,6 +25,10 @@ export function TimetableCell({ highlight = false, events }: Props) {
                 type="button"
                 className={`btn btn-block text-base-100 p-2 rounded-lg ${event.color}`}
               >
+                <EventTime
+                  startTime={event.startTime}
+                  endTime={event.endTime}
+                />
                 <h4 className="truncate flex-1 font-medium">{event.title}</h4>
               </button>
             </li>
@@ -41,4 +51,19 @@ export function TimetableCell({ highlight = false, events }: Props) {
 interface Props {
   highlight: boolean;
   events: CellEvent[];
+}
+
+function EventTime({ startTime, endTime }: TimeProps) {
+  if (!startTime) return null;
+  return (
+    <div className="flex flex-col text-xs leading-tight shrink-0 opacity-70 tabular-nums">
+      <span>{startTime}</span>
+      {endTime && <span>{endTime}</span>}
+    </div>
+  );
+}
+
+interface TimeProps {
+  startTime: string | null;
+  endTime: string | null;
 }

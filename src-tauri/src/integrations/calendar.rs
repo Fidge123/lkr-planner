@@ -32,6 +32,10 @@ pub struct CalendarCellEvent {
     pub project_status: Option<String>,
     /// ISO date in the form yyyy-MM-dd.
     pub date: String,
+    /// Start time in HH:MM format. None for all-day events.
+    pub start_time: Option<String>,
+    /// End time in HH:MM format. None for all-day events.
+    pub end_time: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
@@ -53,6 +57,8 @@ struct RawVEvent {
     summary: String,
     description: String,
     dtstart: String,
+    start_time: Option<String>,
+    end_time: Option<String>,
 }
 
 /// After initial classification: either a lkr-planner event or a bare event, pending project resolution.
@@ -62,6 +68,8 @@ struct PendingEvent {
     summary: String,
     /// None = bare event. Some(ref) = lkr-planner event with unresolved Daylite project ref.
     project_ref: Option<String>,
+    start_time: Option<String>,
+    end_time: Option<String>,
 }
 
 // ── Tauri command ─────────────────────────────────────────────────────────────
@@ -287,7 +295,8 @@ fn parse_ical_events(ical_text: &str) -> Vec<RawVEvent> {
                 return None;
             };
 
-            let date = match event.get_start()? {
+            let start = event.get_start()?;
+            let date = match &start {
                 DatePerhapsTime::Date(d) => d.format("%Y-%m-%d").to_string(),
                 DatePerhapsTime::DateTime(CalendarDateTime::Floating(dt)) => {
                     dt.date().format("%Y-%m-%d").to_string()
@@ -299,15 +308,36 @@ fn parse_ical_events(ical_text: &str) -> Vec<RawVEvent> {
                     date_time.date().format("%Y-%m-%d").to_string()
                 }
             };
+            let start_time = ical_time(&start);
+            let end_time = event.get_end().and_then(|dt| ical_time(&dt));
 
             Some(RawVEvent {
                 uid: event.get_uid().unwrap_or("").to_string(),
                 summary: event.get_summary().unwrap_or("").to_string(),
                 description: event.get_description().unwrap_or("").to_string(),
                 dtstart: date,
+                start_time,
+                end_time,
             })
         })
         .collect()
+}
+
+/// Extracts the time component from a `DatePerhapsTime` as an `HH:MM` string.
+/// Returns `None` for all-day (date-only) values.
+fn ical_time(dt: &DatePerhapsTime) -> Option<String> {
+    match dt {
+        DatePerhapsTime::Date(_) => None,
+        DatePerhapsTime::DateTime(CalendarDateTime::Floating(dt)) => {
+            Some(dt.time().format("%H:%M").to_string())
+        }
+        DatePerhapsTime::DateTime(CalendarDateTime::Utc(dt)) => {
+            Some(dt.time().format("%H:%M").to_string())
+        }
+        DatePerhapsTime::DateTime(CalendarDateTime::WithTimezone { date_time, .. }) => {
+            Some(date_time.time().format("%H:%M").to_string())
+        }
+    }
 }
 
 // ── Event classification ──────────────────────────────────────────────────────
@@ -341,6 +371,8 @@ fn classify_event(event: RawVEvent) -> PendingEvent {
         date,
         summary: event.summary,
         project_ref,
+        start_time: event.start_time,
+        end_time: event.end_time,
     }
 }
 
@@ -354,48 +386,62 @@ fn resolve_event(
     cache: &DayliteCache,
     api_results: &HashMap<String, Option<(String, String)>>,
 ) -> CalendarCellEvent {
-    let Some(project_ref) = pending.project_ref else {
+    let PendingEvent {
+        uid,
+        date,
+        summary,
+        project_ref,
+        start_time,
+        end_time,
+    } = pending;
+
+    let Some(project_ref) = project_ref else {
         return CalendarCellEvent {
-            uid: pending.uid,
+            uid,
             kind: CalendarEventKind::Bare,
-            title: pending.summary,
+            title: summary,
             project_status: None,
-            date: pending.date,
+            date,
+            start_time,
+            end_time,
         };
     };
 
     // Try the local Daylite cache first.
     if let Some(cached) = cache.projects.iter().find(|p| p.reference == project_ref) {
         return CalendarCellEvent {
-            uid: pending.uid,
+            uid,
             kind: CalendarEventKind::Assignment,
             title: cached.name.clone(),
             project_status: Some(cached.status.clone()),
-            date: pending.date,
+            date,
+            start_time,
+            end_time,
         };
     }
 
     // Try the pre-fetched API result.
     if let Some(Some((name, status))) = api_results.get(&project_ref) {
         return CalendarCellEvent {
-            uid: pending.uid,
+            uid,
             kind: CalendarEventKind::Assignment,
             title: name.clone(),
             project_status: Some(status.clone()),
-            date: pending.date,
+            date,
+            start_time,
+            end_time,
         };
     }
 
     // Placeholder: project could not be resolved.
     CalendarCellEvent {
-        uid: pending.uid,
+        uid,
         kind: CalendarEventKind::Assignment,
-        title: format!(
-            "Beschreibung für {} konnte nicht abgerufen werden",
-            pending.summary
-        ),
+        title: format!("Beschreibung für {} konnte nicht abgerufen werden", summary),
         project_status: None,
-        date: pending.date,
+        date,
+        start_time,
+        end_time,
     }
 }
 
@@ -450,6 +496,7 @@ mod tests {
             summary: "Projekt Nord".to_string(),
             description: "daylite:/v1/projects/3001".to_string(),
             dtstart: "2026-01-26".to_string(),
+            ..Default::default()
         };
 
         let pending = classify_event(event);
@@ -466,6 +513,7 @@ mod tests {
             summary: "Auto Werkstatt".to_string(),
             description: "Bitte Auto abholen".to_string(),
             dtstart: "2026-01-27".to_string(),
+            ..Default::default()
         };
 
         let pending = classify_event(event);
@@ -481,6 +529,7 @@ mod tests {
             summary: "Blockertermin".to_string(),
             description: String::new(),
             dtstart: "2026-01-28".to_string(),
+            ..Default::default()
         };
 
         let pending = classify_event(event);
@@ -495,6 +544,7 @@ mod tests {
             summary: "Projekt Süd".to_string(),
             description: "daylite:/v1/projects/4001\nZusätzliche Notizen hier".to_string(),
             dtstart: "2026-01-29".to_string(),
+            ..Default::default()
         };
 
         let pending = classify_event(event);
@@ -509,6 +559,7 @@ mod tests {
             summary: "Ohne UID".to_string(),
             description: String::new(),
             dtstart: "2026-01-26".to_string(),
+            ..Default::default()
         };
 
         let pending = classify_event(event);
@@ -526,6 +577,8 @@ mod tests {
             date: "2026-01-26".to_string(),
             summary: "Projekt Nord".to_string(),
             project_ref: Some("/v1/projects/3001".to_string()),
+            start_time: None,
+            end_time: None,
         };
         let cache = DayliteCache {
             last_synced_at: None,
@@ -553,6 +606,8 @@ mod tests {
             date: "2026-01-27".to_string(),
             summary: "Projekt Süd".to_string(),
             project_ref: Some("/v1/projects/4001".to_string()),
+            start_time: None,
+            end_time: None,
         };
         let cache = DayliteCache::default();
         let mut api_results = HashMap::new();
@@ -575,6 +630,8 @@ mod tests {
             date: "2026-01-28".to_string(),
             summary: "Unbekanntes Projekt".to_string(),
             project_ref: Some("/v1/projects/9999".to_string()),
+            start_time: None,
+            end_time: None,
         };
         let cache = DayliteCache::default();
         let mut api_results = HashMap::new();
@@ -596,6 +653,8 @@ mod tests {
             date: "2026-01-29".to_string(),
             summary: "Auto Werkstatt".to_string(),
             project_ref: None,
+            start_time: None,
+            end_time: None,
         };
         let cache = DayliteCache::default();
         let api_results = HashMap::new();

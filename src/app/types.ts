@@ -7,6 +7,10 @@ export interface CellEvent {
   title: string;
   /** Tailwind CSS background class derived from Daylite project status. */
   color: string;
+  /** Start time in HH:MM format. Null for all-day events. */
+  startTime: string | null;
+  /** End time in HH:MM format. Null for all-day events. */
+  endTime: string | null;
 }
 
 /** Maps a Daylite project status string to a Tailwind background class. */
@@ -33,12 +37,14 @@ function projectStatusToColor(status: string | null | undefined): string {
 export function toCellEvent(event: CalendarCellEvent): CellEvent {
   const color =
     event.kind === "bare"
-      ? "bg-base-300"
+      ? "bg-base-200"
       : projectStatusToColor(event.projectStatus);
   return {
     uid: event.uid,
     kind: event.kind,
     title: event.title,
     color,
+    startTime: event.startTime,
+    endTime: event.endTime,
   };
 }
