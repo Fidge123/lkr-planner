@@ -14,7 +14,7 @@ export function TimetableCell({ highlight = false, events }: Props) {
                   startTime={event.startTime}
                   endTime={event.endTime}
                 />
-                <h4 className="truncate flex-1 font-normal text-sm">
+                <h4 className="flex-1 min-w-0 font-normal text-sm">
                   {event.title}
                 </h4>
               </span>
@@ -29,7 +29,7 @@ export function TimetableCell({ highlight = false, events }: Props) {
                   startTime={event.startTime}
                   endTime={event.endTime}
                 />
-                <h4 className="truncate flex-1 font-medium">{event.title}</h4>
+                <h4 className="flex-1 min-w-0 font-medium">{event.title}</h4>
               </button>
             </li>
           ),
