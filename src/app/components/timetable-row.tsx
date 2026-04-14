@@ -11,6 +11,7 @@ import { TimetableCell } from "./timetable-cell";
 export function TimetableRow({
   employee,
   calendarEvents,
+  calendarError,
   weekDays,
   employeeSetting,
   onOpenIcalDialog,
@@ -37,19 +38,28 @@ export function TimetableRow({
         </button>
       </th>
 
-      {weekDays.map((day) => {
-        const isoDay = day.toISOString().slice(0, 10);
-        const dayEvents = calendarEvents
-          .filter((e) => e.date === isoDay)
-          .map(toCellEvent);
-        return (
-          <TimetableCell
-            key={day.toISOString()}
-            highlight={isToday(day)}
-            events={dayEvents}
-          />
-        );
-      })}
+      {calendarError ? (
+        <td
+          colSpan={weekDays.length}
+          className="p-4 text-error text-sm align-middle"
+        >
+          <span title={calendarError}>Kalender nicht verfügbar</span>
+        </td>
+      ) : (
+        weekDays.map((day) => {
+          const isoDay = day.toISOString().slice(0, 10);
+          const dayEvents = calendarEvents
+            .filter((e) => e.date === isoDay)
+            .map(toCellEvent);
+          return (
+            <TimetableCell
+              key={day.toISOString()}
+              highlight={isToday(day)}
+              events={dayEvents}
+            />
+          );
+        })
+      )}
     </tr>
   );
 }
@@ -74,6 +84,7 @@ function needsAttention(setting: EmployeeSetting | null | undefined): boolean {
 interface Props {
   employee: PlanningContactRecord;
   calendarEvents: CalendarCellEvent[];
+  calendarError: string | null;
   weekDays: Date[];
   employeeSetting: EmployeeSetting | null;
   onOpenIcalDialog: (employee: PlanningContactRecord) => void;

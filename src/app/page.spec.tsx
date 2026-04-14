@@ -24,6 +24,7 @@ const defaultEmployeeState: PlanningGridEmployeesState = {
 
 const defaultAssignmentState: PlanningGridAssignmentState = {
   eventsByEmployee: {},
+  errorsByEmployee: {},
   isLoading: false,
   errorMessage: null,
   reloadAssignments: () => {},
@@ -326,6 +327,49 @@ describe("planning grid assignment states", () => {
 
     // Employee row exists but no project events in it
     expect(html).toContain("Monteur Aus Daylite");
+    expect(html).not.toContain("bg-secondary");
+  });
+
+  it("renders dates from the next week when weekOffset is 1", () => {
+    const html = renderToStaticMarkup(
+      <PlanningGridTable
+        weekOffset={1}
+        projectState={{ ...defaultState }}
+        employeeState={{ ...defaultEmployeeState }}
+        assignmentState={{ ...defaultAssignmentState }}
+        {...defaultIcalProps}
+      />,
+    );
+
+    // System time is 2026-01-28; weekOffset=1 starts on 2026-02-02
+    expect(html).toContain("02.02");
+  });
+
+  it("renders per-employee calendar error inline in the row", () => {
+    const employee = {
+      self: "/v1/contacts/9001",
+      full_name: "Monteur Aus Daylite",
+      category: "Monteur",
+      urls: [],
+    };
+
+    const html = renderToStaticMarkup(
+      <PlanningGridTable
+        weekOffset={0}
+        projectState={{ ...defaultState }}
+        employeeState={{ ...defaultEmployeeState, employees: [employee] }}
+        assignmentState={{
+          ...defaultAssignmentState,
+          errorsByEmployee: {
+            "/v1/contacts/9001": "CalDAV server unreachable",
+          },
+        }}
+        {...defaultIcalProps}
+      />,
+    );
+
+    expect(html).toContain("Kalender nicht verfügbar");
+    expect(html).toContain("CalDAV server unreachable");
     expect(html).not.toContain("bg-secondary");
   });
 });

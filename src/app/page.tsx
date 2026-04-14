@@ -1,11 +1,11 @@
 import type {
-  CalendarCellEvent,
   EmployeeSetting,
   PlanningContactRecord,
   PlanningProjectRecord,
 } from "../generated/tauri";
 import { TimetableHeader } from "./components/timetable-header";
 import { TimetableRow } from "./components/timetable-row";
+import type { PlanningAssignmentsState } from "./use-planning-assignments";
 import { usePlanningAssignments } from "./use-planning-assignments";
 import { usePlanningEmployees } from "./use-planning-employees";
 import { usePlanningProjects } from "./use-planning-projects";
@@ -60,6 +60,7 @@ export function PlanningGridTable({
   } = employeeState;
   const {
     eventsByEmployee,
+    errorsByEmployee,
     isLoading: isAssignmentsLoading,
     errorMessage: assignmentErrorMessage,
     reloadAssignments,
@@ -99,6 +100,11 @@ export function PlanningGridTable({
           </button>
         </section>
       ) : null}
+      {isAssignmentsLoading ? (
+        <p className="px-4 py-2 text-base-content/70">
+          Einsätze werden geladen...
+        </p>
+      ) : null}
       <table className="table table-fixed border-collapse">
         <thead className="text-base-content">
           <tr>
@@ -114,6 +120,7 @@ export function PlanningGridTable({
               key={buildEmployeeRowKey(employee, index)}
               employee={employee}
               calendarEvents={eventsByEmployee[employee.self] ?? []}
+              calendarError={errorsByEmployee[employee.self] ?? null}
               weekDays={weekDays}
               employeeSetting={
                 employeeSettings.find(
@@ -141,11 +148,6 @@ export function PlanningGridTable({
         {isLoading ? (
           <p className="mt-2 text-base-content/70">
             Projekte werden geladen...
-          </p>
-        ) : null}
-        {isAssignmentsLoading ? (
-          <p className="mt-2 text-base-content/70">
-            Einsätze werden geladen...
           </p>
         ) : null}
         {!isLoading && projects.length === 0 ? (
@@ -208,12 +210,7 @@ export interface PlanningGridEmployeesState {
   reloadEmployees: () => void;
 }
 
-export interface PlanningGridAssignmentState {
-  eventsByEmployee: Record<string, CalendarCellEvent[]>;
-  isLoading: boolean;
-  errorMessage: string | null;
-  reloadAssignments: () => void;
-}
+export type PlanningGridAssignmentState = PlanningAssignmentsState;
 
 function toGermanProjectStatus(
   status: PlanningProjectRecord["status"],

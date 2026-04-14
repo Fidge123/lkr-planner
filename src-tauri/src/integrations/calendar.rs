@@ -2,7 +2,7 @@ use chrono::NaiveDate;
 use icalendar::{Calendar, CalendarComponent, CalendarDateTime, Component, DatePerhapsTime};
 use serde::{Deserialize, Serialize};
 use specta::Type;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 use tauri_plugin_http::reqwest;
 use tauri_plugin_http::reqwest::Method;
@@ -114,6 +114,11 @@ pub async fn load_week_events(
         }
     };
 
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .build()
+        .map_err(|e| format!("HTTP-Client konnte nicht erstellt werden: {e}"))?;
+
     // First pass: fetch CalDAV events per employee and classify against the local cache.
     let mut pending_per_employee: Vec<(String, Vec<PendingEvent>)> = Vec::new();
     let mut error_results: Vec<EmployeeWeekEvents> = Vec::new();
@@ -129,7 +134,15 @@ pub async fn load_week_events(
             None => continue,
         };
 
-        match fetch_calendar_events(&calendar_url, &username, &password, week_start_date).await {
+        match fetch_calendar_events(
+            &client,
+            &calendar_url,
+            &username,
+            &password,
+            week_start_date,
+        )
+        .await
+        {
             Ok(raw_events) => {
                 let pending = raw_events.into_iter().map(classify_event).collect();
                 pending_per_employee.push((employee_ref, pending));
@@ -145,7 +158,7 @@ pub async fn load_week_events(
     }
 
     // Collect unique project refs that are not in the local Daylite cache.
-    let mut missing_refs: Vec<String> = Vec::new();
+    let mut missing_refs: HashSet<String> = HashSet::new();
     for (_, pending_events) in &pending_per_employee {
         for event in pending_events {
             if let Some(ref project_ref) = event.project_ref {
@@ -154,8 +167,8 @@ pub async fn load_week_events(
                     .projects
                     .iter()
                     .any(|p| p.reference == *project_ref);
-                if !in_cache && !missing_refs.contains(project_ref) {
-                    missing_refs.push(project_ref.clone());
+                if !in_cache {
+                    missing_refs.insert(project_ref.clone());
                 }
             }
         }
@@ -192,6 +205,7 @@ pub async fn load_week_events(
 // ── CalDAV fetch ──────────────────────────────────────────────────────────────
 
 async fn fetch_calendar_events(
+    client: &reqwest::Client,
     calendar_url: &str,
     username: &str,
     password: &str,
@@ -202,11 +216,6 @@ async fn fetch_calendar_events(
     let end_str = week_end.format("%Y%m%dT000000Z").to_string();
 
     let body = build_report_body(&start_str, &end_str);
-
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(30))
-        .build()
-        .map_err(|e| format!("HTTP-Client konnte nicht erstellt werden: {e}"))?;
 
     let response = client
         .request(
@@ -348,7 +357,7 @@ fn classify_event(event: RawVEvent) -> PendingEvent {
 
     let uid = if event.uid.is_empty() {
         // Synthesise a stable-ish UID from the event content when none is provided.
-        format!("synthetic-{}-{}", date, event.summary.len())
+        format!("synthetic-{}-{}", date, event.summary)
     } else {
         event.uid
     };
