@@ -1,31 +1,26 @@
-## 1. Sync Infrastructure
+## 1. CalDAV Write Infrastructure (Rust)
 
-- [ ] 1.1 Add UUID generation for assignments
-- [ ] 1.2 Create iCal event builder with proper formatting
-- [ ] 1.3 Implement iCal push/update operations
+- [ ] 1.1 Implement CalDAV PUT for VEVENT creation and update
+- [ ] 1.2 Implement CalDAV DELETE for VEVENT removal
+- [ ] 1.3 Add UUID generation for new assignments
+- [ ] 1.4 Build VEVENT from assignment data using BL-015 encoding format (SUMMARY, DESCRIPTION, UID)
+- [ ] 1.5 Apply BL-034 slot algorithm for DTSTART/DTEND based on assignment count per day
 
-## 2. Sync Orchestration
+## 2. Tauri Commands
 
-- [ ] 2.1 Trigger sync on assignment create
-- [ ] 2.2 Trigger sync on assignment update
-- [ ] 2.3 Trigger sync on assignment delete
-- [ ] 2.4 Implement idempotent sync logic (use stable UID)
+- [ ] 2.1 Add `create_assignment` command (employee reference, project reference, day → CalDAV PUT)
+- [ ] 2.2 Add `update_assignment` command (UID, updated fields → CalDAV PUT with ETag)
+- [ ] 2.3 Add `delete_assignment` command (UID, employee reference → CalDAV DELETE)
 
-## 3. Status Tracking
+## 3. Safety Guards
 
-- [ ] 3.1 Add sync status field to assignment model
-- [ ] 3.2 Track last sync timestamp
-- [ ] 3.3 Expose status for troubleshooting UI
-- [ ] 3.4 Handle failed syncs with retry queue
+- [ ] 3.1 Verify employee has a primary calendar URL configured before any write
+- [ ] 3.2 Reject writes where target URL matches the employee's absence calendar URL
+- [ ] 3.3 Add structured logging for all CalDAV write operations
 
-## 4. Safety Guards
+## 4. Testing
 
-- [ ] 4.1 Verify primary iCal URL exists before sync
-- [ ] 4.2 Never construct absence calendar URL for writing
-- [ ] 4.3 Add logging for all sync operations
-
-## 5. Testing
-
-- [ ] 5.1 Sync service tests for create/update/delete and retry behavior
-- [ ] 5.2 Idempotency tests across repeated sync executions
-- [ ] 5.3 Tests ensuring absence calendars are never written
+- [ ] 4.1 Command tests: create/update/delete produce correct VEVENT format
+- [ ] 4.2 Idempotency tests: repeated PUT with same UID produces one event (no duplicate)
+- [ ] 4.3 Tests confirming absence calendar URLs are never written to
+- [ ] 4.4 Error handling tests: CalDAV unavailable, auth failure, ETag conflict

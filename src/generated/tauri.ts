@@ -8,6 +8,13 @@ export const commands = {
 	checkHealth: () => typedError<HealthStatus, string>(__TAURI_INVOKE("check_health")),
 	loadLocalStore: () => typedError<LocalStore, StoreError>(__TAURI_INVOKE("load_local_store")),
 	saveLocalStore: (store: LocalStore) => typedError<null, StoreError>(__TAURI_INVOKE("save_local_store", { store })),
+	/**
+	 *  Loads all calendar events for every configured employee for the given week.
+	 *  Returns one entry per employee that has a primary calendar configured.
+	 *  Per-employee CalDAV failures are returned inline in `error`; only total failures
+	 *  (store unavailable, bad date) return an `Err`.
+	 */
+	loadWeekEvents: (weekStart: string) => typedError<EmployeeWeekEvents[], string>(__TAURI_INVOKE("load_week_events", { weekStart })),
 	dayliteConnectRefreshToken: (request: DayliteRefreshTokenRequest) => typedError<DayliteTokenSyncStatus, DayliteApiError>(__TAURI_INVOKE("daylite_connect_refresh_token", { request })),
 	dayliteListProjects: () => typedError<PlanningProjectRecord[], DayliteApiError>(__TAURI_INVOKE("daylite_list_projects")),
 	dayliteSearchProjects: (input: DayliteSearchInput) => typedError<DayliteSearchResult<DayliteProjectSummary>, DayliteApiError>(__TAURI_INVOKE("daylite_search_projects", { input })),
@@ -31,6 +38,26 @@ export type ApiEndpoints = {
 	planradarBaseUrl: string,
 	zepCaldavRootUrl?: string,
 };
+
+export type CalendarCellEvent = {
+	uid: string,
+	kind: CalendarEventKind,
+	title: string,
+	// Daylite project status string if resolved (e.g. "in_progress"). None for bare or unresolved.
+	projectStatus: string | null,
+	// ISO date in the form yyyy-MM-dd.
+	date: string,
+	// Start time in HH:MM format. None for all-day events.
+	startTime: string | null,
+	// End time in HH:MM format. None for all-day events.
+	endTime: string | null,
+};
+
+export type CalendarEventKind = 
+// A lkr-planner assignment linked to a Daylite project via DESCRIPTION.
+"assignment" | 
+// A bare calendar event with no Daylite project link (legacy, blocker, absence).
+"bare";
 
 export type ContactFilter = {
 	activeEmployeeKeyword: string,
@@ -148,6 +175,13 @@ export type EmployeeSetting = {
 	 *  None if never tested or URL changed since last test.
 	 */
 	absenceIcalLastTestPassed?: boolean | null,
+};
+
+export type EmployeeWeekEvents = {
+	employeeReference: string,
+	events: CalendarCellEvent[],
+	// Set when the CalDAV fetch for this employee fails entirely.
+	error: string | null,
 };
 
 export type HealthStatus = {
