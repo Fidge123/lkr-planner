@@ -127,6 +127,7 @@ export function PlanningGridTable({
                   (s) => s.dayliteContactReference === employee.self,
                 ) ?? null
               }
+              onRetry={reloadAssignments}
               onOpenIcalDialog={onOpenIcalDialog}
             />
           ))}

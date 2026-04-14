@@ -370,6 +370,7 @@ describe("planning grid assignment states", () => {
 
     expect(html).toContain("Kalender nicht verfügbar");
     expect(html).toContain("CalDAV server unreachable");
+    expect(html).toContain("Erneut laden");
     expect(html).not.toContain("bg-secondary");
   });
 });

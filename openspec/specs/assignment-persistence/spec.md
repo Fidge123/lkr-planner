@@ -29,6 +29,21 @@ The system SHALL distinguish lkr-planner assignments from bare calendar events.
 - **AND** no edit affordance is shown (read-only)
 - **AND** covers legacy manually-created events and employee blockers
 
+#### Scenario: Display event start and end time
+- **WHEN** a VEVENT has a start time (non-all-day event)
+- **THEN** the start time is shown in HH:MM format on the left of the event card
+- **AND** the end time is shown below the start time if present
+- **AND** all-day events show no time
+
+#### Scenario: Event card hover feedback
+- **WHEN** the user hovers over any event card
+- **THEN** a visual hover indicator is shown
+
+#### Scenario: Long event titles
+- **WHEN** an event title exceeds the card width
+- **THEN** the title wraps to multiple lines
+- **AND** the card grows vertically to accommodate the text
+
 ### Requirement: Daylite project resolution
 The system SHALL resolve project details for lkr-planner events.
 
@@ -57,14 +72,24 @@ The system SHALL use CalDAV as the data source for all week navigation.
 - **THEN** CalDAV is queried for the new week's date range
 - **AND** assignments for the new week are displayed
 
+#### Scenario: Pre-fetch adjacent weeks
+- **WHEN** a week is loaded
+- **THEN** the previous and next weeks are silently pre-fetched into the cache
+- **AND** navigation to an adjacent week displays instantly without a loading state
+
 ### Requirement: Loading and error states
 The system SHALL maintain German loading and error states.
 
 #### Scenario: Show loading state
 - **WHEN** CalDAV events are being fetched
-- **THEN** a German loading indicator is shown
+- **THEN** a German loading indicator is shown above the planning table
 
-#### Scenario: Show error state on fetch failure
-- **WHEN** a CalDAV fetch fails for one or more employees
-- **THEN** a German error message is displayed
+#### Scenario: Show error state on per-employee fetch failure
+- **WHEN** a CalDAV fetch fails for an individual employee
+- **THEN** their row shows a German error indicator: "Kalender nicht verfügbar"
+- **AND** a retry button is shown that re-fetches the week for all employees
+
+#### Scenario: Show error state on total fetch failure
+- **WHEN** the calendar data cannot be loaded at all (store unavailable, bad date)
+- **THEN** a German error banner is displayed above the planning table
 - **AND** user can retry the fetch

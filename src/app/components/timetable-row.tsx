@@ -14,6 +14,7 @@ export function TimetableRow({
   calendarError,
   weekDays,
   employeeSetting,
+  onRetry,
   onOpenIcalDialog,
 }: Props) {
   const showWarning = needsAttention(employeeSetting);
@@ -39,11 +40,19 @@ export function TimetableRow({
       </th>
 
       {calendarError ? (
-        <td
-          colSpan={weekDays.length}
-          className="p-4 text-error text-sm align-middle"
-        >
-          <span title={calendarError}>Kalender nicht verfügbar</span>
+        <td colSpan={weekDays.length} className="p-4 text-sm align-middle">
+          <div className="flex items-center gap-3">
+            <span className="text-error" title={calendarError}>
+              Kalender nicht verfügbar
+            </span>
+            <button
+              type="button"
+              className="btn btn-xs btn-ghost"
+              onClick={onRetry}
+            >
+              Erneut laden
+            </button>
+          </div>
         </td>
       ) : (
         weekDays.map((day) => {
@@ -87,5 +96,6 @@ interface Props {
   calendarError: string | null;
   weekDays: Date[];
   employeeSetting: EmployeeSetting | null;
+  onRetry: () => void;
   onOpenIcalDialog: (employee: PlanningContactRecord) => void;
 }
