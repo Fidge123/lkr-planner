@@ -5,25 +5,44 @@ The system SHALL import German public holidays for week view display.
 
 #### Scenario: Fetch Germany-wide holidays
 - **WHEN** week view requests holidays for Germany
-- **THEN** the service fetches holidays with `countryCode=DE` and `global=true`
-- **AND** returns holiday names in German
+- **THEN** the service fetches holidays with `countryCode=DE`
+- **AND** returns holiday entries where `global == true` using `localName` as the German name
 
 #### Scenario: Include Mecklenburg-Vorpommern holidays
 - **WHEN** week view requests holidays for Germany
-- **THEN** the service also includes MV-specific holidays
-- **AND** excludes other state-specific holidays
+- **THEN** the service also includes entries where `counties` contains `"DE-MV"`
+- **AND** excludes entries from other German states
 
 #### Scenario: Year-boundary week
 - **WHEN** a week spans two years (e.g., Dec 28 - Jan 3)
-- **THEN** holidays from both years are included
+- **THEN** holidays from both years are fetched and merged
 - **AND** holidays are correctly mapped to their respective days
 
-#### Scenario: Cache holiday data
-- **WHEN** holidays for a year have been fetched
-- **THEN** subsequent requests for same year use cached data
+#### Scenario: Cache year with monthly refresh
+- **WHEN** holidays for a given year have been fetched
+- **THEN** subsequent requests within 30 days use cached data
 - **AND** no additional API call is made
+
+#### Scenario: Refresh stale cache
+- **WHEN** the cached entry for the requested year is older than 30 days
+- **THEN** the service re-fetches from the Nager API
+- **AND** updates the cache with fresh data and a new `fetched_at` date
+
+#### Scenario: Clean up old cache entries
+- **WHEN** the holiday cache is saved
+- **THEN** any entry whose `fetched_at` is older than 1 year is removed
 
 #### Scenario: API failure handling
 - **WHEN** Nager API request fails
-- **THEN** show German warning "Feiertage konnten nicht geladen werden"
-- **AND** week view continues without holiday data
+- **THEN** the command returns a German error message "Feiertage konnten nicht geladen werden"
+- **AND** the week view continues to display without holiday data
+
+#### Scenario: Holiday name in column header
+- **WHEN** a week day is a public holiday
+- **THEN** the column header shows the weekday and date on the first line
+- **AND** the German holiday name on the second line
+- **AND** the header is styled in grey
+
+#### Scenario: Grey out holiday column
+- **WHEN** a week day is a public holiday
+- **THEN** all employee cells in that column are displayed with a grey background
