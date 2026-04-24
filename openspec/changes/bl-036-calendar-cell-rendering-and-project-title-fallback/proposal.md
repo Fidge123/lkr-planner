@@ -21,4 +21,3 @@ The calendar cell needs to render all composed items with appropriate behavior. 
 ## Impact
 
 - Code: New React components for cell rendering, fallback logic function
-- Dependencies: Depends on BL-035 calendar-cell-composition
