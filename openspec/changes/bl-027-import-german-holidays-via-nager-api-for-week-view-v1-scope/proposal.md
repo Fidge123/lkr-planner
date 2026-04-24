@@ -22,4 +22,3 @@ The week view needs to display German public holidays to help planners avoid sch
 
 - Code: New Rust module for holiday data fetching and caching
 - APIs: Nager API (https://date.nager.at)
-- Dependencies: Provides holiday inputs for calendar-cell item composition (BL-035)
