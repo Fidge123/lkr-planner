@@ -13,9 +13,8 @@
 
 ## 3. Integration
 
-- [ ] 3.1 Connect renderer to BL-035 composition output
-- [ ] 3.2 Wire click handler to open edit modal
-- [ ] 3.3 Add all-day indicator for absence/holiday
+- [ ] 3.1 Wire click handler to open edit modal
+- [ ] 3.2 Add all-day indicator for absence/holiday
 
 ## 4. Testing
 

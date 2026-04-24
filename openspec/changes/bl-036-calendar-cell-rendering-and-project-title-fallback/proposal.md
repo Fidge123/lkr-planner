@@ -4,7 +4,7 @@ The calendar cell needs to render all composed items with appropriate behavior. 
 
 ## What Changes
 
-- Render all calendar cell items from BL-035 composition
+- Render all calendar cell items
 - Implement project title fallback chain: custom → Planradar → Daylite company (single) → Daylite project
 - Enforce read-only behavior for non-editable items
 - Display start/end times for all items
@@ -21,4 +21,3 @@ The calendar cell needs to render all composed items with appropriate behavior. 
 ## Impact
 
 - Code: New React components for cell rendering, fallback logic function
-- Dependencies: Depends on BL-035 calendar-cell-composition

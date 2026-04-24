@@ -1,6 +1,6 @@
 ## Context
 
-The calendar cell must display items from BL-035 with correct rendering and title resolution. Title fallback is critical for user experience when project names vary across systems.
+The calendar cell must display items with correct rendering and title resolution. Title fallback is critical for user experience when project names vary across systems.
 
 ## Goals / Non-Goals
 
