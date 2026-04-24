@@ -423,20 +423,11 @@ pub async fn zep_save_and_test_calendar(
     source: IcalSource,
     calendar_url: Option<String>,
 ) -> Result<ZepCalendarTestResult, ZepError> {
-    // Step 1: Validate selection
     let calendar_url = calendar_url
         .as_deref()
         .map(str::trim)
         .filter(|s| !s.is_empty())
         .map(ToString::to_string);
-
-    let Some(ref cal_url) = calendar_url else {
-        return Err(ZepError {
-            code: ZepErrorCode::InvalidConfiguration,
-            user_message: "Bitte einen Kalender auswählen.".to_string(),
-            technical_message: "calendar_url is None or empty".to_string(),
-        });
-    };
 
     // Load local store once — all in-memory mutations use this copy.
     let mut store =
@@ -446,12 +437,12 @@ pub async fn zep_save_and_test_calendar(
             technical_message: e.technical_message,
         })?;
 
-    // Step 2: Sync to Daylite — look up the "other" calendar URL to preserve it
+    // Step 1: Sync to Daylite — empty string removes the URL entry via normalize_non_empty.
     let current_setting =
         find_or_default_setting(&store.employee_settings, &daylite_contact_reference);
     let (primary_url, absence_url) = match source {
         IcalSource::Primary => (
-            cal_url.clone(),
+            calendar_url.clone().unwrap_or_default(),
             current_setting
                 .zep_absence_calendar
                 .clone()
@@ -462,7 +453,7 @@ pub async fn zep_save_and_test_calendar(
                 .zep_primary_calendar
                 .clone()
                 .unwrap_or_default(),
-            cal_url.clone(),
+            calendar_url.clone().unwrap_or_default(),
         ),
     };
 
@@ -481,18 +472,18 @@ pub async fn zep_save_and_test_calendar(
         technical_message: e.technical_message,
     })?;
 
-    // Step 3: Save calendar URL to local store, clear old timestamp
+    // Step 2: Save to local store (None = cleared), clear old test timestamps.
     update_setting(
         &mut store.employee_settings,
         &daylite_contact_reference,
         |s| match source {
             IcalSource::Primary => {
-                s.zep_primary_calendar = Some(cal_url.clone());
+                s.zep_primary_calendar = calendar_url.clone();
                 s.primary_ical_last_tested_at = None;
                 s.primary_ical_last_test_passed = None;
             }
             IcalSource::Absence => {
-                s.zep_absence_calendar = Some(cal_url.clone());
+                s.zep_absence_calendar = calendar_url.clone();
                 s.absence_ical_last_tested_at = None;
                 s.absence_ical_last_test_passed = None;
             }
@@ -507,7 +498,16 @@ pub async fn zep_save_and_test_calendar(
         },
     )?;
 
-    // Step 4: Run CalDAV test
+    // When clearing, skip the connection test.
+    let Some(ref cal_url) = calendar_url else {
+        return Ok(ZepCalendarTestResult {
+            success: true,
+            timestamp: current_timestamp(),
+            error_message: None,
+        });
+    };
+
+    // Step 3: Run CalDAV connection test.
     let creds = load_zep_credentials_from_keychain()?;
     let timestamp = current_timestamp();
     let test_result = probe_calendar(cal_url, &creds.username, &creds.password).await;
@@ -516,7 +516,7 @@ pub async fn zep_save_and_test_calendar(
         Err(e) => (false, Some(e.user_message.clone())),
     };
 
-    // Step 5: Store result timestamp
+    // Step 4: Store test result timestamp.
     update_setting(
         &mut store.employee_settings,
         &daylite_contact_reference,

@@ -67,7 +67,9 @@ export function EmployeeIcalDialog({
       if (result.success) {
         setStatus({
           type: "success",
-          message: `Erfolgreich getestet am ${formatTimestamp(result.timestamp)}.`,
+          message: url
+            ? `Erfolgreich getestet am ${formatTimestamp(result.timestamp)}.`
+            : "Kalender entfernt.",
         });
       } else {
         setStatus({
@@ -123,6 +125,7 @@ export function EmployeeIcalDialog({
             source="primary"
             calendars={zepCalendars}
             selectedUrl={primaryUrl}
+            storedUrl={employeeSetting?.zepPrimaryCalendar ?? ""}
             onUrlChange={(url) => {
               setPrimaryUrl(url);
               setPrimaryStatus(null);
@@ -138,6 +141,7 @@ export function EmployeeIcalDialog({
             source="absence"
             calendars={zepCalendars}
             selectedUrl={absenceUrl}
+            storedUrl={employeeSetting?.zepAbsenceCalendar ?? ""}
             onUrlChange={(url) => {
               setAbsenceUrl(url);
               setAbsenceStatus(null);
@@ -189,6 +193,7 @@ export function CalendarSection({
   title,
   calendars,
   selectedUrl,
+  storedUrl,
   onUrlChange,
   status,
   isSubmitting,
@@ -196,6 +201,7 @@ export function CalendarSection({
   isDisabled,
   isOptional,
 }: CalendarSectionProps) {
+  const isClearing = !selectedUrl && !!storedUrl;
   return (
     <section>
       <h3 className="font-semibold text-sm mb-2">
@@ -225,11 +231,17 @@ export function CalendarSection({
         </label>
         <button
           type="button"
-          className="btn btn-primary btn-sm whitespace-nowrap"
+          className={`btn btn-sm whitespace-nowrap ${isClearing ? "btn-error btn-outline" : "btn-primary"}`}
           onClick={onSubmit}
-          disabled={isDisabled || isSubmitting || !selectedUrl}
+          disabled={isDisabled || isSubmitting || (!selectedUrl && !storedUrl)}
         >
-          {isSubmitting ? "Teste..." : "Speichern & Testen"}
+          {isSubmitting
+            ? isClearing
+              ? "Entferne..."
+              : "Teste..."
+            : isClearing
+              ? "Entfernen"
+              : "Speichern & Testen"}
         </button>
       </div>
 
@@ -343,6 +355,7 @@ export interface CalendarSectionProps {
   source: IcalSource;
   calendars: ZepCalendar[] | null;
   selectedUrl: string;
+  storedUrl: string;
   onUrlChange: (url: string) => void;
   status: SectionStatus | null;
   isSubmitting: boolean;
