@@ -6,9 +6,11 @@ The week view needs German public holidays to provide planning context. The Nage
 
 **Goals:**
 - Fetch Germany-wide holidays and MV-specific holidays
-- Cache year data locally to avoid repeated API calls
+- Cache year data on disk to avoid repeated API calls
 - Handle year-boundary weeks correctly
 - Show graceful error handling without breaking UI
+- Display holiday name in column header below the date
+- Grey out holiday columns for all employees
 
 **Non-Goals:**
 - Additional Bundesland-specific holidays beyond MV
@@ -17,10 +19,10 @@ The week view needs German public holidays to provide planning context. The Nage
 ## Decisions
 
 ### API Integration
-**Decision**: Use Nager API with country code `DE` and filter by `global` and `MV`
-- Fetch all holidays for given year
-- Filter client-side for global and MV states only
-- Cache response in memory for same-year requests
+**Decision**: Use Nager API with country code `DE`, filter client-side by `global` and `DE-MV` county
+- Endpoint: `GET https://date.nager.at/api/v3/PublicHolidays/{year}/DE`
+- Use `localName` field for German holiday name display
+- Keep holiday if `global == true` OR `counties` contains `"DE-MV"`
 
 ### Year-Boundary Handling
 **Decision**: Fetch holidays for both years when week spans year boundary
@@ -28,9 +30,28 @@ The week view needs German public holidays to provide planning context. The Nage
 - Fetch holidays for both years and merge
 
 ### Caching Strategy
-**Decision**: In-memory cache with year as key
-- Avoids repeated API calls within session
-- Cache invalidates on year change or explicit refresh
+**Decision**: Disk cache via LocalStore with per-year entries and age-based refresh
+- Cache shape: `Vec<HolidayCacheEntry>` added to `LocalStore`
+  - `year: i32`, `fetched_at: String` (yyyy-MM-dd), `holidays: Vec<CachedHoliday>`
+  - `CachedHoliday`: `date: String` (yyyy-MM-dd), `name: String` (German)
+- **Current year**: re-fetch if `fetched_at` is older than 30 days (holidays can be corrected)
+- **Other years**: re-fetch only if entry is absent (past years are stable)
+- **Cleanup**: on every save, remove cache entries where `fetched_at` is older than 1 year
+
+### Frontend Display
+**Decision**: Holiday name shown below the date in the column header; holiday columns greyed out
+- `TimetableHeader` receives an optional `holiday` prop
+- When present: render date on first line, holiday name (German) on second line; apply grey styling to header
+- `TimetableRow` receives a `holidayDates: Set<string>` prop (yyyy-MM-dd strings)
+- Cells whose date is in `holidayDates` receive grey background styling
+- `PlanningGrid` owns the `useHolidays(weekStart)` hook and passes data down
+
+### Tauri Command
+**Decision**: Single command returning holidays for a given week
+- Signature: `get_holidays_for_week(week_start: String) -> Result<Vec<Holiday>, String>`
+- `Holiday`: `date: String` (yyyy-MM-dd), `name: String`
+- Backend handles year-boundary, caching, and filtering before returning
+- Frontend receives only the holidays that fall within the requested week
 
 ## Risks / Trade-offs
 
@@ -38,4 +59,4 @@ The week view needs German public holidays to provide planning context. The Nage
   - **Mitigation**: Show German warning "Feiertage konnten nicht geladen werden" and continue without holidays
 
 - **Risk**: Rate limiting
-  - **Mitigation**: Cache aggressively, add retry with backoff
+  - **Mitigation**: Disk cache with monthly refresh for current year; past years cached indefinitely
