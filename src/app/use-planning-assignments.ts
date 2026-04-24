@@ -90,7 +90,8 @@ export function usePlanningAssignments(
   }, [weekStart, loadActiveWeek, prefetchWeek]);
 
   const reloadAssignments = useCallback(() => {
-    void loadActiveWeek(weekStart, true);
+    cache.current = {};
+    void loadActiveWeek(weekStart);
   }, [weekStart, loadActiveWeek]);
 
   return {
