@@ -18,20 +18,15 @@ The system SHALL import German public holidays for week view display.
 - **THEN** holidays from both years are fetched and merged
 - **AND** holidays are correctly mapped to their respective days
 
-#### Scenario: Cache current year with monthly refresh
-- **WHEN** holidays for the current year have been fetched
+#### Scenario: Cache year with monthly refresh
+- **WHEN** holidays for a given year have been fetched
 - **THEN** subsequent requests within 30 days use cached data
 - **AND** no additional API call is made
 
-#### Scenario: Refresh stale current-year cache
-- **WHEN** the cached entry for the current year is older than 30 days
+#### Scenario: Refresh stale cache
+- **WHEN** the cached entry for the requested year is older than 30 days
 - **THEN** the service re-fetches from the Nager API
 - **AND** updates the cache with fresh data and a new `fetched_at` date
-
-#### Scenario: Cache other years indefinitely
-- **WHEN** holidays for a past or future year have been fetched
-- **THEN** subsequent requests for that year always use cached data
-- **AND** no re-fetch occurs regardless of cache age
 
 #### Scenario: Clean up old cache entries
 - **WHEN** the holiday cache is saved

@@ -5,7 +5,7 @@ The week view needs to display German public holidays to help planners avoid sch
 ## What Changes
 
 - Integrate Nager API for German public holidays
-- Fetch Germany-wide (`global=true`) and Mecklenburg-Vorpommern (`MV`) holidays
+- Fetch Germany-wide (`global=true`) and Mecklenburg-Vorpommern (`DE-MV`) holidays
 - Cache holiday data per year locally
 - Handle year-boundary weeks (resolve holidays from both years)
 - Show German warning state on API failure without breaking planning
