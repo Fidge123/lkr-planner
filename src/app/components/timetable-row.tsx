@@ -1,18 +1,20 @@
 import { TriangleAlert } from "lucide-react";
-import { getWorkItemsForCell } from "../../data/dummy-data";
 import type {
+  CalendarCellEvent,
   EmployeeSetting,
   PlanningContactRecord,
-  PlanningProjectRecord,
 } from "../../generated/tauri";
+import { toCellEvent } from "../types";
 import { isToday } from "../util";
 import { TimetableCell } from "./timetable-cell";
 
 export function TimetableRow({
   employee,
-  projects,
+  calendarEvents,
+  calendarError,
   weekDays,
   employeeSetting,
+  onRetry,
   onOpenIcalDialog,
 }: Props) {
   const showWarning = needsAttention(employeeSetting);
@@ -37,13 +39,36 @@ export function TimetableRow({
         </button>
       </th>
 
-      {weekDays.map((day) => (
-        <TimetableCell
-          key={day.toISOString()}
-          highlight={isToday(day)}
-          projects={getWorkItemsForCell(employee.self, day, projects)}
-        />
-      ))}
+      {calendarError ? (
+        <td colSpan={weekDays.length} className="p-4 text-sm align-middle">
+          <div className="flex items-center gap-3">
+            <span className="text-error" title={calendarError}>
+              Kalender nicht verfügbar
+            </span>
+            <button
+              type="button"
+              className="btn btn-xs btn-ghost"
+              onClick={onRetry}
+            >
+              Erneut laden
+            </button>
+          </div>
+        </td>
+      ) : (
+        weekDays.map((day) => {
+          const isoDay = day.toISOString().slice(0, 10);
+          const dayEvents = calendarEvents
+            .filter((e) => e.date === isoDay)
+            .map(toCellEvent);
+          return (
+            <TimetableCell
+              key={day.toISOString()}
+              highlight={isToday(day)}
+              events={dayEvents}
+            />
+          );
+        })
+      )}
     </tr>
   );
 }
@@ -67,8 +92,10 @@ function needsAttention(setting: EmployeeSetting | null | undefined): boolean {
 
 interface Props {
   employee: PlanningContactRecord;
-  projects: PlanningProjectRecord[];
+  calendarEvents: CalendarCellEvent[];
+  calendarError: string | null;
   weekDays: Date[];
   employeeSetting: EmployeeSetting | null;
+  onRetry: () => void;
   onOpenIcalDialog: (employee: PlanningContactRecord) => void;
 }

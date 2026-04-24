@@ -4,6 +4,8 @@ import { ChevronLeft, ChevronRight, Settings } from "lucide-react";
 import { EmployeeIcalDialog } from "./app/components/employee-ical-dialog";
 import { SettingsDialog } from "./app/components/settings-dialog";
 import { PlanningGrid } from "./app/page";
+import { usePlanningAssignments } from "./app/use-planning-assignments";
+import { getWeekDays } from "./app/util";
 import type {
   EmployeeSetting,
   PlanningContactRecord,
@@ -14,6 +16,8 @@ import { discoverZepCalendars } from "./services/zep";
 
 function App() {
   const [weekOffset, setWeekOffset] = useState(0);
+  const weekStart = getWeekDays(weekOffset)[0].toISOString().slice(0, 10);
+  const planningAssignmentsState = usePlanningAssignments(weekStart);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [icalDialogEmployee, setIcalDialogEmployee] =
     useState<PlanningContactRecord | null>(null);
@@ -77,7 +81,8 @@ function App() {
 
   const handleSettingsSaved = useCallback(() => {
     void loadEmployeeSettings();
-  }, [loadEmployeeSettings]);
+    planningAssignmentsState.reloadAssignments();
+  }, [loadEmployeeSettings, planningAssignmentsState.reloadAssignments]);
 
   return (
     <article className="min-h-screen flex flex-col">
@@ -131,6 +136,7 @@ function App() {
         ) : null}
         <PlanningGrid
           weekOffset={weekOffset}
+          assignmentState={planningAssignmentsState}
           employeeSettings={employeeSettings}
           onOpenIcalDialog={handleOpenIcalDialog}
         />

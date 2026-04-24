@@ -1,24 +1,23 @@
 ## Why
 
-Employee assignments need to be synchronized to their personal iCal calendars so they can see their work schedule in their preferred calendar application. This enables employees to view their assignments outside the planning application.
+With CalDAV as the source of truth for assignments (BL-015), this change implements the write side: creating, updating, and deleting VEVENT entries in employee primary CalDAV calendars. Writes happen inline with user actions — no background sync queue is needed because the calendar is the store, not a downstream copy.
 
 ## What Changes
 
-- Synchronize assignment create/update/delete operations to employee primary iCal
-- Ensure idempotent sync behavior (no duplicate events across repeated runs)
-- Track and expose sync status per assignment for troubleshooting
-- Keep absence iCal strictly read-only input
+- Write lkr-planner assignments as VEVENT entries to employee primary CalDAV on create/update/delete
+- Ensure idempotent writes via stable VEVENT UID (no duplicate events on retry)
+- Never write to absence calendars
 
 ## Capabilities
 
 ### New Capabilities
-- `ical-assignment-sync`: Synchronize assignments to employee iCal calendars
+- `ical-assignment-sync`: Write assignment events directly to employee primary CalDAV calendars
 
 ### Modified Capabilities
-- `assignment-persistence`: Extends with sync status tracking
+- `assignment-persistence`: Extends BL-015 read model with write operations
 
 ## Impact
 
-- Code: New sync orchestration service in Tauri backend
-- APIs: iCal push/update operations to employee calendars
-- Dependencies: BL-034 for deterministic daily slot allocation
+- Code: CalDAV PUT/DELETE commands in Tauri backend; BL-016 modal triggers these commands
+- APIs: CalDAV PUT and DELETE to employee primary calendars
+- Dependencies: BL-015 for event encoding format; BL-034 for daily slot allocation

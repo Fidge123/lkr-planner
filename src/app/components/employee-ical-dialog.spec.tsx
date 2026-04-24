@@ -28,6 +28,7 @@ describe("CalendarSection (10.8 – independent state)", () => {
         source="primary"
         calendars={CALENDARS}
         selectedUrl={CALENDARS[0].url}
+        storedUrl={CALENDARS[0].url}
         onUrlChange={() => {}}
         status={null}
         isSubmitting={true}
@@ -41,6 +42,7 @@ describe("CalendarSection (10.8 – independent state)", () => {
         source="absence"
         calendars={CALENDARS}
         selectedUrl={CALENDARS[0].url}
+        storedUrl={CALENDARS[0].url}
         onUrlChange={() => {}}
         status={null}
         isSubmitting={false}
@@ -58,6 +60,48 @@ describe("CalendarSection (10.8 – independent state)", () => {
   });
 });
 
+describe("CalendarSection – clear calendar", () => {
+  it("shows 'Entfernen' button when no URL is selected but one was previously stored", () => {
+    const html = renderToStaticMarkup(
+      <CalendarSection
+        title="Einsatz"
+        source="primary"
+        calendars={CALENDARS}
+        selectedUrl=""
+        storedUrl={CALENDARS[0].url}
+        onUrlChange={() => {}}
+        status={null}
+        isSubmitting={false}
+        onSubmit={() => {}}
+        isDisabled={false}
+      />,
+    );
+
+    expect(html).toContain("Entfernen");
+    expect(html).not.toContain("Speichern");
+    expect(html).not.toMatch(/disabled/);
+  });
+
+  it("disables the button when no URL is selected and no URL was stored", () => {
+    const html = renderToStaticMarkup(
+      <CalendarSection
+        title="Einsatz"
+        source="primary"
+        calendars={CALENDARS}
+        selectedUrl=""
+        storedUrl=""
+        onUrlChange={() => {}}
+        status={null}
+        isSubmitting={false}
+        onSubmit={() => {}}
+        isDisabled={false}
+      />,
+    );
+
+    expect(html).toMatch(/disabled/);
+  });
+});
+
 describe("CalendarSection (10.9 – in-flight state)", () => {
   it("shows 'Teste...' and disables the button while isSubmitting=true", () => {
     const html = renderToStaticMarkup(
@@ -66,6 +110,7 @@ describe("CalendarSection (10.9 – in-flight state)", () => {
         source="primary"
         calendars={CALENDARS}
         selectedUrl={CALENDARS[0].url}
+        storedUrl={CALENDARS[0].url}
         onUrlChange={() => {}}
         status={null}
         isSubmitting={true}
@@ -87,6 +132,7 @@ describe("CalendarSection (10.9 – in-flight state)", () => {
         source="primary"
         calendars={CALENDARS}
         selectedUrl={CALENDARS[0].url}
+        storedUrl={CALENDARS[0].url}
         onUrlChange={() => {}}
         status={null}
         isSubmitting={false}
