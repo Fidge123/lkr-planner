@@ -139,9 +139,12 @@ async fn fetch_from_url(url: &str) -> Result<Vec<Holiday>, String> {
         return Err("Feiertage konnten nicht geladen werden".to_string());
     }
 
-    let nager_holidays: Vec<NagerHoliday> = response
-        .json()
+    let body = response
+        .text()
         .await
+        .map_err(|_| "Feiertage konnten nicht geladen werden".to_string())?;
+
+    let nager_holidays: Vec<NagerHoliday> = serde_json::from_str(&body)
         .map_err(|_| "Feiertage konnten nicht geladen werden".to_string())?;
 
     Ok(filter_holidays(nager_holidays))
