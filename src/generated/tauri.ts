@@ -30,6 +30,7 @@ export const commands = {
 	zepDiscoverCalendars: () => typedError<ZepCalendar[], ZepError>(__TAURI_INVOKE("zep_discover_calendars")),
 	// Save a ZEP calendar URL for one source (Primary or Absence) and test the connection.
 	zepSaveAndTestCalendar: (dayliteContactReference: string, source: IcalSource, calendarUrl: string | null) => typedError<ZepCalendarTestResult, ZepError>(__TAURI_INVOKE("zep_save_and_test_calendar", { dayliteContactReference, source, calendarUrl })),
+	getHolidaysForWeek: (weekStart: string) => typedError<Holiday[], string>(__TAURI_INVOKE("get_holidays_for_week", { weekStart })),
 };
 
 /* Types */
@@ -194,6 +195,22 @@ export type HealthStatusEnum = "healthy" | "unhealthy";
 
 export type IcalSource = "primary" | "absence";
 
+export type CachedHoliday = {
+	date: string,
+	name: string,
+};
+
+export type Holiday = {
+	date: string,
+	name: string,
+};
+
+export type HolidayCacheEntry = {
+	year: number,
+	fetchedAt: string,
+	holidays: CachedHoliday[],
+};
+
 export type LocalStore = {
 	apiEndpoints: ApiEndpoints,
 	tokenReferences: TokenReferences,
@@ -202,6 +219,7 @@ export type LocalStore = {
 	contactFilter: ContactFilter,
 	routingSettings: RoutingSettings,
 	dayliteCache: DayliteCache,
+	holidayCache?: HolidayCacheEntry[],
 };
 
 export type PlanningContactRecord = {

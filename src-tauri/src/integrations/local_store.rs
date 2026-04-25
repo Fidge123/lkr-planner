@@ -1,7 +1,8 @@
+use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use tauri::Manager;
 
 const STORE_FILE_NAME: &str = "local-store.json";
@@ -16,6 +17,8 @@ pub struct LocalStore {
     pub contact_filter: ContactFilter,
     pub routing_settings: RoutingSettings,
     pub daylite_cache: DayliteCache,
+    #[serde(default)]
+    pub holiday_cache: Vec<HolidayCacheEntry>,
 }
 
 impl Default for LocalStore {
@@ -28,7 +31,19 @@ impl Default for LocalStore {
             contact_filter: ContactFilter::default(),
             routing_settings: RoutingSettings::default(),
             daylite_cache: DayliteCache::default(),
+            holiday_cache: Vec::new(),
         }
+    }
+}
+
+impl LocalStore {
+    pub fn cleanup_holiday_cache(&mut self, today: NaiveDate) {
+        let one_year_ago = today - chrono::Duration::days(365);
+        self.holiday_cache.retain(|entry| {
+            NaiveDate::parse_from_str(&entry.fetched_at, "%Y-%m-%d")
+                .map(|d| d > one_year_ago)
+                .unwrap_or(false)
+        });
     }
 }
 
@@ -166,6 +181,21 @@ pub struct DayliteContactUrlCacheEntry {
     pub note: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct HolidayCacheEntry {
+    pub year: i32,
+    pub fetched_at: String,
+    pub holidays: Vec<CachedHoliday>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct CachedHoliday {
+    pub date: String,
+    pub name: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct StoreError {
@@ -202,17 +232,27 @@ pub fn load_local_store(app: tauri::AppHandle) -> Result<LocalStore, StoreError>
 #[tauri::command]
 #[specta::specta]
 pub fn save_local_store(app: tauri::AppHandle, store: LocalStore) -> Result<(), StoreError> {
-    let store_path = app
-        .path()
+    save_store_internal(&app, store)
+}
+
+pub(crate) fn save_store_internal(
+    app: &tauri::AppHandle,
+    mut store: LocalStore,
+) -> Result<(), StoreError> {
+    let store_path = get_store_path(app)?;
+    store.cleanup_holiday_cache(chrono::Local::now().date_naive());
+    save_store_to_path(&store_path, &store)
+}
+
+fn get_store_path(app: &tauri::AppHandle) -> Result<PathBuf, StoreError> {
+    app.path()
         .app_config_dir()
         .map(|path| path.join(STORE_FILE_NAME))
         .map_err(|error| StoreError {
             code: StoreErrorCode::WriteFailed,
             user_message: "Die lokale Konfiguration konnte nicht gespeichert werden.".to_string(),
             technical_message: format!("Pfad konnte nicht aufgelöst werden: {error}"),
-        })?;
-
-    save_store_to_path(&store_path, &store)
+        })
 }
 
 fn load_store_from_path(path: &Path) -> Result<LocalStore, StoreError> {
@@ -354,6 +394,14 @@ mod tests {
                     }],
                 }],
             },
+            holiday_cache: vec![HolidayCacheEntry {
+                year: 2026,
+                fetched_at: "2026-02-01".to_string(),
+                holidays: vec![CachedHoliday {
+                    date: "2026-01-01".to_string(),
+                    name: "Neujahr".to_string(),
+                }],
+            }],
         };
 
         save_store_to_path(&test_path, &store).expect("save should succeed");
@@ -416,5 +464,108 @@ mod tests {
         }
 
         fs::write(path, content).expect("test file should be writable");
+    }
+
+    // Task 2.3: Cache age logic
+
+    #[test]
+    fn cleanup_removes_entries_older_than_one_year() {
+        let today = NaiveDate::from_ymd_opt(2025, 6, 30).unwrap();
+        let mut store = LocalStore::default();
+        store.holiday_cache = vec![
+            HolidayCacheEntry {
+                year: 2024,
+                fetched_at: "2024-07-01".to_string(),
+                holidays: vec![],
+            },
+            HolidayCacheEntry {
+                year: 2023,
+                fetched_at: "2024-06-29".to_string(),
+                holidays: vec![],
+            },
+        ];
+
+        store.cleanup_holiday_cache(today);
+
+        assert_eq!(store.holiday_cache.len(), 1);
+        assert_eq!(store.holiday_cache[0].year, 2024);
+    }
+
+    #[test]
+    fn cleanup_keeps_entries_within_one_year() {
+        let today = NaiveDate::from_ymd_opt(2025, 6, 30).unwrap();
+        let mut store = LocalStore::default();
+        store.holiday_cache = vec![HolidayCacheEntry {
+            year: 2025,
+            fetched_at: "2025-06-01".to_string(),
+            holidays: vec![],
+        }];
+
+        store.cleanup_holiday_cache(today);
+
+        assert_eq!(store.holiday_cache.len(), 1);
+    }
+
+    #[test]
+    fn cleanup_removes_all_entries_when_all_expired() {
+        let today = NaiveDate::from_ymd_opt(2025, 6, 30).unwrap();
+        let mut store = LocalStore::default();
+        store.holiday_cache = vec![
+            HolidayCacheEntry {
+                year: 2023,
+                fetched_at: "2024-06-29".to_string(),
+                holidays: vec![],
+            },
+            HolidayCacheEntry {
+                year: 2022,
+                fetched_at: "2023-01-01".to_string(),
+                holidays: vec![],
+            },
+        ];
+
+        store.cleanup_holiday_cache(today);
+
+        assert!(store.holiday_cache.is_empty());
+    }
+
+    #[test]
+    fn store_with_holiday_cache_roundtrips_via_json() {
+        let test_path = unique_test_path("holiday-cache-store.json");
+        let mut store = LocalStore::default();
+        store.holiday_cache = vec![HolidayCacheEntry {
+            year: 2025,
+            fetched_at: "2025-03-01".to_string(),
+            holidays: vec![CachedHoliday {
+                date: "2025-01-01".to_string(),
+                name: "Neujahr".to_string(),
+            }],
+        }];
+
+        save_store_to_path(&test_path, &store).expect("save should succeed");
+        let loaded = load_store_from_path(&test_path).expect("reload should succeed");
+
+        assert_eq!(loaded.holiday_cache.len(), 1);
+        assert_eq!(loaded.holiday_cache[0].year, 2025);
+        assert_eq!(loaded.holiday_cache[0].holidays[0].name, "Neujahr");
+    }
+
+    #[test]
+    fn store_without_holiday_cache_field_loads_with_empty_cache() {
+        let test_path = unique_test_path("no-holiday-cache.json");
+        write_test_file(
+            &test_path,
+            r#"{
+              "apiEndpoints": {"dayliteBaseUrl":"","planradarBaseUrl":"","zepCaldavRootUrl":""},
+              "tokenReferences": {"dayliteTokenReference":"","planradarTokenReference":"","dayliteAccessToken":"","dayliteRefreshToken":""},
+              "employeeSettings": [],
+              "standardFilter": {"pipelines":[],"columns":[],"categories":[],"exclusionStatuses":[]},
+              "contactFilter": {"activeEmployeeKeyword":""},
+              "routingSettings": {"openrouteserviceApiKey":"","openrouteserviceProfile":""},
+              "dayliteCache": {"projects":[],"contacts":[]}
+            }"#,
+        );
+
+        let loaded = load_store_from_path(&test_path).expect("should load without holidayCache");
+        assert!(loaded.holiday_cache.is_empty());
     }
 }

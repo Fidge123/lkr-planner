@@ -1,11 +1,16 @@
 import { isToday } from "../util";
 
-export function TimetableHeader({ day }: Props) {
+export function TimetableHeader({ day, holiday }: Props) {
+  const isHoliday = holiday !== undefined;
   return (
     <th
       key={day.getTime()}
       className={`text-center ${
-        isToday(day) ? "bg-primary text-primary-content" : ""
+        isToday(day)
+          ? "bg-primary text-primary-content"
+          : isHoliday
+            ? "text-base-content/50"
+            : ""
       }`}
     >
       <time dateTime={day.toISOString()}>
@@ -15,10 +20,14 @@ export function TimetableHeader({ day }: Props) {
           month: "2-digit",
         })}
       </time>
+      {isHoliday ? (
+        <p className="text-xs font-normal mt-0.5">{holiday}</p>
+      ) : null}
     </th>
   );
 }
 
 interface Props {
   day: Date;
+  holiday?: string;
 }

@@ -11,6 +11,7 @@ pub fn run() {
             integrations::local_store::load_local_store,
             integrations::local_store::save_local_store,
             integrations::calendar::load_week_events,
+            integrations::holidays::get_holidays_for_week,
             integrations::daylite::auth::daylite_connect_refresh_token,
             integrations::daylite::projects::daylite_list_projects,
             integrations::daylite::projects::daylite_search_projects,

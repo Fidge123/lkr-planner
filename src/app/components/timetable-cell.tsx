@@ -1,8 +1,14 @@
 import type { CellEvent } from "../types";
 
-export function TimetableCell({ highlight = false, events }: Props) {
+export function TimetableCell({
+  highlight = false,
+  isHoliday = false,
+  events,
+}: Props) {
   return (
-    <td className={`align-top p-2 ${highlight ? "bg-primary/10" : ""}`}>
+    <td
+      className={`align-top p-2 ${highlight ? "bg-primary/10" : isHoliday ? "bg-base-200/60" : ""}`}
+    >
       <ul className="flex flex-col gap-1 list-none">
         {events.map((event) =>
           event.kind === "bare" ? (
@@ -50,6 +56,7 @@ export function TimetableCell({ highlight = false, events }: Props) {
 
 interface Props {
   highlight: boolean;
+  isHoliday?: boolean;
   events: CellEvent[];
 }
 
