@@ -1,6 +1,10 @@
 import type { CellEvent } from "../types";
 
-export function TimetableCell({ highlight = false, isHoliday = false, events }: Props) {
+export function TimetableCell({
+  highlight = false,
+  isHoliday = false,
+  events,
+}: Props) {
   return (
     <td
       className={`align-top p-2 ${highlight ? "bg-primary/10" : isHoliday ? "bg-base-200/60" : ""}`}
