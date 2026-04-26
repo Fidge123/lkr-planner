@@ -5,6 +5,7 @@ import { commands } from "../generated/tauri";
 export interface HolidaysState {
   holidays: Holiday[];
   errorMessage: string | null;
+  reloadHolidays: () => void;
 }
 
 export function useHolidays(weekStart: string): HolidaysState {
@@ -26,5 +27,9 @@ export function useHolidays(weekStart: string): HolidaysState {
     void loadHolidays(weekStart);
   }, [weekStart, loadHolidays]);
 
-  return { holidays, errorMessage };
+  const reloadHolidays = useCallback(() => {
+    void loadHolidays(weekStart);
+  }, [weekStart, loadHolidays]);
+
+  return { holidays, errorMessage, reloadHolidays };
 }

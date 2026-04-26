@@ -34,7 +34,7 @@ export function PlanningGrid({
 
   return (
     <PlanningGridTable
-      weekOffset={weekOffset}
+      weekDays={weekDays}
       projectState={resolvedProjectState}
       employeeState={resolvedEmployeeState}
       assignmentState={resolvedAssignmentState}
@@ -46,7 +46,7 @@ export function PlanningGrid({
 }
 
 export function PlanningGridTable({
-  weekOffset,
+  weekDays,
   projectState,
   employeeState,
   assignmentState,
@@ -54,7 +54,6 @@ export function PlanningGridTable({
   holidaysState,
   onOpenIcalDialog,
 }: PlanningGridTableProps) {
-  const weekDays = getWeekDays(weekOffset);
   const { projects, isLoading, errorMessage, reloadProjects } = projectState;
   const {
     employees,
@@ -69,10 +68,11 @@ export function PlanningGridTable({
     errorMessage: assignmentErrorMessage,
     reloadAssignments,
   } = assignmentState;
-  const { holidays, errorMessage: holidayErrorMessage } = holidaysState ?? {
-    holidays: [],
-    errorMessage: null,
-  };
+  const {
+    holidays,
+    errorMessage: holidayErrorMessage,
+    reloadHolidays,
+  } = holidaysState;
   const holidayByDate = new Map(holidays.map((h) => [h.date, h.name]));
   const holidayDates = new Set(holidays.map((h) => h.date));
 
@@ -113,6 +113,9 @@ export function PlanningGridTable({
       {holidayErrorMessage ? (
         <section className="alert alert-warning m-4">
           <span>{holidayErrorMessage}</span>
+          <button type="button" className="btn btn-sm" onClick={reloadHolidays}>
+            Erneut laden
+          </button>
         </section>
       ) : null}
       {isAssignmentsLoading ? (
@@ -211,13 +214,13 @@ interface Props {
   onOpenIcalDialog?: (employee: PlanningContactRecord) => void;
 }
 
-interface PlanningGridTableProps {
-  weekOffset: number;
+export interface PlanningGridTableProps {
+  weekDays: Date[];
   projectState: PlanningGridProjectsState;
   employeeState: PlanningGridEmployeesState;
   assignmentState: PlanningGridAssignmentState;
   employeeSettings: EmployeeSetting[];
-  holidaysState?: HolidaysState;
+  holidaysState: HolidaysState;
   onOpenIcalDialog: (employee: PlanningContactRecord) => void;
 }
 

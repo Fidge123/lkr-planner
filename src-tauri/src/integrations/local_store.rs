@@ -189,6 +189,8 @@ pub struct HolidayCacheEntry {
     pub holidays: Vec<CachedHoliday>,
 }
 
+// On-disk storage format; kept separate from holidays::Holiday (the command response type)
+// so the cache schema and the API surface can evolve independently.
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct CachedHoliday {

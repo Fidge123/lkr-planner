@@ -43,12 +43,16 @@ pub async fn get_holidays_for_week(
 
     let years = years_for_week(week_start_date, week_end_date);
 
-    let mut store = crate::integrations::local_store::load_local_store(app.clone())
-        .map_err(|_| "Feiertage konnten nicht geladen werden".to_string())?;
+    let mut store =
+        crate::integrations::local_store::load_local_store(app.clone()).map_err(|e| {
+            eprintln!("holidays: store load failed: {}", e.technical_message);
+            "Feiertage konnten nicht geladen werden".to_string()
+        })?;
 
-    let today = chrono::Local::now().date_naive();
+    let today = chrono::Utc::now().date_naive();
     let current_year = today.year();
 
+    let mut fetched_any = false;
     for &year in &years {
         let needs_fetch = match store.holiday_cache.iter().find(|e| e.year == year) {
             None => true,
@@ -56,6 +60,7 @@ pub async fn get_holidays_for_week(
         };
 
         if needs_fetch {
+            fetched_any = true;
             let fetched = fetch_holidays_from_api(year).await?;
             let cached = fetched
                 .iter()
@@ -76,8 +81,14 @@ pub async fn get_holidays_for_week(
         }
     }
 
-    crate::integrations::local_store::save_store_internal(&app, store.clone())
-        .map_err(|_| "Feiertage konnten nicht geladen werden".to_string())?;
+    if fetched_any {
+        crate::integrations::local_store::save_store_internal(&app, store.clone()).map_err(
+            |e| {
+                eprintln!("holidays: store save failed: {}", e.technical_message);
+                "Feiertage konnten nicht geladen werden".to_string()
+            },
+        )?;
+    }
 
     let holidays = store
         .holiday_cache
@@ -129,23 +140,25 @@ async fn fetch_from_url(url: &str) -> Result<Vec<Holiday>, String> {
         .build()
         .map_err(|_| "Feiertage konnten nicht geladen werden".to_string())?;
 
-    let response = client
-        .get(url)
-        .send()
-        .await
-        .map_err(|_| "Feiertage konnten nicht geladen werden".to_string())?;
+    let response = client.get(url).send().await.map_err(|e| {
+        eprintln!("holidays: HTTP request to {url} failed: {e}");
+        "Feiertage konnten nicht geladen werden".to_string()
+    })?;
 
     if !response.status().is_success() {
+        eprintln!("holidays: Nager API returned status {}", response.status());
         return Err("Feiertage konnten nicht geladen werden".to_string());
     }
 
-    let body = response
-        .text()
-        .await
-        .map_err(|_| "Feiertage konnten nicht geladen werden".to_string())?;
+    let body = response.text().await.map_err(|e| {
+        eprintln!("holidays: reading response body failed: {e}");
+        "Feiertage konnten nicht geladen werden".to_string()
+    })?;
 
-    let nager_holidays: Vec<NagerHoliday> = serde_json::from_str(&body)
-        .map_err(|_| "Feiertage konnten nicht geladen werden".to_string())?;
+    let nager_holidays: Vec<NagerHoliday> = serde_json::from_str(&body).map_err(|e| {
+        eprintln!("holidays: JSON parse failed: {e}");
+        "Feiertage konnten nicht geladen werden".to_string()
+    })?;
 
     Ok(filter_holidays(nager_holidays))
 }
