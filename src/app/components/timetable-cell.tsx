@@ -6,9 +6,7 @@ export function TimetableCell({
   events,
 }: Props) {
   return (
-    <td
-      className={`align-top p-2 ${highlight ? "bg-primary/10" : isHoliday ? "bg-base-200/60" : ""}`}
-    >
+    <td className={cellClass(highlight, isHoliday)}>
       <ul className="flex flex-col gap-1 list-none">
         {events.map((event) =>
           event.kind === "bare" ? (
@@ -73,4 +71,10 @@ function EventTime({ startTime, endTime }: TimeProps) {
 interface TimeProps {
   startTime: string | null;
   endTime: string | null;
+}
+
+function cellClass(highlight: boolean, isHoliday: boolean): string {
+  if (highlight) return "align-top p-2 bg-primary/10";
+  if (isHoliday) return "align-top p-2 bg-base-200/60";
+  return "align-top p-2";
 }

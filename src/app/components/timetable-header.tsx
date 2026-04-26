@@ -1,18 +1,9 @@
 import { isToday } from "../util";
 
 export function TimetableHeader({ day, holiday }: Props) {
-  const isHoliday = holiday !== undefined;
+  const isHoliday = Boolean(holiday);
   return (
-    <th
-      key={day.getTime()}
-      className={`text-center ${
-        isToday(day)
-          ? "bg-primary text-primary-content"
-          : isHoliday
-            ? "text-base-content/50"
-            : ""
-      }`}
-    >
+    <th key={day.getTime()} className={headerClass(day, isHoliday)}>
       <time dateTime={day.toISOString()}>
         {day.toLocaleDateString("de-DE", {
           weekday: "long",
@@ -25,6 +16,12 @@ export function TimetableHeader({ day, holiday }: Props) {
       ) : null}
     </th>
   );
+}
+
+function headerClass(day: Date, isHoliday: boolean): string {
+  if (isToday(day)) return "text-center bg-primary text-primary-content";
+  if (isHoliday) return "text-center text-base-content/50";
+  return "text-center";
 }
 
 interface Props {

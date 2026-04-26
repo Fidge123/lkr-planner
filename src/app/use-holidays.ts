@@ -11,25 +11,21 @@ export interface HolidaysState {
 export function useHolidays(weekStart: string): HolidaysState {
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
-  const loadHolidays = useCallback(async (ws: string) => {
-    const result = await commands.getHolidaysForWeek(ws);
-    if (result.status === "error") {
-      setErrorMessage(result.error);
-      setHolidays([]);
-      return;
-    }
-    setHolidays(result.data);
-    setErrorMessage(null);
-  }, []);
+  const [loadTrigger, setLoadTrigger] = useState(0);
 
   useEffect(() => {
-    void loadHolidays(weekStart);
-  }, [weekStart, loadHolidays]);
+    void commands.getHolidaysForWeek(weekStart).then((result) => {
+      if (result.status === "error") {
+        setErrorMessage(result.error);
+        setHolidays([]);
+        return;
+      }
+      setHolidays(result.data);
+      setErrorMessage(null);
+    });
+  }, [weekStart, loadTrigger]);
 
-  const reloadHolidays = useCallback(() => {
-    void loadHolidays(weekStart);
-  }, [weekStart, loadHolidays]);
+  const reloadHolidays = useCallback(() => setLoadTrigger((n) => n + 1), []);
 
   return { holidays, errorMessage, reloadHolidays };
 }

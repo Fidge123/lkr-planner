@@ -7,9 +7,6 @@ use tauri_plugin_http::reqwest;
 const NAGER_BASE_URL: &str = "https://date.nager.at/api/v3/PublicHolidays";
 const REQUEST_TIMEOUT_SECS: u64 = 5;
 const CACHE_REFRESH_DAYS: i64 = 30;
-const DE_MV_COUNTY: &str = "DE-MV";
-
-// ── Public types ──────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -17,8 +14,6 @@ pub struct Holiday {
     pub date: String,
     pub name: String,
 }
-
-// ── Nager API response ────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -28,8 +23,6 @@ struct NagerHoliday {
     global: bool,
     counties: Option<Vec<String>>,
 }
-
-// ── Tauri command ─────────────────────────────────────────────────────────────
 
 #[tauri::command]
 #[specta::specta]
@@ -110,8 +103,6 @@ pub async fn get_holidays_for_week(
     Ok(holidays)
 }
 
-// ── Internal helpers ──────────────────────────────────────────────────────────
-
 fn years_for_week(start: NaiveDate, end: NaiveDate) -> Vec<i32> {
     if start.year() == end.year() {
         vec![start.year()]
@@ -170,7 +161,7 @@ fn filter_holidays(nager_holidays: Vec<NagerHoliday>) -> Vec<Holiday> {
             h.global
                 || h.counties
                     .as_ref()
-                    .map_or(false, |c| c.iter().any(|s| s == DE_MV_COUNTY))
+                    .is_some_and(|c| c.iter().any(|s| s == "DE-MV"))
         })
         .map(|h| Holiday {
             date: h.date,
@@ -179,14 +170,10 @@ fn filter_holidays(nager_holidays: Vec<NagerHoliday>) -> Vec<Holiday> {
         .collect()
 }
 
-// ── Tests ─────────────────────────────────────────────────────────────────────
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::integrations::local_store::HolidayCacheEntry;
-
-    // Task 1.3: Nager API response filtering
 
     #[test]
     fn includes_global_holidays() {
@@ -251,8 +238,6 @@ mod tests {
         assert_eq!(result[0].name, "1. Weihnachtstag");
     }
 
-    // Task 3.1: Year-boundary detection and merging
-
     #[test]
     fn single_year_week_returns_one_year() {
         let start = NaiveDate::from_ymd_opt(2024, 6, 3).unwrap();
@@ -304,8 +289,6 @@ mod tests {
         assert!(filtered.iter().any(|h| h.date == "2025-01-01"));
     }
 
-    // Task 4.1: Cache freshness / timeout behavior
-
     #[test]
     fn cache_entry_is_fresh_within_30_days() {
         let today = NaiveDate::from_ymd_opt(2024, 6, 30).unwrap();
@@ -337,12 +320,5 @@ mod tests {
             holidays: vec![],
         };
         assert!(is_cache_entry_fresh(&entry, today));
-    }
-
-    #[test]
-    fn api_failure_maps_to_german_error_message() {
-        // Verify the error constant used throughout
-        let expected = "Feiertage konnten nicht geladen werden";
-        assert_eq!(expected, "Feiertage konnten nicht geladen werden");
     }
 }

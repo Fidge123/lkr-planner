@@ -38,11 +38,13 @@ impl Default for LocalStore {
 
 impl LocalStore {
     pub fn cleanup_holiday_cache(&mut self, today: NaiveDate) {
-        let one_year_ago = today - chrono::Duration::days(365);
+        let one_year_ago = today
+            .checked_sub_months(chrono::Months::new(12))
+            .unwrap_or(today);
         self.holiday_cache.retain(|entry| {
             NaiveDate::parse_from_str(&entry.fetched_at, "%Y-%m-%d")
                 .map(|d| d > one_year_ago)
-                .unwrap_or(false)
+                .unwrap_or(true)
         });
     }
 }
@@ -181,7 +183,7 @@ pub struct DayliteContactUrlCacheEntry {
     pub note: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct HolidayCacheEntry {
     pub year: i32,
@@ -191,7 +193,7 @@ pub struct HolidayCacheEntry {
 
 // On-disk storage format; kept separate from holidays::Holiday (the command response type)
 // so the cache schema and the API surface can evolve independently.
-#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct CachedHoliday {
     pub date: String,
