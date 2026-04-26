@@ -11,9 +11,8 @@ export interface HolidaysState {
 export function useHolidays(weekStart: string): HolidaysState {
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [loadTrigger, setLoadTrigger] = useState(0);
 
-  useEffect(() => {
+  const reloadHolidays = useCallback(() => {
     void commands.getHolidaysForWeek(weekStart).then((result) => {
       if (result.status === "error") {
         setErrorMessage(result.error);
@@ -23,9 +22,11 @@ export function useHolidays(weekStart: string): HolidaysState {
       setHolidays(result.data);
       setErrorMessage(null);
     });
-  }, [weekStart, loadTrigger]);
+  }, [weekStart]);
 
-  const reloadHolidays = useCallback(() => setLoadTrigger((n) => n + 1), []);
+  useEffect(() => {
+    reloadHolidays();
+  }, [reloadHolidays]);
 
   return { holidays, errorMessage, reloadHolidays };
 }
