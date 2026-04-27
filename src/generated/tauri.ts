@@ -53,11 +53,13 @@ export type CalendarCellEvent = {
 	endTime: string | null,
 };
 
-export type CalendarEventKind = 
+export type CalendarEventKind =
 // A lkr-planner assignment linked to a Daylite project via DESCRIPTION.
-"assignment" | 
-// A bare calendar event with no Daylite project link (legacy, blocker, absence).
-"bare";
+"assignment" |
+// A bare calendar event with no Daylite project link (legacy, blocker, appointment).
+"bare" |
+// An all-day absence from the employee's dedicated ZEP absence calendar.
+"absence";
 
 export type ContactFilter = {
 	activeEmployeeKeyword: string,

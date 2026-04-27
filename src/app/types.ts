@@ -3,7 +3,7 @@ import type { CalendarCellEvent } from "../generated/tauri";
 /** A resolved event ready for rendering in a timetable cell. */
 export interface CellEvent {
   uid: string;
-  kind: "assignment" | "bare";
+  kind: "assignment" | "bare" | "absence";
   title: string;
   /** Tailwind CSS background class derived from Daylite project status. */
   color: string;
@@ -36,9 +36,11 @@ function projectStatusToColor(status: string | null | undefined): string {
 /** Converts a `CalendarCellEvent` to a `CellEvent` ready for rendering. */
 export function toCellEvent(event: CalendarCellEvent): CellEvent {
   const color =
-    event.kind === "bare"
-      ? "bg-base-200"
-      : projectStatusToColor(event.projectStatus);
+    event.kind === "absence"
+      ? "bg-warning/30"
+      : event.kind === "bare"
+        ? "bg-base-200"
+        : projectStatusToColor(event.projectStatus);
   return {
     uid: event.uid,
     kind: event.kind,

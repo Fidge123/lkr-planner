@@ -18,8 +18,10 @@ const DAYLITE_DESCRIPTION_PREFIX: &str = "daylite:";
 pub enum CalendarEventKind {
     /// A lkr-planner assignment linked to a Daylite project via DESCRIPTION.
     Assignment,
-    /// A bare calendar event with no Daylite project link (legacy, blocker, absence).
+    /// A bare calendar event with no Daylite project link (legacy, blocker, appointment).
     Bare,
+    /// An all-day absence from the employee's dedicated ZEP absence calendar.
+    Absence,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
@@ -51,12 +53,15 @@ pub struct EmployeeWeekEvents {
 
 /// A raw VEVENT as parsed from iCal text.
 /// `dtstart` holds an ISO date string in the form `yyyy-MM-dd` (already formatted).
+/// `dtend` is populated only for all-day events (DATE value); timed events use `end_time`.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 struct RawVEvent {
     uid: String,
     summary: String,
     description: String,
     dtstart: String,
+    /// Exclusive end date for all-day events (RFC 5545: DTEND is the day after the last day).
+    dtend: Option<NaiveDate>,
     start_time: Option<String>,
     end_time: Option<String>,
 }
@@ -120,7 +125,8 @@ pub async fn load_week_events(
         .map_err(|e| format!("HTTP-Client konnte nicht erstellt werden: {e}"))?;
 
     // First pass: fetch CalDAV events per employee and classify against the local cache.
-    let mut pending_per_employee: Vec<(String, Vec<PendingEvent>)> = Vec::new();
+    let mut pending_per_employee: Vec<(String, Vec<PendingEvent>, Vec<CalendarCellEvent>)> =
+        Vec::new();
     let mut error_results: Vec<EmployeeWeekEvents> = Vec::new();
 
     for setting in &store.employee_settings {
@@ -134,18 +140,40 @@ pub async fn load_week_events(
             None => continue,
         };
 
-        match fetch_calendar_events(
-            &client,
-            &calendar_url,
-            &username,
-            &password,
-            week_start_date,
-        )
-        .await
-        {
+        let absence_url = setting
+            .zep_absence_calendar
+            .as_deref()
+            .filter(|u| !u.is_empty())
+            .map(str::to_string);
+
+        // Fetch primary and absence calendars concurrently.
+        let (primary_result, absence_result) = tokio::join!(
+            fetch_calendar_events(
+                &client,
+                &calendar_url,
+                &username,
+                &password,
+                week_start_date
+            ),
+            async {
+                match absence_url {
+                    Some(ref url) => {
+                        fetch_calendar_events(&client, url, &username, &password, week_start_date)
+                            .await
+                            .ok()
+                    }
+                    None => None,
+                }
+            }
+        );
+
+        match primary_result {
             Ok(raw_events) => {
                 let pending = raw_events.into_iter().map(classify_event).collect();
-                pending_per_employee.push((employee_ref, pending));
+                let absence_events = absence_result
+                    .map(|raw| map_absence_raw_events_for_week(raw, week_start_date))
+                    .unwrap_or_default();
+                pending_per_employee.push((employee_ref, pending, absence_events));
             }
             Err(error_msg) => {
                 error_results.push(EmployeeWeekEvents {
@@ -159,7 +187,7 @@ pub async fn load_week_events(
 
     // Collect unique project refs that are not in the local Daylite cache.
     let mut missing_refs: HashSet<String> = HashSet::new();
-    for (_, pending_events) in &pending_per_employee {
+    for (_, pending_events, _) in &pending_per_employee {
         for event in pending_events {
             if let Some(ref project_ref) = event.project_ref {
                 let in_cache = store
@@ -187,11 +215,12 @@ pub async fn load_week_events(
 
     // Build final results combining cache and API lookups.
     let mut results = error_results;
-    for (employee_ref, pending_events) in pending_per_employee {
-        let events = pending_events
+    for (employee_ref, pending_events, absence_events) in pending_per_employee {
+        let mut events: Vec<CalendarCellEvent> = pending_events
             .into_iter()
             .map(|p| resolve_event(p, &store.daylite_cache, &api_results))
             .collect();
+        events.extend(absence_events);
         results.push(EmployeeWeekEvents {
             employee_reference: employee_ref,
             events,
@@ -318,13 +347,19 @@ fn parse_ical_events(ical_text: &str) -> Vec<RawVEvent> {
                 }
             };
             let start_time = ical_time(&start);
-            let end_time = event.get_end().and_then(|dt| ical_time(&dt));
+            let raw_end = event.get_end();
+            let end_time = raw_end.as_ref().and_then(ical_time);
+            let dtend = raw_end.as_ref().and_then(|dt| match dt {
+                DatePerhapsTime::Date(d) => Some(*d),
+                _ => None,
+            });
 
             Some(RawVEvent {
                 uid: event.get_uid().unwrap_or("").to_string(),
                 summary: event.get_summary().unwrap_or("").to_string(),
                 description: event.get_description().unwrap_or("").to_string(),
                 dtstart: date,
+                dtend,
                 start_time,
                 end_time,
             })
@@ -452,6 +487,73 @@ fn resolve_event(
         start_time,
         end_time,
     }
+}
+
+// ── Absence event mapping ─────────────────────────────────────────────────────
+
+/// Maps raw absence calendar events to `CalendarCellEvent`s for the given week.
+/// All-day events with a `dtend` are expanded into one event per day in
+/// `[dtstart, dtend)` clamped to `[week_start, week_start + 7)`.
+fn map_absence_raw_events_for_week(
+    raw_events: Vec<RawVEvent>,
+    week_start: NaiveDate,
+) -> Vec<CalendarCellEvent> {
+    let week_end = week_start + chrono::Duration::days(7);
+    let mut result = Vec::new();
+
+    for raw in raw_events {
+        let event_start = match NaiveDate::parse_from_str(&raw.dtstart, "%Y-%m-%d") {
+            Ok(d) => d,
+            Err(_) => continue,
+        };
+
+        if let Some(event_end) = raw.dtend {
+            // All-day multi-day event: expand into per-day events within the week.
+            let clamped_start = event_start.max(week_start);
+            let clamped_end = event_end.min(week_end);
+            let mut day = clamped_start;
+            while day < clamped_end {
+                result.push(CalendarCellEvent {
+                    uid: format!("{}-{}", raw.uid, day),
+                    kind: CalendarEventKind::Absence,
+                    title: raw.summary.clone(),
+                    project_status: None,
+                    date: day.format("%Y-%m-%d").to_string(),
+                    start_time: None,
+                    end_time: None,
+                });
+                day += chrono::Duration::days(1);
+            }
+        } else {
+            result.push(CalendarCellEvent {
+                uid: raw.uid,
+                kind: CalendarEventKind::Absence,
+                title: raw.summary,
+                project_status: None,
+                date: raw.dtstart,
+                start_time: raw.start_time,
+                end_time: raw.end_time,
+            });
+        }
+    }
+
+    result
+}
+
+/// Maps raw absence events without week-range context (used where week is already filtered).
+fn map_absence_raw_events(raw_events: Vec<RawVEvent>) -> Vec<CalendarCellEvent> {
+    raw_events
+        .into_iter()
+        .map(|raw| CalendarCellEvent {
+            uid: raw.uid,
+            kind: CalendarEventKind::Absence,
+            title: raw.summary,
+            project_status: None,
+            date: raw.dtstart,
+            start_time: raw.start_time,
+            end_time: raw.end_time,
+        })
+        .collect()
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -673,5 +775,124 @@ mod tests {
         assert_eq!(event.kind, CalendarEventKind::Bare);
         assert_eq!(event.title, "Auto Werkstatt");
         assert_eq!(event.project_status, None);
+    }
+
+    // ── Absence event mapping ──
+
+    #[test]
+    fn absence_event_has_absence_kind_title_and_no_project_status() {
+        let raw = RawVEvent {
+            uid: "abs-1".to_string(),
+            summary: "Urlaub".to_string(),
+            description: String::new(),
+            dtstart: "2026-04-28".to_string(),
+            ..Default::default()
+        };
+
+        let events = map_absence_raw_events(vec![raw]);
+
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].kind, CalendarEventKind::Absence);
+        assert_eq!(events[0].title, "Urlaub");
+        assert_eq!(events[0].project_status, None);
+    }
+
+    #[test]
+    fn maps_multiple_absence_events_from_raw() {
+        let raw = vec![
+            RawVEvent {
+                uid: "abs-1".to_string(),
+                summary: "Urlaub".to_string(),
+                dtstart: "2026-04-28".to_string(),
+                ..Default::default()
+            },
+            RawVEvent {
+                uid: "abs-2".to_string(),
+                summary: "Krankenstand".to_string(),
+                dtstart: "2026-04-29".to_string(),
+                ..Default::default()
+            },
+        ];
+
+        let events = map_absence_raw_events(raw);
+
+        assert_eq!(events.len(), 2);
+        assert!(events.iter().all(|e| e.kind == CalendarEventKind::Absence));
+        assert!(events.iter().all(|e| e.project_status.is_none()));
+    }
+
+    #[test]
+    fn returns_empty_when_no_absence_raw_events() {
+        let events = map_absence_raw_events(vec![]);
+        assert!(events.is_empty());
+    }
+
+    #[test]
+    fn absence_fetch_failure_produces_no_absence_events() {
+        // Simulates the silent-failure path: when fetch_calendar_events returns Err,
+        // the caller passes an empty vec to map_absence_raw_events.
+        let fetch_result: Result<Vec<RawVEvent>, String> =
+            Err("Verbindung fehlgeschlagen".to_string());
+        let raw = fetch_result.unwrap_or_default();
+
+        let events = map_absence_raw_events(raw);
+
+        assert!(events.is_empty());
+    }
+
+    // ── Multi-day absence expansion ──
+
+    #[test]
+    fn parse_ical_events_captures_dtend_for_all_day_event() {
+        let ical = "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:abs-1\r\nSUMMARY:Urlaub\r\nDTSTART;VALUE=DATE:20260427\r\nDTEND;VALUE=DATE:20260502\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+
+        let events = parse_ical_events(ical);
+
+        assert_eq!(events.len(), 1);
+        assert_eq!(
+            events[0].dtend,
+            Some(NaiveDate::from_ymd_opt(2026, 5, 2).unwrap())
+        );
+    }
+
+    #[test]
+    fn multi_day_absence_expands_into_one_event_per_day_in_week() {
+        // Mon–Fri absence (DTEND is exclusive: Sat = last day not covered).
+        let raw = vec![RawVEvent {
+            uid: "abs-1".to_string(),
+            summary: "Urlaub".to_string(),
+            dtstart: "2026-04-27".to_string(),
+            dtend: Some(NaiveDate::from_ymd_opt(2026, 5, 2).unwrap()),
+            ..Default::default()
+        }];
+        let week_start = NaiveDate::from_ymd_opt(2026, 4, 27).unwrap();
+
+        let events = map_absence_raw_events_for_week(raw, week_start);
+
+        assert_eq!(events.len(), 5);
+        assert_eq!(events[0].date, "2026-04-27");
+        assert_eq!(events[4].date, "2026-05-01");
+        assert!(events.iter().all(|e| e.kind == CalendarEventKind::Absence));
+        assert!(events.iter().all(|e| e.title == "Urlaub"));
+    }
+
+    #[test]
+    fn multi_day_absence_starting_before_week_only_covers_days_in_week() {
+        // Absence starts last week (Mon Apr 20), ends Wed Apr 29 (exclusive).
+        // Only Mon Apr 27 and Tue Apr 28 fall in this week.
+        let raw = vec![RawVEvent {
+            uid: "abs-2".to_string(),
+            summary: "Krankenstand".to_string(),
+            dtstart: "2026-04-20".to_string(),
+            dtend: Some(NaiveDate::from_ymd_opt(2026, 4, 29).unwrap()),
+            ..Default::default()
+        }];
+        let week_start = NaiveDate::from_ymd_opt(2026, 4, 27).unwrap();
+
+        let events = map_absence_raw_events_for_week(raw, week_start);
+
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[0].date, "2026-04-27");
+        assert_eq!(events[1].date, "2026-04-28");
     }
 }
