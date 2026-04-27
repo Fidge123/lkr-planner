@@ -30,8 +30,10 @@ pub async fn get_holidays_for_week(
     app: tauri::AppHandle,
     week_start: String,
 ) -> Result<Vec<Holiday>, String> {
-    let week_start_date = NaiveDate::parse_from_str(&week_start, "%Y-%m-%d")
-        .map_err(|_| "Feiertage konnten nicht geladen werden".to_string())?;
+    let week_start_date = NaiveDate::parse_from_str(&week_start, "%Y-%m-%d").map_err(|e| {
+        eprintln!("holidays: invalid week_start '{week_start}': {e}");
+        "Feiertage konnten nicht geladen werden".to_string()
+    })?;
     let week_end_date = week_start_date + chrono::Duration::days(6);
 
     let years = years_for_week(week_start_date, week_end_date);
@@ -74,16 +76,7 @@ pub async fn get_holidays_for_week(
         }
     }
 
-    if fetched_any {
-        crate::integrations::local_store::save_store_internal(&app, store.clone()).map_err(
-            |e| {
-                eprintln!("holidays: store save failed: {}", e.technical_message);
-                "Feiertage konnten nicht geladen werden".to_string()
-            },
-        )?;
-    }
-
-    let holidays = store
+    let holidays: Vec<Holiday> = store
         .holiday_cache
         .iter()
         .flat_map(|e| e.holidays.iter())
@@ -99,6 +92,13 @@ pub async fn get_holidays_for_week(
             }
         })
         .collect();
+
+    if fetched_any {
+        crate::integrations::local_store::save_store_internal(&app, store).map_err(|e| {
+            eprintln!("holidays: store save failed: {}", e.technical_message);
+            "Feiertage konnten nicht geladen werden".to_string()
+        })?;
+    }
 
     Ok(holidays)
 }

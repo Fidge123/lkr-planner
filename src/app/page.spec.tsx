@@ -34,6 +34,7 @@ const defaultAssignmentState: PlanningGridAssignmentState = {
 
 const defaultHolidaysState: HolidaysState = {
   holidays: [],
+  isLoading: false,
   errorMessage: null,
   reloadHolidays: () => {},
 };

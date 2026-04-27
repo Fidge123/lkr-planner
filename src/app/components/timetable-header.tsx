@@ -12,14 +12,18 @@ export function TimetableHeader({ day, holiday }: Props) {
         })}
       </time>
       {isHoliday ? (
-        <p className="text-xs font-normal mt-0.5">{holiday}</p>
+        <small className="block text-xs font-normal mt-0.5">{holiday}</small>
       ) : null}
     </th>
   );
 }
 
 function headerClass(day: Date, isHoliday: boolean): string {
-  if (isToday(day)) return "text-center bg-primary text-primary-content";
+  const today = isToday(day);
+  if (today && isHoliday)
+    return "text-center border-l-2 border-r-2 border-t-2 border-primary text-base-content/50";
+  if (today)
+    return "text-center border-l-2 border-r-2 border-t-2 border-primary text-primary";
   if (isHoliday) return "text-center text-base-content/50";
   return "text-center";
 }

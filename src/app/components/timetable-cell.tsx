@@ -74,7 +74,9 @@ interface TimeProps {
 }
 
 function cellClass(highlight: boolean, isHoliday: boolean): string {
-  if (highlight) return "align-top p-2 bg-primary/10";
+  if (highlight && isHoliday)
+    return "align-top p-2 border-l-2 border-r-2 border-primary bg-base-200/60";
+  if (highlight) return "align-top p-2 border-l-2 border-r-2 border-primary";
   if (isHoliday) return "align-top p-2 bg-base-200/60";
   return "align-top p-2";
 }

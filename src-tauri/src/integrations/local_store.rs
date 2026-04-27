@@ -243,8 +243,9 @@ pub(crate) fn save_store_internal(
     app: &tauri::AppHandle,
     mut store: LocalStore,
 ) -> Result<(), StoreError> {
+    // Cleans up expired holiday cache entries as a side-effect of every save.
     let store_path = get_store_path(app)?;
-    store.cleanup_holiday_cache(chrono::Local::now().date_naive());
+    store.cleanup_holiday_cache(chrono::Utc::now().date_naive());
     save_store_to_path(&store_path, &store)
 }
 
@@ -469,8 +470,6 @@ mod tests {
 
         fs::write(path, content).expect("test file should be writable");
     }
-
-    // Task 2.3: Cache age logic
 
     #[test]
     fn cleanup_removes_entries_older_than_one_year() {
