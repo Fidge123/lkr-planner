@@ -540,22 +540,6 @@ fn map_absence_raw_events_for_week(
     result
 }
 
-/// Maps raw absence events without week-range context (used where week is already filtered).
-fn map_absence_raw_events(raw_events: Vec<RawVEvent>) -> Vec<CalendarCellEvent> {
-    raw_events
-        .into_iter()
-        .map(|raw| CalendarCellEvent {
-            uid: raw.uid,
-            kind: CalendarEventKind::Absence,
-            title: raw.summary,
-            project_status: None,
-            date: raw.dtstart,
-            start_time: raw.start_time,
-            end_time: raw.end_time,
-        })
-        .collect()
-}
-
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -788,8 +772,9 @@ mod tests {
             dtstart: "2026-04-28".to_string(),
             ..Default::default()
         };
+        let week_start = NaiveDate::from_ymd_opt(2026, 4, 27).unwrap();
 
-        let events = map_absence_raw_events(vec![raw]);
+        let events = map_absence_raw_events_for_week(vec![raw], week_start);
 
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].kind, CalendarEventKind::Absence);
@@ -799,6 +784,7 @@ mod tests {
 
     #[test]
     fn maps_multiple_absence_events_from_raw() {
+        let week_start = NaiveDate::from_ymd_opt(2026, 4, 27).unwrap();
         let raw = vec![
             RawVEvent {
                 uid: "abs-1".to_string(),
@@ -814,7 +800,7 @@ mod tests {
             },
         ];
 
-        let events = map_absence_raw_events(raw);
+        let events = map_absence_raw_events_for_week(raw, week_start);
 
         assert_eq!(events.len(), 2);
         assert!(events.iter().all(|e| e.kind == CalendarEventKind::Absence));
@@ -823,19 +809,21 @@ mod tests {
 
     #[test]
     fn returns_empty_when_no_absence_raw_events() {
-        let events = map_absence_raw_events(vec![]);
+        let week_start = NaiveDate::from_ymd_opt(2026, 4, 27).unwrap();
+        let events = map_absence_raw_events_for_week(vec![], week_start);
         assert!(events.is_empty());
     }
 
     #[test]
     fn absence_fetch_failure_produces_no_absence_events() {
         // Simulates the silent-failure path: when fetch_calendar_events returns Err,
-        // the caller passes an empty vec to map_absence_raw_events.
+        // the caller passes an empty vec to the mapping function.
         let fetch_result: Result<Vec<RawVEvent>, String> =
             Err("Verbindung fehlgeschlagen".to_string());
         let raw = fetch_result.unwrap_or_default();
+        let week_start = NaiveDate::from_ymd_opt(2026, 4, 27).unwrap();
 
-        let events = map_absence_raw_events(raw);
+        let events = map_absence_raw_events_for_week(raw, week_start);
 
         assert!(events.is_empty());
     }
