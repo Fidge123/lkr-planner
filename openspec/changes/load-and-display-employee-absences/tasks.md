@@ -5,10 +5,11 @@
 
 ## 2. Backend: Fetch Absence Events in `load_week_events`
 
-- [ ] 2.1 For each employee with `zep_absence_calendar` set, fetch CalDAV events from that URL using the existing `fetch_calendar_events` function
-- [ ] 2.2 Fetch primary and absence calendars concurrently per employee
-- [ ] 2.3 Map fetched absence events to `CalendarCellEvent` with `kind: Absence` and no `project_status`
-- [ ] 2.4 Append absence events to the employee's `events` vec (absence calendar fetch failures are silently skipped; do not set `error`)
+- [ ] 2.1 Add `dtend: Option<NaiveDate>` to `RawVEvent`; populate it from the iCal `DTEND` date value for all-day events in `parse_ical_events`
+- [ ] 2.2 For each employee with `zep_absence_calendar` set, fetch CalDAV events from that URL using the existing `fetch_calendar_events` function
+- [ ] 2.3 Fetch primary and absence calendars concurrently per employee
+- [ ] 2.4 Map fetched absence events to `CalendarCellEvent` with `kind: Absence` and no `project_status`; for all-day events with a `dtend`, expand into one event per day in `[dtstart, dtend)` clamped to the requested week
+- [ ] 2.5 Append absence events to the employee's `events` vec (absence calendar fetch failures are silently skipped; do not set `error`)
 
 ## 3. Backend: Testing
 

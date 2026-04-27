@@ -40,6 +40,19 @@ For each employee with both a primary and absence calendar configured, fetch bot
 ### No changes to settings dialog or ZEP service
 The "Abwesenheit" calendar section in `EmployeeIcalDialog` is already fully implemented. No work needed there.
 
+### Multi-day absence expansion via splitting
+iCal all-day events use `DTSTART` (inclusive) and `DTEND` (exclusive). A week-long vacation produces a single VEVENT with a date range, but the planner grid requires one event per day. The CalDAV `time-range` filter already returns events whose range overlaps the queried week, so a vacation starting last week is still returned when querying the current week.
+
+The current `parse_ical_events` function only captures `DTSTART` and discards `DTEND` for all-day events (it is consumed by `ical_time()` which returns `None` for date values). To enable per-day rendering without corrupting primary calendar behaviour:
+
+- `RawVEvent` gains `dtend: Option<NaiveDate>` — populated for all-day events only
+- `parse_ical_events` stays a pure 1:1 iCal-to-struct mapper; no week-range argument
+- Expansion into per-day events is applied **only in the absence calendar mapping path** inside `load_week_events`, after `parse_ical_events` returns
+- Expansion: for each absence `RawVEvent` with a `dtend`, emit one `CalendarCellEvent` per day in `[dtstart, dtend)` that falls within the requested week
+- Primary calendar events are **never expanded**; their `dtend` field is ignored
+
+This keeps `parse_ical_events` reusable and ensures absence-specific logic does not affect assignment or bare event handling.
+
 ## Risks / Trade-offs
 
 - **Risk**: Absence events from the CalDAV calendar may have varying SUMMARY strings (no standard format) → Accept: render whatever `SUMMARY` the event has; planners recognise their own calendar entries.

@@ -18,6 +18,17 @@ The system SHALL fetch absence events from each employee's configured ZEP absenc
 - **THEN** no absence events are returned for that employee
 - **AND** the primary calendar events and `error` field are unaffected
 
+#### Scenario: Multi-day absence spans all covered days in the week
+- **WHEN** an absence calendar event covers multiple days (DTSTART to DTEND)
+- **AND** some or all of those days fall within the queried week
+- **THEN** one absence event is returned per covered day within that week
+- **AND** each event has the same `title` (from the iCal SUMMARY)
+
+#### Scenario: Multi-day absence starting before the queried week
+- **WHEN** an absence event has a DTSTART before the queried week
+- **AND** its DTEND falls within or after the queried week
+- **THEN** absence events are returned only for days within the queried week
+
 #### Scenario: Absence event carries summary as title
 - **WHEN** an absence calendar event has a SUMMARY field
 - **THEN** the absence event `title` is set to that SUMMARY value
