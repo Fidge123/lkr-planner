@@ -60,7 +60,9 @@ struct RawVEvent {
     summary: String,
     description: String,
     dtstart: String,
-    /// Exclusive end date for all-day events (RFC 5545: DTEND is the day after the last day).
+    /// Exclusive end date for all-day events (DATE values only).
+    /// RFC 5545 §3.8.2.2: for DATE-only values, DTEND is the day after the last covered day (exclusive).
+    /// DATE-TIME DTEND is intentionally not stored here; timed events use `end_time` instead.
     dtend: Option<NaiveDate>,
     start_time: Option<String>,
     end_time: Option<String>,
@@ -100,7 +102,7 @@ pub async fn load_week_events(
         Ok(c) => (c.username, c.password),
         Err(e) => {
             // No credentials: return error for every employee with a calendar URL
-            let results = store
+            let results: Vec<EmployeeWeekEvents> = store
                 .employee_settings
                 .iter()
                 .filter(|s| {
@@ -115,6 +117,12 @@ pub async fn load_week_events(
                     error: Some(e.user_message.clone()),
                 })
                 .collect();
+            if results.is_empty() {
+                eprintln!(
+                    "load_week_events: ZEP credentials unavailable and no primary calendars configured: {}",
+                    e.technical_message
+                );
+            }
             return Ok(results);
         }
     };
@@ -124,49 +132,65 @@ pub async fn load_week_events(
         .build()
         .map_err(|e| format!("HTTP-Client konnte nicht erstellt werden: {e}"))?;
 
-    // First pass: fetch CalDAV events per employee and classify against the local cache.
+    // First pass: fetch CalDAV events for all employees concurrently (primary + absence per
+    // employee are also concurrent via tokio::join!).
+    let employee_futures: Vec<_> = store
+        .employee_settings
+        .iter()
+        .filter_map(|setting| {
+            let calendar_url = setting
+                .zep_primary_calendar
+                .as_deref()
+                .filter(|u| !u.is_empty())
+                .map(str::to_string)?;
+
+            let absence_url = setting
+                .zep_absence_calendar
+                .as_deref()
+                .filter(|u| !u.is_empty())
+                .map(str::to_string);
+
+            let employee_ref = setting.daylite_contact_reference.clone();
+            let client = client.clone();
+            let username = username.clone();
+            let password = password.clone();
+
+            Some(async move {
+                let (primary_result, absence_result) = tokio::join!(
+                    fetch_calendar_events(
+                        &client,
+                        &calendar_url,
+                        &username,
+                        &password,
+                        week_start_date
+                    ),
+                    async {
+                        match absence_url {
+                            Some(ref url) => fetch_calendar_events(
+                                &client,
+                                url,
+                                &username,
+                                &password,
+                                week_start_date,
+                            )
+                            .await
+                            .ok(),
+                            None => None,
+                        }
+                    }
+                );
+                (employee_ref, primary_result, absence_result)
+            })
+        })
+        .collect();
+
+    let fetch_results = futures::future::join_all(employee_futures).await;
+
     let mut pending_per_employee: Vec<(String, Vec<PendingEvent>, Vec<CalendarCellEvent>)> =
         Vec::new();
     let mut error_results: Vec<EmployeeWeekEvents> = Vec::new();
 
-    for setting in &store.employee_settings {
-        let employee_ref = setting.daylite_contact_reference.clone();
-        let calendar_url = match setting
-            .zep_primary_calendar
-            .as_deref()
-            .filter(|u| !u.is_empty())
-        {
-            Some(url) => url.to_string(),
-            None => continue,
-        };
-
-        let absence_url = setting
-            .zep_absence_calendar
-            .as_deref()
-            .filter(|u| !u.is_empty())
-            .map(str::to_string);
-
-        // Fetch primary and absence calendars concurrently.
-        let (primary_result, absence_result) = tokio::join!(
-            fetch_calendar_events(
-                &client,
-                &calendar_url,
-                &username,
-                &password,
-                week_start_date
-            ),
-            async {
-                match absence_url {
-                    Some(ref url) => {
-                        fetch_calendar_events(&client, url, &username, &password, week_start_date)
-                            .await
-                            .ok()
-                    }
-                    None => None,
-                }
-            }
-        );
-
+    for (employee_ref, primary_result, absence_result) in fetch_results {
         match primary_result {
             Ok(raw_events) => {
                 let pending = raw_events.into_iter().map(classify_event).collect();
@@ -221,6 +245,9 @@ pub async fn load_week_events(
             .map(|p| resolve_event(p, &store.daylite_cache, &api_results))
             .collect();
         events.extend(absence_events);
+        // Deduplicate by UID to guard against CalDAV servers redelivering the same event.
+        let mut seen_uids = HashSet::new();
+        events.retain(|e| seen_uids.insert(e.uid.clone()));
         results.push(EmployeeWeekEvents {
             employee_reference: employee_ref,
             events,
@@ -277,6 +304,12 @@ async fn fetch_calendar_events(
 }
 
 fn build_report_body(start: &str, end: &str) -> String {
+    // Timestamps must be in the form YYYYMMDDTHHMMSSz (e.g. "20260428T000000Z").
+    // They come from chrono::format so this invariant holds unless the format string changes.
+    debug_assert!(
+        start.len() == 16 && end.len() == 16,
+        "CalDAV timestamp must be 16 chars: got start={start:?} end={end:?}"
+    );
     format!(
         r#"<?xml version="1.0" encoding="utf-8"?>
 <c:calendar-query xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
@@ -308,7 +341,7 @@ fn parse_caldav_report(xml_text: &str) -> Result<Vec<RawVEvent>, String> {
         let is_bare = !is_caldav && node.tag_name().name() == "calendar-data";
         if is_caldav || is_bare {
             if let Some(text) = node.text() {
-                events.extend(parse_ical_events(text));
+                events.extend(parse_ical_events(text)?);
             }
         }
     }
@@ -316,16 +349,15 @@ fn parse_caldav_report(xml_text: &str) -> Result<Vec<RawVEvent>, String> {
     Ok(events)
 }
 
-/// Parses iCal text and returns all VEVENT entries found.
-/// Uses the `icalendar` crate for RFC 5545-compliant parsing (line unfolding,
+/// Parses iCal text and returns all VEVENT entries found, or an error if the text is not
+/// valid iCal. Uses the `icalendar` crate for RFC 5545-compliant parsing (line unfolding,
 /// text unescaping, typed DTSTART). `RawVEvent.dtstart` is already in `yyyy-MM-dd` format.
-fn parse_ical_events(ical_text: &str) -> Vec<RawVEvent> {
-    let calendar: Calendar = match ical_text.parse() {
-        Ok(cal) => cal,
-        Err(_) => return vec![],
-    };
+fn parse_ical_events(ical_text: &str) -> Result<Vec<RawVEvent>, String> {
+    let calendar: Calendar = ical_text
+        .parse()
+        .map_err(|e| format!("iCal-Daten konnten nicht gelesen werden: {e:?}"))?;
 
-    calendar
+    let events = calendar
         .components
         .into_iter()
         .filter_map(|component| {
@@ -349,6 +381,8 @@ fn parse_ical_events(ical_text: &str) -> Vec<RawVEvent> {
             let start_time = ical_time(&start);
             let raw_end = event.get_end();
             let end_time = raw_end.as_ref().and_then(ical_time);
+            // Only DATE-valued DTEND is captured; DATE-TIME DTEND is intentionally ignored here
+            // because absence expansion only applies to all-day (VALUE=DATE) events.
             let dtend = raw_end.as_ref().and_then(|dt| match dt {
                 DatePerhapsTime::Date(d) => Some(*d),
                 _ => None,
@@ -364,7 +398,9 @@ fn parse_ical_events(ical_text: &str) -> Vec<RawVEvent> {
                 end_time,
             })
         })
-        .collect()
+        .collect();
+
+    Ok(events)
 }
 
 /// Extracts the time component from a `DatePerhapsTime` as an `HH:MM` string.
@@ -391,13 +427,27 @@ fn classify_event(event: RawVEvent) -> PendingEvent {
     let date = event.dtstart;
 
     let uid = if event.uid.is_empty() {
-        // Synthesise a stable-ish UID from the event content when none is provided.
-        format!("synthetic-{}-{}", date, event.summary)
+        // Synthesise a stable-ish UID from event content. Summary is sanitized to alphanumeric
+        // and hyphens only, so the UID is safe to embed in keys or URLs.
+        let safe: String = event
+            .summary
+            .chars()
+            .filter(|c| c.is_alphanumeric() || *c == '-')
+            .take(50)
+            .collect();
+        format!("synthetic-{date}-{safe}")
     } else {
         event.uid
     };
 
-    let first_line = event.description.lines().next().unwrap_or("").trim();
+    // Strip ASCII whitespace, BOM (U+FEFF), and zero-width space (U+200B) that some
+    // calendar UIs prepend to the description field.
+    let first_line = event
+        .description
+        .lines()
+        .next()
+        .unwrap_or("")
+        .trim_matches(|c: char| c.is_whitespace() || c == '\u{feff}' || c == '\u{200b}');
 
     let project_ref = if first_line.starts_with(DAYLITE_DESCRIPTION_PREFIX) {
         let raw_ref = first_line[DAYLITE_DESCRIPTION_PREFIX.len()..].trim();
@@ -514,6 +564,7 @@ fn map_absence_raw_events_for_week(
             let mut day = clamped_start;
             while day < clamped_end {
                 result.push(CalendarCellEvent {
+                    // NaiveDate Display format is "yyyy-MM-dd" (RFC 3339 date).
                     uid: format!("{}-{}", raw.uid, day),
                     kind: CalendarEventKind::Absence,
                     title: raw.summary.clone(),
@@ -553,7 +604,7 @@ mod tests {
     fn parses_vevent_with_all_properties() {
         let ical = "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:test-uid-1\r\nSUMMARY:Projekt Nord\r\nDESCRIPTION:daylite:/v1/projects/3001\r\nDTSTART;VALUE=DATE:20260126\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
 
-        let events = parse_ical_events(ical);
+        let events = parse_ical_events(ical).unwrap();
 
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].uid, "test-uid-1");
@@ -566,7 +617,7 @@ mod tests {
     fn parses_multiple_vevents_from_single_ical_text() {
         let ical = "BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:ev-1\nSUMMARY:A\nDTSTART:20260126T080000\nEND:VEVENT\nBEGIN:VEVENT\nUID:ev-2\nSUMMARY:B\nDTSTART:20260127T080000\nEND:VEVENT\nEND:VCALENDAR\n";
 
-        let events = parse_ical_events(ical);
+        let events = parse_ical_events(ical).unwrap();
 
         assert_eq!(events.len(), 2);
         assert_eq!(events[0].uid, "ev-1");
@@ -577,7 +628,7 @@ mod tests {
     fn skips_vevent_without_parseable_dtstart() {
         let ical = "BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:bad\nSUMMARY:Bad\nDTSTART:not-a-date\nEND:VEVENT\nEND:VCALENDAR\n";
 
-        let events = parse_ical_events(ical);
+        let events = parse_ical_events(ical).unwrap();
 
         assert!(events.is_empty());
     }
@@ -834,7 +885,7 @@ mod tests {
     fn parse_ical_events_captures_dtend_for_all_day_event() {
         let ical = "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:abs-1\r\nSUMMARY:Urlaub\r\nDTSTART;VALUE=DATE:20260427\r\nDTEND;VALUE=DATE:20260502\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
 
-        let events = parse_ical_events(ical);
+        let events = parse_ical_events(ical).unwrap();
 
         assert_eq!(events.len(), 1);
         assert_eq!(
@@ -882,5 +933,87 @@ mod tests {
         assert_eq!(events.len(), 2);
         assert_eq!(events[0].date, "2026-04-27");
         assert_eq!(events[1].date, "2026-04-28");
+    }
+
+    // H1: DATE-TIME DTSTART with no DATE DTEND → single-day event (intentional; expansion only
+    // applies when the iCal source uses VALUE=DATE for DTEND, as ZEP does for all-day absences).
+    #[test]
+    fn absence_with_timed_dtstart_and_no_dtend_produces_single_event() {
+        let raw = vec![RawVEvent {
+            uid: "abs-timed".to_string(),
+            summary: "Kurzurlaub".to_string(),
+            dtstart: "2026-04-28".to_string(),
+            dtend: None,
+            start_time: Some("08:00".to_string()),
+            end_time: Some("17:00".to_string()),
+            ..Default::default()
+        }];
+        let week_start = NaiveDate::from_ymd_opt(2026, 4, 27).unwrap();
+
+        let events = map_absence_raw_events_for_week(raw, week_start);
+
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].date, "2026-04-28");
+        assert_eq!(events[0].kind, CalendarEventKind::Absence);
+    }
+
+    // M3 (red): malformed iCal text should return an error from parse_ical_events.
+    #[test]
+    fn malformed_ical_text_returns_error() {
+        let result = parse_ical_events("this is definitely not valid ical");
+        assert!(result.is_err(), "expected Err for malformed iCal, got Ok");
+    }
+
+    // M5 (red): BOM-prefixed description should still classify as a Daylite event.
+    #[test]
+    fn classifies_event_with_bom_prefixed_daylite_description() {
+        let event = RawVEvent {
+            uid: "uid-bom".to_string(),
+            summary: "Projekt BOM".to_string(),
+            description: "\u{feff}daylite:/v1/projects/5001".to_string(),
+            dtstart: "2026-01-26".to_string(),
+            ..Default::default()
+        };
+
+        let pending = classify_event(event);
+
+        assert_eq!(pending.project_ref, Some("/v1/projects/5001".to_string()));
+    }
+
+    // L3 (red): synthetic UID must not contain newlines, slashes, or other special characters.
+    #[test]
+    fn synthetic_uid_contains_only_safe_characters() {
+        let event = RawVEvent {
+            uid: String::new(),
+            summary: "Termin\nmit/Sonderzeichen".to_string(),
+            description: String::new(),
+            dtstart: "2026-01-26".to_string(),
+            ..Default::default()
+        };
+
+        let pending = classify_event(event);
+
+        assert!(!pending.uid.contains('\n'), "UID must not contain newline");
+        assert!(!pending.uid.contains('/'), "UID must not contain slash");
+    }
+
+    // L8: absence events with a daylite: description must NOT be classified as assignments.
+    #[test]
+    fn absence_events_are_never_classified_as_assignments_regardless_of_description() {
+        let raw = vec![RawVEvent {
+            uid: "abs-daylite".to_string(),
+            summary: "Urlaub".to_string(),
+            description: "daylite:/v1/projects/9999".to_string(),
+            dtstart: "2026-04-28".to_string(),
+            dtend: None,
+            ..Default::default()
+        }];
+        let week_start = NaiveDate::from_ymd_opt(2026, 4, 27).unwrap();
+
+        let events = map_absence_raw_events_for_week(raw, week_start);
+
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].kind, CalendarEventKind::Absence);
+        assert_eq!(events[0].project_status, None);
     }
 }

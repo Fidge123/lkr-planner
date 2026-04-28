@@ -9,7 +9,7 @@ import type { PlanningAssignmentsState } from "./use-planning-assignments";
 import { usePlanningAssignments } from "./use-planning-assignments";
 import { usePlanningEmployees } from "./use-planning-employees";
 import { usePlanningProjects } from "./use-planning-projects";
-import { getWeekDays } from "./util";
+import { getWeekDays, toLocalISODate } from "./util";
 
 export function PlanningGrid({
   weekOffset,
@@ -20,7 +20,7 @@ export function PlanningGrid({
   onOpenIcalDialog,
 }: Props) {
   const weekDays = getWeekDays(weekOffset);
-  const weekStart = weekDays[0].toISOString().slice(0, 10);
+  const weekStart = toLocalISODate(weekDays[0]);
 
   const planningProjectsState = usePlanningProjects();
   const planningEmployeesState = usePlanningEmployees();

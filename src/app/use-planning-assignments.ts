@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CalendarCellEvent, EmployeeWeekEvents } from "../generated/tauri";
 import { commands } from "../generated/tauri";
+import { toLocalISODate } from "./util";
 
 type EmployeeEvents = Record<string, CalendarCellEvent[]>;
 type EmployeeErrors = Record<string, string>;
@@ -117,7 +118,6 @@ function groupResults(entries: EmployeeWeekEvents[]): WeekData {
 }
 
 function adjacentWeek(weekStart: string, offsetDays: number): string {
-  const d = new Date(weekStart);
-  d.setDate(d.getDate() + offsetDays);
-  return d.toISOString().slice(0, 10);
+  const [y, m, d] = weekStart.split("-").map(Number);
+  return toLocalISODate(new Date(y, m - 1, d + offsetDays));
 }

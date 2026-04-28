@@ -35,7 +35,7 @@ Absence events carry a `title` (the iCal SUMMARY, e.g. "Urlaub") and `date`, but
 For each employee with both a primary and absence calendar configured, fetch both concurrently. Only the primary calendar failure sets `EmployeeWeekEvents.error`. Absence calendar failures are silently skipped — the calendar is optional and its unavailability should not block the row from rendering.
 
 ### Frontend: `CellEvent` kind extended to `"absence"`
-`types.ts` adds `"absence"` to the `CellEvent.kind` union. `toCellEvent` maps `Absence` events to `bg-warning/30` color. `TimetableCell` renders absence events using the same non-interactive (`span`) path as bare events, with the warning color applied.
+`types.ts` adds `"absence"` to the `CellEvent.kind` union. `toCellEvent` maps `Absence` events to `bg-info/30` color (light blue — distinct from `bg-warning` used by deferred assignments). `TimetableCell` renders absence events using the same non-interactive (`span`) path as bare events, with the info color applied.
 
 ### No changes to settings dialog or ZEP service
 The "Abwesenheit" calendar section in `EmployeeIcalDialog` is already fully implemented. No work needed there.

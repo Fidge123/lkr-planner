@@ -37,7 +37,7 @@ function projectStatusToColor(status: string | null | undefined): string {
 export function toCellEvent(event: CalendarCellEvent): CellEvent {
   const color =
     event.kind === "absence"
-      ? "bg-warning/30"
+      ? "bg-info/30"
       : event.kind === "bare"
         ? "bg-base-200"
         : projectStatusToColor(event.projectStatus);
