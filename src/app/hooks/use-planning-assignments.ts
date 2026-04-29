@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { CalendarCellEvent, EmployeeWeekEvents } from "../generated/tauri";
-import { commands } from "../generated/tauri";
+import type {
+  CalendarCellEvent,
+  EmployeeWeekEvents,
+} from "../../generated/tauri";
+import { commands } from "../../generated/tauri";
+import { useLeadingDebounce } from "./use-leading-debounce";
 
 type EmployeeEvents = Record<string, CalendarCellEvent[]>;
 type EmployeeErrors = Record<string, string>;
@@ -12,7 +16,6 @@ interface WeekData {
 
 export interface PlanningAssignmentsState {
   eventsByEmployee: EmployeeEvents;
-  /** Per-employee CalDAV fetch errors, keyed by employee reference. */
   errorsByEmployee: EmployeeErrors;
   isLoading: boolean;
   errorMessage: string | null;
@@ -22,7 +25,9 @@ export interface PlanningAssignmentsState {
 export function usePlanningAssignments(
   weekStart: string,
 ): PlanningAssignmentsState {
+  const debouncedWeekStart = useLeadingDebounce(weekStart, 200);
   const cache = useRef<Record<string, WeekData>>({});
+  const requestIdRef = useRef(0);
   const [eventsByEmployee, setEventsByEmployee] = useState<EmployeeEvents>({});
   const [errorsByEmployee, setErrorsByEmployee] = useState<EmployeeErrors>({});
   const [isLoading, setIsLoading] = useState(true);
@@ -33,6 +38,8 @@ export function usePlanningAssignments(
     if (invalidate) {
       delete cache.current[ws];
     }
+
+    const id = ++requestIdRef.current;
 
     const cached = cache.current[ws];
     if (cached) {
@@ -46,6 +53,7 @@ export function usePlanningAssignments(
     setIsLoading(true);
     try {
       const result = await commands.loadWeekEvents(ws);
+      if (id !== requestIdRef.current) return;
       if (result.status === "error") {
         setErrorMessage(result.error);
         setEventsByEmployee({});
@@ -58,6 +66,7 @@ export function usePlanningAssignments(
       setErrorsByEmployee(data.errorsByEmployee);
       setErrorMessage(null);
     } catch (error) {
+      if (id !== requestIdRef.current) return;
       setErrorMessage(
         error instanceof Error
           ? error.message
@@ -66,11 +75,12 @@ export function usePlanningAssignments(
       setEventsByEmployee({});
       setErrorsByEmployee({});
     } finally {
-      setIsLoading(false);
+      if (id === requestIdRef.current) {
+        setIsLoading(false);
+      }
     }
   }, []);
 
-  // Silently pre-warms the cache for an adjacent week.
   const prefetchWeek = useCallback(async (ws: string) => {
     if (cache.current[ws]) return;
     try {
@@ -83,11 +93,12 @@ export function usePlanningAssignments(
     }
   }, []);
 
+  // Debounced: load active week and prefetch adjacent weeks after navigation settles
   useEffect(() => {
-    void loadActiveWeek(weekStart);
-    void prefetchWeek(adjacentWeek(weekStart, -7));
-    void prefetchWeek(adjacentWeek(weekStart, 7));
-  }, [weekStart, loadActiveWeek, prefetchWeek]);
+    void loadActiveWeek(debouncedWeekStart);
+    void prefetchWeek(adjacentWeek(debouncedWeekStart, -7));
+    void prefetchWeek(adjacentWeek(debouncedWeekStart, 7));
+  }, [debouncedWeekStart, loadActiveWeek, prefetchWeek]);
 
   const reloadAssignments = useCallback(() => {
     cache.current = {};

@@ -1,8 +1,12 @@
 import type { CellEvent } from "../types";
 
-export function TimetableCell({ highlight = false, events }: Props) {
+export function TimetableCell({
+  highlight = false,
+  isHoliday = false,
+  events,
+}: Props) {
   return (
-    <td className={`align-top p-2 ${highlight ? "bg-primary/10" : ""}`}>
+    <td className={cellClass(highlight, isHoliday)}>
       <ul className="flex flex-col gap-1 list-none">
         {events.map((event) =>
           event.kind === "bare" ? (
@@ -50,6 +54,7 @@ export function TimetableCell({ highlight = false, events }: Props) {
 
 interface Props {
   highlight: boolean;
+  isHoliday?: boolean;
   events: CellEvent[];
 }
 
@@ -66,4 +71,10 @@ function EventTime({ startTime, endTime }: TimeProps) {
 interface TimeProps {
   startTime: string | null;
   endTime: string | null;
+}
+
+function cellClass(highlight: boolean, isHoliday: boolean): string {
+  if (isHoliday) return "align-top p-2 bg-base-200/60";
+  if (highlight) return "align-top p-2 bg-primary/10";
+  return "align-top p-2";
 }
