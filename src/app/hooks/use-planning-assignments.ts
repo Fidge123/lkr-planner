@@ -16,7 +16,6 @@ interface WeekData {
 
 export interface PlanningAssignmentsState {
   eventsByEmployee: EmployeeEvents;
-  /** Per-employee CalDAV fetch errors, keyed by employee reference. */
   errorsByEmployee: EmployeeErrors;
   isLoading: boolean;
   errorMessage: string | null;
@@ -82,7 +81,6 @@ export function usePlanningAssignments(
     }
   }, []);
 
-  // Silently pre-warms the cache for an adjacent week.
   const prefetchWeek = useCallback(async (ws: string) => {
     if (cache.current[ws]) return;
     try {
@@ -95,13 +93,11 @@ export function usePlanningAssignments(
     }
   }, []);
 
-  // Sliding window: prefetch adjacent weeks immediately on every navigation step
   useEffect(() => {
     void prefetchWeek(adjacentWeek(weekStart, -7));
     void prefetchWeek(adjacentWeek(weekStart, 7));
   }, [weekStart, prefetchWeek]);
 
-  // Active load: debounced so skipped weeks during rapid navigation are never fetched
   useEffect(() => {
     void loadActiveWeek(debouncedWeekStart);
   }, [debouncedWeekStart, loadActiveWeek]);
