@@ -15,6 +15,7 @@ export const commands = {
 	 *  (store unavailable, bad date) return an `Err`.
 	 */
 	loadWeekEvents: (weekStart: string) => typedError<EmployeeWeekEvents[], string>(__TAURI_INVOKE("load_week_events", { weekStart })),
+	getHolidaysForWeek: (weekStart: string) => typedError<Holiday[], string>(__TAURI_INVOKE("get_holidays_for_week", { weekStart })),
 	dayliteConnectRefreshToken: (request: DayliteRefreshTokenRequest) => typedError<DayliteTokenSyncStatus, DayliteApiError>(__TAURI_INVOKE("daylite_connect_refresh_token", { request })),
 	dayliteListProjects: () => typedError<PlanningProjectRecord[], DayliteApiError>(__TAURI_INVOKE("daylite_list_projects")),
 	dayliteSearchProjects: (input: DayliteSearchInput) => typedError<DayliteSearchResult<DayliteProjectSummary>, DayliteApiError>(__TAURI_INVOKE("daylite_search_projects", { input })),
@@ -37,6 +38,11 @@ export type ApiEndpoints = {
 	dayliteBaseUrl: string,
 	planradarBaseUrl: string,
 	zepCaldavRootUrl?: string,
+};
+
+export type CachedHoliday = {
+	date: string,
+	name: string,
 };
 
 export type CalendarCellEvent = {
@@ -194,6 +200,17 @@ export type HealthStatus = {
 
 export type HealthStatusEnum = "healthy" | "unhealthy";
 
+export type Holiday = {
+	date: string,
+	name: string,
+};
+
+export type HolidayCacheEntry = {
+	year: number,
+	fetchedAt: string,
+	holidays: CachedHoliday[],
+};
+
 export type IcalSource = "primary" | "absence";
 
 export type LocalStore = {
@@ -204,6 +221,7 @@ export type LocalStore = {
 	contactFilter: ContactFilter,
 	routingSettings: RoutingSettings,
 	dayliteCache: DayliteCache,
+	holidayCache?: HolidayCacheEntry[],
 };
 
 export type PlanningContactRecord = {

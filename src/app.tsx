@@ -3,8 +3,8 @@ import "./app.css";
 import { ChevronLeft, ChevronRight, Settings } from "lucide-react";
 import { EmployeeIcalDialog } from "./app/components/employee-ical-dialog";
 import { SettingsDialog } from "./app/components/settings-dialog";
+import { usePlanningAssignments } from "./app/hooks/use-planning-assignments";
 import { PlanningGrid } from "./app/page";
-import { usePlanningAssignments } from "./app/use-planning-assignments";
 import { getWeekDays } from "./app/util";
 import type {
   EmployeeSetting,

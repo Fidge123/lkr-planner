@@ -14,6 +14,7 @@ export function TimetableRow({
   calendarError,
   weekDays,
   employeeSetting,
+  holidayDates,
   onRetry,
   onOpenIcalDialog,
 }: Props) {
@@ -64,6 +65,7 @@ export function TimetableRow({
             <TimetableCell
               key={day.toISOString()}
               highlight={isToday(day)}
+              isHoliday={holidayDates.has(isoDay)}
               events={dayEvents}
             />
           );
@@ -96,6 +98,7 @@ interface Props {
   calendarError: string | null;
   weekDays: Date[];
   employeeSetting: EmployeeSetting | null;
+  holidayDates: Set<string>;
   onRetry: () => void;
   onOpenIcalDialog: (employee: PlanningContactRecord) => void;
 }

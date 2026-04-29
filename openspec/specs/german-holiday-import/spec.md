@@ -1,5 +1,3 @@
-## ADDED Requirements
-
 ### Requirement: German holiday import
 The system SHALL import German public holidays for week view display.
 
@@ -23,10 +21,15 @@ The system SHALL import German public holidays for week view display.
 - **THEN** subsequent requests within 30 days use cached data
 - **AND** no additional API call is made
 
-#### Scenario: Refresh stale cache
-- **WHEN** the cached entry for the requested year is older than 30 days
+#### Scenario: Refresh stale cache for current year
+- **WHEN** the cached entry for the **current year** is older than 30 days
 - **THEN** the service re-fetches from the Nager API
 - **AND** updates the cache with fresh data and a new `fetched_at` date
+
+#### Scenario: Past year cache is permanent
+- **WHEN** holidays for a past year have been fetched and cached
+- **THEN** that cache entry is never re-fetched regardless of age
+- **AND** past-year holidays are served from cache indefinitely
 
 #### Scenario: Clean up old cache entries
 - **WHEN** the holiday cache is saved

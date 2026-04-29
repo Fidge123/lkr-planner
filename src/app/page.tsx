@@ -5,10 +5,10 @@ import type {
 } from "../generated/tauri";
 import { TimetableHeader } from "./components/timetable-header";
 import { TimetableRow } from "./components/timetable-row";
-import type { PlanningAssignmentsState } from "./use-planning-assignments";
-import { usePlanningAssignments } from "./use-planning-assignments";
-import { usePlanningEmployees } from "./use-planning-employees";
-import { usePlanningProjects } from "./use-planning-projects";
+import { type HolidaysState, useHolidays } from "./hooks/use-holidays";
+import type { PlanningAssignmentsState } from "./hooks/use-planning-assignments";
+import { usePlanningEmployees } from "./hooks/use-planning-employees";
+import { usePlanningProjects } from "./hooks/use-planning-projects";
 import { getWeekDays, toLocalISODate } from "./util";
 
 export function PlanningGrid({
@@ -24,33 +24,33 @@ export function PlanningGrid({
 
   const planningProjectsState = usePlanningProjects();
   const planningEmployeesState = usePlanningEmployees();
-  const planningAssignmentsState = usePlanningAssignments(weekStart);
+  const holidaysState = useHolidays(weekStart);
 
   const resolvedProjectState = projectState ?? planningProjectsState;
   const resolvedEmployeeState = employeeState ?? planningEmployeesState;
-  const resolvedAssignmentState = assignmentState ?? planningAssignmentsState;
 
   return (
     <PlanningGridTable
-      weekOffset={weekOffset}
+      weekDays={weekDays}
       projectState={resolvedProjectState}
       employeeState={resolvedEmployeeState}
-      assignmentState={resolvedAssignmentState}
+      assignmentState={assignmentState}
       employeeSettings={employeeSettings ?? []}
+      holidaysState={holidaysState}
       onOpenIcalDialog={onOpenIcalDialog ?? (() => {})}
     />
   );
 }
 
 export function PlanningGridTable({
-  weekOffset,
+  weekDays,
   projectState,
   employeeState,
   assignmentState,
   employeeSettings,
+  holidaysState,
   onOpenIcalDialog,
 }: PlanningGridTableProps) {
-  const weekDays = getWeekDays(weekOffset);
   const { projects, isLoading, errorMessage, reloadProjects } = projectState;
   const {
     employees,
@@ -65,6 +65,13 @@ export function PlanningGridTable({
     errorMessage: assignmentErrorMessage,
     reloadAssignments,
   } = assignmentState;
+  const {
+    holidays,
+    errorMessage: holidayErrorMessage,
+    reloadHolidays,
+  } = holidaysState;
+  const holidayByDate = new Map(holidays.map((h) => [h.date, h.name]));
+  const holidayDates = new Set(holidays.map((h) => h.date));
 
   return (
     <section className="w-full h-full overflow-auto">
@@ -100,6 +107,14 @@ export function PlanningGridTable({
           </button>
         </section>
       ) : null}
+      {holidayErrorMessage ? (
+        <section className="alert alert-warning m-4">
+          <span>{holidayErrorMessage}</span>
+          <button type="button" className="btn btn-sm" onClick={reloadHolidays}>
+            Erneut laden
+          </button>
+        </section>
+      ) : null}
       {isAssignmentsLoading ? (
         <p className="px-4 py-2 text-base-content/70">
           Einsätze werden geladen...
@@ -109,9 +124,16 @@ export function PlanningGridTable({
         <thead className="text-base-content">
           <tr>
             <th className="w-40 p-4 font-bold">Mitarbeiter</th>
-            {weekDays.map((day) => (
-              <TimetableHeader key={day.getTime()} day={day} />
-            ))}
+            {weekDays.map((day) => {
+              const isoDay = toLocalISODate(day);
+              return (
+                <TimetableHeader
+                  key={day.getTime()}
+                  day={day}
+                  holiday={holidayByDate.get(isoDay)}
+                />
+              );
+            })}
           </tr>
         </thead>
         <tbody>
@@ -127,6 +149,7 @@ export function PlanningGridTable({
                   (s) => s.dayliteContactReference === employee.self,
                 ) ?? null
               }
+              holidayDates={holidayDates}
               onRetry={reloadAssignments}
               onOpenIcalDialog={onOpenIcalDialog}
             />
@@ -183,17 +206,18 @@ interface Props {
   weekOffset: number;
   projectState?: PlanningGridProjectsState;
   employeeState?: PlanningGridEmployeesState;
-  assignmentState?: PlanningGridAssignmentState;
+  assignmentState: PlanningGridAssignmentState;
   employeeSettings?: EmployeeSetting[];
   onOpenIcalDialog?: (employee: PlanningContactRecord) => void;
 }
 
-interface PlanningGridTableProps {
-  weekOffset: number;
+export interface PlanningGridTableProps {
+  weekDays: Date[];
   projectState: PlanningGridProjectsState;
   employeeState: PlanningGridEmployeesState;
   assignmentState: PlanningGridAssignmentState;
   employeeSettings: EmployeeSetting[];
+  holidaysState: HolidaysState;
   onOpenIcalDialog: (employee: PlanningContactRecord) => void;
 }
 
