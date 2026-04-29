@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { PlanningProjectRecord } from "../generated/tauri";
-import { loadDayliteProjects } from "../services/daylite-projects";
-import type { PlanningGridProjectsState } from "./page";
+import type { PlanningProjectRecord } from "../../generated/tauri";
+import { loadDayliteProjects } from "../../services/daylite-projects";
+import type { PlanningGridProjectsState } from "../page";
 
 export function usePlanningProjects(): PlanningGridProjectsState {
   const requestIdRef = useRef(0);

@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { PlanningContactRecord } from "../generated/tauri";
+import type { PlanningContactRecord } from "../../generated/tauri";
 import {
   loadCachedDayliteContacts,
   loadDayliteContacts,
-} from "../services/daylite-contacts";
-import type { PlanningGridEmployeesState } from "./page";
+} from "../../services/daylite-contacts";
+import type { PlanningGridEmployeesState } from "../page";
 
 export function usePlanningEmployees(): PlanningGridEmployeesState {
   const requestIdRef = useRef(0);

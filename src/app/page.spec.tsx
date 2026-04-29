@@ -1,13 +1,13 @@
 import { beforeAll, describe, expect, it, setSystemTime } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { CalendarCellEvent } from "../generated/tauri";
+import type { HolidaysState } from "./hooks/use-holidays";
 import {
   type PlanningGridAssignmentState,
   type PlanningGridEmployeesState,
   type PlanningGridProjectsState,
   PlanningGridTable,
 } from "./page";
-import type { HolidaysState } from "./use-holidays";
 import { getWeekDays } from "./util";
 
 const defaultState: PlanningGridProjectsState = {

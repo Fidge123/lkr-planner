@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { CalendarCellEvent, EmployeeWeekEvents } from "../generated/tauri";
-import { commands } from "../generated/tauri";
+import type {
+  CalendarCellEvent,
+  EmployeeWeekEvents,
+} from "../../generated/tauri";
+import { commands } from "../../generated/tauri";
 import { useLeadingDebounce } from "./use-leading-debounce";
 
 type EmployeeEvents = Record<string, CalendarCellEvent[]>;

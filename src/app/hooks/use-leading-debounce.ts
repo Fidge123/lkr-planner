@@ -1,11 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 
-/**
- * Returns a debounced value that fires immediately on the leading edge
- * (first change after a quiet period) and only fires again on the trailing
- * edge if additional changes arrived during the delay window. A single
- * isolated change produces exactly one update.
- */
 export function useLeadingDebounce<T>(value: T, delay: number): T {
   const [debouncedValue, setDebouncedValue] = useState(value);
   const isDebouncing = useRef(false);

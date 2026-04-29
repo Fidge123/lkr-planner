@@ -5,11 +5,11 @@ import type {
 } from "../generated/tauri";
 import { TimetableHeader } from "./components/timetable-header";
 import { TimetableRow } from "./components/timetable-row";
-import { type HolidaysState, useHolidays } from "./use-holidays";
-import type { PlanningAssignmentsState } from "./use-planning-assignments";
-import { usePlanningAssignments } from "./use-planning-assignments";
-import { usePlanningEmployees } from "./use-planning-employees";
-import { usePlanningProjects } from "./use-planning-projects";
+import { type HolidaysState, useHolidays } from "./hooks/use-holidays";
+import type { PlanningAssignmentsState } from "./hooks/use-planning-assignments";
+import { usePlanningAssignments } from "./hooks/use-planning-assignments";
+import { usePlanningEmployees } from "./hooks/use-planning-employees";
+import { usePlanningProjects } from "./hooks/use-planning-projects";
 import { getWeekDays } from "./util";
 
 export function PlanningGrid({

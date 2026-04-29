@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Holiday } from "../generated/tauri";
-import { commands } from "../generated/tauri";
-import { useLeadingDebounce } from "./use-leading-debounce";
+import { commands, type Holiday } from "../../generated/tauri";
 
 export interface HolidaysState {
   holidays: Holiday[];
@@ -11,7 +9,6 @@ export interface HolidaysState {
 }
 
 export function useHolidays(weekStart: string): HolidaysState {
-  const debouncedWeekStart = useLeadingDebounce(weekStart, 200);
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -20,7 +17,7 @@ export function useHolidays(weekStart: string): HolidaysState {
   const reloadHolidays = useCallback(() => {
     const id = ++requestIdRef.current;
     setIsLoading(true);
-    void commands.getHolidaysForWeek(debouncedWeekStart).then((result) => {
+    void commands.getHolidaysForWeek(weekStart).then((result) => {
       if (id !== requestIdRef.current) return;
       setIsLoading(false);
       if (result.status === "error") {
@@ -31,7 +28,7 @@ export function useHolidays(weekStart: string): HolidaysState {
       setHolidays(result.data);
       setErrorMessage(null);
     });
-  }, [debouncedWeekStart]);
+  }, [weekStart]);
 
   useEffect(() => {
     reloadHolidays();
