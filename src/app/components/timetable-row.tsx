@@ -5,7 +5,7 @@ import type {
   PlanningContactRecord,
 } from "../../generated/tauri";
 import { toCellEvent } from "../types";
-import { isToday } from "../util";
+import { isToday, toLocalISODate } from "../util";
 import { TimetableCell } from "./timetable-cell";
 
 export function TimetableRow({
@@ -57,7 +57,7 @@ export function TimetableRow({
         </td>
       ) : (
         weekDays.map((day) => {
-          const isoDay = day.toISOString().slice(0, 10);
+          const isoDay = toLocalISODate(day);
           const dayEvents = calendarEvents
             .filter((e) => e.date === isoDay)
             .map(toCellEvent);

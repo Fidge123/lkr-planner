@@ -9,7 +9,17 @@ export function TimetableCell({
     <td className={cellClass(highlight, isHoliday)}>
       <ul className="flex flex-col gap-1 list-none">
         {events.map((event) =>
-          event.kind === "bare" ? (
+          event.kind === "absence" ? (
+            <li key={event.uid}>
+              <span
+                className={`flex items-center w-full gap-4 p-2 rounded-lg cursor-default text-base-content transition-colors ${event.color}`}
+              >
+                <h4 className="flex-1 min-w-0 font-normal text-sm italic">
+                  {event.title}
+                </h4>
+              </span>
+            </li>
+          ) : event.kind === "bare" ? (
             <li key={event.uid}>
               <span
                 className={`flex items-center w-full gap-4 p-2 rounded-lg cursor-default text-base-content transition-colors hover:bg-base-300 ${event.color}`}

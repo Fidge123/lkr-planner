@@ -1,23 +1,27 @@
 export function getWeekDays(weekOffset: number) {
   const today = new Date();
   const currentDay = today.getDay();
-  const dayInMs = 1000 * 60 * 60 * 24;
   // Calculate Monday of the current week (or next week if today is weekend)
   const mondayOffset =
     currentDay === 0 ? 1 : currentDay === 6 ? 2 : 1 - currentDay;
-  const monday = new Date(today.toISOString().slice(0, 10));
-  monday.setDate(today.getDate() + mondayOffset + weekOffset * 7);
+  const mondayDate = today.getDate() + mondayOffset + weekOffset * 7;
 
-  return [
-    monday,
-    new Date(monday.getTime() + dayInMs),
-    new Date(monday.getTime() + dayInMs * 2),
-    new Date(monday.getTime() + dayInMs * 3),
-    new Date(monday.getTime() + dayInMs * 4),
-  ];
+  // Use local-time date construction to avoid UTC/DST offset issues.
+  return Array.from(
+    { length: 5 },
+    (_, i) => new Date(today.getFullYear(), today.getMonth(), mondayDate + i),
+  );
 }
 
 export function isToday(day: Date) {
   const today = new Date();
   return day.toDateString() === today.toDateString();
+}
+
+/** Formats a Date as "yyyy-MM-dd" using local time components (not UTC). */
+export function toLocalISODate(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
 }
