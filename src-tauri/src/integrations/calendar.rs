@@ -554,9 +554,7 @@ fn sort_events_absences_first(events: &mut Vec<CalendarCellEvent>) {
                 1u8
             }
         };
-        a.date
-            .cmp(&b.date)
-            .then(kind_order(a).cmp(&kind_order(b)))
+        a.date.cmp(&b.date).then(kind_order(a).cmp(&kind_order(b)))
     });
 }
 

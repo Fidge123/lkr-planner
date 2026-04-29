@@ -4,8 +4,8 @@ import type {
   EmployeeWeekEvents,
 } from "../../generated/tauri";
 import { commands } from "../../generated/tauri";
-import { useLeadingDebounce } from "./use-leading-debounce";
 import { toLocalISODate } from "../util";
+import { useLeadingDebounce } from "./use-leading-debounce";
 
 type EmployeeEvents = Record<string, CalendarCellEvent[]>;
 type EmployeeErrors = Record<string, string>;
