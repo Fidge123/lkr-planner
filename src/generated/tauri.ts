@@ -15,6 +15,7 @@ export const commands = {
 	 *  (store unavailable, bad date) return an `Err`.
 	 */
 	loadWeekEvents: (weekStart: string) => typedError<EmployeeWeekEvents[], string>(__TAURI_INVOKE("load_week_events", { weekStart })),
+	getHolidaysForWeek: (weekStart: string) => typedError<Holiday[], string>(__TAURI_INVOKE("get_holidays_for_week", { weekStart })),
 	dayliteConnectRefreshToken: (request: DayliteRefreshTokenRequest) => typedError<DayliteTokenSyncStatus, DayliteApiError>(__TAURI_INVOKE("daylite_connect_refresh_token", { request })),
 	dayliteListProjects: () => typedError<PlanningProjectRecord[], DayliteApiError>(__TAURI_INVOKE("daylite_list_projects")),
 	dayliteSearchProjects: (input: DayliteSearchInput) => typedError<DayliteSearchResult<DayliteProjectSummary>, DayliteApiError>(__TAURI_INVOKE("daylite_search_projects", { input })),
@@ -30,7 +31,6 @@ export const commands = {
 	zepDiscoverCalendars: () => typedError<ZepCalendar[], ZepError>(__TAURI_INVOKE("zep_discover_calendars")),
 	// Save a ZEP calendar URL for one source (Primary or Absence) and test the connection.
 	zepSaveAndTestCalendar: (dayliteContactReference: string, source: IcalSource, calendarUrl: string | null) => typedError<ZepCalendarTestResult, ZepError>(__TAURI_INVOKE("zep_save_and_test_calendar", { dayliteContactReference, source, calendarUrl })),
-	getHolidaysForWeek: (weekStart: string) => typedError<Holiday[], string>(__TAURI_INVOKE("get_holidays_for_week", { weekStart })),
 };
 
 /* Types */
@@ -38,6 +38,11 @@ export type ApiEndpoints = {
 	dayliteBaseUrl: string,
 	planradarBaseUrl: string,
 	zepCaldavRootUrl?: string,
+};
+
+export type CachedHoliday = {
+	date: string,
+	name: string,
 };
 
 export type CalendarCellEvent = {
@@ -193,13 +198,6 @@ export type HealthStatus = {
 
 export type HealthStatusEnum = "healthy" | "unhealthy";
 
-export type IcalSource = "primary" | "absence";
-
-export type CachedHoliday = {
-	date: string,
-	name: string,
-};
-
 export type Holiday = {
 	date: string,
 	name: string,
@@ -210,6 +208,8 @@ export type HolidayCacheEntry = {
 	fetchedAt: string,
 	holidays: CachedHoliday[],
 };
+
+export type IcalSource = "primary" | "absence";
 
 export type LocalStore = {
 	apiEndpoints: ApiEndpoints,

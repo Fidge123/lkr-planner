@@ -20,8 +20,6 @@ export function TimetableHeader({ day, holiday }: Props) {
 
 function headerClass(day: Date, isHoliday: boolean): string {
   const today = isToday(day);
-  if (today && isHoliday)
-    return "text-center border-l-2 border-r-2 border-t-2 border-primary text-base-content/50";
   if (today) return "text-center bg-primary text-primary-content";
   if (isHoliday) return "text-center text-base-content/50";
   return "text-center";
