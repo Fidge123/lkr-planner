@@ -6,6 +6,7 @@ import type {
 import { TimetableHeader } from "./components/timetable-header";
 import { TimetableRow } from "./components/timetable-row";
 import { type HolidaysState, useHolidays } from "./use-holidays";
+import { useLeadingDebounce } from "./use-leading-debounce";
 import type { PlanningAssignmentsState } from "./use-planning-assignments";
 import { usePlanningAssignments } from "./use-planning-assignments";
 import { usePlanningEmployees } from "./use-planning-employees";
@@ -22,11 +23,12 @@ export function PlanningGrid({
 }: Props) {
   const weekDays = getWeekDays(weekOffset);
   const weekStart = weekDays[0].toISOString().slice(0, 10);
+  const fetchWeekStart = useLeadingDebounce(weekStart, 200);
 
   const planningProjectsState = usePlanningProjects();
   const planningEmployeesState = usePlanningEmployees();
-  const planningAssignmentsState = usePlanningAssignments(weekStart);
-  const holidaysState = useHolidays(weekStart);
+  const planningAssignmentsState = usePlanningAssignments(fetchWeekStart);
+  const holidaysState = useHolidays(fetchWeekStart);
 
   const resolvedProjectState = projectState ?? planningProjectsState;
   const resolvedEmployeeState = employeeState ?? planningEmployeesState;
