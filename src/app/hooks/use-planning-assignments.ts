@@ -93,14 +93,12 @@ export function usePlanningAssignments(
     }
   }, []);
 
-  useEffect(() => {
-    void prefetchWeek(adjacentWeek(weekStart, -7));
-    void prefetchWeek(adjacentWeek(weekStart, 7));
-  }, [weekStart, prefetchWeek]);
-
+  // Debounced: load active week and prefetch adjacent weeks after navigation settles
   useEffect(() => {
     void loadActiveWeek(debouncedWeekStart);
-  }, [debouncedWeekStart, loadActiveWeek]);
+    void prefetchWeek(adjacentWeek(debouncedWeekStart, -7));
+    void prefetchWeek(adjacentWeek(debouncedWeekStart, 7));
+  }, [debouncedWeekStart, loadActiveWeek, prefetchWeek]);
 
   const reloadAssignments = useCallback(() => {
     cache.current = {};

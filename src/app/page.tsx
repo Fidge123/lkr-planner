@@ -7,7 +7,6 @@ import { TimetableHeader } from "./components/timetable-header";
 import { TimetableRow } from "./components/timetable-row";
 import { type HolidaysState, useHolidays } from "./hooks/use-holidays";
 import type { PlanningAssignmentsState } from "./hooks/use-planning-assignments";
-import { usePlanningAssignments } from "./hooks/use-planning-assignments";
 import { usePlanningEmployees } from "./hooks/use-planning-employees";
 import { usePlanningProjects } from "./hooks/use-planning-projects";
 import { getWeekDays } from "./util";
@@ -25,19 +24,17 @@ export function PlanningGrid({
 
   const planningProjectsState = usePlanningProjects();
   const planningEmployeesState = usePlanningEmployees();
-  const planningAssignmentsState = usePlanningAssignments(weekStart);
   const holidaysState = useHolidays(weekStart);
 
   const resolvedProjectState = projectState ?? planningProjectsState;
   const resolvedEmployeeState = employeeState ?? planningEmployeesState;
-  const resolvedAssignmentState = assignmentState ?? planningAssignmentsState;
 
   return (
     <PlanningGridTable
       weekDays={weekDays}
       projectState={resolvedProjectState}
       employeeState={resolvedEmployeeState}
-      assignmentState={resolvedAssignmentState}
+      assignmentState={assignmentState}
       employeeSettings={employeeSettings ?? []}
       holidaysState={holidaysState}
       onOpenIcalDialog={onOpenIcalDialog ?? (() => {})}
@@ -209,7 +206,7 @@ interface Props {
   weekOffset: number;
   projectState?: PlanningGridProjectsState;
   employeeState?: PlanningGridEmployeesState;
-  assignmentState?: PlanningGridAssignmentState;
+  assignmentState: PlanningGridAssignmentState;
   employeeSettings?: EmployeeSetting[];
   onOpenIcalDialog?: (employee: PlanningContactRecord) => void;
 }
