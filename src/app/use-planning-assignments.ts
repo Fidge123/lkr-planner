@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CalendarCellEvent, EmployeeWeekEvents } from "../generated/tauri";
 import { commands } from "../generated/tauri";
+import { useLeadingDebounce } from "./use-leading-debounce";
 
 type EmployeeEvents = Record<string, CalendarCellEvent[]>;
 type EmployeeErrors = Record<string, string>;
@@ -22,6 +23,7 @@ export interface PlanningAssignmentsState {
 export function usePlanningAssignments(
   weekStart: string,
 ): PlanningAssignmentsState {
+  const debouncedWeekStart = useLeadingDebounce(weekStart, 200);
   const cache = useRef<Record<string, WeekData>>({});
   const requestIdRef = useRef(0);
   const [eventsByEmployee, setEventsByEmployee] = useState<EmployeeEvents>({});
@@ -90,11 +92,16 @@ export function usePlanningAssignments(
     }
   }, []);
 
+  // Sliding window: prefetch adjacent weeks immediately on every navigation step
   useEffect(() => {
-    void loadActiveWeek(weekStart);
     void prefetchWeek(adjacentWeek(weekStart, -7));
     void prefetchWeek(adjacentWeek(weekStart, 7));
-  }, [weekStart, loadActiveWeek, prefetchWeek]);
+  }, [weekStart, prefetchWeek]);
+
+  // Active load: debounced so skipped weeks during rapid navigation are never fetched
+  useEffect(() => {
+    void loadActiveWeek(debouncedWeekStart);
+  }, [debouncedWeekStart, loadActiveWeek]);
 
   const reloadAssignments = useCallback(() => {
     cache.current = {};
