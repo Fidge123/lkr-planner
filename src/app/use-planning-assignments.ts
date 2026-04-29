@@ -23,6 +23,7 @@ export function usePlanningAssignments(
   weekStart: string,
 ): PlanningAssignmentsState {
   const cache = useRef<Record<string, WeekData>>({});
+  const requestIdRef = useRef(0);
   const [eventsByEmployee, setEventsByEmployee] = useState<EmployeeEvents>({});
   const [errorsByEmployee, setErrorsByEmployee] = useState<EmployeeErrors>({});
   const [isLoading, setIsLoading] = useState(true);
@@ -33,6 +34,8 @@ export function usePlanningAssignments(
     if (invalidate) {
       delete cache.current[ws];
     }
+
+    const id = ++requestIdRef.current;
 
     const cached = cache.current[ws];
     if (cached) {
@@ -46,6 +49,7 @@ export function usePlanningAssignments(
     setIsLoading(true);
     try {
       const result = await commands.loadWeekEvents(ws);
+      if (id !== requestIdRef.current) return;
       if (result.status === "error") {
         setErrorMessage(result.error);
         setEventsByEmployee({});
@@ -58,6 +62,7 @@ export function usePlanningAssignments(
       setErrorsByEmployee(data.errorsByEmployee);
       setErrorMessage(null);
     } catch (error) {
+      if (id !== requestIdRef.current) return;
       setErrorMessage(
         error instanceof Error
           ? error.message
@@ -66,7 +71,9 @@ export function usePlanningAssignments(
       setEventsByEmployee({});
       setErrorsByEmployee({});
     } finally {
-      setIsLoading(false);
+      if (id === requestIdRef.current) {
+        setIsLoading(false);
+      }
     }
   }, []);
 
