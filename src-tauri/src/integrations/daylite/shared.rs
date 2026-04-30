@@ -58,7 +58,7 @@ pub struct DayliteRefreshTokenRequest {
     pub refresh_token: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct DayliteSearchInput {
     pub search_term: String,

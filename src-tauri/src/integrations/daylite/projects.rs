@@ -826,27 +826,12 @@ mod tests {
     }
 
     #[test]
-    fn timeout_error_has_correct_german_message() {
-        let error = DayliteApiError {
-            code: DayliteApiErrorCode::Timeout,
-            http_status: None,
-            user_message: "Zeitüberschreitung bei der Daylite-Anfrage".to_string(),
-            technical_message: "request timed out".to_string(),
-        };
-        assert_eq!(
-            error.user_message,
-            "Zeitüberschreitung bei der Daylite-Anfrage"
-        );
-        assert_eq!(error.code, DayliteApiErrorCode::Timeout);
-    }
-
-    #[test]
     fn timeout_error_propagates_from_transport() {
         tauri::async_runtime::block_on(async {
             let transport = MockTransport::new(vec![Err(DayliteApiError {
                 code: DayliteApiErrorCode::Timeout,
                 http_status: None,
-                user_message: "Zeitüberschreitung bei der Daylite-Anfrage".to_string(),
+                user_message: "Zeitüberschreitung bei der Daylite-Anfrage.".to_string(),
                 technical_message: "request timed out".to_string(),
             })]);
             let client = DayliteApiClient::with_transport(Arc::new(transport));
@@ -866,13 +851,12 @@ mod tests {
             )
             .await;
 
-            assert!(matches!(
-                result,
-                Err(DayliteApiError {
-                    code: DayliteApiErrorCode::Timeout,
-                    ..
-                })
-            ));
+            let err = result.expect_err("timeout from transport should propagate as error");
+            assert_eq!(err.code, DayliteApiErrorCode::Timeout);
+            assert_eq!(
+                err.user_message,
+                "Zeitüberschreitung bei der Daylite-Anfrage."
+            );
         });
     }
 

@@ -244,7 +244,7 @@ impl DayliteHttpTransport for ReqwestTransport {
                     DayliteApiError {
                         code: DayliteApiErrorCode::Timeout,
                         http_status: None,
-                        user_message: "Zeitüberschreitung bei der Daylite-Anfrage".to_string(),
+                        user_message: "Zeitüberschreitung bei der Daylite-Anfrage.".to_string(),
                         technical_message: format!(
                             "Zeitüberschreitung bei {}: {error}",
                             request.path
