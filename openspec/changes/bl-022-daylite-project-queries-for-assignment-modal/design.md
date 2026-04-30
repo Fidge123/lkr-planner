@@ -20,11 +20,17 @@ The assignment modal requires Daylite project search with status filtering, dete
 ## Decisions
 
 ### Search Implementation
-**Decision**: Two sequential API calls per status value, results merged in Rust
-- The Daylite `_search` API only supports single-value operators for scalar fields (`equal`, `not_equal`, `contains`, etc.) — there is no `in` operator for `status`
-- Multi-value operators (`any`/`not_any`) exist only for relational fields (contacts, groups, tasks)
-- To filter by `new_status` and `in_progress`, make one call per status and merge results before sorting and limiting
-- Rust handles deduplication, numeric sort, and limit after merge
+**Decision**: Single API call with array body for OR status conditions
+- The Daylite `_search` API supports array request bodies: objects in an array are joined disjunctively (OR), while keys within a single object are joined conjunctively (AND)
+- To filter by `new_status` OR `in_progress`, send a single request with an array body:
+  ```json
+  [
+    { "name": { "contains": "..." }, "status": { "equal": "new_status" } },
+    { "name": { "contains": "..." }, "status": { "equal": "in_progress" } }
+  ]
+  ```
+- When no status filter is provided, send a plain object body — backwards-compatible with existing callers
+- No merging or deduplication needed; the API handles the OR logic
 
 ### Result Determinism
 **Decision**: Numeric sort by project ID in Rust before applying limit
@@ -52,9 +58,6 @@ The assignment modal requires Daylite project search with status filtering, dete
 - Backwards-compatible: existing callers that pass no statuses continue to receive all statuses
 
 ## Risks / Trade-offs
-
-- **Risk**: Two API calls per search increases latency
-  - **Mitigation**: Calls are sequential but both hit limit=5 server-side; total data is small; 5s timeout applies per call
 
 - **Risk**: Slow search response affecting modal UX
   - **Mitigation**: 5s timeout; German error shown in modal

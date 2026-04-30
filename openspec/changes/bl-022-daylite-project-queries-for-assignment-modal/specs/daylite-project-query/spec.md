@@ -8,7 +8,7 @@ The system SHALL filter projects by status in the Daylite API search body.
 - **AND** query is at least 1 character
 - **THEN** the service returns projects matching the query by name
 - **AND** only projects with status `new_status` or `in_progress` are included
-- **AND** status filter is applied server-side in the Daylite search body
+- **AND** status filter is applied server-side using a single request with array body (OR logic)
 - **AND** results are limited to 5 items
 
 #### Scenario: Search returns deterministic results

@@ -7,10 +7,10 @@
 
 ## 2. Status Filter in Search (Rust, TDD)
 
-- [ ] 2.1 Write failing test: search with status filter sends status in request body
+- [ ] 2.1 Write failing test: search with multiple statuses sends array body with one OR-clause per status
 - [ ] 2.2 Add `statuses: Option<Vec<String>>` field to `DayliteSearchInput`
-- [ ] 2.3 Update `search_projects_core` to include status filter in Daylite search body
-- [ ] 2.4 Write failing test: search without status filter is backwards-compatible (no status in body)
+- [ ] 2.3 Update `search_projects_core` to build array body when statuses provided, plain object body otherwise
+- [ ] 2.4 Write failing test: search without status filter sends plain object body (backwards-compatible)
 - [ ] 2.5 Regenerate TypeScript bindings for updated `DayliteSearchInput`
 
 ## 3. Deterministic Ordering (Rust, TDD)
