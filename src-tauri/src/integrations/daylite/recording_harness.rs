@@ -110,6 +110,7 @@ fn record_daylite_cassettes_from_live_api() {
             &DayliteSearchInput {
                 search_term: config.project_search_term.clone(),
                 limit: Some(5),
+                statuses: None,
             },
         )
         .await

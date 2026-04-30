@@ -135,6 +135,22 @@ pub(super) async fn search_projects_core(
     ),
     DayliteApiError,
 > {
+    let body = match &input.statuses {
+        Some(statuses) if !statuses.is_empty() => {
+            let clauses: Vec<serde_json::Value> = statuses
+                .iter()
+                .map(|s| {
+                    json!({
+                        "name": { "contains": input.search_term },
+                        "status": { "equal": s }
+                    })
+                })
+                .collect();
+            json!(clauses)
+        }
+        _ => json!({ "name": { "contains": input.search_term } }),
+    };
+
     let (search_result, token_state) =
         send_authenticated_json::<DayliteSearchResult<DayliteProjectSummary>>(
             client,
@@ -142,25 +158,39 @@ pub(super) async fn search_projects_core(
             DayliteHttpMethod::Post,
             "/projects/_search",
             build_limit_query(input.limit),
-            Some(json!({
-                "name": {
-                    "contains": input.search_term
-                }
-            })),
+            Some(body),
         )
         .await?;
 
+    let mut results: Vec<DayliteProjectSummary> = search_result
+        .results
+        .into_iter()
+        .map(normalize_project_summary)
+        .collect();
+
+    results.sort_by_key(|p| extract_numeric_id(&p.reference));
+
+    if let Some(limit) = input.limit {
+        results.truncate(limit as usize);
+    }
+
     Ok((
         DayliteSearchResult {
-            results: search_result
-                .results
-                .into_iter()
-                .map(normalize_project_summary)
-                .collect(),
+            results,
             next: normalize_optional_string(search_result.next),
         },
         token_state,
     ))
+}
+
+/// Extracts the trailing integer from a Daylite reference path like `/v1/projects/3001`.
+/// Returns `u64::MAX` for references that don't end with a numeric ID so they sort last.
+fn extract_numeric_id(reference: &str) -> u64 {
+    reference
+        .rsplit('/')
+        .next()
+        .and_then(|s| s.parse::<u64>().ok())
+        .unwrap_or(u64::MAX)
 }
 
 fn map_daylite_project_summary(project: DayliteProjectSummary) -> PlanningProjectRecord {
@@ -325,7 +355,7 @@ mod tests {
         DayliteHttpTransport,
     };
     use crate::integrations::daylite::shared::{
-        DayliteApiError, DayliteSearchInput, DayliteTokenState,
+        DayliteApiError, DayliteApiErrorCode, DayliteSearchInput, DayliteTokenState,
     };
     use std::collections::VecDeque;
     use std::sync::{Arc, Mutex};
@@ -431,6 +461,7 @@ mod tests {
                 &DayliteSearchInput {
                     search_term: "Nord".to_string(),
                     limit: Some(5),
+                    statuses: None,
                 },
             )
             .await
@@ -459,6 +490,91 @@ mod tests {
             let body = requests[0].body.as_ref().expect("should have body");
             assert_eq!(body["name"]["contains"], "Nord");
         });
+    }
+
+    #[test]
+    fn search_results_are_sorted_by_numeric_id_ascending() {
+        tauri::async_runtime::block_on(async {
+            // IDs: 100, 20, 3 — string sort would give 100 < 20 < 3, numeric gives 3 < 20 < 100
+            let transport = MockTransport::new(vec![Ok(mock_response(
+                200,
+                r#"{"results":[
+                    {"self":"/v1/projects/100","name":"Hundert"},
+                    {"self":"/v1/projects/20","name":"Zwanzig"},
+                    {"self":"/v1/projects/3","name":"Drei"}
+                ],"next":null}"#,
+            ))]);
+            let client = DayliteApiClient::with_transport(Arc::new(transport));
+
+            let (result, _) = search_projects_core(
+                &client,
+                DayliteTokenState {
+                    access_token: "at".to_string(),
+                    refresh_token: "rt".to_string(),
+                    access_token_expires_at_ms: Some(u64::MAX),
+                },
+                &DayliteSearchInput {
+                    search_term: "".to_string(),
+                    limit: None,
+                    statuses: None,
+                },
+            )
+            .await
+            .expect("search should succeed");
+
+            assert_eq!(result.results[0].reference, "/v1/projects/3");
+            assert_eq!(result.results[1].reference, "/v1/projects/20");
+            assert_eq!(result.results[2].reference, "/v1/projects/100");
+        });
+    }
+
+    #[test]
+    fn search_limit_is_applied_after_sort() {
+        tauri::async_runtime::block_on(async {
+            let transport = MockTransport::new(vec![Ok(mock_response(
+                200,
+                r#"{"results":[
+                    {"self":"/v1/projects/100","name":"Hundert"},
+                    {"self":"/v1/projects/20","name":"Zwanzig"},
+                    {"self":"/v1/projects/3","name":"Drei"}
+                ],"next":null}"#,
+            ))]);
+            let client = DayliteApiClient::with_transport(Arc::new(transport));
+
+            let (result, _) = search_projects_core(
+                &client,
+                DayliteTokenState {
+                    access_token: "at".to_string(),
+                    refresh_token: "rt".to_string(),
+                    access_token_expires_at_ms: Some(u64::MAX),
+                },
+                &DayliteSearchInput {
+                    search_term: "".to_string(),
+                    limit: Some(2),
+                    statuses: None,
+                },
+            )
+            .await
+            .expect("search should succeed");
+
+            assert_eq!(result.results.len(), 2);
+            // After sort: 3, 20, 100 — limit 2 keeps the two lowest IDs
+            assert_eq!(result.results[0].reference, "/v1/projects/3");
+            assert_eq!(result.results[1].reference, "/v1/projects/20");
+        });
+    }
+
+    #[test]
+    fn extract_numeric_id_handles_standard_reference() {
+        assert_eq!(super::extract_numeric_id("/v1/projects/3001"), 3001);
+        assert_eq!(super::extract_numeric_id("/v1/projects/100"), 100);
+        assert_eq!(super::extract_numeric_id("/v1/projects/20"), 20);
+    }
+
+    #[test]
+    fn extract_numeric_id_returns_max_for_non_numeric() {
+        assert_eq!(super::extract_numeric_id("/v1/projects/abc"), u64::MAX);
+        assert_eq!(super::extract_numeric_id(""), u64::MAX);
     }
 
     #[test]
@@ -535,6 +651,7 @@ mod tests {
                 &DayliteSearchInput {
                     search_term: "Nord".to_string(),
                     limit: Some(5),
+                    statuses: None,
                 },
             )
             .await
@@ -597,6 +714,166 @@ mod tests {
                     .expect("mock should contain enough responses")
             })
         }
+    }
+
+    #[test]
+    fn search_with_statuses_sends_array_body_with_or_clauses() {
+        tauri::async_runtime::block_on(async {
+            let transport = MockTransport::new(vec![Ok(mock_response(
+                200,
+                r#"{"results":[],"next":null}"#,
+            ))]);
+            let client = DayliteApiClient::with_transport(Arc::new(transport.clone()));
+
+            search_projects_core(
+                &client,
+                DayliteTokenState {
+                    access_token: "at".to_string(),
+                    refresh_token: "rt".to_string(),
+                    access_token_expires_at_ms: Some(u64::MAX),
+                },
+                &DayliteSearchInput {
+                    search_term: "Nord".to_string(),
+                    limit: Some(5),
+                    statuses: Some(vec!["new_status".to_string(), "in_progress".to_string()]),
+                },
+            )
+            .await
+            .expect("search should succeed");
+
+            let requests = transport.requests();
+            assert_eq!(requests.len(), 1);
+            let body = requests[0].body.as_ref().expect("body should be present");
+            assert!(body.is_array(), "body should be an array for OR conditions");
+            let items = body.as_array().unwrap();
+            assert_eq!(items.len(), 2);
+            assert_eq!(items[0]["name"]["contains"], "Nord");
+            assert_eq!(items[0]["status"]["equal"], "new_status");
+            assert_eq!(items[1]["name"]["contains"], "Nord");
+            assert_eq!(items[1]["status"]["equal"], "in_progress");
+        });
+    }
+
+    #[test]
+    fn search_without_statuses_sends_plain_object_body() {
+        tauri::async_runtime::block_on(async {
+            let transport = MockTransport::new(vec![Ok(mock_response(
+                200,
+                r#"{"results":[],"next":null}"#,
+            ))]);
+            let client = DayliteApiClient::with_transport(Arc::new(transport.clone()));
+
+            search_projects_core(
+                &client,
+                DayliteTokenState {
+                    access_token: "at".to_string(),
+                    refresh_token: "rt".to_string(),
+                    access_token_expires_at_ms: Some(u64::MAX),
+                },
+                &DayliteSearchInput {
+                    search_term: "Nord".to_string(),
+                    limit: Some(5),
+                    statuses: None,
+                },
+            )
+            .await
+            .expect("search should succeed");
+
+            let requests = transport.requests();
+            assert_eq!(requests.len(), 1);
+            let body = requests[0].body.as_ref().expect("body should be present");
+            assert!(
+                body.is_object(),
+                "body should be a plain object when no statuses"
+            );
+            assert_eq!(body["name"]["contains"], "Nord");
+            assert!(
+                body.get("status").is_none(),
+                "no status key when statuses is None"
+            );
+        });
+    }
+
+    #[test]
+    fn malformed_response_returns_invalid_response_with_german_message() {
+        tauri::async_runtime::block_on(async {
+            let transport = MockTransport::new(vec![Ok(mock_response(200, "not valid json {{{"))]);
+            let client = DayliteApiClient::with_transport(Arc::new(transport));
+
+            let result = search_projects_core(
+                &client,
+                DayliteTokenState {
+                    access_token: "at".to_string(),
+                    refresh_token: "rt".to_string(),
+                    access_token_expires_at_ms: Some(u64::MAX),
+                },
+                &DayliteSearchInput {
+                    search_term: "Nord".to_string(),
+                    limit: None,
+                    statuses: None,
+                },
+            )
+            .await;
+
+            let err = result.expect_err("malformed response should return error");
+            assert_eq!(err.code, DayliteApiErrorCode::InvalidResponse);
+            assert!(
+                err.user_message.contains("Daylite"),
+                "error message should mention Daylite: {}",
+                err.user_message
+            );
+        });
+    }
+
+    #[test]
+    fn timeout_error_has_correct_german_message() {
+        let error = DayliteApiError {
+            code: DayliteApiErrorCode::Timeout,
+            http_status: None,
+            user_message: "Zeitüberschreitung bei der Daylite-Anfrage".to_string(),
+            technical_message: "request timed out".to_string(),
+        };
+        assert_eq!(
+            error.user_message,
+            "Zeitüberschreitung bei der Daylite-Anfrage"
+        );
+        assert_eq!(error.code, DayliteApiErrorCode::Timeout);
+    }
+
+    #[test]
+    fn timeout_error_propagates_from_transport() {
+        tauri::async_runtime::block_on(async {
+            let transport = MockTransport::new(vec![Err(DayliteApiError {
+                code: DayliteApiErrorCode::Timeout,
+                http_status: None,
+                user_message: "Zeitüberschreitung bei der Daylite-Anfrage".to_string(),
+                technical_message: "request timed out".to_string(),
+            })]);
+            let client = DayliteApiClient::with_transport(Arc::new(transport));
+
+            let result = search_projects_core(
+                &client,
+                DayliteTokenState {
+                    access_token: "at".to_string(),
+                    refresh_token: "rt".to_string(),
+                    access_token_expires_at_ms: Some(u64::MAX),
+                },
+                &DayliteSearchInput {
+                    search_term: "Nord".to_string(),
+                    limit: None,
+                    statuses: None,
+                },
+            )
+            .await;
+
+            assert!(matches!(
+                result,
+                Err(DayliteApiError {
+                    code: DayliteApiErrorCode::Timeout,
+                    ..
+                })
+            ));
+        });
     }
 
     fn mock_response(status: u16, body: &str) -> DayliteHttpResponse {

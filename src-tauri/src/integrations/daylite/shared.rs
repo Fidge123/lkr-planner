@@ -48,6 +48,7 @@ pub enum DayliteApiErrorCode {
     RequestFailed,
     InvalidResponse,
     TokenRefreshFailed,
+    Timeout,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
@@ -57,11 +58,13 @@ pub struct DayliteRefreshTokenRequest {
     pub refresh_token: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct DayliteSearchInput {
     pub search_term: String,
     pub limit: Option<u16>,
+    #[serde(default)]
+    pub statuses: Option<Vec<String>>,
 }
 
 pub(super) fn build_limit_query(limit: Option<u16>) -> Vec<(String, String)> {

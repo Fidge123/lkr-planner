@@ -78,7 +78,7 @@ export type DayliteApiError = {
 	technicalMessage: string,
 };
 
-export type DayliteApiErrorCode = "UNAUTHORIZED" | "RATE_LIMITED" | "SERVER_ERROR" | "MISSING_TOKEN" | "INVALID_CONFIGURATION" | "REQUEST_FAILED" | "INVALID_RESPONSE" | "TOKEN_REFRESH_FAILED";
+export type DayliteApiErrorCode = "UNAUTHORIZED" | "RATE_LIMITED" | "SERVER_ERROR" | "MISSING_TOKEN" | "INVALID_CONFIGURATION" | "REQUEST_FAILED" | "INVALID_RESPONSE" | "TOKEN_REFRESH_FAILED" | "TIMEOUT";
 
 export type DayliteCache = {
 	lastSyncedAt: string | null,
@@ -133,6 +133,7 @@ export type DayliteRefreshTokenRequest = {
 export type DayliteSearchInput = {
 	searchTerm: string,
 	limit: number | null,
+	statuses: Array<string> | null,
 };
 
 export type DayliteSearchResult<T> = {
