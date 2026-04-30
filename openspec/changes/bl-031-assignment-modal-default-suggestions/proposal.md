@@ -27,4 +27,4 @@ The assignment modal needs to show default suggestions when opened. This helps u
 
 ## Note
 
-Overdue project query (previously scoped to BL-022) is implemented here, as it is only consumed by the default suggestions feature. Uses Daylite category filter `{"category": {"equal": "Überfällig"}}` combined with active status filter.
+Overdue project query (previously scoped to BL-022) is implemented here, as it is only consumed by the default suggestions feature. Uses a single Daylite call with `{"category": {"equal": "Überfällig"}}` — no separate status filter needed, as the Daylite API has no multi-value operator for scalar fields and projects in this category are by definition active.

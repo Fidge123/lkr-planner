@@ -11,7 +11,7 @@ The system SHALL show deterministic default suggestions when assignment modal op
 #### Scenario: Show overdue projects
 - **WHEN** modal opens
 - **THEN** show up to 4 overdue projects after the recent project
-- **AND** overdue projects are those with Daylite category `"Überfällig"` and status `new_status` or `in_progress`
+- **AND** overdue projects are those with Daylite category `"Überfällig"`
 - **AND** total suggestions capped at 5
 
 #### Scenario: Empty state handling

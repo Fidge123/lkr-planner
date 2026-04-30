@@ -17,9 +17,9 @@ The assignment modal needs default suggestions to help users quickly select proj
 ## Decisions
 
 ### Overdue Project Query
-**Decision**: Query Daylite by category `"Überfällig"` for overdue projects
-- Use `{"category": {"equal": "Überfällig"}}` in Daylite search body
-- Also apply active status filter (`new_status` / `in_progress`) via BL-022 `statuses` parameter
+**Decision**: Query Daylite by category `"Überfällig"` only — no additional status filter
+- Use `{"category": {"equal": "Überfällig"}}` in Daylite search body as a single call
+- No separate status filter: the Daylite API has no `in` operator for scalar fields, so filtering two statuses requires two calls; projects in the "Überfällig" category are by definition active (done/abandoned projects are not marked overdue)
 - This is a new Tauri command added in this change, building on BL-022 infrastructure
 - Sort by numeric project ID ascending (same as BL-022), limit to 5
 

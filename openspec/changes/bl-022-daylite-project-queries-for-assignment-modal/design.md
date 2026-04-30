@@ -20,11 +20,11 @@ The assignment modal requires Daylite project search with status filtering, dete
 ## Decisions
 
 ### Search Implementation
-**Decision**: Server-side status filtering via Daylite API search body
-- Contacts use `{"category": {"equal": "Monteur"}}` — projects must use the same pattern
-- Current project search sends no status filter and returns all statuses — this is the gap to fix
-- For two statuses (`new_status`, `in_progress`): if the API supports an `"in"` operator, use a single call; otherwise make two `{"equal": "..."}` calls and merge results
-- Rust handles deduplication and applies limit after merge
+**Decision**: Two sequential API calls per status value, results merged in Rust
+- The Daylite `_search` API only supports single-value operators for scalar fields (`equal`, `not_equal`, `contains`, etc.) — there is no `in` operator for `status`
+- Multi-value operators (`any`/`not_any`) exist only for relational fields (contacts, groups, tasks)
+- To filter by `new_status` and `in_progress`, make one call per status and merge results before sorting and limiting
+- Rust handles deduplication, numeric sort, and limit after merge
 
 ### Result Determinism
 **Decision**: Numeric sort by project ID in Rust before applying limit
@@ -53,8 +53,8 @@ The assignment modal requires Daylite project search with status filtering, dete
 
 ## Risks / Trade-offs
 
-- **Risk**: Daylite API may not support multi-value status filter in a single call
-  - **Mitigation**: Fall back to two sequential calls merged in Rust; document in code
+- **Risk**: Two API calls per search increases latency
+  - **Mitigation**: Calls are sequential but both hit limit=5 server-side; total data is small; 5s timeout applies per call
 
 - **Risk**: Slow search response affecting modal UX
   - **Mitigation**: 5s timeout; German error shown in modal
