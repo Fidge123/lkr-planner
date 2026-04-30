@@ -1,9 +1,15 @@
-## 1. Suggestion Logic
+## 1. Overdue Project Query (Rust, TDD)
 
-- [ ] 1.1 Implement query for most recently assigned project
-- [ ] 1.2 Implement query for overdue projects (via BL-022)
-- [ ] 1.3 Combine results with recent project first
-- [ ] 1.4 Cap total suggestions at 5
+- [ ] 1.1 Write failing test: overdue query sends `{"category": {"equal": "Überfällig"}}` and active status filter in body
+- [ ] 1.2 Implement `daylite_query_overdue_projects` Tauri command using BL-022 `DayliteSearchInput` infrastructure
+- [ ] 1.3 Write failing test: overdue results are sorted by numeric ID and limited to 5
+- [ ] 1.4 Add VCR cassette for overdue project query
+
+## 2. Suggestion Logic
+
+- [ ] 2.1 Implement query for most recently assigned project
+- [ ] 2.2 Combine overdue results with recent project first
+- [ ] 2.3 Cap total suggestions at 5
 
 ## 2. UI Implementation
 
