@@ -11,22 +11,22 @@
 - [ ] 2.2 Combine overdue results with recent project first
 - [ ] 2.3 Cap total suggestions at 5
 
-## 2. UI Implementation
+## 3. UI Implementation
 
-- [ ] 2.1 Add suggestions section to assignment modal
-- [ ] 2.2 Render suggestions as clickable items
-- [ ] 2.3 Implement click handler to select suggestion
-- [ ] 2.4 Show German empty-state message when no suggestions
+- [ ] 3.1 Add suggestions section to assignment modal
+- [ ] 3.2 Render suggestions as clickable items
+- [ ] 3.3 Implement click handler to select suggestion
+- [ ] 3.4 Show German empty-state message when no suggestions
 
-## 3. Fallback Handling
+## 4. Fallback Handling
 
-- [ ] 3.1 Handle case with no recent assignment
-- [ ] 3.2 Handle case with no overdue projects
-- [ ] 3.3 Handle case with neither available
+- [ ] 4.1 Handle case with no recent assignment
+- [ ] 4.2 Handle case with no overdue projects
+- [ ] 4.3 Handle case with neither available
 
-## 4. Testing
+## 5. Testing
 
-- [ ] 4.1 Write UI tests for suggestion ordering
-- [ ] 4.2 Write UI tests for suggestion count limit (max 5)
-- [ ] 4.3 Write service tests for fallback behavior
-- [ ] 4.4 Write tests for empty state message display
+- [ ] 5.1 Write UI tests for suggestion ordering
+- [ ] 5.2 Write UI tests for suggestion count limit (max 5)
+- [ ] 5.3 Write service tests for fallback behavior
+- [ ] 5.4 Write tests for empty state message display
