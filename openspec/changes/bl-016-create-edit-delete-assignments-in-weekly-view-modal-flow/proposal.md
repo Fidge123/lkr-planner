@@ -20,5 +20,12 @@ Users need a modal interface to create, edit, and delete assignments in the week
 
 ## Impact
 
-- Code: New React modal component + Tauri commands
-- Dependencies: BL-015 for persistent assignment state
+- Code: New React modal component + Tauri commands (CalDAV write operations)
+- Dependencies:
+  - BL-015 for persistent assignment state
+  - BL-022 for Daylite project query service (project picker in modal)
+
+## Out of Scope
+
+- Live text filter with debounce and keyboard navigation → BL-032
+- Deterministic same-day slot redistribution → BL-034 (consumed by BL-017 iCal sync)

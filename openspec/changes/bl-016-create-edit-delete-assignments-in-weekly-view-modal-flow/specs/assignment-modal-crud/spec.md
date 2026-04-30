@@ -46,9 +46,26 @@ The system SHALL handle unsaved changes properly.
 - **THEN** confirmation dialog appears
 - **AND** user can save, discard, or cancel
 
-### Requirement: Immediate UI update
-The system SHALL update the weekly grid immediately after save.
+### Requirement: Grid reload after save
+The system SHALL reload the weekly grid after a successful save or delete.
 
-#### Scenario: Grid updates after save
-- **WHEN** assignment is saved
-- **THEN** weekly grid updates without page reload
+#### Scenario: Grid reloads after save
+- **WHEN** assignment is saved successfully
+- **THEN** weekly grid reloads from backend without full page reload
+- **AND** the new or updated assignment is visible
+
+#### Scenario: Grid reloads after delete
+- **WHEN** assignment is deleted successfully
+- **THEN** weekly grid reloads from backend without full page reload
+- **AND** the cell is shown as empty
+
+### Requirement: Project picker
+The system SHALL provide a project picker in the modal for selecting a project.
+
+#### Scenario: Picker shows active projects only
+- **WHEN** assignment modal is open
+- **THEN** project picker lists only projects with status `new_status` or `in_progress`
+
+#### Scenario: Picker is pre-populated in edit mode
+- **WHEN** modal opens in edit mode
+- **THEN** the currently assigned project is pre-selected in the picker

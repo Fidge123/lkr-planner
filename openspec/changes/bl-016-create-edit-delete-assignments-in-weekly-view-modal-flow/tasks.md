@@ -1,31 +1,45 @@
-## 1. Modal Component
+## 1. Resource URL Capture (Rust)
 
-- [ ] 1.1 Create AssignmentModal React component
-- [ ] 1.2 Implement cell click handler to open modal
-- [ ] 1.3 Add modal close functionality
-- [ ] 1.4 Handle modal open/close state
+- [ ] 1.1 Write failing test: `parse_caldav_report` returns href alongside each event
+- [ ] 1.2 Add href field to `RawVEvent` and `CalendarCellEvent` structs
+- [ ] 1.3 Update `parse_caldav_report` to extract `d:href` from each REPORT item
+- [ ] 1.4 Regenerate TypeScript bindings to include href in `CalendarCellEvent`
 
-## 2. Create/Edit/Delete Operations
+## 2. CalDAV Write Commands (Rust, TDD)
 
-- [ ] 2.1 Implement create assignment form
-- [ ] 2.2 Implement edit mode with pre-populated data
-- [ ] 2.3 Implement delete with confirmation
-- [ ] 2.4 Connect form to Tauri backend commands
+- [ ] 2.1 Write failing unit test for iCal VCALENDAR payload builder (08:00–16:00 window)
+- [ ] 2.2 Implement iCal payload builder
+- [ ] 2.3 Write failing VCR test for `create_assignment` command
+- [ ] 2.4 Implement `create_assignment` Tauri command (CalDAV PUT to `{calendar_url}/{uid}.ics`)
+- [ ] 2.5 Write failing VCR test for `update_assignment` command
+- [ ] 2.6 Implement `update_assignment` Tauri command (CalDAV PUT to stored href)
+- [ ] 2.7 Write failing VCR test for `delete_assignment` command
+- [ ] 2.8 Implement `delete_assignment` Tauri command (CalDAV DELETE to stored href)
 
-## 3. UI Integration
+## 3. Project Picker Service (Frontend, TDD)
 
-- [ ] 3.1 Add optimistic UI update after save
-- [ ] 3.2 Handle save errors with German messages
-- [ ] 3.3 Update weekly grid immediately on save
+- [ ] 3.1 Write failing service test: returns only `new_status` and `in_progress` projects via BL-022
+- [ ] 3.2 Implement project picker service using BL-022 `daylite-project-query`
 
-## 4. Edge Cases
+## 4. AssignmentModal Component (Frontend, TDD)
 
-- [ ] 4.1 Handle unsaved changes confirmation dialog
-- [ ] 4.2 Handle keyboard events (Escape to close)
-- [ ] 4.3 Handle click outside modal to close
+- [ ] 4.1 Write failing render test: modal in create mode shows empty project picker and save button
+- [ ] 4.2 Write failing render test: modal in edit mode shows pre-populated project and delete button
+- [ ] 4.3 Write failing render test: delete confirmation dialog renders correctly
+- [ ] 4.4 Implement `AssignmentModal` component (DaisyUI modal, create/edit/delete flows)
+- [ ] 4.5 Connect modal save/delete actions to Tauri commands
 
-## 5. Testing
+## 5. Cell Wiring and Grid Integration (Frontend, TDD)
 
-- [ ] 5.1 UI tests for modal open/close from cell interactions
-- [ ] 5.2 UI tests for create/edit/delete actions and persistence confirmation
-- [ ] 5.3 Regression tests for keyboard/cancel/unsaved-change handling
+- [ ] 5.1 Write failing render test: empty cell renders a clickable add affordance
+- [ ] 5.2 Write failing render test: assigned cell renders as clickable with assignment data
+- [ ] 5.3 Wire cell click handlers to open modal (empty → create mode, assigned → edit mode)
+- [ ] 5.4 Implement reload after save via `reloadAssignments()`
+- [ ] 5.5 Show German error message in modal on save/delete failure
+
+## 6. Edge Cases (TDD)
+
+- [ ] 6.1 Write failing test: unsaved changes dialog renders when closing modal with dirty state
+- [ ] 6.2 Implement unsaved changes confirmation dialog
+- [ ] 6.3 Escape key closes modal (triggers unsaved changes dialog if dirty)
+- [ ] 6.4 Click outside modal closes modal (triggers unsaved changes dialog if dirty)
