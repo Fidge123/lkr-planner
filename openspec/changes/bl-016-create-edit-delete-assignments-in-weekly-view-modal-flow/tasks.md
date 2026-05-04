@@ -31,15 +31,15 @@
 
 ## 5. Cell Wiring and Grid Integration (Frontend, TDD)
 
-- [ ] 5.1 Write failing render test: empty cell renders a clickable add affordance
-- [ ] 5.2 Write failing render test: assigned cell renders as clickable with assignment data
-- [ ] 5.3 Wire cell click handlers to open modal (empty → create mode, assigned → edit mode)
-- [ ] 5.4 Implement reload after save via `reloadAssignments()`
-- [ ] 5.5 Show German error message in modal on save/delete failure
+- [x] 5.1 Write failing render test: empty cell renders a clickable add affordance
+- [x] 5.2 Write failing render test: assigned cell renders as clickable with assignment data
+- [x] 5.3 Wire cell click handlers to open modal (empty → create mode, assigned → edit mode)
+- [x] 5.4 Implement reload after save via `reloadAssignments()`
+- [x] 5.5 Show German error message in modal on save/delete failure
 
 ## 6. Edge Cases (TDD)
 
-- [ ] 6.1 Write failing test: unsaved changes dialog renders when closing modal with dirty state
-- [ ] 6.2 Implement unsaved changes confirmation dialog
-- [ ] 6.3 Escape key closes modal (triggers unsaved changes dialog if dirty)
-- [ ] 6.4 Click outside modal closes modal (triggers unsaved changes dialog if dirty)
+- [x] 6.1 Write failing test: unsaved changes dialog renders when closing modal with dirty state
+- [x] 6.2 Implement unsaved changes confirmation dialog
+- [x] 6.3 Escape key closes modal (triggers unsaved changes dialog if dirty)
+- [x] 6.4 Click outside modal closes modal (triggers unsaved changes dialog if dirty)

@@ -64,6 +64,21 @@ describe("AssignmentModal", () => {
     expect(html).toContain("Löschen");
   });
 
+  it("unsaved changes dialog renders when closing modal with dirty state", () => {
+    const html = renderToStaticMarkup(
+      <AssignmentModal
+        {...baseProps}
+        isOpen
+        assignment={null}
+        showUnsavedConfirm
+      />,
+    );
+
+    expect(html).toContain("Ungespeicherte Änderungen");
+    expect(html).toContain("Verwerfen");
+    expect(html).toContain("Weiterbearbeiten");
+  });
+
   it("delete confirmation dialog renders correctly", () => {
     const existingAssignment: CalendarCellEvent = {
       uid: "uid-2",

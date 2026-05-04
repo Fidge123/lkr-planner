@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   type CalendarCellEvent,
   commands,
@@ -14,6 +14,7 @@ export function AssignmentModal({
   onSave,
   onClose,
   showDeleteConfirm: initialShowDeleteConfirm = false,
+  showUnsavedConfirm: initialShowUnsavedConfirm = false,
 }: Props) {
   const isEditMode = assignment !== null;
 
@@ -24,17 +25,87 @@ export function AssignmentModal({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(
     initialShowDeleteConfirm,
   );
+  const [showUnsavedConfirm, setShowUnsavedConfirm] = useState(
+    initialShowUnsavedConfirm,
+  );
+  const [isDirty, setIsDirty] = useState(false);
+  const dialogRef = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
     if (!isOpen) return;
     setErrorMessage(null);
     setIsSaving(false);
     setShowDeleteConfirm(initialShowDeleteConfirm);
+    setShowUnsavedConfirm(initialShowUnsavedConfirm);
     setSelectedProjectRef("");
+    setIsDirty(false);
     void loadProjectsForAssignmentPicker().then(setProjects);
-  }, [isOpen, initialShowDeleteConfirm]);
+  }, [isOpen, initialShowDeleteConfirm, initialShowUnsavedConfirm]);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    const handleCancel = (e: Event) => {
+      e.preventDefault();
+      requestClose();
+    };
+    dialog.addEventListener("cancel", handleCancel);
+    return () => dialog.removeEventListener("cancel", handleCancel);
+  });
 
   if (!isOpen) return null;
+
+  const requestClose = () => {
+    if (isSaving) return;
+    if (isDirty) {
+      setShowUnsavedConfirm(true);
+      return;
+    }
+    onClose();
+  };
+
+  if (showUnsavedConfirm) {
+    return (
+      <dialog
+        className="modal modal-open"
+        open
+        aria-labelledby="assignment-unsaved-title"
+      >
+        <section className="modal-box max-w-sm">
+          <h2 id="assignment-unsaved-title" className="text-lg font-semibold">
+            Ungespeicherte Änderungen
+          </h2>
+          <p className="mt-3 text-sm">
+            Es gibt ungespeicherte Änderungen. Möchten Sie diese verwerfen?
+          </p>
+          <section className="modal-action">
+            <button
+              type="button"
+              className="btn btn-sm"
+              onClick={() => setShowUnsavedConfirm(false)}
+            >
+              Weiterbearbeiten
+            </button>
+            <button
+              type="button"
+              className="btn btn-sm btn-warning"
+              onClick={onClose}
+            >
+              Verwerfen
+            </button>
+          </section>
+        </section>
+        <button
+          type="button"
+          className="modal-backdrop"
+          onClick={() => setShowUnsavedConfirm(false)}
+          aria-label="Dialog schließen"
+        >
+          Schließen
+        </button>
+      </dialog>
+    );
+  }
 
   if (showDeleteConfirm) {
     return (
@@ -86,7 +157,7 @@ export function AssignmentModal({
         <button
           type="button"
           className="modal-backdrop"
-          onClick={onClose}
+          onClick={requestClose}
           aria-label="Dialog schließen"
         >
           Schließen
@@ -130,6 +201,7 @@ export function AssignmentModal({
 
   return (
     <dialog
+      ref={dialogRef}
       className="modal modal-open"
       open
       aria-labelledby="assignment-modal-title"
@@ -152,7 +224,10 @@ export function AssignmentModal({
               <select
                 className="select select-bordered w-full"
                 value={selectedProjectRef}
-                onChange={(e) => setSelectedProjectRef(e.target.value)}
+                onChange={(e) => {
+                  setSelectedProjectRef(e.target.value);
+                  setIsDirty(true);
+                }}
                 disabled={isSaving}
               >
                 <option value="">Projekt auswählen...</option>
@@ -180,7 +255,7 @@ export function AssignmentModal({
           <button
             type="button"
             className="btn btn-sm"
-            onClick={onClose}
+            onClick={requestClose}
             disabled={isSaving}
           >
             Abbrechen
@@ -198,7 +273,7 @@ export function AssignmentModal({
       <button
         type="button"
         className="modal-backdrop"
-        onClick={onClose}
+        onClick={requestClose}
         aria-label="Dialog schließen"
       >
         Schließen
@@ -215,4 +290,5 @@ interface Props {
   onSave: () => void;
   onClose: () => void;
   showDeleteConfirm?: boolean;
+  showUnsavedConfirm?: boolean;
 }
