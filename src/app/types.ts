@@ -11,6 +11,8 @@ export interface CellEvent {
   startTime: string | null;
   /** End time in HH:MM format. Null for all-day events. */
   endTime: string | null;
+  /** CalDAV resource URL needed for PUT/DELETE. Null for non-assignment events. */
+  href: string | null;
 }
 
 /** Maps a Daylite project status string to a Tailwind background class. */
@@ -48,5 +50,6 @@ export function toCellEvent(event: CalendarCellEvent): CellEvent {
     color,
     startTime: event.startTime,
     endTime: event.endTime,
+    href: event.href,
   };
 }

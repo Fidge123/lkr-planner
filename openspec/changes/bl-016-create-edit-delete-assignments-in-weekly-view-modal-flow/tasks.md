@@ -1,33 +1,33 @@
 ## 1. Resource URL Capture (Rust)
 
-- [ ] 1.1 Write failing test: `parse_caldav_report` returns href alongside each event
-- [ ] 1.2 Add href field to `RawVEvent` and `CalendarCellEvent` structs
-- [ ] 1.3 Update `parse_caldav_report` to extract `d:href` from each REPORT item
-- [ ] 1.4 Regenerate TypeScript bindings to include href in `CalendarCellEvent`
+- [x] 1.1 Write failing test: `parse_caldav_report` returns href alongside each event
+- [x] 1.2 Add href field to `RawVEvent` and `CalendarCellEvent` structs
+- [x] 1.3 Update `parse_caldav_report` to extract `d:href` from each REPORT item
+- [x] 1.4 Regenerate TypeScript bindings to include href in `CalendarCellEvent`
 
 ## 2. CalDAV Write Commands (Rust, TDD)
 
-- [ ] 2.1 Write failing unit test for iCal VCALENDAR payload builder (08:00–16:00 window)
-- [ ] 2.2 Implement iCal payload builder
-- [ ] 2.3 Write failing VCR test for `create_assignment` command
-- [ ] 2.4 Implement `create_assignment` Tauri command (CalDAV PUT to `{calendar_url}/{uid}.ics`)
-- [ ] 2.5 Write failing VCR test for `update_assignment` command
-- [ ] 2.6 Implement `update_assignment` Tauri command (CalDAV PUT to stored href)
-- [ ] 2.7 Write failing VCR test for `delete_assignment` command
-- [ ] 2.8 Implement `delete_assignment` Tauri command (CalDAV DELETE to stored href)
+- [x] 2.1 Write failing unit test for iCal VCALENDAR payload builder (08:00–16:00 window)
+- [x] 2.2 Implement iCal payload builder
+- [x] 2.3 Write failing VCR test for `create_assignment` command
+- [x] 2.4 Implement `create_assignment` Tauri command (CalDAV PUT to `{calendar_url}/{uid}.ics`)
+- [x] 2.5 Write failing VCR test for `update_assignment` command
+- [x] 2.6 Implement `update_assignment` Tauri command (CalDAV PUT to stored href)
+- [x] 2.7 Write failing VCR test for `delete_assignment` command
+- [x] 2.8 Implement `delete_assignment` Tauri command (CalDAV DELETE to stored href)
 
 ## 3. Project Picker Service (Frontend, TDD)
 
-- [ ] 3.1 Write failing service test: returns only `new_status` and `in_progress` projects via BL-022
-- [ ] 3.2 Implement project picker service using BL-022 `daylite-project-query`
+- [x] 3.1 Write failing service test: returns only `new_status` and `in_progress` projects via BL-022
+- [x] 3.2 Implement project picker service using BL-022 `daylite-project-query`
 
 ## 4. AssignmentModal Component (Frontend, TDD)
 
-- [ ] 4.1 Write failing render test: modal in create mode shows empty project picker and save button
-- [ ] 4.2 Write failing render test: modal in edit mode shows pre-populated project and delete button
-- [ ] 4.3 Write failing render test: delete confirmation dialog renders correctly
-- [ ] 4.4 Implement `AssignmentModal` component (DaisyUI modal, create/edit/delete flows)
-- [ ] 4.5 Connect modal save/delete actions to Tauri commands
+- [x] 4.1 Write failing render test: modal in create mode shows empty project picker and save button
+- [x] 4.2 Write failing render test: modal in edit mode shows pre-populated project and delete button
+- [x] 4.3 Write failing render test: delete confirmation dialog renders correctly
+- [x] 4.4 Implement `AssignmentModal` component (DaisyUI modal, create/edit/delete flows)
+- [x] 4.5 Connect modal save/delete actions to Tauri commands
 
 ## 5. Cell Wiring and Grid Integration (Frontend, TDD)
 

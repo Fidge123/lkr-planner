@@ -2209,6 +2209,7 @@ dependencies = [
  "tauri-plugin-updater",
  "tauri-specta",
  "tokio",
+ "uuid",
 ]
 
 [[package]]

@@ -31,6 +31,12 @@ export const commands = {
 	zepDiscoverCalendars: () => typedError<ZepCalendar[], ZepError>(__TAURI_INVOKE("zep_discover_calendars")),
 	// Save a ZEP calendar URL for one source (Primary or Absence) and test the connection.
 	zepSaveAndTestCalendar: (dayliteContactReference: string, source: IcalSource, calendarUrl: string | null) => typedError<ZepCalendarTestResult, ZepError>(__TAURI_INVOKE("zep_save_and_test_calendar", { dayliteContactReference, source, calendarUrl })),
+	// Creates a new assignment event via CalDAV PUT. Returns the new resource href.
+	createAssignment: (employeeReference: string, date: string, projectRef: string, projectName: string) => typedError<string, string>(__TAURI_INVOKE("create_assignment", { employeeReference, date, projectRef, projectName })),
+	// Updates an existing assignment event in place using the stored CalDAV href.
+	updateAssignment: (href: string, uid: string, date: string, projectRef: string, projectName: string) => typedError<null, string>(__TAURI_INVOKE("update_assignment", { href, uid, date, projectRef, projectName })),
+	// Deletes an assignment event using the stored CalDAV href.
+	deleteAssignment: (href: string) => typedError<null, string>(__TAURI_INVOKE("delete_assignment", { href })),
 };
 
 /* Types */
@@ -57,6 +63,8 @@ export type CalendarCellEvent = {
 	startTime: string | null,
 	// End time in HH:MM format. None for all-day events.
 	endTime: string | null,
+	// CalDAV resource URL (d:href from REPORT) needed for PUT/DELETE. None if unknown.
+	href: string | null,
 };
 
 export type CalendarEventKind =

@@ -6,6 +6,7 @@ use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 use tauri_plugin_http::reqwest;
 use tauri_plugin_http::reqwest::Method;
+use uuid::Uuid;
 
 use crate::integrations::local_store::DayliteCache;
 
@@ -38,6 +39,8 @@ pub struct CalendarCellEvent {
     pub start_time: Option<String>,
     /// End time in HH:MM format. None for all-day events.
     pub end_time: Option<String>,
+    /// CalDAV resource URL (d:href from REPORT) needed for PUT/DELETE. None if unknown.
+    pub href: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
@@ -66,6 +69,8 @@ struct RawVEvent {
     dtend: Option<NaiveDate>,
     start_time: Option<String>,
     end_time: Option<String>,
+    /// CalDAV resource URL from d:href in REPORT response. Empty if not found.
+    href: String,
 }
 
 /// After initial classification: either a lkr-planner event or a bare event, pending project resolution.
@@ -77,6 +82,8 @@ struct PendingEvent {
     project_ref: Option<String>,
     start_time: Option<String>,
     end_time: Option<String>,
+    /// CalDAV resource URL (d:href) required for PUT/DELETE operations. Empty if unknown.
+    href: String,
 }
 
 // ── Tauri command ─────────────────────────────────────────────────────────────
@@ -260,6 +267,227 @@ pub async fn load_week_events(
     Ok(results)
 }
 
+// ── CalDAV write commands ─────────────────────────────────────────────────────
+
+/// Creates a new assignment event on the employee's primary CalDAV calendar.
+/// Returns the CalDAV resource href (e.g. `{calendar_url}/{uid}.ics`) of the new event.
+#[tauri::command]
+#[specta::specta]
+pub async fn create_assignment(
+    app: tauri::AppHandle,
+    employee_reference: String,
+    date: String,
+    project_ref: String,
+    project_name: String,
+) -> Result<String, String> {
+    let store =
+        crate::integrations::local_store::load_local_store(app).map_err(|e| e.user_message)?;
+
+    let calendar_url = store
+        .employee_settings
+        .iter()
+        .find(|s| s.daylite_contact_reference == employee_reference)
+        .and_then(|s| s.zep_primary_calendar.as_deref())
+        .filter(|u| !u.is_empty())
+        .ok_or_else(|| "Kein Kalender für diesen Mitarbeiter konfiguriert.".to_string())?
+        .to_string();
+
+    let (username, password) = crate::integrations::zep::load_zep_credentials_from_keychain()
+        .map(|c| (c.username, c.password))
+        .map_err(|e| e.user_message)?;
+
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .build()
+        .map_err(|e| format!("HTTP-Client konnte nicht erstellt werden: {e}"))?;
+
+    create_assignment_core(
+        &client,
+        &calendar_url,
+        &username,
+        &password,
+        &date,
+        &project_ref,
+        &project_name,
+    )
+    .await
+}
+
+pub(crate) async fn create_assignment_core(
+    client: &reqwest::Client,
+    calendar_url: &str,
+    username: &str,
+    password: &str,
+    date: &str,
+    project_ref: &str,
+    project_name: &str,
+) -> Result<String, String> {
+    let uid = Uuid::new_v4().to_string();
+    let payload = build_ical_payload(&uid, date, project_name, project_ref);
+
+    let base = calendar_url.trim_end_matches('/');
+    let resource_url = format!("{base}/{uid}.ics");
+
+    let response = client
+        .put(&resource_url)
+        .basic_auth(username, Some(password))
+        .header("Content-Type", "text/calendar; charset=utf-8")
+        .body(payload)
+        .send()
+        .await
+        .map_err(|e| format!("Einsatz konnte nicht gespeichert werden: {e}"))?;
+
+    let status = response.status().as_u16();
+    if !(200..300).contains(&status) {
+        return Err(format!("Kalenderserver antwortete mit HTTP {status}"));
+    }
+
+    Ok(resource_url)
+}
+
+/// Updates an existing assignment event in place using the stored CalDAV href.
+#[tauri::command]
+#[specta::specta]
+pub async fn update_assignment(
+    app: tauri::AppHandle,
+    href: String,
+    uid: String,
+    date: String,
+    project_ref: String,
+    project_name: String,
+) -> Result<(), String> {
+    let (username, password) = crate::integrations::zep::load_zep_credentials_from_keychain()
+        .map(|c| (c.username, c.password))
+        .map_err(|e| e.user_message)?;
+
+    let store =
+        crate::integrations::local_store::load_local_store(app).map_err(|e| e.user_message)?;
+
+    let base_url = store.api_endpoints.zep_caldav_root_url.clone();
+
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .build()
+        .map_err(|e| format!("HTTP-Client konnte nicht erstellt werden: {e}"))?;
+
+    update_assignment_core(
+        &client,
+        &href,
+        &base_url,
+        &uid,
+        &username,
+        &password,
+        &date,
+        &project_ref,
+        &project_name,
+    )
+    .await
+}
+
+pub(crate) async fn update_assignment_core(
+    client: &reqwest::Client,
+    href: &str,
+    base_url: &str,
+    uid: &str,
+    username: &str,
+    password: &str,
+    date: &str,
+    project_ref: &str,
+    project_name: &str,
+) -> Result<(), String> {
+    let resource_url = if href.starts_with("http://") || href.starts_with("https://") {
+        href.to_string()
+    } else {
+        format!("{}{}", base_url.trim_end_matches('/'), href)
+    };
+
+    let payload = build_ical_payload(uid, date, project_name, project_ref);
+
+    let response = client
+        .put(&resource_url)
+        .basic_auth(username, Some(password))
+        .header("Content-Type", "text/calendar; charset=utf-8")
+        .body(payload)
+        .send()
+        .await
+        .map_err(|e| format!("Einsatz konnte nicht aktualisiert werden: {e}"))?;
+
+    let status = response.status().as_u16();
+    if !(200..300).contains(&status) {
+        return Err(format!("Kalenderserver antwortete mit HTTP {status}"));
+    }
+
+    Ok(())
+}
+
+/// Deletes an assignment event using the stored CalDAV href.
+#[tauri::command]
+#[specta::specta]
+pub async fn delete_assignment(app: tauri::AppHandle, href: String) -> Result<(), String> {
+    let (username, password) = crate::integrations::zep::load_zep_credentials_from_keychain()
+        .map(|c| (c.username, c.password))
+        .map_err(|e| e.user_message)?;
+
+    let store =
+        crate::integrations::local_store::load_local_store(app).map_err(|e| e.user_message)?;
+
+    let base_url = store.api_endpoints.zep_caldav_root_url.clone();
+
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .build()
+        .map_err(|e| format!("HTTP-Client konnte nicht erstellt werden: {e}"))?;
+
+    delete_assignment_core(&client, &href, &base_url, &username, &password).await
+}
+
+pub(crate) async fn delete_assignment_core(
+    client: &reqwest::Client,
+    href: &str,
+    base_url: &str,
+    username: &str,
+    password: &str,
+) -> Result<(), String> {
+    let resource_url = if href.starts_with("http://") || href.starts_with("https://") {
+        href.to_string()
+    } else {
+        format!("{}{}", base_url.trim_end_matches('/'), href)
+    };
+
+    let response = client
+        .delete(&resource_url)
+        .basic_auth(username, Some(password))
+        .send()
+        .await
+        .map_err(|e| format!("Einsatz konnte nicht gelöscht werden: {e}"))?;
+
+    let status = response.status().as_u16();
+    if !(200..300).contains(&status) {
+        return Err(format!("Kalenderserver antwortete mit HTTP {status}"));
+    }
+
+    Ok(())
+}
+
+// ── iCal payload builder ──────────────────────────────────────────────────────
+
+/// Builds an RFC 5545 VCALENDAR payload for a lkr-planner assignment.
+/// Uses a fixed floating 08:00–16:00 time window (local time, no timezone).
+pub(crate) fn build_ical_payload(
+    uid: &str,
+    date: &str,
+    summary: &str,
+    project_ref: &str,
+) -> String {
+    let compact = date.replace('-', "");
+    let dtstart = format!("{compact}T080000");
+    let dtend = format!("{compact}T160000");
+    let dtstamp = chrono::Utc::now().format("%Y%m%dT%H%M%SZ");
+    format!(
+        "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//lkr-planner//EN\r\nBEGIN:VEVENT\r\nUID:{uid}\r\nDTSTAMP:{dtstamp}\r\nDTSTART:{dtstart}\r\nDTEND:{dtend}\r\nSUMMARY:{summary}\r\nDESCRIPTION:daylite:{project_ref}\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"
+    )
+}
+
 // ── CalDAV fetch ──────────────────────────────────────────────────────────────
 
 async fn fetch_calendar_events(
@@ -333,6 +561,8 @@ fn build_report_body(start: &str, end: &str) -> String {
 // ── iCal parsing ──────────────────────────────────────────────────────────────
 
 /// Parses a CalDAV REPORT XML response and extracts VEVENT entries from each calendar-data element.
+/// Populates `href` on each `RawVEvent` by walking up to the enclosing `d:response` ancestor
+/// and reading its `d:href` child element.
 fn parse_caldav_report(xml_text: &str) -> Result<Vec<RawVEvent>, String> {
     let doc = roxmltree::Document::parse(xml_text)
         .map_err(|e| format!("XML konnte nicht geparst werden: {e}"))?;
@@ -343,7 +573,23 @@ fn parse_caldav_report(xml_text: &str) -> Result<Vec<RawVEvent>, String> {
         let is_bare = !is_caldav && node.tag_name().name() == "calendar-data";
         if is_caldav || is_bare {
             if let Some(text) = node.text() {
-                events.extend(parse_ical_events(text)?);
+                let href = node
+                    .ancestors()
+                    .find(|a| a.has_tag_name(("DAV:", "response")))
+                    .and_then(|response| {
+                        response
+                            .children()
+                            .find(|c| c.has_tag_name(("DAV:", "href")))
+                            .and_then(|h| h.text())
+                    })
+                    .unwrap_or("")
+                    .to_string();
+
+                let mut parsed = parse_ical_events(text)?;
+                for event in &mut parsed {
+                    event.href = href.clone();
+                }
+                events.extend(parsed);
             }
         }
     }
@@ -398,6 +644,7 @@ fn parse_ical_events(ical_text: &str) -> Result<Vec<RawVEvent>, String> {
                 dtend,
                 start_time,
                 end_time,
+                href: String::new(), // populated by parse_caldav_report from d:href
             })
         })
         .collect();
@@ -469,6 +716,7 @@ fn classify_event(event: RawVEvent) -> PendingEvent {
         project_ref,
         start_time: event.start_time,
         end_time: event.end_time,
+        href: event.href,
     }
 }
 
@@ -489,7 +737,10 @@ fn resolve_event(
         project_ref,
         start_time,
         end_time,
+        href,
     } = pending;
+
+    let href = if href.is_empty() { None } else { Some(href) };
 
     let Some(project_ref) = project_ref else {
         return CalendarCellEvent {
@@ -500,6 +751,7 @@ fn resolve_event(
             date,
             start_time,
             end_time,
+            href,
         };
     };
 
@@ -513,6 +765,7 @@ fn resolve_event(
             date,
             start_time,
             end_time,
+            href,
         };
     }
 
@@ -526,6 +779,7 @@ fn resolve_event(
             date,
             start_time,
             end_time,
+            href,
         };
     }
 
@@ -538,6 +792,7 @@ fn resolve_event(
         date,
         start_time,
         end_time,
+        href,
     }
 }
 
@@ -576,6 +831,12 @@ fn map_absence_raw_events_for_week(
             Err(_) => continue,
         };
 
+        let href = if raw.href.is_empty() {
+            None
+        } else {
+            Some(raw.href.clone())
+        };
+
         if let Some(event_end) = raw.dtend {
             // All-day multi-day event: expand into per-day events within the week.
             let clamped_start = event_start.max(week_start);
@@ -591,6 +852,7 @@ fn map_absence_raw_events_for_week(
                     date: day.format("%Y-%m-%d").to_string(),
                     start_time: None,
                     end_time: None,
+                    href: href.clone(),
                 });
                 day += chrono::Duration::days(1);
             }
@@ -603,6 +865,7 @@ fn map_absence_raw_events_for_week(
                 date: raw.dtstart,
                 start_time: raw.start_time,
                 end_time: raw.end_time,
+                href,
             });
         }
     }
@@ -744,6 +1007,7 @@ mod tests {
             project_ref: Some("/v1/projects/3001".to_string()),
             start_time: None,
             end_time: None,
+            href: String::new(),
         };
         let cache = DayliteCache {
             last_synced_at: None,
@@ -773,6 +1037,7 @@ mod tests {
             project_ref: Some("/v1/projects/4001".to_string()),
             start_time: None,
             end_time: None,
+            href: String::new(),
         };
         let cache = DayliteCache::default();
         let mut api_results = HashMap::new();
@@ -797,6 +1062,7 @@ mod tests {
             project_ref: Some("/v1/projects/9999".to_string()),
             start_time: None,
             end_time: None,
+            href: String::new(),
         };
         let cache = DayliteCache::default();
         let mut api_results = HashMap::new();
@@ -820,6 +1086,7 @@ mod tests {
             project_ref: None,
             start_time: None,
             end_time: None,
+            href: String::new(),
         };
         let cache = DayliteCache::default();
         let api_results = HashMap::new();
@@ -1048,6 +1315,7 @@ mod tests {
                 date: "2026-04-28".to_string(),
                 start_time: Some("09:00".to_string()),
                 end_time: Some("17:00".to_string()),
+                href: None,
             },
             CalendarCellEvent {
                 uid: "absence-1".to_string(),
@@ -1057,6 +1325,7 @@ mod tests {
                 date: "2026-04-28".to_string(),
                 start_time: None,
                 end_time: None,
+                href: None,
             },
         ];
 
@@ -1077,6 +1346,7 @@ mod tests {
                 date: "2026-04-28".to_string(),
                 start_time: Some("10:00".to_string()),
                 end_time: None,
+                href: None,
             },
             CalendarCellEvent {
                 uid: "absence-1".to_string(),
@@ -1086,6 +1356,7 @@ mod tests {
                 date: "2026-04-28".to_string(),
                 start_time: None,
                 end_time: None,
+                href: None,
             },
         ];
 
@@ -1106,6 +1377,7 @@ mod tests {
                 date: "2026-04-27".to_string(),
                 start_time: Some("09:00".to_string()),
                 end_time: None,
+                href: None,
             },
             CalendarCellEvent {
                 uid: "absence-tue".to_string(),
@@ -1115,6 +1387,7 @@ mod tests {
                 date: "2026-04-28".to_string(),
                 start_time: None,
                 end_time: None,
+                href: None,
             },
         ];
 
@@ -1123,5 +1396,221 @@ mod tests {
         // Monday assignment stays before Tuesday absence (different days).
         assert_eq!(events[0].date, "2026-04-27");
         assert_eq!(events[1].date, "2026-04-28");
+    }
+
+    // ── Resource URL (href) capture ──
+
+    #[test]
+    fn parse_caldav_report_returns_href_with_each_event() {
+        let xml = r#"<?xml version="1.0" encoding="utf-8"?>
+<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
+  <d:response>
+    <d:href>/calendars/user/calendar/event1.ics</d:href>
+    <d:propstat>
+      <d:prop>
+        <c:calendar-data>BEGIN:VCALENDAR
+BEGIN:VEVENT
+UID:test-uid-1
+SUMMARY:Projekt Nord
+DTSTART;VALUE=DATE:20260505
+END:VEVENT
+END:VCALENDAR
+</c:calendar-data>
+      </d:prop>
+    </d:propstat>
+  </d:response>
+</d:multistatus>"#;
+
+        let events = parse_caldav_report(xml).unwrap();
+
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].uid, "test-uid-1");
+        assert_eq!(events[0].href, "/calendars/user/calendar/event1.ics");
+    }
+
+    #[test]
+    fn parse_caldav_report_returns_correct_href_per_event_when_multiple_responses() {
+        let xml = r#"<?xml version="1.0" encoding="utf-8"?>
+<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
+  <d:response>
+    <d:href>/calendars/user/calendar/ev1.ics</d:href>
+    <d:propstat>
+      <d:prop>
+        <c:calendar-data>BEGIN:VCALENDAR
+BEGIN:VEVENT
+UID:uid-1
+SUMMARY:Eins
+DTSTART;VALUE=DATE:20260505
+END:VEVENT
+END:VCALENDAR
+</c:calendar-data>
+      </d:prop>
+    </d:propstat>
+  </d:response>
+  <d:response>
+    <d:href>/calendars/user/calendar/ev2.ics</d:href>
+    <d:propstat>
+      <d:prop>
+        <c:calendar-data>BEGIN:VCALENDAR
+BEGIN:VEVENT
+UID:uid-2
+SUMMARY:Zwei
+DTSTART;VALUE=DATE:20260506
+END:VEVENT
+END:VCALENDAR
+</c:calendar-data>
+      </d:prop>
+    </d:propstat>
+  </d:response>
+</d:multistatus>"#;
+
+        let events = parse_caldav_report(xml).unwrap();
+
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[0].uid, "uid-1");
+        assert_eq!(events[0].href, "/calendars/user/calendar/ev1.ics");
+        assert_eq!(events[1].uid, "uid-2");
+        assert_eq!(events[1].href, "/calendars/user/calendar/ev2.ics");
+    }
+
+    #[test]
+    fn href_propagates_through_classify_and_resolve_to_cell_event() {
+        let event = RawVEvent {
+            uid: "uid-href".to_string(),
+            summary: "Projekt Nord".to_string(),
+            description: "daylite:/v1/projects/3001".to_string(),
+            dtstart: "2026-05-05".to_string(),
+            href: "/calendars/user/cal/uid-href.ics".to_string(),
+            ..Default::default()
+        };
+        let cache = DayliteCache {
+            last_synced_at: None,
+            projects: vec![DayliteProjectCacheEntry {
+                reference: "/v1/projects/3001".to_string(),
+                name: "Projekt Nord".to_string(),
+                status: "in_progress".to_string(),
+            }],
+            contacts: vec![],
+        };
+
+        let pending = classify_event(event);
+        let cell_event = resolve_event(pending, &cache, &HashMap::new());
+
+        assert_eq!(
+            cell_event.href,
+            Some("/calendars/user/cal/uid-href.ics".to_string())
+        );
+    }
+
+    #[test]
+    fn build_ical_payload_contains_expected_fields() {
+        let payload = build_ical_payload(
+            "test-uid-1",
+            "2026-05-06",
+            "Mein Projekt",
+            "/v1/projects/42",
+        );
+
+        assert!(payload.contains("BEGIN:VCALENDAR"), "missing VCALENDAR");
+        assert!(payload.contains("BEGIN:VEVENT"), "missing VEVENT");
+        assert!(payload.contains("UID:test-uid-1"), "missing UID");
+        assert!(payload.contains("DTSTART:20260506T080000"), "wrong DTSTART");
+        assert!(payload.contains("DTEND:20260506T160000"), "wrong DTEND");
+        assert!(payload.contains("SUMMARY:Mein Projekt"), "missing SUMMARY");
+        assert!(
+            payload.contains("DESCRIPTION:daylite:/v1/projects/42"),
+            "missing DESCRIPTION"
+        );
+        assert!(payload.contains("END:VEVENT"), "missing END:VEVENT");
+        assert!(payload.contains("END:VCALENDAR"), "missing END:VCALENDAR");
+    }
+
+    #[test]
+    fn build_ical_payload_uses_floating_local_time_no_z_suffix() {
+        let payload = build_ical_payload("uid-2", "2026-12-31", "Test", "/v1/projects/1");
+        assert!(
+            payload.contains("DTSTART:20261231T080000\r\n"),
+            "DTSTART must not have Z suffix"
+        );
+        assert!(
+            payload.contains("DTEND:20261231T160000\r\n"),
+            "DTEND must not have Z suffix"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "VCR: requires live CalDAV server credentials"]
+    async fn create_assignment_core_sends_put_and_returns_href() {
+        // To record: set CALDAV_URL, CALDAV_USER, CALDAV_PASS env vars and run with --ignored.
+        let calendar_url = std::env::var("CALDAV_URL").expect("CALDAV_URL");
+        let username = std::env::var("CALDAV_USER").expect("CALDAV_USER");
+        let password = std::env::var("CALDAV_PASS").expect("CALDAV_PASS");
+
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(30))
+            .build()
+            .unwrap();
+
+        let href = create_assignment_core(
+            &client,
+            &calendar_url,
+            &username,
+            &password,
+            "2026-05-06",
+            "/v1/projects/42",
+            "Testprojekt",
+        )
+        .await
+        .expect("create_assignment_core should succeed");
+
+        assert!(href.starts_with(&calendar_url.trim_end_matches('/').to_string()));
+        assert!(href.ends_with(".ics"));
+    }
+
+    #[tokio::test]
+    #[ignore = "VCR: requires live CalDAV server credentials"]
+    async fn update_assignment_core_sends_put_to_stored_href() {
+        let base_url = std::env::var("CALDAV_BASE_URL").expect("CALDAV_BASE_URL");
+        let href = std::env::var("CALDAV_HREF").expect("CALDAV_HREF");
+        let uid = std::env::var("CALDAV_UID").expect("CALDAV_UID");
+        let username = std::env::var("CALDAV_USER").expect("CALDAV_USER");
+        let password = std::env::var("CALDAV_PASS").expect("CALDAV_PASS");
+
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(30))
+            .build()
+            .unwrap();
+
+        update_assignment_core(
+            &client,
+            &href,
+            &base_url,
+            &uid,
+            &username,
+            &password,
+            "2026-05-07",
+            "/v1/projects/42",
+            "Aktualisiertes Projekt",
+        )
+        .await
+        .expect("update_assignment_core should succeed");
+    }
+
+    #[tokio::test]
+    #[ignore = "VCR: requires live CalDAV server credentials"]
+    async fn delete_assignment_core_sends_delete_to_stored_href() {
+        let base_url = std::env::var("CALDAV_BASE_URL").expect("CALDAV_BASE_URL");
+        let href = std::env::var("CALDAV_HREF").expect("CALDAV_HREF");
+        let username = std::env::var("CALDAV_USER").expect("CALDAV_USER");
+        let password = std::env::var("CALDAV_PASS").expect("CALDAV_PASS");
+
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(30))
+            .build()
+            .unwrap();
+
+        delete_assignment_core(&client, &href, &base_url, &username, &password)
+            .await
+            .expect("delete_assignment_core should succeed");
     }
 }

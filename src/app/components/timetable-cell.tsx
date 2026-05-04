@@ -4,6 +4,8 @@ export function TimetableCell({
   highlight = false,
   isHoliday = false,
   events,
+  onAddClick,
+  onEventClick,
 }: Props) {
   return (
     <td className={cellClass(highlight, isHoliday)}>
@@ -38,6 +40,7 @@ export function TimetableCell({
               <button
                 type="button"
                 className={`btn btn-block h-auto justify-start gap-4 text-base-100 p-2 rounded-lg transition-all hover:brightness-90 active:brightness-75 ${event.color}`}
+                onClick={() => onEventClick(event)}
               >
                 <EventTime
                   startTime={event.startTime}
@@ -53,6 +56,7 @@ export function TimetableCell({
             type="button"
             className="btn btn-dash btn-block rounded-lg opacity-20 hover:opacity-80 transition-opacity"
             aria-label="Aufgabe hinzufügen"
+            onClick={onAddClick}
           >
             +
           </button>
@@ -66,6 +70,8 @@ interface Props {
   highlight: boolean;
   isHoliday?: boolean;
   events: CellEvent[];
+  onAddClick: () => void;
+  onEventClick: (event: CellEvent) => void;
 }
 
 function EventTime({ startTime, endTime }: TimeProps) {
