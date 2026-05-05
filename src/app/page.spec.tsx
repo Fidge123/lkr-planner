@@ -257,6 +257,7 @@ describe("planning grid assignment states", () => {
       date: "2026-01-26",
       startTime: null,
       endTime: null,
+      href: null,
     };
 
     const html = renderToStaticMarkup(
@@ -293,6 +294,7 @@ describe("planning grid assignment states", () => {
       date: "2026-01-26",
       startTime: null,
       endTime: null,
+      href: null,
     };
 
     const html = renderToStaticMarkup(

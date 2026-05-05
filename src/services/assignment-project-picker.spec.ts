@@ -1,10 +1,13 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
+import type { DayliteSearchInput } from "../generated/tauri";
 import {
   loadProjectsForAssignmentPicker,
   test_resetAssignmentProjectPickerCache,
 } from "./assignment-project-picker";
 
-const mockDayliteSearchProjects = mock(() => Promise.resolve({} as unknown));
+const mockDayliteSearchProjects = mock((_: DayliteSearchInput) =>
+  Promise.resolve({} as unknown),
+);
 
 mock.module("../generated/tauri", () => ({
   commands: {
