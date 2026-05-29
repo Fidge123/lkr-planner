@@ -674,6 +674,47 @@ mod tests {
         });
     }
 
+    #[test]
+    fn search_projects_with_status_filter_replays_vcr_cassette() {
+        tauri::async_runtime::block_on(async {
+            let client = DayliteApiClient::with_replay_cassette("daylite-search-projects.json")
+                .expect("status-filter cassette client should be created");
+
+            let (search_result, token_state) = search_projects_core(
+                &client,
+                DayliteTokenState {
+                    access_token: "test-token".to_string(),
+                    refresh_token: "test-refresh".to_string(),
+                    access_token_expires_at_ms: Some(u64::MAX),
+                },
+                &DayliteSearchInput {
+                    search_term: "Nord".to_string(),
+                    limit: Some(5),
+                    full_records: true,
+                    statuses: Some(vec!["new_status".to_string(), "in_progress".to_string()]),
+                },
+            )
+            .await
+            .expect("search with status filter should replay from cassette");
+
+            assert!(
+                !search_result.results.is_empty(),
+                "cassette should contain results"
+            );
+            assert_eq!(token_state.access_token, "test-token");
+
+            // All returned projects must be in the requested statuses
+            for project in &search_result.results {
+                assert!(
+                    project.status.as_deref() == Some("new_status")
+                        || project.status.as_deref() == Some("in_progress"),
+                    "project {:?} has unexpected status",
+                    project.reference
+                );
+            }
+        });
+    }
+
     #[derive(Clone)]
     struct MockTransport {
         responses: Arc<Mutex<VecDeque<Result<DayliteHttpResponse, DayliteApiError>>>>,

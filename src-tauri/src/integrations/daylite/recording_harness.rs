@@ -116,6 +116,19 @@ fn record_daylite_cassettes_from_live_api() {
         .await
         .expect("project search cassette should be recorded");
 
+        search_projects_core(
+            &DayliteApiClient::with_env_cassette(&config.base_url, "daylite-search-projects.json")
+                .expect("project search cassette client should be created"),
+            stable_token_state.clone(),
+            &DayliteSearchInput {
+                search_term: config.project_search_term.clone(),
+                limit: Some(5),
+                statuses: Some(vec!["new_status".to_string(), "in_progress".to_string()]),
+            },
+        )
+        .await
+        .expect("project search cassette should be recorded");
+
         list_contacts_core(
             &DayliteApiClient::with_env_cassette(&config.base_url, "daylite-list-contacts.json")
                 .expect("contact list cassette client should be created"),
