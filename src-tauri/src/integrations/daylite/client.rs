@@ -126,6 +126,7 @@ impl ReqwestTransport {
     fn new(base_url: &str) -> Result<Self, DayliteApiError> {
         let normalized_base_url = normalize_base_url(base_url)?;
         let http_client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(5))
             .build()
             .map_err(|error| DayliteApiError {
                 code: DayliteApiErrorCode::RequestFailed,
@@ -238,11 +239,25 @@ impl DayliteHttpTransport for ReqwestTransport {
                     .body(body.to_string());
             }
 
-            let response = builder.send().await.map_err(|error| DayliteApiError {
-                code: DayliteApiErrorCode::RequestFailed,
-                http_status: None,
-                user_message: "Die Anfrage an Daylite ist fehlgeschlagen.".to_string(),
-                technical_message: format!("Netzwerkfehler bei {}: {error}", request.path),
+            let response = builder.send().await.map_err(|error| {
+                if error.is_timeout() {
+                    DayliteApiError {
+                        code: DayliteApiErrorCode::Timeout,
+                        http_status: None,
+                        user_message: "Zeitüberschreitung bei der Daylite-Anfrage.".to_string(),
+                        technical_message: format!(
+                            "Zeitüberschreitung bei {}: {error}",
+                            request.path
+                        ),
+                    }
+                } else {
+                    DayliteApiError {
+                        code: DayliteApiErrorCode::RequestFailed,
+                        http_status: None,
+                        user_message: "Die Anfrage an Daylite ist fehlgeschlagen.".to_string(),
+                        technical_message: format!("Netzwerkfehler bei {}: {error}", request.path),
+                    }
+                }
             })?;
 
             let status = response.status().as_u16();

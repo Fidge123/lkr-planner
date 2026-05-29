@@ -20,5 +20,11 @@ The assignment modal needs to show default suggestions when opened. This helps u
 
 ## Impact
 
-- Code: New React component logic for suggestion generation
-- Dependencies: Uses Daylite query capabilities from BL-022
+- Code: New React component logic for suggestion generation + Rust overdue project query
+- Dependencies:
+  - BL-022 for project search infrastructure (status filter, timeout, numeric sort)
+  - BL-016 for assignment modal where suggestions are displayed
+
+## Note
+
+Overdue project query (previously scoped to BL-022) is implemented here, as it is only consumed by the default suggestions feature. Uses a single Daylite call with `{"category": {"equal": "Überfällig"}}` — no separate status filter needed, as the Daylite API has no multi-value operator for scalar fields and projects in this category are by definition active.

@@ -16,10 +16,17 @@ The assignment modal needs default suggestions to help users quickly select proj
 
 ## Decisions
 
+### Overdue Project Query
+**Decision**: Query Daylite by category `"Überfällig"` only — no additional status filter
+- Use `{"category": {"equal": "Überfällig"}}` in Daylite search body as a single call
+- No separate status filter: the Daylite API has no `in` operator for scalar fields, so filtering two statuses requires two calls; projects in the "Überfällig" category are by definition active (done/abandoned projects are not marked overdue)
+- This is a new Tauri command added in this change, building on BL-022 infrastructure
+- Sort by numeric project ID ascending (same as BL-022), limit to 5
+
 ### Suggestion Ordering
 **Decision**: Most recently assigned project first, then overdue projects
 - Query assignment history for most recent project
-- Query overdue projects via BL-022 query
+- Query overdue projects via new overdue command
 - Combine results, cap at 5 total suggestions
 
 ### Fallback Behavior

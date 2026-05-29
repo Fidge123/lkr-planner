@@ -152,6 +152,7 @@ export function PlanningGridTable({
               holidayDates={holidayDates}
               onRetry={reloadAssignments}
               onOpenIcalDialog={onOpenIcalDialog}
+              onReloadAssignments={reloadAssignments}
             />
           ))}
           {!isEmployeeLoading && employees.length === 0 ? (

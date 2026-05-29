@@ -23,6 +23,9 @@ pub fn run() {
             integrations::zep::zep_test_credentials,
             integrations::zep::zep_discover_calendars,
             integrations::zep::zep_save_and_test_calendar,
+            integrations::calendar::create_assignment,
+            integrations::calendar::update_assignment,
+            integrations::calendar::delete_assignment,
         ]);
 
     #[cfg(debug_assertions)]

@@ -257,7 +257,7 @@ mod tests {
         let start = NaiveDate::from_ymd_opt(2024, 12, 30).unwrap();
         let end = NaiveDate::from_ymd_opt(2025, 1, 5).unwrap();
 
-        let all_holidays = vec![
+        let all_holidays = [
             Holiday {
                 date: "2024-12-25".to_string(),
                 name: "1. Weihnachtstag".to_string(),

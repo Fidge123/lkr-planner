@@ -45,22 +45,22 @@ fn map_keyring_error(err: KeyringError) -> SecretError {
 }
 
 pub fn set_token(service: &str, username: &str, token: &str) -> Result<(), SecretError> {
-    let entry = Entry::new(service, username).map_err(|e| map_keyring_error(e))?;
+    let entry = Entry::new(service, username).map_err(map_keyring_error)?;
     entry.set_password(token).map_err(map_keyring_error)
 }
 
 pub fn get_token(service: &str, username: &str) -> Result<String, SecretError> {
-    let entry = Entry::new(service, username).map_err(|e| map_keyring_error(e))?;
+    let entry = Entry::new(service, username).map_err(map_keyring_error)?;
     entry.get_password().map_err(map_keyring_error)
 }
 
 pub fn delete_token(service: &str, username: &str) -> Result<(), SecretError> {
-    let entry = Entry::new(service, username).map_err(|e| map_keyring_error(e))?;
+    let entry = Entry::new(service, username).map_err(map_keyring_error)?;
     entry.delete_credential().map_err(map_keyring_error)
 }
 
 pub fn check_token(service: &str, username: &str) -> Result<bool, SecretError> {
-    let entry = Entry::new(service, username).map_err(|e| map_keyring_error(e))?;
+    let entry = Entry::new(service, username).map_err(map_keyring_error)?;
     match entry.get_password() {
         Ok(_) => Ok(true),
         Err(KeyringError::NoEntry) => Ok(false),

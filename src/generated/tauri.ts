@@ -31,6 +31,15 @@ export const commands = {
 	zepDiscoverCalendars: () => typedError<ZepCalendar[], ZepError>(__TAURI_INVOKE("zep_discover_calendars")),
 	// Save a ZEP calendar URL for one source (Primary or Absence) and test the connection.
 	zepSaveAndTestCalendar: (dayliteContactReference: string, source: IcalSource, calendarUrl: string | null) => typedError<ZepCalendarTestResult, ZepError>(__TAURI_INVOKE("zep_save_and_test_calendar", { dayliteContactReference, source, calendarUrl })),
+	/**
+	 *  Creates a new assignment event on the employee's primary CalDAV calendar.
+	 *  Returns the CalDAV resource href (e.g. `{calendar_url}/{uid}.ics`) of the new event.
+	 */
+	createAssignment: (employeeReference: string, date: string, projectRef: string, projectName: string) => typedError<string, string>(__TAURI_INVOKE("create_assignment", { employeeReference, date, projectRef, projectName })),
+	// Updates an existing assignment event in place using the stored CalDAV href.
+	updateAssignment: (href: string, uid: string, date: string, projectRef: string, projectName: string) => typedError<null, string>(__TAURI_INVOKE("update_assignment", { href, uid, date, projectRef, projectName })),
+	// Deletes an assignment event using the stored CalDAV href.
+	deleteAssignment: (href: string) => typedError<null, string>(__TAURI_INVOKE("delete_assignment", { href })),
 };
 
 /* Types */
@@ -57,13 +66,15 @@ export type CalendarCellEvent = {
 	startTime: string | null,
 	// End time in HH:MM format. None for all-day events.
 	endTime: string | null,
+	// CalDAV resource URL (d:href from REPORT) needed for PUT/DELETE. None if unknown.
+	href: string | null,
 };
 
-export type CalendarEventKind =
+export type CalendarEventKind = 
 // A lkr-planner assignment linked to a Daylite project via DESCRIPTION.
-"assignment" |
+"assignment" | 
 // A bare calendar event with no Daylite project link (legacy, blocker, appointment).
-"bare" |
+"bare" | 
 // An all-day absence from the employee's dedicated ZEP absence calendar.
 "absence";
 
@@ -78,7 +89,7 @@ export type DayliteApiError = {
 	technicalMessage: string,
 };
 
-export type DayliteApiErrorCode = "UNAUTHORIZED" | "RATE_LIMITED" | "SERVER_ERROR" | "MISSING_TOKEN" | "INVALID_CONFIGURATION" | "REQUEST_FAILED" | "INVALID_RESPONSE" | "TOKEN_REFRESH_FAILED";
+export type DayliteApiErrorCode = "UNAUTHORIZED" | "RATE_LIMITED" | "SERVER_ERROR" | "MISSING_TOKEN" | "INVALID_CONFIGURATION" | "REQUEST_FAILED" | "INVALID_RESPONSE" | "TOKEN_REFRESH_FAILED" | "TIMEOUT";
 
 export type DayliteCache = {
 	lastSyncedAt: string | null,
@@ -133,6 +144,11 @@ export type DayliteRefreshTokenRequest = {
 export type DayliteSearchInput = {
 	searchTerm: string,
 	limit: number | null,
+	statuses?: string[] | null,
+	// Include full record data in the response (`?full-records=true`).
+	fullRecords?: boolean | null,
+	// Pagination cursor: object ID of the first result to return (`?start=<id>`).
+	start?: number | null,
 };
 
 export type DayliteSearchResult<T> = {
