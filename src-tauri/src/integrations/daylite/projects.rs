@@ -723,7 +723,7 @@ mod tests {
             // All returned projects must be in the requested statuses
             for project in &search_result.results {
                 assert!(
-                    project.status.as_deref() == Some("new_status")
+                    project.status.as_deref() == Some("new")
                         || project.status.as_deref() == Some("in_progress"),
                     "project {:?} has unexpected status",
                     project.reference
