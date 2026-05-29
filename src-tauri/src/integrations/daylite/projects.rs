@@ -151,13 +151,21 @@ pub(super) async fn search_projects_core(
         _ => json!({ "name": { "contains": input.search_term } }),
     };
 
+    let mut query = build_limit_query(input.limit);
+    if input.full_records == Some(true) {
+        query.push(("full-records".to_string(), "true".to_string()));
+    }
+    if let Some(start) = input.start {
+        query.push(("start".to_string(), start.to_string()));
+    }
+
     let (search_result, token_state) =
         send_authenticated_json::<DayliteSearchResult<DayliteProjectSummary>>(
             client,
             token_state,
             DayliteHttpMethod::Post,
             "/projects/_search",
-            build_limit_query(input.limit),
+            query,
             Some(body),
         )
         .await?;
@@ -462,6 +470,8 @@ mod tests {
                     search_term: "Nord".to_string(),
                     limit: Some(5),
                     statuses: None,
+                    full_records: None,
+                    start: None,
                 },
             )
             .await
@@ -517,6 +527,8 @@ mod tests {
                     search_term: "".to_string(),
                     limit: None,
                     statuses: None,
+                    full_records: None,
+                    start: None,
                 },
             )
             .await
@@ -552,6 +564,8 @@ mod tests {
                     search_term: "".to_string(),
                     limit: Some(2),
                     statuses: None,
+                    full_records: None,
+                    start: None,
                 },
             )
             .await
@@ -652,6 +666,8 @@ mod tests {
                     search_term: "Nord".to_string(),
                     limit: Some(5),
                     statuses: None,
+                    full_records: None,
+                    start: None,
                 },
             )
             .await
@@ -690,8 +706,9 @@ mod tests {
                 &DayliteSearchInput {
                     search_term: "Nord".to_string(),
                     limit: Some(5),
-                    full_records: true,
+                    full_records: Some(true),
                     statuses: Some(vec!["new_status".to_string(), "in_progress".to_string()]),
+                    start: None,
                 },
             )
             .await
@@ -777,6 +794,8 @@ mod tests {
                     search_term: "Nord".to_string(),
                     limit: Some(5),
                     statuses: Some(vec!["new_status".to_string(), "in_progress".to_string()]),
+                    full_records: None,
+                    start: None,
                 },
             )
             .await
@@ -815,6 +834,8 @@ mod tests {
                     search_term: "Nord".to_string(),
                     limit: Some(5),
                     statuses: None,
+                    full_records: None,
+                    start: None,
                 },
             )
             .await
@@ -852,6 +873,8 @@ mod tests {
                     search_term: "Nord".to_string(),
                     limit: None,
                     statuses: None,
+                    full_records: None,
+                    start: None,
                 },
             )
             .await;
@@ -888,6 +911,8 @@ mod tests {
                     search_term: "Nord".to_string(),
                     limit: None,
                     statuses: None,
+                    full_records: None,
+                    start: None,
                 },
             )
             .await;

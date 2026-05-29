@@ -65,6 +65,12 @@ pub struct DayliteSearchInput {
     pub limit: Option<u16>,
     #[serde(default)]
     pub statuses: Option<Vec<String>>,
+    /// Include full record data in the response (`?full-records=true`).
+    #[serde(default)]
+    pub full_records: Option<bool>,
+    /// Pagination cursor: object ID of the first result to return (`?start=<id>`).
+    #[serde(default)]
+    pub start: Option<u64>,
 }
 
 pub(super) fn build_limit_query(limit: Option<u16>) -> Vec<(String, String)> {

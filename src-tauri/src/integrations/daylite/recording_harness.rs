@@ -111,6 +111,8 @@ fn record_daylite_cassettes_from_live_api() {
                 search_term: config.project_search_term.clone(),
                 limit: Some(5),
                 statuses: None,
+                full_records: None,
+                start: None,
             },
         )
         .await
@@ -124,6 +126,8 @@ fn record_daylite_cassettes_from_live_api() {
                 search_term: config.project_search_term.clone(),
                 limit: Some(5),
                 statuses: Some(vec!["new_status".to_string(), "in_progress".to_string()]),
+                full_records: None,
+                start: None,
             },
         )
         .await

@@ -12,6 +12,8 @@ export async function loadProjectsForAssignmentPicker(): Promise<
     searchTerm: "",
     limit: null,
     statuses: ["new_status", "in_progress"],
+    fullRecords: null,
+    start: null,
   });
 
   if (result.status === "error") {
