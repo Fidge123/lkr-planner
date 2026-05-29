@@ -1,6 +1,9 @@
 on: push
 name: Clippy check
 
+permissions:
+  contents: read
+
 env:
   RUSTFLAGS: "-Dwarnings"
 
