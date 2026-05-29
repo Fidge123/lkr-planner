@@ -173,11 +173,11 @@ pub(super) async fn update_contact_ical_urls_core(
         .collect();
 
     cached_contacts.retain(|contact| contact.reference != updated_contact.reference);
-    if is_monteur_contact(&updated_contact) {
+    if is_planning_contact(&updated_contact) {
         cached_contacts.push(updated_contact.clone());
     }
 
-    store.daylite_cache.contacts = sort_contacts(filter_monteur_contacts(cached_contacts))
+    store.daylite_cache.contacts = sort_contacts(filter_planning_contacts(cached_contacts))
         .into_iter()
         .map(map_planning_contact_to_cache_entry)
         .collect();
@@ -196,14 +196,17 @@ pub(super) async fn list_contacts_core(
             DayliteHttpMethod::Post,
             "/contacts/_search",
             vec![("full-records".to_string(), "true".to_string())],
-            Some(json!({
-                "category": {
-                    "equal": "Monteur"
-                }
-            })),
+            // A top-level array of clauses is matched with OR semantics, so this
+            // fetches both planning categories: "Monteur" and "Test". The "Test"
+            // employees are filtered out in the view unless the user disables the
+            // "hide non-plannable employees" toggle.
+            Some(json!([
+                { "category": { "equal": "Monteur" } },
+                { "category": { "equal": "Test" } },
+            ])),
         )
         .await?;
-    let contacts = sort_contacts(filter_monteur_contacts(
+    let contacts = sort_contacts(filter_planning_contacts(
         search_result
             .results
             .into_iter()
@@ -220,7 +223,7 @@ pub fn daylite_list_cached_contacts(
     app: tauri::AppHandle,
 ) -> Result<Vec<PlanningContactRecord>, DayliteApiError> {
     let store = load_store_or_error(app)?;
-    Ok(sort_contacts(filter_monteur_contacts(
+    Ok(sort_contacts(filter_planning_contacts(
         store
             .daylite_cache
             .contacts
@@ -271,16 +274,23 @@ fn map_planning_contact_to_cache_entry(contact: PlanningContactRecord) -> Daylit
     }
 }
 
-fn filter_monteur_contacts(contacts: Vec<PlanningContactRecord>) -> Vec<PlanningContactRecord> {
+/// Keeps only contacts relevant to the planning view. This covers both planning
+/// categories — "Monteur" and "Test" — because "Test" employees are fetched too
+/// and only hidden in the frontend when the "hide non-plannable employees"
+/// toggle is enabled.
+fn filter_planning_contacts(contacts: Vec<PlanningContactRecord>) -> Vec<PlanningContactRecord> {
     contacts
         .into_iter()
-        .filter(is_monteur_contact)
+        .filter(is_planning_contact)
         .collect::<Vec<_>>()
 }
 
-fn is_monteur_contact(contact: &PlanningContactRecord) -> bool {
+fn is_planning_contact(contact: &PlanningContactRecord) -> bool {
     normalize_string_option(contact.category.clone())
-        .map(|category| category.to_lowercase() == "monteur")
+        .map(|category| {
+            let category = category.to_lowercase();
+            category == "monteur" || category == "test"
+        })
         .unwrap_or(false)
 }
 
@@ -520,7 +530,7 @@ fn normalize_non_empty(value: &str) -> Option<&str> {
 #[cfg(test)]
 mod tests {
     use super::{
-        contact_display_name, filter_monteur_contacts, list_contacts_core, map_cached_contact,
+        contact_display_name, filter_planning_contacts, list_contacts_core, map_cached_contact,
         map_daylite_contact_summary, merge_contact_ical_urls, parse_contact_id,
         reconcile_employee_calendars_from_contacts, sort_contacts, update_contact_ical_urls_core,
         DayliteContactSummary, DayliteContactUrl, DayliteUpdateContactIcalUrlsInput,
@@ -607,7 +617,7 @@ mod tests {
     }
 
     #[test]
-    fn filters_and_sorts_monteur_contacts_by_display_name() {
+    fn filters_planning_contacts_keeps_monteur_and_test_sorted_by_display_name() {
         let contacts = vec![
             PlanningContactRecord {
                 reference: "/v1/contacts/3001".to_string(),
@@ -630,13 +640,57 @@ mod tests {
                 category: Some("Monteur".to_string()),
                 urls: vec![],
             },
+            PlanningContactRecord {
+                reference: "/v1/contacts/3004".to_string(),
+                full_name: Some("Bea Test".to_string()),
+                nickname: None,
+                category: Some("Test".to_string()),
+                urls: vec![],
+            },
         ];
 
-        let mapped = sort_contacts(filter_monteur_contacts(contacts));
+        let mapped = sort_contacts(filter_planning_contacts(contacts));
 
-        assert_eq!(mapped.len(), 2);
-        assert_eq!(mapped[0].reference, "/v1/contacts/3003");
-        assert_eq!(mapped[1].reference, "/v1/contacts/3001");
+        // Vertrieb is dropped; Monteur and Test are kept and sorted by display name.
+        assert_eq!(mapped.len(), 3);
+        assert_eq!(mapped[0].reference, "/v1/contacts/3004"); // Bea Test
+        assert_eq!(mapped[1].reference, "/v1/contacts/3003"); // Maks
+        assert_eq!(mapped[2].reference, "/v1/contacts/3001"); // Zora Monteur
+    }
+
+    #[test]
+    fn list_contacts_searches_both_monteur_and_test_categories() {
+        tauri::async_runtime::block_on(async {
+            let search_response = mock_response(
+                200,
+                r#"{"results":[{"self":"/v1/contacts/900","first_name":"Max","last_name":"M","category":"Monteur","urls":[]},{"self":"/v1/contacts/901","first_name":"Bea","last_name":"T","category":"Test","urls":[]}]}"#,
+            );
+            let transport = MockTransport::new(vec![Ok(search_response)]);
+            let client = DayliteApiClient::with_transport(Arc::new(transport.clone()));
+
+            let (contacts, _) = list_contacts_core(
+                &client,
+                DayliteTokenState {
+                    access_token: "token".to_string(),
+                    refresh_token: "refresh".to_string(),
+                    access_token_expires_at_ms: Some(u64::MAX),
+                },
+            )
+            .await
+            .expect("list should succeed");
+
+            // Both planning categories are returned to the caller.
+            assert_eq!(contacts.len(), 2);
+
+            let requests = transport.requests();
+            assert_eq!(requests.len(), 1);
+            assert_eq!(requests[0].path, "/contacts/_search");
+            let body = requests[0].body.as_ref().expect("search should have body");
+            let clauses = body.as_array().expect("body should be an OR clause array");
+            assert_eq!(clauses.len(), 2);
+            assert_eq!(clauses[0]["category"]["equal"], "Monteur");
+            assert_eq!(clauses[1]["category"]["equal"], "Test");
+        });
     }
 
     #[test]

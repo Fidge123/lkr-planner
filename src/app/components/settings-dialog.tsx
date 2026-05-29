@@ -8,14 +8,22 @@ import {
   updateDayliteRefreshToken,
 } from "../../services/daylite-auth";
 import {
+  loadHideNonPlannableEmployees,
+  saveHideNonPlannableEmployees,
+} from "../../services/display-settings";
+import {
   loadZepCredentials,
   saveZepCredentials,
   testZepCredentials,
 } from "../../services/zep";
 
-type SettingsSection = "daylite" | "zep";
+type SettingsSection = "daylite" | "zep" | "display";
 
-export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
+export function SettingsDialog({
+  isOpen,
+  onClose,
+  onDisplaySettingsChanged,
+}: SettingsDialogProps) {
   const [activeSection, setActiveSection] =
     useState<SettingsSection>("daylite");
 
@@ -54,13 +62,25 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
           >
             ZEP
           </button>
+          <button
+            type="button"
+            className={`btn btn-ghost btn-sm justify-start ${activeSection === "display" ? "btn-active" : ""}`}
+            onClick={() => setActiveSection("display")}
+          >
+            Anzeige
+          </button>
         </aside>
 
         <main className="flex-1 p-6 overflow-y-auto">
           {activeSection === "daylite" ? (
             <DayliteSettingsPanel onClose={onClose} />
-          ) : (
+          ) : activeSection === "zep" ? (
             <ZepSettingsPanel onClose={onClose} />
+          ) : (
+            <DisplaySettingsPanel
+              onClose={onClose}
+              onChanged={onDisplaySettingsChanged}
+            />
           )}
         </main>
       </section>
@@ -351,13 +371,102 @@ function ZepSettingsPanel({ onClose }: PanelProps) {
   );
 }
 
+function DisplaySettingsPanel({ onClose, onChanged }: DisplayPanelProps) {
+  const [hideNonPlannable, setHideNonPlannable] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [status, setStatus] = useState<PanelStatus | null>(null);
+
+  useEffect(() => {
+    let isActive = true;
+    void loadHideNonPlannableEmployees()
+      .then((value) => {
+        if (isActive) {
+          setHideNonPlannable(value);
+        }
+      })
+      .catch(() => {
+        // Fall back to the default (hide) if the store cannot be read.
+      });
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
+  const onToggle = async (event: ChangeEvent<HTMLInputElement>) => {
+    const nextValue = event.target.checked;
+    setHideNonPlannable(nextValue);
+    setIsSaving(true);
+    setStatus(null);
+
+    try {
+      await saveHideNonPlannableEmployees(nextValue);
+      onChanged?.();
+    } catch (error) {
+      // Revert the optimistic change so the UI matches the persisted state.
+      setHideNonPlannable(!nextValue);
+      setStatus({
+        type: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Die Anzeige-Einstellung konnte nicht gespeichert werden.",
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <>
+      <h3 className="text-lg font-semibold">Anzeige</h3>
+
+      {status ? (
+        <section className="alert alert-error mt-4">
+          <span>{status.message}</span>
+        </section>
+      ) : null}
+
+      <label className="label mt-4 cursor-pointer items-start justify-start gap-3">
+        <input
+          type="checkbox"
+          className="toggle toggle-primary"
+          checked={hideNonPlannable}
+          onChange={onToggle}
+          disabled={isSaving}
+        />
+        <span className="flex flex-col gap-1">
+          <span className="label-text font-medium">
+            Nicht planbare Mitarbeiter ausblenden
+          </span>
+          <span className="label-text text-base-content/60">
+            Blendet Mitarbeiter ohne konfigurierten Kalender sowie Mitarbeiter
+            der Kategorie „Test“ aus.
+          </span>
+        </span>
+      </label>
+
+      <section className="mt-6 flex items-center justify-end">
+        <button type="button" className="btn btn-sm" onClick={onClose}>
+          Schließen
+        </button>
+      </section>
+    </>
+  );
+}
+
 interface SettingsDialogProps {
   isOpen: boolean;
   onClose: () => void;
+  onDisplaySettingsChanged?: () => void;
 }
 
 interface PanelProps {
   onClose: () => void;
+}
+
+interface DisplayPanelProps {
+  onClose: () => void;
+  onChanged?: () => void;
 }
 
 interface PanelStatus {

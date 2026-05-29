@@ -29,6 +29,10 @@ function App() {
   const [employeeSettingsError, setEmployeeSettingsError] = useState<
     string | null
   >(null);
+  // Display preference: hide employees without a calendar or with category "Test".
+  // Defaults to true (matches the backend DisplaySettings default).
+  const [hideNonPlannableEmployees, setHideNonPlannableEmployees] =
+    useState(true);
   // Session cache for discovered ZEP calendars (task 2.4). Not persisted across restarts;
   // null means "not yet fetched", [] means "fetched but empty".
   const [zepCalendars, setZepCalendars] = useState<ZepCalendar[] | null>(null);
@@ -39,6 +43,9 @@ function App() {
     const result = await commands.loadLocalStore();
     if (result.status === "ok") {
       setEmployeeSettings(result.data.employeeSettings);
+      setHideNonPlannableEmployees(
+        result.data.displaySettings?.hideNonPlannableEmployees ?? true,
+      );
       setEmployeeSettingsError(null);
     } else {
       setEmployeeSettingsError(result.error.userMessage);
@@ -166,6 +173,7 @@ function App() {
           weekOffset={weekOffset}
           assignmentState={planningAssignmentsState}
           employeeSettings={employeeSettings}
+          hideNonPlannableEmployees={hideNonPlannableEmployees}
           onOpenIcalDialog={handleOpenIcalDialog}
         />
       </main>
@@ -173,6 +181,7 @@ function App() {
       <SettingsDialog
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
+        onDisplaySettingsChanged={loadEmployeeSettings}
       />
 
       <EmployeeIcalDialog

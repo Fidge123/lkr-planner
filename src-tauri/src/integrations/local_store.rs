@@ -16,6 +16,8 @@ pub struct LocalStore {
     pub standard_filter: StandardFilter,
     pub contact_filter: ContactFilter,
     pub routing_settings: RoutingSettings,
+    #[serde(default)]
+    pub display_settings: DisplaySettings,
     pub daylite_cache: DayliteCache,
     #[serde(default)]
     pub holiday_cache: Vec<HolidayCacheEntry>,
@@ -114,6 +116,24 @@ impl Default for ContactFilter {
     fn default() -> Self {
         Self {
             active_employee_keyword: "Monteur".to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct DisplaySettings {
+    /// When true, the planning view only shows employees that are plannable, i.e.
+    /// category "Monteur" with a configured primary calendar. Employees without a
+    /// primary calendar and those with the Daylite category "Test" are hidden.
+    /// Defaults to true so the planning view is uncluttered out of the box.
+    pub hide_non_plannable_employees: bool,
+}
+
+impl Default for DisplaySettings {
+    fn default() -> Self {
+        Self {
+            hide_non_plannable_employees: true,
         }
     }
 }
@@ -365,6 +385,9 @@ mod tests {
                 openrouteservice_api_key: "ors-key".to_string(),
                 openrouteservice_profile: "driving-car".to_string(),
             },
+            display_settings: DisplaySettings {
+                hide_non_plannable_employees: false,
+            },
             daylite_cache: DayliteCache {
                 last_synced_at: Some("2026-02-13T12:00:00Z".to_string()),
                 projects: vec![DayliteProjectCacheEntry {
@@ -563,5 +586,17 @@ mod tests {
 
         let loaded = load_store_from_path(&test_path).expect("should load without holidayCache");
         assert!(loaded.holiday_cache.is_empty());
+        // displaySettings absent in the file must default to hiding non-plannable employees.
+        assert!(loaded.display_settings.hide_non_plannable_employees);
+    }
+
+    #[test]
+    fn display_settings_default_hides_non_plannable_employees() {
+        assert!(DisplaySettings::default().hide_non_plannable_employees);
+        assert!(
+            LocalStore::default()
+                .display_settings
+                .hide_non_plannable_employees
+        );
     }
 }
