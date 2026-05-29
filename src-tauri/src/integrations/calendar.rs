@@ -384,6 +384,7 @@ pub async fn update_assignment(
     .await
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn update_assignment_core(
     client: &reqwest::Client,
     href: &str,
@@ -698,8 +699,8 @@ fn classify_event(event: RawVEvent) -> PendingEvent {
         .unwrap_or("")
         .trim_matches(|c: char| c.is_whitespace() || c == '\u{feff}' || c == '\u{200b}');
 
-    let project_ref = if first_line.starts_with(DAYLITE_DESCRIPTION_PREFIX) {
-        let raw_ref = first_line[DAYLITE_DESCRIPTION_PREFIX.len()..].trim();
+    let project_ref = if let Some(stripped) = first_line.strip_prefix(DAYLITE_DESCRIPTION_PREFIX) {
+        let raw_ref = stripped.trim();
         if raw_ref.is_empty() {
             None
         } else {
@@ -800,7 +801,7 @@ fn resolve_event(
 
 /// Sorts a mixed list of calendar events so that `Absence` events always appear
 /// first within each day. Within the same kind, original relative order is preserved.
-fn sort_events_absences_first(events: &mut Vec<CalendarCellEvent>) {
+fn sort_events_absences_first(events: &mut [CalendarCellEvent]) {
     events.sort_by(|a, b| {
         let kind_order = |e: &CalendarCellEvent| {
             if matches!(e.kind, CalendarEventKind::Absence) {
@@ -1155,9 +1156,7 @@ mod tests {
     fn absence_fetch_failure_produces_no_absence_events() {
         // Simulates the silent-failure path: when fetch_calendar_events returns Err,
         // the caller passes an empty vec to the mapping function.
-        let fetch_result: Result<Vec<RawVEvent>, String> =
-            Err("Verbindung fehlgeschlagen".to_string());
-        let raw = fetch_result.unwrap_or_default();
+        let raw: Vec<RawVEvent> = Vec::new();
         let week_start = NaiveDate::from_ymd_opt(2026, 4, 27).unwrap();
 
         let events = map_absence_raw_events_for_week(raw, week_start);

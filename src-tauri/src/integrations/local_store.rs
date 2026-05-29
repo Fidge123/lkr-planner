@@ -7,7 +7,7 @@ use tauri::Manager;
 
 const STORE_FILE_NAME: &str = "local-store.json";
 
-#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, Type, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct LocalStore {
     pub api_endpoints: ApiEndpoints,
@@ -19,21 +19,6 @@ pub struct LocalStore {
     pub daylite_cache: DayliteCache,
     #[serde(default)]
     pub holiday_cache: Vec<HolidayCacheEntry>,
-}
-
-impl Default for LocalStore {
-    fn default() -> Self {
-        Self {
-            api_endpoints: ApiEndpoints::default(),
-            token_references: TokenReferences::default(),
-            employee_settings: Vec::new(),
-            standard_filter: StandardFilter::default(),
-            contact_filter: ContactFilter::default(),
-            routing_settings: RoutingSettings::default(),
-            daylite_cache: DayliteCache::default(),
-            holiday_cache: Vec::new(),
-        }
-    }
 }
 
 impl LocalStore {
@@ -474,19 +459,21 @@ mod tests {
     #[test]
     fn cleanup_removes_entries_older_than_one_year() {
         let today = NaiveDate::from_ymd_opt(2025, 6, 30).unwrap();
-        let mut store = LocalStore::default();
-        store.holiday_cache = vec![
-            HolidayCacheEntry {
-                year: 2024,
-                fetched_at: "2024-07-01".to_string(),
-                holidays: vec![],
-            },
-            HolidayCacheEntry {
-                year: 2023,
-                fetched_at: "2024-06-29".to_string(),
-                holidays: vec![],
-            },
-        ];
+        let mut store = LocalStore {
+            holiday_cache: vec![
+                HolidayCacheEntry {
+                    year: 2024,
+                    fetched_at: "2024-07-01".to_string(),
+                    holidays: vec![],
+                },
+                HolidayCacheEntry {
+                    year: 2023,
+                    fetched_at: "2024-06-29".to_string(),
+                    holidays: vec![],
+                },
+            ],
+            ..LocalStore::default()
+        };
 
         store.cleanup_holiday_cache(today);
 
@@ -497,12 +484,14 @@ mod tests {
     #[test]
     fn cleanup_keeps_entries_within_one_year() {
         let today = NaiveDate::from_ymd_opt(2025, 6, 30).unwrap();
-        let mut store = LocalStore::default();
-        store.holiday_cache = vec![HolidayCacheEntry {
-            year: 2025,
-            fetched_at: "2025-06-01".to_string(),
-            holidays: vec![],
-        }];
+        let mut store = LocalStore {
+            holiday_cache: vec![HolidayCacheEntry {
+                year: 2025,
+                fetched_at: "2025-06-01".to_string(),
+                holidays: vec![],
+            }],
+            ..LocalStore::default()
+        };
 
         store.cleanup_holiday_cache(today);
 
@@ -512,19 +501,21 @@ mod tests {
     #[test]
     fn cleanup_removes_all_entries_when_all_expired() {
         let today = NaiveDate::from_ymd_opt(2025, 6, 30).unwrap();
-        let mut store = LocalStore::default();
-        store.holiday_cache = vec![
-            HolidayCacheEntry {
-                year: 2023,
-                fetched_at: "2024-06-29".to_string(),
-                holidays: vec![],
-            },
-            HolidayCacheEntry {
-                year: 2022,
-                fetched_at: "2023-01-01".to_string(),
-                holidays: vec![],
-            },
-        ];
+        let mut store = LocalStore {
+            holiday_cache: vec![
+                HolidayCacheEntry {
+                    year: 2023,
+                    fetched_at: "2024-06-29".to_string(),
+                    holidays: vec![],
+                },
+                HolidayCacheEntry {
+                    year: 2022,
+                    fetched_at: "2023-01-01".to_string(),
+                    holidays: vec![],
+                },
+            ],
+            ..LocalStore::default()
+        };
 
         store.cleanup_holiday_cache(today);
 
@@ -534,15 +525,17 @@ mod tests {
     #[test]
     fn store_with_holiday_cache_roundtrips_via_json() {
         let test_path = unique_test_path("holiday-cache-store.json");
-        let mut store = LocalStore::default();
-        store.holiday_cache = vec![HolidayCacheEntry {
-            year: 2025,
-            fetched_at: "2025-03-01".to_string(),
-            holidays: vec![CachedHoliday {
-                date: "2025-01-01".to_string(),
-                name: "Neujahr".to_string(),
+        let store = LocalStore {
+            holiday_cache: vec![HolidayCacheEntry {
+                year: 2025,
+                fetched_at: "2025-03-01".to_string(),
+                holidays: vec![CachedHoliday {
+                    date: "2025-01-01".to_string(),
+                    name: "Neujahr".to_string(),
+                }],
             }],
-        }];
+            ..LocalStore::default()
+        };
 
         save_store_to_path(&test_path, &store).expect("save should succeed");
         let loaded = load_store_from_path(&test_path).expect("reload should succeed");
