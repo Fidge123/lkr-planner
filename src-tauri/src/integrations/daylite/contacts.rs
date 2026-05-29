@@ -1,5 +1,5 @@
 use super::super::local_store::{
-    DayliteContactCacheEntry, DayliteContactUrlCacheEntry, LocalStore,
+    DayliteContactCacheEntry, DayliteContactUrlCacheEntry, EmployeeSetting, LocalStore,
 };
 use super::auth_flow::{send_authenticated_json, send_authenticated_request};
 use super::client::DayliteApiClient;
@@ -81,6 +81,7 @@ pub async fn daylite_list_contacts(
         .cloned()
         .map(map_planning_contact_to_cache_entry)
         .collect();
+    reconcile_employee_calendars_from_contacts(&mut store.employee_settings, &contacts);
     save_store_or_error(app, store)?;
 
     Ok(contacts)
@@ -435,6 +436,63 @@ fn merge_contact_ical_urls(
     merged_urls
 }
 
+/// Daylite is the source of truth for an employee's calendar configuration.
+/// Whenever fresh contacts are fetched from Daylite, this mirrors the managed
+/// "Einsatz iCal" / "Abwesenheit iCal" URLs from each contact into the local
+/// employee settings, so a calendar configured on one device is picked up on
+/// every other device. When a calendar URL changes (including being removed in
+/// Daylite), the corresponding connection-test result is cleared because it no
+/// longer describes the current URL.
+pub(super) fn reconcile_employee_calendars_from_contacts(
+    settings: &mut Vec<EmployeeSetting>,
+    contacts: &[PlanningContactRecord],
+) {
+    for contact in contacts {
+        let primary = extract_managed_ical_url(&contact.urls, is_primary_ical_label);
+        let absence = extract_managed_ical_url(&contact.urls, is_absence_ical_label);
+
+        if let Some(setting) = settings
+            .iter_mut()
+            .find(|setting| setting.daylite_contact_reference == contact.reference)
+        {
+            if setting.zep_primary_calendar != primary {
+                setting.zep_primary_calendar = primary;
+                setting.primary_ical_last_tested_at = None;
+                setting.primary_ical_last_test_passed = None;
+            }
+            if setting.zep_absence_calendar != absence {
+                setting.zep_absence_calendar = absence;
+                setting.absence_ical_last_tested_at = None;
+                setting.absence_ical_last_test_passed = None;
+            }
+        } else if primary.is_some() || absence.is_some() {
+            settings.push(EmployeeSetting {
+                daylite_contact_reference: contact.reference.clone(),
+                zep_primary_calendar: primary,
+                zep_absence_calendar: absence,
+                ..Default::default()
+            });
+        }
+    }
+}
+
+fn extract_managed_ical_url(
+    urls: &[DayliteContactUrl],
+    matches_label: fn(&str) -> bool,
+) -> Option<String> {
+    urls.iter().find_map(|url| {
+        let label = normalize_url_label(url.label.as_deref())?;
+        if !matches_label(&label) {
+            return None;
+        }
+
+        url.url
+            .as_deref()
+            .and_then(normalize_non_empty)
+            .map(ToString::to_string)
+    })
+}
+
 fn is_primary_ical_label(label: &str) -> bool {
     label == "einsatz ical"
 }
@@ -463,15 +521,17 @@ fn normalize_non_empty(value: &str) -> Option<&str> {
 mod tests {
     use super::{
         contact_display_name, filter_monteur_contacts, list_contacts_core, map_cached_contact,
-        map_daylite_contact_summary, merge_contact_ical_urls, parse_contact_id, sort_contacts,
-        update_contact_ical_urls_core, DayliteContactSummary, DayliteContactUrl,
-        DayliteUpdateContactIcalUrlsInput, PlanningContactRecord,
+        map_daylite_contact_summary, merge_contact_ical_urls, parse_contact_id,
+        reconcile_employee_calendars_from_contacts, sort_contacts, update_contact_ical_urls_core,
+        DayliteContactSummary, DayliteContactUrl, DayliteUpdateContactIcalUrlsInput,
+        PlanningContactRecord,
     };
     use crate::integrations::daylite::client::{
         BoxFuture, DayliteApiClient, DayliteHttpMethod, DayliteHttpRequest, DayliteHttpResponse,
         DayliteHttpTransport,
     };
     use crate::integrations::daylite::shared::{DayliteApiError, DayliteTokenState};
+    use crate::integrations::local_store::EmployeeSetting;
     use crate::integrations::local_store::{
         DayliteContactCacheEntry, DayliteContactUrlCacheEntry, LocalStore,
     };
@@ -630,6 +690,157 @@ mod tests {
                 },
             ]
         );
+    }
+
+    #[test]
+    fn reconcile_populates_calendars_from_daylite_for_new_device() {
+        // Simulates a fresh device: no local employee settings exist yet, but the
+        // contact fetched from Daylite carries the managed iCal URLs.
+        let mut settings: Vec<EmployeeSetting> = vec![];
+        let contacts = vec![PlanningContactRecord {
+            reference: "/v1/contacts/100".to_string(),
+            full_name: Some("Max Mustermann".to_string()),
+            nickname: None,
+            category: Some("Monteur".to_string()),
+            urls: vec![
+                DayliteContactUrl {
+                    label: Some("Einsatz iCal".to_string()),
+                    url: Some("https://example.com/max-primary.ics".to_string()),
+                    note: None,
+                },
+                DayliteContactUrl {
+                    label: Some("Abwesenheit iCal".to_string()),
+                    url: Some("https://example.com/max-absence.ics".to_string()),
+                    note: None,
+                },
+            ],
+        }];
+
+        reconcile_employee_calendars_from_contacts(&mut settings, &contacts);
+
+        assert_eq!(settings.len(), 1);
+        assert_eq!(settings[0].daylite_contact_reference, "/v1/contacts/100");
+        assert_eq!(
+            settings[0].zep_primary_calendar,
+            Some("https://example.com/max-primary.ics".to_string())
+        );
+        assert_eq!(
+            settings[0].zep_absence_calendar,
+            Some("https://example.com/max-absence.ics".to_string())
+        );
+    }
+
+    #[test]
+    fn reconcile_overrides_changed_url_and_clears_stale_test_result() {
+        let mut settings = vec![EmployeeSetting {
+            daylite_contact_reference: "/v1/contacts/100".to_string(),
+            zep_primary_calendar: Some("https://example.com/old-primary.ics".to_string()),
+            zep_absence_calendar: None,
+            primary_ical_last_tested_at: Some("2026-01-01T00:00:00Z".to_string()),
+            primary_ical_last_test_passed: Some(true),
+            absence_ical_last_tested_at: None,
+            absence_ical_last_test_passed: None,
+        }];
+        let contacts = vec![PlanningContactRecord {
+            reference: "/v1/contacts/100".to_string(),
+            full_name: Some("Max Mustermann".to_string()),
+            nickname: None,
+            category: Some("Monteur".to_string()),
+            urls: vec![DayliteContactUrl {
+                label: Some("Einsatz iCal".to_string()),
+                url: Some("https://example.com/new-primary.ics".to_string()),
+                note: None,
+            }],
+        }];
+
+        reconcile_employee_calendars_from_contacts(&mut settings, &contacts);
+
+        assert_eq!(
+            settings[0].zep_primary_calendar,
+            Some("https://example.com/new-primary.ics".to_string())
+        );
+        // The recorded test no longer describes the new URL, so it is cleared.
+        assert_eq!(settings[0].primary_ical_last_tested_at, None);
+        assert_eq!(settings[0].primary_ical_last_test_passed, None);
+    }
+
+    #[test]
+    fn reconcile_clears_calendar_removed_in_daylite() {
+        let mut settings = vec![EmployeeSetting {
+            daylite_contact_reference: "/v1/contacts/100".to_string(),
+            zep_primary_calendar: Some("https://example.com/old-primary.ics".to_string()),
+            zep_absence_calendar: Some("https://example.com/old-absence.ics".to_string()),
+            primary_ical_last_tested_at: Some("2026-01-01T00:00:00Z".to_string()),
+            primary_ical_last_test_passed: Some(true),
+            absence_ical_last_tested_at: None,
+            absence_ical_last_test_passed: None,
+        }];
+        let contacts = vec![PlanningContactRecord {
+            reference: "/v1/contacts/100".to_string(),
+            full_name: Some("Max Mustermann".to_string()),
+            nickname: None,
+            category: Some("Monteur".to_string()),
+            urls: vec![],
+        }];
+
+        reconcile_employee_calendars_from_contacts(&mut settings, &contacts);
+
+        assert_eq!(settings[0].zep_primary_calendar, None);
+        assert_eq!(settings[0].zep_absence_calendar, None);
+        assert_eq!(settings[0].primary_ical_last_tested_at, None);
+    }
+
+    #[test]
+    fn reconcile_leaves_unchanged_calendar_and_test_result_intact() {
+        let mut settings = vec![EmployeeSetting {
+            daylite_contact_reference: "/v1/contacts/100".to_string(),
+            zep_primary_calendar: Some("https://example.com/primary.ics".to_string()),
+            zep_absence_calendar: None,
+            primary_ical_last_tested_at: Some("2026-01-01T00:00:00Z".to_string()),
+            primary_ical_last_test_passed: Some(true),
+            absence_ical_last_tested_at: None,
+            absence_ical_last_test_passed: None,
+        }];
+        let contacts = vec![PlanningContactRecord {
+            reference: "/v1/contacts/100".to_string(),
+            full_name: Some("Max Mustermann".to_string()),
+            nickname: None,
+            category: Some("Monteur".to_string()),
+            urls: vec![DayliteContactUrl {
+                label: Some("Einsatz iCal".to_string()),
+                url: Some("https://example.com/primary.ics".to_string()),
+                note: None,
+            }],
+        }];
+
+        reconcile_employee_calendars_from_contacts(&mut settings, &contacts);
+
+        // Unchanged URL must preserve the existing connection-test result.
+        assert_eq!(
+            settings[0].primary_ical_last_tested_at,
+            Some("2026-01-01T00:00:00Z".to_string())
+        );
+        assert_eq!(settings[0].primary_ical_last_test_passed, Some(true));
+    }
+
+    #[test]
+    fn reconcile_skips_contacts_without_managed_calendars() {
+        let mut settings: Vec<EmployeeSetting> = vec![];
+        let contacts = vec![PlanningContactRecord {
+            reference: "/v1/contacts/100".to_string(),
+            full_name: Some("Max Mustermann".to_string()),
+            nickname: None,
+            category: Some("Monteur".to_string()),
+            urls: vec![DayliteContactUrl {
+                label: Some("Website".to_string()),
+                url: Some("https://example.com".to_string()),
+                note: None,
+            }],
+        }];
+
+        reconcile_employee_calendars_from_contacts(&mut settings, &contacts);
+
+        assert!(settings.is_empty());
     }
 
     #[test]

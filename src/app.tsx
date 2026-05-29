@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import "./app.css";
 import { ChevronLeft, ChevronRight, Settings } from "lucide-react";
 import { EmployeeIcalDialog } from "./app/components/employee-ical-dialog";
@@ -12,6 +12,7 @@ import type {
   ZepCalendar,
 } from "./generated/tauri";
 import { commands } from "./generated/tauri";
+import { loadDayliteContacts } from "./services/daylite-contacts";
 import { discoverZepCalendars } from "./services/zep";
 
 function App() {
@@ -44,8 +45,35 @@ function App() {
     }
   }, []);
 
+  // reloadAssignments depends on the visible week, but startup initialization must
+  // run only once. A ref lets the effect call the latest version without re-running.
+  const reloadAssignmentsRef = useRef(
+    planningAssignmentsState.reloadAssignments,
+  );
+  reloadAssignmentsRef.current = planningAssignmentsState.reloadAssignments;
+
+  // Daylite is the source of truth for an employee's calendar configuration.
+  // On startup we sync contacts from Daylite first — this lets the backend
+  // reconcile each employee's calendar URLs from Daylite into the local store —
+  // and only then read the (now reconciled) settings. This is what makes a
+  // calendar configured on one device show up on every other device. Assignments
+  // are reloaded afterwards so events appear without a manual refresh.
   useEffect(() => {
-    void loadEmployeeSettings();
+    let cancelled = false;
+    void (async () => {
+      try {
+        await loadDayliteContacts();
+      } catch {
+        // Daylite unreachable: fall back to whatever the local store already holds.
+      }
+      if (cancelled) return;
+      await loadEmployeeSettings();
+      if (cancelled) return;
+      reloadAssignmentsRef.current();
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [loadEmployeeSettings]);
 
   const loadZepCalendars = useCallback(async () => {
