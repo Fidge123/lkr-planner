@@ -145,10 +145,10 @@ export type DayliteSearchInput = {
 	searchTerm: string,
 	limit: number | null,
 	statuses?: string[] | null,
-	// Include full record data in the response (?full-records=true).
-	fullRecords: boolean | null,
-	// Pagination cursor: object ID of the first result to return (?start=<id>).
-	start: number | null,
+	// Include full record data in the response (`?full-records=true`).
+	fullRecords?: boolean | null,
+	// Pagination cursor: object ID of the first result to return (`?start=<id>`).
+	start?: number | null,
 };
 
 export type DayliteSearchResult<T> = {
