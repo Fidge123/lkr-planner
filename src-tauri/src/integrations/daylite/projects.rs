@@ -857,6 +857,118 @@ mod tests {
     }
 
     #[test]
+    fn search_with_full_records_sends_query_param() {
+        tauri::async_runtime::block_on(async {
+            let transport = MockTransport::new(vec![Ok(mock_response(
+                200,
+                r#"{"results":[],"next":null}"#,
+            ))]);
+            let client = DayliteApiClient::with_transport(Arc::new(transport.clone()));
+
+            search_projects_core(
+                &client,
+                DayliteTokenState {
+                    access_token: "at".to_string(),
+                    refresh_token: "rt".to_string(),
+                    access_token_expires_at_ms: Some(u64::MAX),
+                },
+                &DayliteSearchInput {
+                    search_term: "Nord".to_string(),
+                    limit: Some(5),
+                    statuses: None,
+                    full_records: Some(true),
+                    start: None,
+                },
+            )
+            .await
+            .expect("search should succeed");
+
+            let requests = transport.requests();
+            assert!(
+                requests[0]
+                    .query
+                    .contains(&("full-records".to_string(), "true".to_string())),
+                "query should include full-records=true, got {:?}",
+                requests[0].query
+            );
+        });
+    }
+
+    #[test]
+    fn search_without_full_records_omits_query_param() {
+        tauri::async_runtime::block_on(async {
+            let transport = MockTransport::new(vec![Ok(mock_response(
+                200,
+                r#"{"results":[],"next":null}"#,
+            ))]);
+            let client = DayliteApiClient::with_transport(Arc::new(transport.clone()));
+
+            search_projects_core(
+                &client,
+                DayliteTokenState {
+                    access_token: "at".to_string(),
+                    refresh_token: "rt".to_string(),
+                    access_token_expires_at_ms: Some(u64::MAX),
+                },
+                &DayliteSearchInput {
+                    search_term: "Nord".to_string(),
+                    limit: None,
+                    statuses: None,
+                    full_records: None,
+                    start: None,
+                },
+            )
+            .await
+            .expect("search should succeed");
+
+            let requests = transport.requests();
+            assert!(
+                !requests[0].query.iter().any(|(k, _)| k == "full-records"),
+                "query should not include full-records when None, got {:?}",
+                requests[0].query
+            );
+        });
+    }
+
+    #[test]
+    fn search_with_start_sends_query_param() {
+        tauri::async_runtime::block_on(async {
+            let transport = MockTransport::new(vec![Ok(mock_response(
+                200,
+                r#"{"results":[],"next":null}"#,
+            ))]);
+            let client = DayliteApiClient::with_transport(Arc::new(transport.clone()));
+
+            search_projects_core(
+                &client,
+                DayliteTokenState {
+                    access_token: "at".to_string(),
+                    refresh_token: "rt".to_string(),
+                    access_token_expires_at_ms: Some(u64::MAX),
+                },
+                &DayliteSearchInput {
+                    search_term: "Nord".to_string(),
+                    limit: None,
+                    statuses: None,
+                    full_records: None,
+                    start: Some(3001),
+                },
+            )
+            .await
+            .expect("search should succeed");
+
+            let requests = transport.requests();
+            assert!(
+                requests[0]
+                    .query
+                    .contains(&("start".to_string(), "3001".to_string())),
+                "query should include start=3001, got {:?}",
+                requests[0].query
+            );
+        });
+    }
+
+    #[test]
     fn malformed_response_returns_invalid_response_with_german_message() {
         tauri::async_runtime::block_on(async {
             let transport = MockTransport::new(vec![Ok(mock_response(200, "not valid json {{{"))]);
