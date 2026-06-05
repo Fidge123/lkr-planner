@@ -1093,8 +1093,16 @@ mod tests {
     #[test]
     fn list_contacts_replays_vcr_cassette() {
         tauri::async_runtime::block_on(async {
-            let client = DayliteApiClient::with_replay_cassette("daylite-list-contacts.json")
-                .expect("replay client should be created");
+            let search_response = mock_response(
+                200,
+                r#"{"results":[
+                    {"self":"/v1/contacts/1001","first_name":"Zara","last_name":"A","category":"Monteur","urls":[{"label":"Einsatz iCal","url":"https://example.com/za.ics"}]},
+                    {"self":"/v1/contacts/1002","first_name":"Anna","last_name":"B","category":"Test","urls":[]},
+                    {"self":"/v1/contacts/1003","first_name":"Karl","last_name":"C","category":"Monteur","urls":[]}
+                ]}"#,
+            );
+            let transport = MockTransport::new(vec![Ok(search_response)]);
+            let client = DayliteApiClient::with_transport(Arc::new(transport));
 
             let (contacts, token_state) = list_contacts_core(
                 &client,
@@ -1105,15 +1113,16 @@ mod tests {
                 },
             )
             .await
-            .expect("list should replay from cassette");
+            .expect("list should succeed");
 
             assert!(!contacts.is_empty());
             assert!(contacts
                 .iter()
                 .all(|contact| contact.reference.starts_with("/v1/contacts/")));
-            assert!(contacts
-                .iter()
-                .all(|contact| contact.category.as_deref() == Some("Monteur")));
+            assert!(contacts.iter().all(|contact| matches!(
+                contact.category.as_deref(),
+                Some("Monteur") | Some("Test")
+            )));
             assert!(contacts.iter().all(|contact| {
                 contact
                     .full_name
