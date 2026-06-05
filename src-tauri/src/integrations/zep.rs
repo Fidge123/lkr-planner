@@ -549,7 +549,7 @@ pub async fn zep_save_and_test_calendar(
 /// (i.e. `last_tested_at` is `None`). Silently does nothing if ZEP credentials
 /// are not configured. Intended to be called after Daylite reconciliation so that
 /// newly-discovered calendar URLs are validated immediately without a manual save.
-pub(crate) async fn test_untested_calendar_urls(settings: &mut Vec<EmployeeSetting>) {
+pub(crate) async fn test_untested_calendar_urls(settings: &mut [EmployeeSetting]) {
     // Collect (contact_reference, url, is_primary) triples that need testing.
     let to_test: Vec<(String, String, bool)> = settings
         .iter()
