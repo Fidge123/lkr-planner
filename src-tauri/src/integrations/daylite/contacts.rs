@@ -82,6 +82,7 @@ pub async fn daylite_list_contacts(
         .map(map_planning_contact_to_cache_entry)
         .collect();
     reconcile_employee_calendars_from_contacts(&mut store.employee_settings, &contacts);
+    crate::integrations::zep::test_untested_calendar_urls(&mut store.employee_settings).await;
     save_store_or_error(app, store)?;
 
     Ok(contacts)
