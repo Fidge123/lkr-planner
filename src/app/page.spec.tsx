@@ -41,6 +41,9 @@ const defaultHolidaysState: HolidaysState = {
 
 const defaultIcalProps = {
   employeeSettings: [] as import("../generated/tauri").EmployeeSetting[],
+  // Tests assert on the full employee list; filtering is covered separately in
+  // employee-visibility.spec.ts and the dedicated test below.
+  hideNonPlannableEmployees: false,
   holidaysState: defaultHolidaysState,
   onOpenIcalDialog: () => {},
 };
@@ -202,6 +205,55 @@ describe("planning grid project loading states", () => {
 
     expect(html).toContain("Monteur Aus Daylite");
     expect(html).not.toContain("Anna Schmidt");
+  });
+
+  it("hides employees without a calendar and test employees when the toggle is enabled", () => {
+    const html = renderToStaticMarkup(
+      <PlanningGridTable
+        weekDays={getWeekDays(0)}
+        projectState={{ ...defaultState }}
+        employeeState={{
+          ...defaultEmployeeState,
+          employees: [
+            {
+              self: "/v1/contacts/1",
+              full_name: "Mit Kalender",
+              category: "Monteur",
+              urls: [],
+            },
+            {
+              self: "/v1/contacts/2",
+              full_name: "Ohne Kalender",
+              category: "Monteur",
+              urls: [],
+            },
+            {
+              self: "/v1/contacts/3",
+              full_name: "Test Mitarbeiter",
+              category: "Test",
+              urls: [],
+            },
+          ],
+        }}
+        assignmentState={{ ...defaultAssignmentState }}
+        {...defaultIcalProps}
+        hideNonPlannableEmployees={true}
+        employeeSettings={[
+          {
+            dayliteContactReference: "/v1/contacts/1",
+            zepPrimaryCalendar: "https://app.zep.de/caldav/admin/eins/",
+          },
+          {
+            dayliteContactReference: "/v1/contacts/3",
+            zepPrimaryCalendar: "https://app.zep.de/caldav/admin/drei/",
+          },
+        ]}
+      />,
+    );
+
+    expect(html).toContain("Mit Kalender");
+    expect(html).not.toContain("Ohne Kalender");
+    expect(html).not.toContain("Test Mitarbeiter");
   });
 });
 
