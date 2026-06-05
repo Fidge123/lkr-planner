@@ -78,7 +78,6 @@ export type CalendarEventKind =
 // An all-day absence from the employee's dedicated ZEP absence calendar.
 "absence";
 
-
 export type DayliteApiError = {
 	code: DayliteApiErrorCode,
 	httpStatus: number | null,
