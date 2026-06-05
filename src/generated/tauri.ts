@@ -164,6 +164,16 @@ export type DayliteUpdateContactIcalUrlsInput = {
 	absenceIcalUrl: string,
 };
 
+export type DisplaySettings = {
+	/**
+	 *  When true, the planning view only shows employees that are plannable, i.e.
+	 *  category "Monteur" with a configured primary calendar. Employees without a
+	 *  primary calendar and those with the Daylite category "Test" are hidden.
+	 *  Defaults to true so the planning view is uncluttered out of the box.
+	 */
+	hideNonPlannableEmployees: boolean,
+};
+
 export type EmployeeSetting = {
 	dayliteContactReference: string,
 	/**
@@ -225,16 +235,6 @@ export type HolidayCacheEntry = {
 };
 
 export type IcalSource = "primary" | "absence";
-
-export type DisplaySettings = {
-	/**
-	 *  When true, the planning view only shows employees that are plannable, i.e.
-	 *  category "Monteur" with a configured primary calendar. Employees without a
-	 *  primary calendar and those with the Daylite category "Test" are hidden.
-	 *  Defaults to true so the planning view is uncluttered out of the box.
-	 */
-	hideNonPlannableEmployees: boolean,
-};
 
 export type LocalStore = {
 	apiEndpoints: ApiEndpoints,
