@@ -33,6 +33,12 @@ This is a desktop application which provides a planning view and integrates with
   - **Components**: PascalCase function components
   - **Constants**: camelCase
 
+### Documentation
+
+All markdown files and pull request descriptions should have one sentence per line.
+Don't break sentences across multiple lines in markdown.
+Avoid `---` between headers and avoid em dashes.
+
 ### Frontend
 
 - Avoid nested `div` and `span` elements

@@ -78,10 +78,6 @@ export type CalendarEventKind =
 // An all-day absence from the employee's dedicated ZEP absence calendar.
 "absence";
 
-export type ContactFilter = {
-	activeEmployeeKeyword: string,
-};
-
 export type DayliteApiError = {
 	code: DayliteApiErrorCode,
 	httpStatus: number | null,
@@ -161,6 +157,16 @@ export type DayliteUpdateContactIcalUrlsInput = {
 	absenceIcalUrl: string,
 };
 
+export type DisplaySettings = {
+	/**
+	 *  When true, the planning view only shows employees that are plannable, i.e.
+	 *  category "Monteur" with a configured primary calendar. Employees without a
+	 *  primary calendar and those with the Daylite category "Test" are hidden.
+	 *  Defaults to true so the planning view is uncluttered out of the box.
+	 */
+	hideNonPlannableEmployees: boolean,
+};
+
 export type EmployeeSetting = {
 	dayliteContactReference: string,
 	/**
@@ -225,11 +231,8 @@ export type IcalSource = "primary" | "absence";
 
 export type LocalStore = {
 	apiEndpoints: ApiEndpoints,
-	tokenReferences: TokenReferences,
 	employeeSettings: EmployeeSetting[],
-	standardFilter: StandardFilter,
-	contactFilter: ContactFilter,
-	routingSettings: RoutingSettings,
+	displaySettings?: DisplaySettings,
 	dayliteCache: DayliteCache,
 	holidayCache?: HolidayCacheEntry[],
 };
@@ -257,18 +260,6 @@ export type PlanningProjectRecord = {
 
 export type PlanningProjectStatus = "new_status" | "in_progress" | "done" | "abandoned" | "cancelled" | "deferred";
 
-export type RoutingSettings = {
-	openrouteserviceApiKey: string,
-	openrouteserviceProfile: string,
-};
-
-export type StandardFilter = {
-	pipelines: string[],
-	columns: string[],
-	categories: string[],
-	exclusionStatuses: string[],
-};
-
 export type StoreError = {
 	code: StoreErrorCode,
 	userMessage: string,
@@ -276,14 +267,6 @@ export type StoreError = {
 };
 
 export type StoreErrorCode = "READ_FAILED" | "WRITE_FAILED" | "CORRUPT_FILE" | "MISSING_FIELDS";
-
-export type TokenReferences = {
-	dayliteTokenReference: string,
-	planradarTokenReference: string,
-	dayliteAccessToken: string,
-	dayliteRefreshToken: string,
-	dayliteAccessTokenExpiresAtMs: number | null,
-};
 
 export type ZepCalendar = {
 	displayName: string,

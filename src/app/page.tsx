@@ -5,6 +5,7 @@ import type {
 } from "../generated/tauri";
 import { TimetableHeader } from "./components/timetable-header";
 import { TimetableRow } from "./components/timetable-row";
+import { filterVisibleEmployees } from "./employee-visibility";
 import { type HolidaysState, useHolidays } from "./hooks/use-holidays";
 import type { PlanningAssignmentsState } from "./hooks/use-planning-assignments";
 import { usePlanningEmployees } from "./hooks/use-planning-employees";
@@ -17,6 +18,7 @@ export function PlanningGrid({
   employeeState,
   assignmentState,
   employeeSettings,
+  hideNonPlannableEmployees = true,
   onOpenIcalDialog,
 }: Props) {
   const weekDays = getWeekDays(weekOffset);
@@ -36,6 +38,7 @@ export function PlanningGrid({
       employeeState={resolvedEmployeeState}
       assignmentState={assignmentState}
       employeeSettings={employeeSettings ?? []}
+      hideNonPlannableEmployees={hideNonPlannableEmployees}
       holidaysState={holidaysState}
       onOpenIcalDialog={onOpenIcalDialog ?? (() => {})}
     />
@@ -48,6 +51,7 @@ export function PlanningGridTable({
   employeeState,
   assignmentState,
   employeeSettings,
+  hideNonPlannableEmployees,
   holidaysState,
   onOpenIcalDialog,
 }: PlanningGridTableProps) {
@@ -72,6 +76,11 @@ export function PlanningGridTable({
   } = holidaysState;
   const holidayByDate = new Map(holidays.map((h) => [h.date, h.name]));
   const holidayDates = new Set(holidays.map((h) => h.date));
+  const visibleEmployees = filterVisibleEmployees(
+    employees,
+    employeeSettings,
+    hideNonPlannableEmployees,
+  );
 
   return (
     <section className="w-full h-full overflow-auto">
@@ -137,7 +146,7 @@ export function PlanningGridTable({
           </tr>
         </thead>
         <tbody>
-          {employees.map((employee, index) => (
+          {visibleEmployees.map((employee, index) => (
             <TimetableRow
               key={buildEmployeeRowKey(employee, index)}
               employee={employee}
@@ -155,7 +164,7 @@ export function PlanningGridTable({
               onReloadAssignments={reloadAssignments}
             />
           ))}
-          {!isEmployeeLoading && employees.length === 0 ? (
+          {!isEmployeeLoading && visibleEmployees.length === 0 ? (
             <tr key="no-employees-row">
               <td
                 className="p-4 text-base-content/70"
@@ -209,6 +218,7 @@ interface Props {
   employeeState?: PlanningGridEmployeesState;
   assignmentState: PlanningGridAssignmentState;
   employeeSettings?: EmployeeSetting[];
+  hideNonPlannableEmployees?: boolean;
   onOpenIcalDialog?: (employee: PlanningContactRecord) => void;
 }
 
@@ -218,6 +228,7 @@ export interface PlanningGridTableProps {
   employeeState: PlanningGridEmployeesState;
   assignmentState: PlanningGridAssignmentState;
   employeeSettings: EmployeeSetting[];
+  hideNonPlannableEmployees: boolean;
   holidaysState: HolidaysState;
   onOpenIcalDialog: (employee: PlanningContactRecord) => void;
 }
