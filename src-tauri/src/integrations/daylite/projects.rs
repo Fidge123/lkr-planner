@@ -220,7 +220,7 @@ fn map_daylite_project_summary(project: DayliteProjectSummary) -> PlanningProjec
 
 fn normalize_project_summary(project: DayliteProjectSummary) -> DayliteProjectSummary {
     DayliteProjectSummary {
-        reference: normalize_reference(project.reference),
+        reference: normalize_required_string(project.reference),
         name: normalize_required_string(project.name),
         status: normalize_optional_string(project.status),
         category: normalize_optional_string(project.category),
@@ -235,10 +235,6 @@ fn normalize_project_summary(project: DayliteProjectSummary) -> DayliteProjectSu
 
 fn normalize_required_string(value: String) -> String {
     value.trim().to_string()
-}
-
-fn normalize_reference(value: String) -> String {
-    normalize_required_string(value)
 }
 
 fn normalize_optional_string(value: Option<String>) -> Option<String> {
@@ -418,7 +414,7 @@ mod tests {
                 200,
                 r#"{"results":[{"self":"/v1/projects/1","name":"Projekt A","status":"in_progress"},{"self":"/v1/projects/2","name":"Projekt B"}],"next":null}"#,
             ))]);
-            let client = DayliteApiClient::with_transport(Arc::new(transport.clone()));
+            let client = DayliteApiClient::with_transport(Box::new(transport.clone()));
 
             let (projects, token_state) = list_projects_core(
                 &client,
@@ -457,7 +453,7 @@ mod tests {
                 200,
                 r#"{"results":[{"self":" /v1/projects/10 ","name":" Projekt Nord ","category":" Bau ","keywords":[" Aufträge ",""],"due":"2026-02-15"}],"next":" /v1/projects/_search?offset=5 "}"#,
             ))]);
-            let client = DayliteApiClient::with_transport(Arc::new(transport.clone()));
+            let client = DayliteApiClient::with_transport(Box::new(transport.clone()));
 
             let (result, _) = search_projects_core(
                 &client,
@@ -514,7 +510,7 @@ mod tests {
                     {"self":"/v1/projects/3","name":"Drei"}
                 ],"next":null}"#,
             ))]);
-            let client = DayliteApiClient::with_transport(Arc::new(transport));
+            let client = DayliteApiClient::with_transport(Box::new(transport));
 
             let (result, _) = search_projects_core(
                 &client,
@@ -551,7 +547,7 @@ mod tests {
                     {"self":"/v1/projects/3","name":"Drei"}
                 ],"next":null}"#,
             ))]);
-            let client = DayliteApiClient::with_transport(Arc::new(transport));
+            let client = DayliteApiClient::with_transport(Box::new(transport));
 
             let (result, _) = search_projects_core(
                 &client,
@@ -601,7 +597,7 @@ mod tests {
                 )),
                 Ok(mock_response(200, r#"{"results":[],"next":null}"#)),
             ]);
-            let client = DayliteApiClient::with_transport(Arc::new(transport));
+            let client = DayliteApiClient::with_transport(Box::new(transport));
 
             let (projects, token_state) = list_projects_core(
                 &client,
@@ -781,7 +777,7 @@ mod tests {
                 200,
                 r#"{"results":[],"next":null}"#,
             ))]);
-            let client = DayliteApiClient::with_transport(Arc::new(transport.clone()));
+            let client = DayliteApiClient::with_transport(Box::new(transport.clone()));
 
             search_projects_core(
                 &client,
@@ -821,7 +817,7 @@ mod tests {
                 200,
                 r#"{"results":[],"next":null}"#,
             ))]);
-            let client = DayliteApiClient::with_transport(Arc::new(transport.clone()));
+            let client = DayliteApiClient::with_transport(Box::new(transport.clone()));
 
             search_projects_core(
                 &client,
@@ -863,7 +859,7 @@ mod tests {
                 200,
                 r#"{"results":[],"next":null}"#,
             ))]);
-            let client = DayliteApiClient::with_transport(Arc::new(transport.clone()));
+            let client = DayliteApiClient::with_transport(Box::new(transport.clone()));
 
             search_projects_core(
                 &client,
@@ -901,7 +897,7 @@ mod tests {
                 200,
                 r#"{"results":[],"next":null}"#,
             ))]);
-            let client = DayliteApiClient::with_transport(Arc::new(transport.clone()));
+            let client = DayliteApiClient::with_transport(Box::new(transport.clone()));
 
             search_projects_core(
                 &client,
@@ -937,7 +933,7 @@ mod tests {
                 200,
                 r#"{"results":[],"next":null}"#,
             ))]);
-            let client = DayliteApiClient::with_transport(Arc::new(transport.clone()));
+            let client = DayliteApiClient::with_transport(Box::new(transport.clone()));
 
             search_projects_core(
                 &client,
@@ -972,7 +968,7 @@ mod tests {
     fn malformed_response_returns_invalid_response_with_german_message() {
         tauri::async_runtime::block_on(async {
             let transport = MockTransport::new(vec![Ok(mock_response(200, "not valid json {{{"))]);
-            let client = DayliteApiClient::with_transport(Arc::new(transport));
+            let client = DayliteApiClient::with_transport(Box::new(transport));
 
             let result = search_projects_core(
                 &client,
@@ -1010,7 +1006,7 @@ mod tests {
                 user_message: "Zeitüberschreitung bei der Daylite-Anfrage.".to_string(),
                 technical_message: "request timed out".to_string(),
             })]);
-            let client = DayliteApiClient::with_transport(Arc::new(transport));
+            let client = DayliteApiClient::with_transport(Box::new(transport));
 
             let result = search_projects_core(
                 &client,

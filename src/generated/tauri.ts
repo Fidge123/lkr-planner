@@ -102,19 +102,13 @@ export type DayliteContactCacheEntry = {
 	fullName: string | null,
 	nickname: string | null,
 	category: string | null,
-	urls: DayliteContactUrlCacheEntry[],
+	urls: DayliteContactUrl[],
 };
 
 export type DayliteContactUrl = {
 	label?: string | null,
 	url?: string | null,
 	note?: string | null,
-};
-
-export type DayliteContactUrlCacheEntry = {
-	label: string | null,
-	url: string | null,
-	note: string | null,
 };
 
 export type DayliteProjectCacheEntry = {

@@ -64,39 +64,39 @@ pub(super) async fn refresh_tokens(
     let refreshed_refresh_token = parsed_refresh.refresh_token.trim().to_string();
 
     if access_token.is_empty() {
-        return Err(DayliteApiError {
-            code: DayliteApiErrorCode::TokenRefreshFailed,
-            http_status: Some(response.status),
-            user_message: "Das Daylite-Access-Token konnte nicht erneuert werden.".to_string(),
-            technical_message: format!(
+        return Err(DayliteApiError::new(
+            DayliteApiErrorCode::TokenRefreshFailed,
+            Some(response.status),
+            "Das Daylite-Access-Token konnte nicht erneuert werden.",
+            format!(
                 "Refresh-Antwort enthält ein leeres access_token Feld. body={}",
                 truncate_for_log(&response.body)
             ),
-        });
+        ));
     }
 
     if refreshed_refresh_token.is_empty() {
-        return Err(DayliteApiError {
-            code: DayliteApiErrorCode::TokenRefreshFailed,
-            http_status: Some(response.status),
-            user_message: "Das Daylite-Refresh-Token konnte nicht erneuert werden.".to_string(),
-            technical_message: format!(
+        return Err(DayliteApiError::new(
+            DayliteApiErrorCode::TokenRefreshFailed,
+            Some(response.status),
+            "Das Daylite-Refresh-Token konnte nicht erneuert werden.",
+            format!(
                 "Refresh-Antwort enthält ein leeres refresh_token Feld. body={}",
                 truncate_for_log(&response.body)
             ),
-        });
+        ));
     }
 
     if parsed_refresh.expires_in == 0 {
-        return Err(DayliteApiError {
-            code: DayliteApiErrorCode::TokenRefreshFailed,
-            http_status: Some(response.status),
-            user_message: "Die Ablaufzeit des Daylite-Access-Tokens ist ungültig.".to_string(),
-            technical_message: format!(
+        return Err(DayliteApiError::new(
+            DayliteApiErrorCode::TokenRefreshFailed,
+            Some(response.status),
+            "Die Ablaufzeit des Daylite-Access-Tokens ist ungültig.",
+            format!(
                 "Refresh-Antwort enthält expires_in=0. body={}",
                 truncate_for_log(&response.body)
             ),
-        });
+        ));
     }
 
     let now_ms = current_epoch_ms()?;
@@ -170,11 +170,13 @@ fn parse_refresh_response_body(
     body: &str,
 ) -> Result<DayliteRefreshTokenResponse, DayliteApiError> {
     parse_json_body::<DayliteRefreshTokenResponse>(status, body, "/personal_token/refresh_token")
-        .map_err(|error| DayliteApiError {
-            code: DayliteApiErrorCode::TokenRefreshFailed,
-            http_status: error.http_status,
-            user_message: "Die Daylite-Token-Antwort konnte nicht verarbeitet werden.".to_string(),
-            technical_message: error.technical_message,
+        .map_err(|error| {
+            DayliteApiError::new(
+                DayliteApiErrorCode::TokenRefreshFailed,
+                error.http_status,
+                "Die Daylite-Token-Antwort konnte nicht verarbeitet werden.",
+                error.technical_message,
+            )
         })
 }
 
@@ -246,7 +248,7 @@ mod tests {
     fn send_authenticated_json_uses_existing_access_token_and_parses_payload() {
         tauri::async_runtime::block_on(async {
             let transport = MockTransport::new(vec![Ok(mock_response(200, r#"{"value":"ok"}"#))]);
-            let client = DayliteApiClient::with_transport(Arc::new(transport.clone()));
+            let client = DayliteApiClient::with_transport(Box::new(transport.clone()));
 
             let (data, token_state) = send_authenticated_json::<AuthFlowFixture>(
                 &client,
@@ -291,7 +293,7 @@ mod tests {
                 )),
                 Ok(mock_response(200, r#"{"value":"ok"}"#)),
             ]);
-            let client = DayliteApiClient::with_transport(Arc::new(transport.clone()));
+            let client = DayliteApiClient::with_transport(Box::new(transport.clone()));
 
             let (_, token_state) = send_authenticated_json::<AuthFlowFixture>(
                 &client,
@@ -328,7 +330,7 @@ mod tests {
         tauri::async_runtime::block_on(async {
             let transport =
                 MockTransport::new(vec![Ok(mock_response(401, r#"{"error":"unauthorized"}"#))]);
-            let client = DayliteApiClient::with_transport(Arc::new(transport));
+            let client = DayliteApiClient::with_transport(Box::new(transport));
 
             let error = refresh_tokens(&client, "valid-refresh-token".to_string())
                 .await
@@ -344,7 +346,7 @@ mod tests {
         tauri::async_runtime::block_on(async {
             let transport =
                 MockTransport::new(vec![Ok(mock_response(200, "this is not valid json"))]);
-            let client = DayliteApiClient::with_transport(Arc::new(transport));
+            let client = DayliteApiClient::with_transport(Box::new(transport));
 
             let error = refresh_tokens(&client, "valid-refresh-token".to_string())
                 .await
@@ -361,7 +363,7 @@ mod tests {
                 200,
                 r#"{"access_token":" ","refresh_token":"rt","expires_in":3600}"#,
             ))]);
-            let client = DayliteApiClient::with_transport(Arc::new(transport));
+            let client = DayliteApiClient::with_transport(Box::new(transport));
 
             let error = refresh_tokens(&client, "valid-refresh-token".to_string())
                 .await
@@ -379,7 +381,7 @@ mod tests {
                 200,
                 r#"{"access_token":"at","refresh_token":"","expires_in":3600}"#,
             ))]);
-            let client = DayliteApiClient::with_transport(Arc::new(transport));
+            let client = DayliteApiClient::with_transport(Box::new(transport));
 
             let error = refresh_tokens(&client, "valid-refresh-token".to_string())
                 .await
@@ -397,7 +399,7 @@ mod tests {
                 200,
                 r#"{"access_token":"at","refresh_token":"rt","expires_in":0}"#,
             ))]);
-            let client = DayliteApiClient::with_transport(Arc::new(transport));
+            let client = DayliteApiClient::with_transport(Box::new(transport));
 
             let error = refresh_tokens(&client, "valid-refresh-token".to_string())
                 .await
@@ -415,7 +417,7 @@ mod tests {
                 500,
                 r#"{"error":"internal server error"}"#,
             ))]);
-            let client = DayliteApiClient::with_transport(Arc::new(transport));
+            let client = DayliteApiClient::with_transport(Box::new(transport));
 
             let error = send_authenticated_json::<AuthFlowFixture>(
                 &client,
@@ -442,7 +444,7 @@ mod tests {
         tauri::async_runtime::block_on(async {
             let transport =
                 MockTransport::new(vec![Ok(mock_response(200, "not valid json at all"))]);
-            let client = DayliteApiClient::with_transport(Arc::new(transport));
+            let client = DayliteApiClient::with_transport(Box::new(transport));
 
             let error = send_authenticated_json::<AuthFlowFixture>(
                 &client,

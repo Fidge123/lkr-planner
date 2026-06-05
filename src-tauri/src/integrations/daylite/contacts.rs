@@ -1,6 +1,4 @@
-use super::super::local_store::{
-    DayliteContactCacheEntry, DayliteContactUrlCacheEntry, LocalStore,
-};
+use super::super::local_store::{DayliteContactCacheEntry, DayliteContactUrl, LocalStore};
 use super::auth_flow::{send_authenticated_json, send_authenticated_request};
 use super::client::DayliteApiClient;
 use super::client::DayliteHttpMethod;
@@ -30,17 +28,6 @@ pub struct DayliteContactSummary {
     pub category: Option<String>,
     #[serde(default)]
     pub urls: Vec<DayliteContactUrl>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct DayliteContactUrl {
-    #[serde(default)]
-    pub label: Option<String>,
-    #[serde(default)]
-    pub url: Option<String>,
-    #[serde(default)]
-    pub note: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
@@ -230,14 +217,14 @@ pub fn daylite_list_cached_contacts(
 }
 
 fn map_daylite_contact_summary(contact: DayliteContactSummary) -> PlanningContactRecord {
-    let full_name = normalize_optional_string(contact.full_name)
+    let full_name = normalize_string_option(contact.full_name)
         .or_else(|| join_name(&contact.first_name, &contact.last_name));
 
     PlanningContactRecord {
         reference: normalize_string(contact.reference),
         full_name,
-        nickname: normalize_optional_string(contact.nickname),
-        category: normalize_optional_string(contact.category),
+        nickname: normalize_string_option(contact.nickname),
+        category: normalize_string_option(contact.category),
         urls: normalize_contact_urls(contact.urls),
     }
 }
@@ -245,10 +232,10 @@ fn map_daylite_contact_summary(contact: DayliteContactSummary) -> PlanningContac
 fn map_cached_contact(contact: DayliteContactCacheEntry) -> PlanningContactRecord {
     PlanningContactRecord {
         reference: normalize_string(contact.reference),
-        full_name: normalize_optional_string(contact.full_name),
-        nickname: normalize_optional_string(contact.nickname),
-        category: normalize_optional_string(contact.category),
-        urls: normalize_cached_contact_urls(contact.urls),
+        full_name: normalize_string_option(contact.full_name),
+        nickname: normalize_string_option(contact.nickname),
+        category: normalize_string_option(contact.category),
+        urls: normalize_contact_urls(contact.urls),
     }
 }
 
@@ -258,15 +245,7 @@ fn map_planning_contact_to_cache_entry(contact: PlanningContactRecord) -> Daylit
         full_name: contact.full_name,
         nickname: contact.nickname,
         category: contact.category,
-        urls: contact
-            .urls
-            .into_iter()
-            .map(|url| DayliteContactUrlCacheEntry {
-                label: url.label,
-                url: url.url,
-                note: url.note,
-            })
-            .collect(),
+        urls: contact.urls,
     }
 }
 
@@ -308,30 +287,9 @@ fn normalize_contact_urls(urls: Vec<DayliteContactUrl>) -> Vec<DayliteContactUrl
     urls.into_iter()
         .filter_map(|url| {
             let normalized_url = DayliteContactUrl {
-                label: normalize_optional_string(url.label),
-                url: normalize_optional_string(url.url),
-                note: normalize_optional_string(url.note),
-            };
-
-            if normalized_url.label.is_none()
-                && normalized_url.url.is_none()
-                && normalized_url.note.is_none()
-            {
-                None
-            } else {
-                Some(normalized_url)
-            }
-        })
-        .collect()
-}
-
-fn normalize_cached_contact_urls(urls: Vec<DayliteContactUrlCacheEntry>) -> Vec<DayliteContactUrl> {
-    urls.into_iter()
-        .filter_map(|url| {
-            let normalized_url = DayliteContactUrl {
-                label: normalize_optional_string(url.label),
-                url: normalize_optional_string(url.url),
-                note: normalize_optional_string(url.note),
+                label: normalize_string_option(url.label),
+                url: normalize_string_option(url.url),
+                note: normalize_string_option(url.note),
             };
 
             if normalized_url.label.is_none()
@@ -361,10 +319,6 @@ fn normalize_string_option(value: Option<String>) -> Option<String> {
     })
 }
 
-fn normalize_optional_string(value: Option<String>) -> Option<String> {
-    normalize_string_option(value)
-}
-
 fn join_name(first_name: &str, last_name: &str) -> Option<String> {
     let normalized_first_name = first_name.trim();
     let normalized_last_name = last_name.trim();
@@ -390,14 +344,14 @@ fn parse_contact_id(contact_reference: &str) -> Result<u64, DayliteApiError> {
     let trimmed_reference = contact_reference.trim();
     let contact_id_raw = trimmed_reference.rsplit('/').next().unwrap_or_default();
 
-    contact_id_raw
-        .parse::<u64>()
-        .map_err(|error| DayliteApiError {
-            code: DayliteApiErrorCode::InvalidResponse,
-            http_status: None,
-            user_message: "Die Daylite-Kontaktreferenz ist ungültig.".to_string(),
-            technical_message: format!("Ungültige Kontaktreferenz `{trimmed_reference}`: {error}"),
-        })
+    contact_id_raw.parse::<u64>().map_err(|error| {
+        DayliteApiError::new(
+            DayliteApiErrorCode::InvalidResponse,
+            None,
+            "Die Daylite-Kontaktreferenz ist ungültig.",
+            format!("Ungültige Kontaktreferenz `{trimmed_reference}`: {error}"),
+        )
+    })
 }
 
 fn merge_contact_ical_urls(
@@ -472,9 +426,7 @@ mod tests {
         DayliteHttpTransport,
     };
     use crate::integrations::daylite::shared::{DayliteApiError, DayliteTokenState};
-    use crate::integrations::local_store::{
-        DayliteContactCacheEntry, DayliteContactUrlCacheEntry, LocalStore,
-    };
+    use crate::integrations::local_store::{DayliteContactCacheEntry, LocalStore};
     use std::collections::VecDeque;
     use std::sync::{Arc, Mutex};
 
@@ -524,7 +476,7 @@ mod tests {
             full_name: None,
             nickname: None,
             category: Some("Monteur".to_string()),
-            urls: vec![DayliteContactUrlCacheEntry {
+            urls: vec![DayliteContactUrl {
                 label: Some("Abwesenheit iCal".to_string()),
                 url: Some("https://example.com/moritz-absence.ics".to_string()),
                 note: None,
@@ -655,7 +607,7 @@ mod tests {
                 r#"{"self":"/v1/contacts/500","first_name":"Max","last_name":"M","category":"Monteur","urls":[{"label":"Website","url":"https://example.com"},{"label":"Einsatz iCal","url":"https://example.com/primary.ics"},{"label":"Abwesenheit iCal","url":"https://example.com/absence.ics"}]}"#,
             );
             let transport = MockTransport::new(vec![Ok(get_response), Ok(patch_response)]);
-            let client = DayliteApiClient::with_transport(Arc::new(transport.clone()));
+            let client = DayliteApiClient::with_transport(Box::new(transport.clone()));
             let mut store = LocalStore::default();
 
             let (contact, token_state) = update_contact_ical_urls_core(
@@ -702,7 +654,7 @@ mod tests {
             );
             let patch_response = mock_response(204, "");
             let transport = MockTransport::new(vec![Ok(get_response), Ok(patch_response)]);
-            let client = DayliteApiClient::with_transport(Arc::new(transport));
+            let client = DayliteApiClient::with_transport(Box::new(transport));
             let mut store = LocalStore::default();
 
             let (contact, _) = update_contact_ical_urls_core(
@@ -744,7 +696,7 @@ mod tests {
                 r#"{"self":"/v1/contacts/600","first_name":"Anna","last_name":"B","category":"Monteur","urls":[{"label":"Einsatz iCal","url":"https://example.com/anna.ics"}]}"#,
             );
             let transport = MockTransport::new(vec![Ok(get_response), Ok(patch_response)]);
-            let client = DayliteApiClient::with_transport(Arc::new(transport));
+            let client = DayliteApiClient::with_transport(Box::new(transport));
             let mut store = LocalStore::default();
             store.daylite_cache.contacts = vec![DayliteContactCacheEntry {
                 reference: "/v1/contacts/600".to_string(),
@@ -793,7 +745,7 @@ mod tests {
                 r#"{"self":"/v1/contacts/700","first_name":"Kai","last_name":"V","category":"Vertrieb","urls":[]}"#,
             );
             let transport = MockTransport::new(vec![Ok(get_response), Ok(patch_response)]);
-            let client = DayliteApiClient::with_transport(Arc::new(transport));
+            let client = DayliteApiClient::with_transport(Box::new(transport));
             let mut store = LocalStore::default();
             store.daylite_cache.contacts = vec![DayliteContactCacheEntry {
                 reference: "/v1/contacts/700".to_string(),

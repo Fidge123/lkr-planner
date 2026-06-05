@@ -1,7 +1,7 @@
 use crate::integrations::daylite::contacts::{
     sync_contact_ical_urls, DayliteUpdateContactIcalUrlsInput,
 };
-use crate::integrations::local_store::EmployeeSetting;
+use crate::integrations::local_store::{EmployeeSetting, StoreError};
 use crate::secret_manager;
 use chrono::{SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
@@ -19,6 +19,32 @@ pub struct ZepError {
     pub code: ZepErrorCode,
     pub user_message: String,
     pub technical_message: String,
+}
+
+impl ZepError {
+    pub(crate) fn new(
+        code: ZepErrorCode,
+        user_message: impl Into<String>,
+        technical_message: impl Into<String>,
+    ) -> Self {
+        Self {
+            code,
+            user_message: user_message.into(),
+            technical_message: technical_message.into(),
+        }
+    }
+}
+
+// Local-store failures during ZEP commands always surface as a configuration error,
+// so `?` can convert them directly instead of repeating the mapping at every call site.
+impl From<StoreError> for ZepError {
+    fn from(error: StoreError) -> Self {
+        ZepError::new(
+            ZepErrorCode::InvalidConfiguration,
+            error.user_message,
+            error.technical_message,
+        )
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
@@ -89,17 +115,21 @@ fn save_zep_credentials_to_keychain(username: &str, password: &str) -> Result<()
         username: username.to_string(),
         password: password.to_string(),
     })
-    .map_err(|e| ZepError {
-        code: ZepErrorCode::KeychainError,
-        user_message: "Die ZEP-Zugangsdaten konnten nicht gespeichert werden.".to_string(),
-        technical_message: format!("Serialisierung fehlgeschlagen: {e}"),
+    .map_err(|e| {
+        ZepError::new(
+            ZepErrorCode::KeychainError,
+            "Die ZEP-Zugangsdaten konnten nicht gespeichert werden.",
+            format!("Serialisierung fehlgeschlagen: {e}"),
+        )
     })?;
 
     secret_manager::set_token(ZEP_KEYCHAIN_SERVICE, ZEP_KEYCHAIN_ACCOUNT, &payload).map_err(
-        |e| ZepError {
-            code: ZepErrorCode::KeychainError,
-            user_message: "Die ZEP-Zugangsdaten konnten nicht im Keychain gespeichert werden (Zugriff verweigert?).".to_string(),
-            technical_message: e.to_string(),
+        |e| {
+            ZepError::new(
+                ZepErrorCode::KeychainError,
+                "Die ZEP-Zugangsdaten konnten nicht im Keychain gespeichert werden (Zugriff verweigert?).",
+                e.to_string(),
+            )
         },
     )
 }
@@ -107,28 +137,25 @@ fn save_zep_credentials_to_keychain(username: &str, password: &str) -> Result<()
 pub(crate) fn load_zep_credentials_from_keychain() -> Result<ZepStoredCredentials, ZepError> {
     let json_str = secret_manager::get_token(ZEP_KEYCHAIN_SERVICE, ZEP_KEYCHAIN_ACCOUNT).map_err(
         |e| match e {
-            secret_manager::SecretError::NotFound => ZepError {
-                code: ZepErrorCode::MissingCredentials,
-                user_message:
-                    "Keine ZEP-Zugangsdaten hinterlegt. Bitte ZEP-Verbindung konfigurieren."
-                        .to_string(),
-                technical_message: "Kein Keychain-Eintrag für ZEP-Zugangsdaten.".to_string(),
-            },
-            _ => ZepError {
-                code: ZepErrorCode::KeychainError,
-                user_message:
-                    "Auf die ZEP-Zugangsdaten im Keychain konnte nicht zugegriffen werden."
-                        .to_string(),
-                technical_message: e.to_string(),
-            },
+            secret_manager::SecretError::NotFound => ZepError::new(
+                ZepErrorCode::MissingCredentials,
+                "Keine ZEP-Zugangsdaten hinterlegt. Bitte ZEP-Verbindung konfigurieren.",
+                "Kein Keychain-Eintrag für ZEP-Zugangsdaten.",
+            ),
+            _ => ZepError::new(
+                ZepErrorCode::KeychainError,
+                "Auf die ZEP-Zugangsdaten im Keychain konnte nicht zugegriffen werden.",
+                e.to_string(),
+            ),
         },
     )?;
 
-    serde_json::from_str::<ZepStoredCredentials>(&json_str).map_err(|e| ZepError {
-        code: ZepErrorCode::KeychainError,
-        user_message: "Die gespeicherten ZEP-Zugangsdaten sind beschädigt. Bitte neu eingeben."
-            .to_string(),
-        technical_message: format!("Deserialisierung fehlgeschlagen: {e}"),
+    serde_json::from_str::<ZepStoredCredentials>(&json_str).map_err(|e| {
+        ZepError::new(
+            ZepErrorCode::KeychainError,
+            "Die gespeicherten ZEP-Zugangsdaten sind beschädigt. Bitte neu eingeben.",
+            format!("Deserialisierung fehlgeschlagen: {e}"),
+        )
     })
 }
 
@@ -144,10 +171,12 @@ async fn propfind(url: &str, username: &str, password: &str) -> Result<String, Z
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(30))
         .build()
-        .map_err(|e| ZepError {
-            code: ZepErrorCode::NetworkError,
-            user_message: "HTTP-Client konnte nicht initialisiert werden.".to_string(),
-            technical_message: format!("Client::build fehlgeschlagen: {e}"),
+        .map_err(|e| {
+            ZepError::new(
+                ZepErrorCode::NetworkError,
+                "HTTP-Client konnte nicht initialisiert werden.",
+                format!("Client::build fehlgeschlagen: {e}"),
+            )
         })?;
     let response = client
         .request(
@@ -160,43 +189,46 @@ async fn propfind(url: &str, username: &str, password: &str) -> Result<String, Z
         .body(PROPFIND_BODY)
         .send()
         .await
-        .map_err(|e| ZepError {
-            code: ZepErrorCode::NetworkError,
-            user_message: "ZEP CalDAV-Server ist nicht erreichbar.".to_string(),
-            technical_message: format!("PROPFIND fehlgeschlagen für {url}: {e}"),
+        .map_err(|e| {
+            ZepError::new(
+                ZepErrorCode::NetworkError,
+                "ZEP CalDAV-Server ist nicht erreichbar.",
+                format!("PROPFIND fehlgeschlagen für {url}: {e}"),
+            )
         })?;
 
     let status = response.status().as_u16();
     match status {
         401 => {
-            return Err(ZepError {
-                code: ZepErrorCode::Unauthorized,
-                user_message: "Authentifizierung fehlgeschlagen. ZEP-Zugangsdaten prüfen."
-                    .to_string(),
-                technical_message: format!("PROPFIND returned HTTP 401 for {url}"),
-            });
+            return Err(ZepError::new(
+                ZepErrorCode::Unauthorized,
+                "Authentifizierung fehlgeschlagen. ZEP-Zugangsdaten prüfen.",
+                format!("PROPFIND returned HTTP 401 for {url}"),
+            ));
         }
         404 => {
-            return Err(ZepError {
-                code: ZepErrorCode::NotFound,
-                user_message: "ZEP CalDAV-URL nicht gefunden. Root-URL prüfen.".to_string(),
-                technical_message: format!("PROPFIND returned HTTP 404 for {url}"),
-            });
+            return Err(ZepError::new(
+                ZepErrorCode::NotFound,
+                "ZEP CalDAV-URL nicht gefunden. Root-URL prüfen.",
+                format!("PROPFIND returned HTTP 404 for {url}"),
+            ));
         }
         200..=299 => {}
         _ => {
-            return Err(ZepError {
-                code: ZepErrorCode::NetworkError,
-                user_message: "ZEP CalDAV-Server hat einen Fehler zurückgegeben.".to_string(),
-                technical_message: format!("PROPFIND returned HTTP {status} for {url}"),
-            });
+            return Err(ZepError::new(
+                ZepErrorCode::NetworkError,
+                "ZEP CalDAV-Server hat einen Fehler zurückgegeben.",
+                format!("PROPFIND returned HTTP {status} for {url}"),
+            ));
         }
     }
 
-    response.text().await.map_err(|e| ZepError {
-        code: ZepErrorCode::InvalidResponse,
-        user_message: "Die Antwort des ZEP CalDAV-Servers konnte nicht gelesen werden.".to_string(),
-        technical_message: format!("Response body read fehlgeschlagen: {e}"),
+    response.text().await.map_err(|e| {
+        ZepError::new(
+            ZepErrorCode::InvalidResponse,
+            "Die Antwort des ZEP CalDAV-Servers konnte nicht gelesen werden.",
+            format!("Response body read fehlgeschlagen: {e}"),
+        )
     })
 }
 
@@ -204,10 +236,12 @@ async fn probe_calendar(url: &str, username: &str, password: &str) -> Result<(),
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(30))
         .build()
-        .map_err(|e| ZepError {
-            code: ZepErrorCode::NetworkError,
-            user_message: "HTTP-Client konnte nicht initialisiert werden.".to_string(),
-            technical_message: format!("Client::build fehlgeschlagen: {e}"),
+        .map_err(|e| {
+            ZepError::new(
+                ZepErrorCode::NetworkError,
+                "HTTP-Client konnte nicht initialisiert werden.",
+                format!("Client::build fehlgeschlagen: {e}"),
+            )
         })?;
     let response = client
         .request(
@@ -220,30 +254,32 @@ async fn probe_calendar(url: &str, username: &str, password: &str) -> Result<(),
         .body(PROPFIND_BODY)
         .send()
         .await
-        .map_err(|e| ZepError {
-            code: ZepErrorCode::NetworkError,
-            user_message: "ZEP CalDAV-Server ist nicht erreichbar.".to_string(),
-            technical_message: format!("PROPFIND Depth:0 fehlgeschlagen für {url}: {e}"),
+        .map_err(|e| {
+            ZepError::new(
+                ZepErrorCode::NetworkError,
+                "ZEP CalDAV-Server ist nicht erreichbar.",
+                format!("PROPFIND Depth:0 fehlgeschlagen für {url}: {e}"),
+            )
         })?;
 
     let status = response.status().as_u16();
     match status {
-        401 => Err(ZepError {
-            code: ZepErrorCode::Unauthorized,
-            user_message: "Authentifizierung fehlgeschlagen. ZEP-Zugangsdaten prüfen.".to_string(),
-            technical_message: format!("PROPFIND Depth:0 returned HTTP 401 for {url}"),
-        }),
-        404 => Err(ZepError {
-            code: ZepErrorCode::NotFound,
-            user_message: "Kalender nicht gefunden. Kalender-Zuweisung prüfen.".to_string(),
-            technical_message: format!("PROPFIND Depth:0 returned HTTP 404 for {url}"),
-        }),
+        401 => Err(ZepError::new(
+            ZepErrorCode::Unauthorized,
+            "Authentifizierung fehlgeschlagen. ZEP-Zugangsdaten prüfen.",
+            format!("PROPFIND Depth:0 returned HTTP 401 for {url}"),
+        )),
+        404 => Err(ZepError::new(
+            ZepErrorCode::NotFound,
+            "Kalender nicht gefunden. Kalender-Zuweisung prüfen.",
+            format!("PROPFIND Depth:0 returned HTTP 404 for {url}"),
+        )),
         200..=299 => Ok(()),
-        _ => Err(ZepError {
-            code: ZepErrorCode::NetworkError,
-            user_message: "ZEP CalDAV-Server hat einen Fehler zurückgegeben.".to_string(),
-            technical_message: format!("PROPFIND Depth:0 returned HTTP {status} for {url}"),
-        }),
+        _ => Err(ZepError::new(
+            ZepErrorCode::NetworkError,
+            "ZEP CalDAV-Server hat einen Fehler zurückgegeben.",
+            format!("PROPFIND Depth:0 returned HTTP {status} for {url}"),
+        )),
     }
 }
 
@@ -314,26 +350,17 @@ pub fn zep_save_credentials(
 ) -> Result<(), ZepError> {
     let root_url = root_url.trim().trim_end_matches('/').to_string();
     if root_url.is_empty() {
-        return Err(ZepError {
-            code: ZepErrorCode::InvalidConfiguration,
-            user_message: "Die ZEP CalDAV-URL darf nicht leer sein.".to_string(),
-            technical_message: "root_url is empty".to_string(),
-        });
+        return Err(ZepError::new(
+            ZepErrorCode::InvalidConfiguration,
+            "Die ZEP CalDAV-URL darf nicht leer sein.",
+            "root_url is empty",
+        ));
     }
 
     // Write the store first so that a keychain failure leaves no orphaned credential entry.
-    let mut store =
-        crate::integrations::local_store::load_local_store(app.clone()).map_err(|e| ZepError {
-            code: ZepErrorCode::InvalidConfiguration,
-            user_message: e.user_message,
-            technical_message: e.technical_message,
-        })?;
+    let mut store = crate::integrations::local_store::load_local_store(app.clone())?;
     store.api_endpoints.zep_caldav_root_url = root_url;
-    crate::integrations::local_store::save_local_store(app, store).map_err(|e| ZepError {
-        code: ZepErrorCode::InvalidConfiguration,
-        user_message: e.user_message,
-        technical_message: e.technical_message,
-    })?;
+    crate::integrations::local_store::save_local_store(app, store)?;
 
     save_zep_credentials_to_keychain(&username, &password)?;
 
@@ -343,11 +370,7 @@ pub fn zep_save_credentials(
 #[tauri::command]
 #[specta::specta]
 pub fn zep_load_credentials(app: tauri::AppHandle) -> Result<Option<ZepCredentialsInfo>, ZepError> {
-    let store = crate::integrations::local_store::load_local_store(app).map_err(|e| ZepError {
-        code: ZepErrorCode::InvalidConfiguration,
-        user_message: e.user_message,
-        technical_message: e.technical_message,
-    })?;
+    let store = crate::integrations::local_store::load_local_store(app)?;
 
     let root_url = store.api_endpoints.zep_caldav_root_url.trim().to_string();
     if root_url.is_empty() {
@@ -373,11 +396,11 @@ pub async fn zep_test_credentials(
 ) -> Result<ZepCredentialTestResult, ZepError> {
     let root_url = root_url.trim().trim_end_matches('/').to_string();
     if root_url.is_empty() {
-        return Err(ZepError {
-            code: ZepErrorCode::InvalidConfiguration,
-            user_message: "Die ZEP CalDAV-URL darf nicht leer sein.".to_string(),
-            technical_message: "root_url is empty".to_string(),
-        });
+        return Err(ZepError::new(
+            ZepErrorCode::InvalidConfiguration,
+            "Die ZEP CalDAV-URL darf nicht leer sein.",
+            "root_url is empty",
+        ));
     }
 
     let body = propfind(&root_url, &username, &password).await?;
@@ -391,20 +414,15 @@ pub async fn zep_test_credentials(
 #[tauri::command]
 #[specta::specta]
 pub async fn zep_discover_calendars(app: tauri::AppHandle) -> Result<Vec<ZepCalendar>, ZepError> {
-    let store = crate::integrations::local_store::load_local_store(app).map_err(|e| ZepError {
-        code: ZepErrorCode::InvalidConfiguration,
-        user_message: e.user_message,
-        technical_message: e.technical_message,
-    })?;
+    let store = crate::integrations::local_store::load_local_store(app)?;
 
     let root_url = store.api_endpoints.zep_caldav_root_url.trim().to_string();
     if root_url.is_empty() {
-        return Err(ZepError {
-            code: ZepErrorCode::MissingCredentials,
-            user_message: "ZEP CalDAV-URL nicht konfiguriert. Bitte ZEP-Verbindung einrichten."
-                .to_string(),
-            technical_message: "zep_caldav_root_url is empty in local store".to_string(),
-        });
+        return Err(ZepError::new(
+            ZepErrorCode::MissingCredentials,
+            "ZEP CalDAV-URL nicht konfiguriert. Bitte ZEP-Verbindung einrichten.",
+            "zep_caldav_root_url is empty in local store",
+        ));
     }
 
     let creds = load_zep_credentials_from_keychain()?;
@@ -430,12 +448,7 @@ pub async fn zep_save_and_test_calendar(
         .map(ToString::to_string);
 
     // Load local store once — all in-memory mutations use this copy.
-    let mut store =
-        crate::integrations::local_store::load_local_store(app.clone()).map_err(|e| ZepError {
-            code: ZepErrorCode::InvalidConfiguration,
-            user_message: e.user_message,
-            technical_message: e.technical_message,
-        })?;
+    let mut store = crate::integrations::local_store::load_local_store(app.clone())?;
 
     // Step 1: Sync to Daylite — empty string removes the URL entry via normalize_non_empty.
     let current_setting =
@@ -466,10 +479,12 @@ pub async fn zep_save_and_test_calendar(
         },
     )
     .await
-    .map_err(|e| ZepError {
-        code: ZepErrorCode::DayliteSyncFailed,
-        user_message: format!("Daylite-Synchronisation fehlgeschlagen: {}", e.user_message),
-        technical_message: e.technical_message,
+    .map_err(|e| {
+        ZepError::new(
+            ZepErrorCode::DayliteSyncFailed,
+            format!("Daylite-Synchronisation fehlgeschlagen: {}", e.user_message),
+            e.technical_message,
+        )
     })?;
 
     // Step 2: Save to local store (None = cleared), clear old test timestamps.
@@ -490,13 +505,7 @@ pub async fn zep_save_and_test_calendar(
         },
     );
 
-    crate::integrations::local_store::save_local_store(app.clone(), store.clone()).map_err(
-        |e| ZepError {
-            code: ZepErrorCode::InvalidConfiguration,
-            user_message: e.user_message,
-            technical_message: e.technical_message,
-        },
-    )?;
+    crate::integrations::local_store::save_local_store(app.clone(), store.clone())?;
 
     // When clearing, skip the connection test.
     let Some(ref cal_url) = calendar_url else {
@@ -532,11 +541,7 @@ pub async fn zep_save_and_test_calendar(
         },
     );
 
-    crate::integrations::local_store::save_local_store(app, store).map_err(|e| ZepError {
-        code: ZepErrorCode::InvalidConfiguration,
-        user_message: e.user_message,
-        technical_message: e.technical_message,
-    })?;
+    crate::integrations::local_store::save_local_store(app, store)?;
 
     Ok(ZepCalendarTestResult {
         success,
