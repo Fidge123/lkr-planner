@@ -11,11 +11,7 @@ const STORE_FILE_NAME: &str = "local-store.json";
 #[serde(rename_all = "camelCase")]
 pub struct LocalStore {
     pub api_endpoints: ApiEndpoints,
-    pub token_references: TokenReferences,
     pub employee_settings: Vec<EmployeeSetting>,
-    pub standard_filter: StandardFilter,
-    pub contact_filter: ContactFilter,
-    pub routing_settings: RoutingSettings,
     #[serde(default)]
     pub display_settings: DisplaySettings,
     pub daylite_cache: DayliteCache,
@@ -43,17 +39,6 @@ pub struct ApiEndpoints {
     pub planradar_base_url: String,
     #[serde(default)]
     pub zep_caldav_root_url: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct TokenReferences {
-    pub daylite_token_reference: String,
-    pub planradar_token_reference: String,
-    pub daylite_access_token: String,
-    pub daylite_refresh_token: String,
-    #[specta(type = Option<f64>)]
-    pub daylite_access_token_expires_at_ms: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq, Default)]
@@ -88,40 +73,6 @@ pub struct EmployeeSetting {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-pub struct StandardFilter {
-    pub pipelines: Vec<String>,
-    pub columns: Vec<String>,
-    pub categories: Vec<String>,
-    pub exclusion_statuses: Vec<String>,
-}
-
-impl Default for StandardFilter {
-    fn default() -> Self {
-        Self {
-            pipelines: vec!["Aufträge".to_string()],
-            columns: vec!["Vorbereitung".to_string(), "Durchführung".to_string()],
-            categories: vec!["Überfällig".to_string(), "Liefertermin bekannt".to_string()],
-            exclusion_statuses: vec!["Done".to_string()],
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct ContactFilter {
-    pub active_employee_keyword: String,
-}
-
-impl Default for ContactFilter {
-    fn default() -> Self {
-        Self {
-            active_employee_keyword: "Monteur".to_string(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
 pub struct DisplaySettings {
     /// When true, the planning view only shows employees that are plannable, i.e.
     /// category "Monteur" with a configured primary calendar. Employees without a
@@ -134,22 +85,6 @@ impl Default for DisplaySettings {
     fn default() -> Self {
         Self {
             hide_non_plannable_employees: true,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct RoutingSettings {
-    pub openrouteservice_api_key: String,
-    pub openrouteservice_profile: String,
-}
-
-impl Default for RoutingSettings {
-    fn default() -> Self {
-        Self {
-            openrouteservice_api_key: String::new(),
-            openrouteservice_profile: "driving-car".to_string(),
         }
     }
 }
@@ -354,13 +289,6 @@ mod tests {
                 planradar_base_url: "https://planradar.example/api".to_string(),
                 zep_caldav_root_url: "https://app.zep.de/caldav/admin".to_string(),
             },
-            token_references: TokenReferences {
-                daylite_token_reference: "keychain://daylite-token".to_string(),
-                planradar_token_reference: "keychain://planradar-token".to_string(),
-                daylite_access_token: "access-token-1".to_string(),
-                daylite_refresh_token: "refresh-token-1".to_string(),
-                daylite_access_token_expires_at_ms: Some(1_761_200_000_000),
-            },
             employee_settings: vec![EmployeeSetting {
                 daylite_contact_reference: "/v1/contacts/100".to_string(),
                 zep_primary_calendar: Some(
@@ -372,19 +300,6 @@ mod tests {
                 absence_ical_last_tested_at: None,
                 absence_ical_last_test_passed: None,
             }],
-            standard_filter: StandardFilter {
-                pipelines: vec!["Aufträge".to_string()],
-                columns: vec!["Vorbereitung".to_string()],
-                categories: vec!["Überfällig".to_string()],
-                exclusion_statuses: vec!["Done".to_string()],
-            },
-            contact_filter: ContactFilter {
-                active_employee_keyword: "Monteur".to_string(),
-            },
-            routing_settings: RoutingSettings {
-                openrouteservice_api_key: "ors-key".to_string(),
-                openrouteservice_profile: "driving-car".to_string(),
-            },
             display_settings: DisplaySettings {
                 hide_non_plannable_employees: false,
             },
@@ -575,11 +490,7 @@ mod tests {
             &test_path,
             r#"{
               "apiEndpoints": {"dayliteBaseUrl":"","planradarBaseUrl":"","zepCaldavRootUrl":""},
-              "tokenReferences": {"dayliteTokenReference":"","planradarTokenReference":"","dayliteAccessToken":"","dayliteRefreshToken":""},
               "employeeSettings": [],
-              "standardFilter": {"pipelines":[],"columns":[],"categories":[],"exclusionStatuses":[]},
-              "contactFilter": {"activeEmployeeKeyword":""},
-              "routingSettings": {"openrouteserviceApiKey":"","openrouteserviceProfile":""},
               "dayliteCache": {"projects":[],"contacts":[]}
             }"#,
         );

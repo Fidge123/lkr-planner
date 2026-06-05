@@ -78,9 +78,6 @@ export type CalendarEventKind =
 // An all-day absence from the employee's dedicated ZEP absence calendar.
 "absence";
 
-export type ContactFilter = {
-	activeEmployeeKeyword: string,
-};
 
 export type DayliteApiError = {
 	code: DayliteApiErrorCode,
@@ -241,11 +238,7 @@ export type DisplaySettings = {
 
 export type LocalStore = {
 	apiEndpoints: ApiEndpoints,
-	tokenReferences: TokenReferences,
 	employeeSettings: EmployeeSetting[],
-	standardFilter: StandardFilter,
-	contactFilter: ContactFilter,
-	routingSettings: RoutingSettings,
 	displaySettings?: DisplaySettings,
 	dayliteCache: DayliteCache,
 	holidayCache?: HolidayCacheEntry[],
@@ -274,18 +267,6 @@ export type PlanningProjectRecord = {
 
 export type PlanningProjectStatus = "new_status" | "in_progress" | "done" | "abandoned" | "cancelled" | "deferred";
 
-export type RoutingSettings = {
-	openrouteserviceApiKey: string,
-	openrouteserviceProfile: string,
-};
-
-export type StandardFilter = {
-	pipelines: string[],
-	columns: string[],
-	categories: string[],
-	exclusionStatuses: string[],
-};
-
 export type StoreError = {
 	code: StoreErrorCode,
 	userMessage: string,
@@ -293,14 +274,6 @@ export type StoreError = {
 };
 
 export type StoreErrorCode = "READ_FAILED" | "WRITE_FAILED" | "CORRUPT_FILE" | "MISSING_FIELDS";
-
-export type TokenReferences = {
-	dayliteTokenReference: string,
-	planradarTokenReference: string,
-	dayliteAccessToken: string,
-	dayliteRefreshToken: string,
-	dayliteAccessTokenExpiresAtMs: number | null,
-};
 
 export type ZepCalendar = {
 	displayName: string,
