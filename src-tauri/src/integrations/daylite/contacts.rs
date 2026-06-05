@@ -620,7 +620,7 @@ mod tests {
                 r#"{"results":[{"self":"/v1/contacts/900","first_name":"Max","last_name":"M","category":"Monteur","urls":[]},{"self":"/v1/contacts/901","first_name":"Bea","last_name":"T","category":"Test","urls":[]}]}"#,
             );
             let transport = MockTransport::new(vec![Ok(search_response)]);
-            let client = DayliteApiClient::with_transport(Arc::new(transport.clone()));
+            let client = DayliteApiClient::with_transport(Box::new(transport.clone()));
 
             let (contacts, _) = list_contacts_core(
                 &client,
