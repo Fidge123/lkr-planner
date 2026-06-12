@@ -112,14 +112,19 @@ pub struct DayliteContactCacheEntry {
     pub full_name: Option<String>,
     pub nickname: Option<String>,
     pub category: Option<String>,
-    pub urls: Vec<DayliteContactUrlCacheEntry>,
+    pub urls: Vec<DayliteContactUrl>,
 }
 
+/// A single labelled URL on a Daylite contact. Shared by the wire, domain, and on-disk
+/// cache representations of a contact (they had identical shapes).
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
-pub struct DayliteContactUrlCacheEntry {
+pub struct DayliteContactUrl {
+    #[serde(default)]
     pub label: Option<String>,
+    #[serde(default)]
     pub url: Option<String>,
+    #[serde(default)]
     pub note: Option<String>,
 }
 
@@ -148,6 +153,20 @@ pub struct StoreError {
     pub technical_message: String,
 }
 
+impl StoreError {
+    fn new(
+        code: StoreErrorCode,
+        user_message: impl Into<String>,
+        technical_message: impl Into<String>,
+    ) -> Self {
+        Self {
+            code,
+            user_message: user_message.into(),
+            technical_message: technical_message.into(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum StoreErrorCode {
@@ -164,10 +183,12 @@ pub fn load_local_store(app: tauri::AppHandle) -> Result<LocalStore, StoreError>
         .path()
         .app_config_dir()
         .map(|path| path.join(STORE_FILE_NAME))
-        .map_err(|error| StoreError {
-            code: StoreErrorCode::ReadFailed,
-            user_message: "Die lokale Konfiguration konnte nicht geladen werden.".to_string(),
-            technical_message: format!("Pfad konnte nicht aufgelöst werden: {error}"),
+        .map_err(|error| {
+            StoreError::new(
+                StoreErrorCode::ReadFailed,
+                "Die lokale Konfiguration konnte nicht geladen werden.",
+                format!("Pfad konnte nicht aufgelöst werden: {error}"),
+            )
         })?;
 
     load_store_from_path(&store_path)
@@ -193,10 +214,12 @@ fn get_store_path(app: &tauri::AppHandle) -> Result<PathBuf, StoreError> {
     app.path()
         .app_config_dir()
         .map(|path| path.join(STORE_FILE_NAME))
-        .map_err(|error| StoreError {
-            code: StoreErrorCode::WriteFailed,
-            user_message: "Die lokale Konfiguration konnte nicht gespeichert werden.".to_string(),
-            technical_message: format!("Pfad konnte nicht aufgelöst werden: {error}"),
+        .map_err(|error| {
+            StoreError::new(
+                StoreErrorCode::WriteFailed,
+                "Die lokale Konfiguration konnte nicht gespeichert werden.",
+                format!("Pfad konnte nicht aufgelöst werden: {error}"),
+            )
         })
 }
 
@@ -205,60 +228,65 @@ fn load_store_from_path(path: &Path) -> Result<LocalStore, StoreError> {
         return Ok(LocalStore::default());
     }
 
-    let content = fs::read_to_string(path).map_err(|error| StoreError {
-        code: StoreErrorCode::ReadFailed,
-        user_message: "Die lokale Konfiguration konnte nicht geladen werden.".to_string(),
-        technical_message: format!(
-            "Datei konnte nicht gelesen werden ({}): {error}",
-            path.display()
-        ),
+    let content = fs::read_to_string(path).map_err(|error| {
+        StoreError::new(
+            StoreErrorCode::ReadFailed,
+            "Die lokale Konfiguration konnte nicht geladen werden.",
+            format!(
+                "Datei konnte nicht gelesen werden ({}): {error}",
+                path.display()
+            ),
+        )
     })?;
 
     serde_json::from_str::<LocalStore>(&content).map_err(|error| {
         if error.to_string().contains("missing field") {
-            return StoreError {
-                code: StoreErrorCode::MissingFields,
-                user_message: "Die lokale Konfiguration ist unvollständig und muss geprüft werden."
-                    .to_string(),
-                technical_message: format!("Fehlende Felder in {}: {error}", path.display()),
-            };
+            return StoreError::new(
+                StoreErrorCode::MissingFields,
+                "Die lokale Konfiguration ist unvollständig und muss geprüft werden.",
+                format!("Fehlende Felder in {}: {error}", path.display()),
+            );
         }
 
-        StoreError {
-            code: StoreErrorCode::CorruptFile,
-            user_message:
-                "Die lokale Konfiguration ist beschädigt und konnte nicht gelesen werden."
-                    .to_string(),
-            technical_message: format!("Ungültiges JSON in {}: {error}", path.display()),
-        }
+        StoreError::new(
+            StoreErrorCode::CorruptFile,
+            "Die lokale Konfiguration ist beschädigt und konnte nicht gelesen werden.",
+            format!("Ungültiges JSON in {}: {error}", path.display()),
+        )
     })
 }
 
 fn save_store_to_path(path: &Path, store: &LocalStore) -> Result<(), StoreError> {
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|error| StoreError {
-            code: StoreErrorCode::WriteFailed,
-            user_message: "Die lokale Konfiguration konnte nicht gespeichert werden.".to_string(),
-            technical_message: format!(
-                "Verzeichnis konnte nicht erstellt werden ({}): {error}",
-                parent.display()
-            ),
+        fs::create_dir_all(parent).map_err(|error| {
+            StoreError::new(
+                StoreErrorCode::WriteFailed,
+                "Die lokale Konfiguration konnte nicht gespeichert werden.",
+                format!(
+                    "Verzeichnis konnte nicht erstellt werden ({}): {error}",
+                    parent.display()
+                ),
+            )
         })?;
     }
 
-    let serialized_store = serde_json::to_string_pretty(store).map_err(|error| StoreError {
-        code: StoreErrorCode::WriteFailed,
-        user_message: "Die lokale Konfiguration konnte nicht gespeichert werden.".to_string(),
-        technical_message: format!("Serialisierung fehlgeschlagen: {error}"),
+    let serialized_store = serde_json::to_string_pretty(store).map_err(|error| {
+        StoreError::new(
+            StoreErrorCode::WriteFailed,
+            "Die lokale Konfiguration konnte nicht gespeichert werden.",
+            format!("Serialisierung fehlgeschlagen: {error}"),
+        )
     })?;
 
-    fs::write(path, serialized_store).map_err(|error| StoreError {
-        code: StoreErrorCode::WriteFailed,
-        user_message: "Die lokale Konfiguration konnte nicht gespeichert werden.".to_string(),
-        technical_message: format!(
-            "Datei konnte nicht geschrieben werden ({}): {error}",
-            path.display()
-        ),
+    fs::write(path, serialized_store).map_err(|error| {
+        StoreError::new(
+            StoreErrorCode::WriteFailed,
+            "Die lokale Konfiguration konnte nicht gespeichert werden.",
+            format!(
+                "Datei konnte nicht geschrieben werden ({}): {error}",
+                path.display()
+            ),
+        )
     })?;
 
     Ok(())
@@ -315,7 +343,7 @@ mod tests {
                     full_name: Some("Max Mustermann".to_string()),
                     nickname: Some("Max".to_string()),
                     category: Some("Monteur".to_string()),
-                    urls: vec![DayliteContactUrlCacheEntry {
+                    urls: vec![DayliteContactUrl {
                         label: Some("Einsatz iCal".to_string()),
                         url: Some("https://example.com/primary.ics".to_string()),
                         note: None,

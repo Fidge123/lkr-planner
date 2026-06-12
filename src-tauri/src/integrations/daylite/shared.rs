@@ -1,7 +1,6 @@
 use super::super::local_store::{self, LocalStore};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use specta::Type;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -35,6 +34,22 @@ pub struct DayliteApiError {
     pub http_status: Option<u16>,
     pub user_message: String,
     pub technical_message: String,
+}
+
+impl DayliteApiError {
+    pub(super) fn new(
+        code: DayliteApiErrorCode,
+        http_status: Option<u16>,
+        user_message: impl Into<String>,
+        technical_message: impl Into<String>,
+    ) -> Self {
+        Self {
+            code,
+            http_status,
+            user_message: user_message.into(),
+            technical_message: technical_message.into(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
@@ -85,12 +100,12 @@ pub(super) fn build_limit_query(limit: Option<u16>) -> Vec<(String, String)> {
 pub(super) fn normalize_base_url(base_url: &str) -> Result<String, DayliteApiError> {
     let trimmed = base_url.trim().trim_end_matches('/');
     if trimmed.is_empty() {
-        return Err(DayliteApiError {
-            code: DayliteApiErrorCode::InvalidConfiguration,
-            http_status: None,
-            user_message: "Die Daylite-URL ist nicht konfiguriert.".to_string(),
-            technical_message: "Leere dayliteBaseUrl-Konfiguration".to_string(),
-        });
+        return Err(DayliteApiError::new(
+            DayliteApiErrorCode::InvalidConfiguration,
+            None,
+            "Die Daylite-URL ist nicht konfiguriert.",
+            "Leere dayliteBaseUrl-Konfiguration",
+        ));
     }
 
     Ok(trimmed.to_string())
@@ -98,28 +113,32 @@ pub(super) fn normalize_base_url(base_url: &str) -> Result<String, DayliteApiErr
 
 pub(super) fn load_daylite_tokens() -> Result<DayliteTokenState, DayliteApiError> {
     match crate::secret_manager::get_token("lkr-planner-daylite", "LKR Planner Daylite Token") {
-        Ok(json_str) => serde_json::from_str(&json_str).map_err(|e| DayliteApiError {
-            code: DayliteApiErrorCode::InvalidConfiguration,
-            http_status: None,
-            user_message: "Die gespeicherten Daylite-Zugangsdaten sind beschädigt. Bitte verbinde dich erneut.".to_string(),
-            technical_message: format!("Token-JSON konnte nicht deserialisiert werden: {e}"),
+        Ok(json_str) => serde_json::from_str(&json_str).map_err(|e| {
+            DayliteApiError::new(
+                DayliteApiErrorCode::InvalidConfiguration,
+                None,
+                "Die gespeicherten Daylite-Zugangsdaten sind beschädigt. Bitte verbinde dich erneut.",
+                format!("Token-JSON konnte nicht deserialisiert werden: {e}"),
+            )
         }),
         Err(crate::secret_manager::SecretError::NotFound) => Ok(DayliteTokenState::default()),
-        Err(e) => Err(DayliteApiError {
-            code: DayliteApiErrorCode::InvalidConfiguration,
-            http_status: None,
-            user_message: "Auf die Daylite-Zugangsdaten im Keychain konnte nicht zugegriffen werden. Bitte prüfe die Keychain-Berechtigungen.".to_string(),
-            technical_message: format!("Keychain-Fehler beim Lesen des Daylite-Tokens: {e}"),
-        }),
+        Err(e) => Err(DayliteApiError::new(
+            DayliteApiErrorCode::InvalidConfiguration,
+            None,
+            "Auf die Daylite-Zugangsdaten im Keychain konnte nicht zugegriffen werden. Bitte prüfe die Keychain-Berechtigungen.",
+            format!("Keychain-Fehler beim Lesen des Daylite-Tokens: {e}"),
+        )),
     }
 }
 
 pub(super) fn store_daylite_tokens(token_state: &DayliteTokenState) -> Result<(), DayliteApiError> {
-    let json_str = serde_json::to_string(token_state).map_err(|e| DayliteApiError {
-        code: DayliteApiErrorCode::ServerError,
-        http_status: None,
-        user_message: "Token konnten nicht sicher gespeichert werden.".to_string(),
-        technical_message: format!("Token serialization failed: {e}"),
+    let json_str = serde_json::to_string(token_state).map_err(|e| {
+        DayliteApiError::new(
+            DayliteApiErrorCode::ServerError,
+            None,
+            "Token konnten nicht sicher gespeichert werden.",
+            format!("Token serialization failed: {e}"),
+        )
     })?;
 
     crate::secret_manager::set_token(
@@ -127,13 +146,13 @@ pub(super) fn store_daylite_tokens(token_state: &DayliteTokenState) -> Result<()
         "LKR Planner Daylite Token",
         &json_str,
     )
-    .map_err(|e| DayliteApiError {
-        code: DayliteApiErrorCode::ServerError,
-        http_status: None,
-        user_message:
-            "Auf den sicheren Speicher konnte nicht zugegriffen werden (Keychain verweigert?)."
-                .to_string(),
-        technical_message: e.to_string(),
+    .map_err(|e| {
+        DayliteApiError::new(
+            DayliteApiErrorCode::ServerError,
+            None,
+            "Auf den sicheren Speicher konnte nicht zugegriffen werden (Keychain verweigert?).",
+            e.to_string(),
+        )
     })
 }
 
@@ -171,15 +190,15 @@ pub(super) fn normalize_http_error(status: u16, body: &str, path: &str) -> Dayli
         )
     };
 
-    DayliteApiError {
+    DayliteApiError::new(
         code,
-        http_status: Some(status),
-        user_message: user_message.to_string(),
-        technical_message: format!(
+        Some(status),
+        user_message,
+        format!(
             "Daylite request failed for {path} with status={status}; body={}",
             truncate_for_log(body)
         ),
-    }
+    )
 }
 
 pub(super) fn parse_success_json_body<T: DeserializeOwned>(
@@ -199,34 +218,26 @@ pub(super) fn parse_json_body<T: DeserializeOwned>(
     body: &str,
     path: &str,
 ) -> Result<T, DayliteApiError> {
-    let raw_json = serde_json::from_str::<Value>(body).map_err(|error| DayliteApiError {
-        code: DayliteApiErrorCode::InvalidResponse,
-        http_status: Some(status),
-        user_message: "Die Antwort von Daylite konnte nicht verarbeitet werden.".to_string(),
-        technical_message: format!(
-            "JSON-Parsing für {path} fehlgeschlagen: {error}; body={}",
-            truncate_for_log(body)
-        ),
-    })?;
-
-    serde_json::from_value::<T>(raw_json).map_err(|error| DayliteApiError {
-        code: DayliteApiErrorCode::InvalidResponse,
-        http_status: Some(status),
-        user_message: "Die Antwort von Daylite konnte nicht verarbeitet werden.".to_string(),
-        technical_message: format!(
-            "JSON-Deserialisierung für {path} fehlgeschlagen: {error}; body={}",
-            truncate_for_log(body)
-        ),
+    serde_json::from_str::<T>(body).map_err(|error| {
+        DayliteApiError::new(
+            DayliteApiErrorCode::InvalidResponse,
+            Some(status),
+            "Die Antwort von Daylite konnte nicht verarbeitet werden.",
+            format!(
+                "JSON-Verarbeitung für {path} fehlgeschlagen: {error}; body={}",
+                truncate_for_log(body)
+            ),
+        )
     })
 }
 
 pub(super) fn missing_token_error(user_message: &str, technical_message: &str) -> DayliteApiError {
-    DayliteApiError {
-        code: DayliteApiErrorCode::MissingToken,
-        http_status: None,
-        user_message: user_message.to_string(),
-        technical_message: technical_message.to_string(),
-    }
+    DayliteApiError::new(
+        DayliteApiErrorCode::MissingToken,
+        None,
+        user_message,
+        technical_message,
+    )
 }
 
 pub(super) fn should_refresh_access_token(token_state: &DayliteTokenState, now_ms: u64) -> bool {
@@ -243,18 +254,22 @@ pub(super) fn should_refresh_access_token(token_state: &DayliteTokenState, now_m
 pub(super) fn current_epoch_ms() -> Result<u64, DayliteApiError> {
     let duration = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map_err(|error| DayliteApiError {
-            code: DayliteApiErrorCode::RequestFailed,
-            http_status: None,
-            user_message: "Die aktuelle Systemzeit konnte nicht gelesen werden.".to_string(),
-            technical_message: format!("Systemzeitfehler: {error}"),
+        .map_err(|error| {
+            DayliteApiError::new(
+                DayliteApiErrorCode::RequestFailed,
+                None,
+                "Die aktuelle Systemzeit konnte nicht gelesen werden.",
+                format!("Systemzeitfehler: {error}"),
+            )
         })?;
 
-    u64::try_from(duration.as_millis()).map_err(|error| DayliteApiError {
-        code: DayliteApiErrorCode::RequestFailed,
-        http_status: None,
-        user_message: "Die aktuelle Systemzeit konnte nicht gelesen werden.".to_string(),
-        technical_message: format!("Zeitstempel-Konvertierung fehlgeschlagen: {error}"),
+    u64::try_from(duration.as_millis()).map_err(|error| {
+        DayliteApiError::new(
+            DayliteApiErrorCode::RequestFailed,
+            None,
+            "Die aktuelle Systemzeit konnte nicht gelesen werden.",
+            format!("Zeitstempel-Konvertierung fehlgeschlagen: {error}"),
+        )
     })
 }
 
@@ -270,10 +285,10 @@ pub(super) fn truncate_for_log(value: &str) -> String {
 }
 
 fn map_store_error(error: local_store::StoreError) -> DayliteApiError {
-    DayliteApiError {
-        code: DayliteApiErrorCode::InvalidConfiguration,
-        http_status: None,
-        user_message: error.user_message,
-        technical_message: error.technical_message,
-    }
+    DayliteApiError::new(
+        DayliteApiErrorCode::InvalidConfiguration,
+        None,
+        error.user_message,
+        error.technical_message,
+    )
 }

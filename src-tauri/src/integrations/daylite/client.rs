@@ -6,24 +6,23 @@ use crate::integrations::http_record_replay::{
 use serde_json::Value;
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::Arc;
 use tauri_plugin_http::reqwest;
 use tauri_plugin_http::reqwest::header::AUTHORIZATION;
 
 pub(super) struct DayliteApiClient {
-    transport: Arc<dyn DayliteHttpTransport>,
+    transport: Box<dyn DayliteHttpTransport>,
 }
 
 impl DayliteApiClient {
     pub(super) fn new(base_url: &str) -> Result<Self, DayliteApiError> {
         let transport = ReqwestTransport::new(base_url)?;
         Ok(Self {
-            transport: Arc::new(transport),
+            transport: Box::new(transport),
         })
     }
 
     #[cfg(test)]
-    pub(super) fn with_transport(transport: Arc<dyn DayliteHttpTransport>) -> Self {
+    pub(super) fn with_transport(transport: Box<dyn DayliteHttpTransport>) -> Self {
         Self { transport }
     }
 
@@ -43,7 +42,7 @@ impl DayliteApiClient {
         )?;
 
         Ok(Self {
-            transport: Arc::new(transport),
+            transport: Box::new(transport),
         })
     }
 
@@ -78,7 +77,7 @@ impl DayliteApiClient {
         )?;
 
         Ok(Self {
-            transport: Arc::new(transport),
+            transport: Box::new(transport),
         })
     }
 }
@@ -128,12 +127,13 @@ impl ReqwestTransport {
         let http_client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(5))
             .build()
-            .map_err(|error| DayliteApiError {
-                code: DayliteApiErrorCode::RequestFailed,
-                http_status: None,
-                user_message: "Die Verbindung zu Daylite konnte nicht aufgebaut werden."
-                    .to_string(),
-                technical_message: format!("HTTP-Client konnte nicht erstellt werden: {error}"),
+            .map_err(|error| {
+                DayliteApiError::new(
+                    DayliteApiErrorCode::RequestFailed,
+                    None,
+                    "Die Verbindung zu Daylite konnte nicht aufgebaut werden.",
+                    format!("HTTP-Client konnte nicht erstellt werden: {error}"),
+                )
             })?;
 
         Ok(Self {
@@ -207,11 +207,13 @@ impl DayliteHttpTransport for ReqwestTransport {
             }
 
             let mut url = reqwest::Url::parse(&format!("{}{}", self.base_url, request.path))
-                .map_err(|error| DayliteApiError {
-                    code: DayliteApiErrorCode::InvalidConfiguration,
-                    http_status: None,
-                    user_message: "Die Daylite-URL ist ungültig konfiguriert.".to_string(),
-                    technical_message: format!("URL konnte nicht geparst werden: {error}"),
+                .map_err(|error| {
+                    DayliteApiError::new(
+                        DayliteApiErrorCode::InvalidConfiguration,
+                        None,
+                        "Die Daylite-URL ist ungültig konfiguriert.",
+                        format!("URL konnte nicht geparst werden: {error}"),
+                    )
                 })?;
 
             {
@@ -241,31 +243,30 @@ impl DayliteHttpTransport for ReqwestTransport {
 
             let response = builder.send().await.map_err(|error| {
                 if error.is_timeout() {
-                    DayliteApiError {
-                        code: DayliteApiErrorCode::Timeout,
-                        http_status: None,
-                        user_message: "Zeitüberschreitung bei der Daylite-Anfrage.".to_string(),
-                        technical_message: format!(
-                            "Zeitüberschreitung bei {}: {error}",
-                            request.path
-                        ),
-                    }
+                    DayliteApiError::new(
+                        DayliteApiErrorCode::Timeout,
+                        None,
+                        "Zeitüberschreitung bei der Daylite-Anfrage.",
+                        format!("Zeitüberschreitung bei {}: {error}", request.path),
+                    )
                 } else {
-                    DayliteApiError {
-                        code: DayliteApiErrorCode::RequestFailed,
-                        http_status: None,
-                        user_message: "Die Anfrage an Daylite ist fehlgeschlagen.".to_string(),
-                        technical_message: format!("Netzwerkfehler bei {}: {error}", request.path),
-                    }
+                    DayliteApiError::new(
+                        DayliteApiErrorCode::RequestFailed,
+                        None,
+                        "Die Anfrage an Daylite ist fehlgeschlagen.",
+                        format!("Netzwerkfehler bei {}: {error}", request.path),
+                    )
                 }
             })?;
 
             let status = response.status().as_u16();
-            let body = response.text().await.map_err(|error| DayliteApiError {
-                code: DayliteApiErrorCode::RequestFailed,
-                http_status: Some(status),
-                user_message: "Die Antwort von Daylite konnte nicht gelesen werden.".to_string(),
-                technical_message: format!("Antworttext konnte nicht gelesen werden: {error}"),
+            let body = response.text().await.map_err(|error| {
+                DayliteApiError::new(
+                    DayliteApiErrorCode::RequestFailed,
+                    Some(status),
+                    "Die Antwort von Daylite konnte nicht gelesen werden.",
+                    format!("Antworttext konnte nicht gelesen werden: {error}"),
+                )
             })?;
 
             #[cfg(test)]
