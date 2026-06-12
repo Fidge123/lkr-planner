@@ -18,11 +18,27 @@ impl std::fmt::Display for SecretError {
 
 impl std::error::Error for SecretError {}
 
-use keyring::Entry;
+use keyring_core::Entry;
 
-use keyring::Error as KeyringError;
+use keyring_core::Error as KeyringError;
 use serde::{Deserialize, Serialize};
 use specta::Type;
+
+/// Register the platform-native credential store as the keyring-core default.
+///
+/// keyring-core does not pick a backend automatically, so this must be called
+/// once at application startup before any token is read or written.
+pub fn init() -> Result<(), SecretError> {
+    #[cfg(target_os = "macos")]
+    let store = apple_native_keyring_store::keychain::Store::new().map_err(map_keyring_error)?;
+    #[cfg(target_os = "windows")]
+    let store = windows_native_keyring_store::Store::new().map_err(map_keyring_error)?;
+    #[cfg(target_os = "linux")]
+    let store = linux_keyutils_keyring_store::Store::new().map_err(map_keyring_error)?;
+
+    keyring_core::set_default_store(store);
+    Ok(())
+}
 
 fn map_keyring_error(err: KeyringError) -> SecretError {
     match err {
@@ -71,12 +87,11 @@ pub fn check_token(service: &str, username: &str) -> Result<bool, SecretError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use keyring::mock;
 
-    // Note: `set_default_credential_builder` mutates global state. Tests using
+    // Note: `set_default_store` mutates global state. Tests using
     // `with_mock_keyring` must not run concurrently with other keyring tests.
     fn with_mock_keyring<T>(f: impl FnOnce() -> T) -> T {
-        keyring::set_default_credential_builder(mock::default_credential_builder());
+        keyring_core::set_default_store(keyring_core::mock::Store::new().unwrap());
         f()
     }
 
@@ -98,13 +113,13 @@ mod tests {
 
     #[test]
     fn map_keyring_error_maps_no_entry_to_not_found() {
-        let err = map_keyring_error(keyring::Error::NoEntry);
+        let err = map_keyring_error(keyring_core::Error::NoEntry);
         assert_eq!(err, SecretError::NotFound);
     }
 
     /// Verify that set + get on the same Entry object works with the mock backend.
-    /// Note: the mock uses EntryOnly persistence, so two separate Entry::new calls
-    /// for the same service/user will NOT share state.
+    /// Note: keyring-core's mock store keeps a shared map keyed by service/user,
+    /// so separate Entry::new calls for the same pair share state within one store.
     #[test]
     fn set_and_get_on_same_entry_with_mock() {
         with_mock_keyring(|| {
@@ -125,7 +140,7 @@ mod tests {
 
     #[test]
     fn map_keyring_error_maps_unexpected_error_to_other() {
-        let err = map_keyring_error(keyring::Error::TooLong("field".to_string(), 0));
+        let err = map_keyring_error(keyring_core::Error::TooLong("field".to_string(), 0));
         assert!(matches!(err, SecretError::Other(_)));
     }
 }

@@ -38,6 +38,10 @@ pub fn run() {
 
     tauri::Builder::default()
         .setup(|app| {
+            if let Err(error) = secret_manager::init() {
+                eprintln!("Failed to initialize credential store: {error}");
+            }
+
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 if let Some(message) = format_update_error(update(handle).await) {

@@ -85,7 +85,7 @@ pub struct DayliteSearchInput {
     pub full_records: Option<bool>,
     /// Pagination cursor: object ID of the first result to return (`?start=<id>`).
     #[serde(default)]
-    pub start: Option<u64>,
+    pub start: Option<String>,
 }
 
 pub(super) fn build_limit_query(limit: Option<u16>) -> Vec<(String, String)> {
