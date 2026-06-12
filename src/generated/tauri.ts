@@ -29,16 +29,16 @@ export const commands = {
 } | null, ZepError>(__TAURI_INVOKE("zep_load_credentials")),
 	zepTestCredentials: (rootUrl: string, username: string, password: string) => typedError<ZepCredentialTestResult, ZepError>(__TAURI_INVOKE("zep_test_credentials", { rootUrl, username, password })),
 	zepDiscoverCalendars: () => typedError<ZepCalendar[], ZepError>(__TAURI_INVOKE("zep_discover_calendars")),
-	// Save a ZEP calendar URL for one source (Primary or Absence) and test the connection.
+	/**  Save a ZEP calendar URL for one source (Primary or Absence) and test the connection. */
 	zepSaveAndTestCalendar: (dayliteContactReference: string, source: IcalSource, calendarUrl: string | null) => typedError<ZepCalendarTestResult, ZepError>(__TAURI_INVOKE("zep_save_and_test_calendar", { dayliteContactReference, source, calendarUrl })),
 	/**
 	 *  Creates a new assignment event on the employee's primary CalDAV calendar.
 	 *  Returns the CalDAV resource href (e.g. `{calendar_url}/{uid}.ics`) of the new event.
 	 */
 	createAssignment: (employeeReference: string, date: string, projectRef: string, projectName: string) => typedError<string, string>(__TAURI_INVOKE("create_assignment", { employeeReference, date, projectRef, projectName })),
-	// Updates an existing assignment event in place using the stored CalDAV href.
+	/**  Updates an existing assignment event in place using the stored CalDAV href. */
 	updateAssignment: (href: string, uid: string, date: string, projectRef: string, projectName: string) => typedError<null, string>(__TAURI_INVOKE("update_assignment", { href, uid, date, projectRef, projectName })),
-	// Deletes an assignment event using the stored CalDAV href.
+	/**  Deletes an assignment event using the stored CalDAV href. */
 	deleteAssignment: (href: string) => typedError<null, string>(__TAURI_INVOKE("delete_assignment", { href })),
 };
 
@@ -58,24 +58,24 @@ export type CalendarCellEvent = {
 	uid: string,
 	kind: CalendarEventKind,
 	title: string,
-	// Daylite project status string if resolved (e.g. "in_progress"). None for bare or unresolved.
+	/**  Daylite project status string if resolved (e.g. "in_progress"). None for bare or unresolved. */
 	projectStatus: string | null,
-	// ISO date in the form yyyy-MM-dd.
+	/**  ISO date in the form yyyy-MM-dd. */
 	date: string,
-	// Start time in HH:MM format. None for all-day events.
+	/**  Start time in HH:MM format. None for all-day events. */
 	startTime: string | null,
-	// End time in HH:MM format. None for all-day events.
+	/**  End time in HH:MM format. None for all-day events. */
 	endTime: string | null,
-	// CalDAV resource URL (d:href from REPORT) needed for PUT/DELETE. None if unknown.
+	/**  CalDAV resource URL (d:href from REPORT) needed for PUT/DELETE. None if unknown. */
 	href: string | null,
 };
 
 export type CalendarEventKind = 
-// A lkr-planner assignment linked to a Daylite project via DESCRIPTION.
+/**  A lkr-planner assignment linked to a Daylite project via DESCRIPTION. */
 "assignment" | 
-// A bare calendar event with no Daylite project link (legacy, blocker, appointment).
+/**  A bare calendar event with no Daylite project link (legacy, blocker, appointment). */
 "bare" | 
-// An all-day absence from the employee's dedicated ZEP absence calendar.
+/**  An all-day absence from the employee's dedicated ZEP absence calendar. */
 "absence";
 
 export type DayliteApiError = {
@@ -141,9 +141,9 @@ export type DayliteSearchInput = {
 	searchTerm: string,
 	limit: number | null,
 	statuses?: string[] | null,
-	// Include full record data in the response (`?full-records=true`).
+	/**  Include full record data in the response (`?full-records=true`). */
 	fullRecords?: boolean | null,
-	// Pagination cursor: object ID of the first result to return (`?start=<id>`).
+	/**  Pagination cursor: object ID of the first result to return (`?start=<id>`). */
 	start?: string | null,
 };
 
@@ -210,7 +210,7 @@ export type EmployeeSetting = {
 export type EmployeeWeekEvents = {
 	employeeReference: string,
 	events: CalendarCellEvent[],
-	// Set when the CalDAV fetch for this employee fails entirely.
+	/**  Set when the CalDAV fetch for this employee fails entirely. */
 	error: string | null,
 };
 
