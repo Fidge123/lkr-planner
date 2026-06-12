@@ -13,16 +13,19 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use specta::Type;
 
+// Raw contact record as returned by the Daylite API. Daylite uses snake_case
+// field names, which the Rust field names match directly, so no rename/alias is
+// needed beyond `self` (a Rust keyword). Ingestion-only: never serialized to the
+// frontend (commands return `PlanningContactRecord`) or persisted.
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
 pub struct DayliteContactSummary {
     #[serde(rename = "self")]
     pub reference: String,
-    #[serde(default, alias = "first_name")]
+    #[serde(default)]
     pub first_name: String,
-    #[serde(default, alias = "last_name")]
+    #[serde(default)]
     pub last_name: String,
-    #[serde(default, alias = "full_name")]
+    #[serde(default)]
     pub full_name: Option<String>,
     #[serde(default)]
     pub nickname: Option<String>,
