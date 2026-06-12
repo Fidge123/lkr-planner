@@ -2,9 +2,8 @@ use super::auth_flow::send_authenticated_json;
 use super::client::DayliteApiClient;
 use super::client::DayliteHttpMethod;
 use super::shared::{
-    build_limit_query, load_daylite_tokens, load_store_or_error, save_store_or_error,
-    store_daylite_tokens, DayliteApiError, DayliteSearchInput, DayliteSearchResult,
-    DayliteTokenState,
+    build_limit_query, load_store_or_error, save_store_or_error, with_token_refresh_lock,
+    DayliteApiError, DayliteSearchInput, DayliteSearchResult, DayliteTokenState,
 };
 use chrono::{DateTime, NaiveDate, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
@@ -75,9 +74,8 @@ pub async fn daylite_list_projects(
 ) -> Result<Vec<PlanningProjectRecord>, DayliteApiError> {
     let store = load_store_or_error(app.clone())?;
     let client = DayliteApiClient::new(&store.api_endpoints.daylite_base_url)?;
-    let (projects, token_state) = list_projects_core(&client, load_daylite_tokens()?).await?;
+    let projects = with_token_refresh_lock(|tokens| list_projects_core(&client, tokens)).await?;
 
-    store_daylite_tokens(&token_state)?;
     save_store_or_error(app, store)?;
 
     Ok(projects)
@@ -91,10 +89,9 @@ pub async fn daylite_search_projects(
 ) -> Result<DayliteSearchResult<DayliteProjectSummary>, DayliteApiError> {
     let store = load_store_or_error(app.clone())?;
     let client = DayliteApiClient::new(&store.api_endpoints.daylite_base_url)?;
-    let (search_result, token_state) =
-        search_projects_core(&client, load_daylite_tokens()?, &input).await?;
+    let search_result =
+        with_token_refresh_lock(|tokens| search_projects_core(&client, tokens, &input)).await?;
 
-    store_daylite_tokens(&token_state)?;
     save_store_or_error(app, store)?;
 
     Ok(search_result)
@@ -325,16 +322,19 @@ pub(crate) async fn fetch_project_by_reference(
 
     let store = crate::integrations::local_store::load_local_store(app).ok()?;
     let client = DayliteApiClient::new(&store.api_endpoints.daylite_base_url).ok()?;
-    let tokens = load_daylite_tokens().ok()?;
 
-    let (summary, _): (DayliteProjectSummary, _) =
-        send_authenticated_json(&client, tokens, DayliteHttpMethod::Get, path, vec![], None)
-            .await
-            .ok()?;
-
-    let mapped = map_daylite_project_summary(summary);
-    let status_str = project_status_to_string(&mapped.status);
-    Some((mapped.name, status_str.to_string()))
+    // The lock both serializes the refresh and persists the rotated token: the previous
+    // code discarded the refreshed token state, leaving the old (now invalid) token stored.
+    with_token_refresh_lock(|tokens| async move {
+        let (summary, tokens): (DayliteProjectSummary, _) =
+            send_authenticated_json(&client, tokens, DayliteHttpMethod::Get, path, vec![], None)
+                .await?;
+        let mapped = map_daylite_project_summary(summary);
+        let status_str = project_status_to_string(&mapped.status);
+        Ok(((mapped.name, status_str.to_string()), tokens))
+    })
+    .await
+    .ok()
 }
 
 fn project_status_to_string(status: &PlanningProjectStatus) -> &'static str {

@@ -156,6 +156,34 @@ pub(super) fn store_daylite_tokens(token_state: &DayliteTokenState) -> Result<()
     })
 }
 
+/// Process-wide lock that serializes the Daylite token lifecycle (load → refresh → store).
+///
+/// Daylite rotates the refresh token on every refresh, so two commands running
+/// concurrently could both read the same stale token and both try to refresh it; the
+/// second refresh would fail and effectively sign the user out. Serializing the whole
+/// cycle keeps refreshes single-flight. Daylite requests are infrequent in this desktop
+/// app, so the reduced concurrency is an acceptable trade for correctness.
+fn token_refresh_lock() -> &'static tokio::sync::Mutex<()> {
+    static LOCK: std::sync::OnceLock<tokio::sync::Mutex<()>> = std::sync::OnceLock::new();
+    LOCK.get_or_init(|| tokio::sync::Mutex::new(()))
+}
+
+/// Runs a token-using operation under [`token_refresh_lock`]: loads the stored tokens,
+/// hands them to `operation`, and persists the (possibly refreshed) tokens it returns.
+/// Tokens are stored only on success, matching the previous per-command behavior.
+pub(super) async fn with_token_refresh_lock<T, Fut>(
+    operation: impl FnOnce(DayliteTokenState) -> Fut,
+) -> Result<T, DayliteApiError>
+where
+    Fut: std::future::Future<Output = Result<(T, DayliteTokenState), DayliteApiError>>,
+{
+    let _guard = token_refresh_lock().lock().await;
+    let tokens = load_daylite_tokens()?;
+    let (value, updated_tokens) = operation(tokens).await?;
+    store_daylite_tokens(&updated_tokens)?;
+    Ok(value)
+}
+
 pub(super) fn load_store_or_error(app: tauri::AppHandle) -> Result<LocalStore, DayliteApiError> {
     local_store::load_local_store(app).map_err(map_store_error)
 }

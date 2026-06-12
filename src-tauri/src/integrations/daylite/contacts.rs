@@ -5,8 +5,8 @@ use super::auth_flow::{send_authenticated_json, send_authenticated_request};
 use super::client::DayliteApiClient;
 use super::client::DayliteHttpMethod;
 use super::shared::{
-    load_daylite_tokens, load_store_or_error, save_store_or_error, store_daylite_tokens,
-    DayliteApiError, DayliteApiErrorCode, DayliteSearchResult, DayliteTokenState,
+    load_store_or_error, save_store_or_error, with_token_refresh_lock, DayliteApiError,
+    DayliteApiErrorCode, DayliteSearchResult, DayliteTokenState,
 };
 use chrono::{SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
@@ -61,9 +61,8 @@ pub async fn daylite_list_contacts(
 ) -> Result<Vec<PlanningContactRecord>, DayliteApiError> {
     let mut store = load_store_or_error(app.clone())?;
     let client = DayliteApiClient::new(&store.api_endpoints.daylite_base_url)?;
-    let (contacts, token_state) = list_contacts_core(&client, load_daylite_tokens()?).await?;
+    let contacts = with_token_refresh_lock(|tokens| list_contacts_core(&client, tokens)).await?;
 
-    store_daylite_tokens(&token_state)?;
     store.daylite_cache.last_synced_at = Some(current_timestamp_iso8601());
     store.daylite_cache.contacts = contacts
         .iter()
@@ -83,12 +82,10 @@ pub async fn sync_contact_ical_urls(
 ) -> Result<(), DayliteApiError> {
     let daylite_base_url = store.api_endpoints.daylite_base_url.clone();
     let client = DayliteApiClient::new(&daylite_base_url)?;
-    let token_state = load_daylite_tokens()?;
 
-    let (_, token_state) =
-        update_contact_ical_urls_core(&client, token_state, store, &input).await?;
+    with_token_refresh_lock(|tokens| update_contact_ical_urls_core(&client, tokens, store, &input))
+        .await?;
 
-    store_daylite_tokens(&token_state)?;
     store.daylite_cache.last_synced_at = Some(current_timestamp_iso8601());
     // Caller is responsible for saving the store.
     Ok(())
@@ -102,12 +99,12 @@ pub async fn daylite_update_contact_ical_urls(
 ) -> Result<PlanningContactRecord, DayliteApiError> {
     let mut store = load_store_or_error(app.clone())?;
     let client = DayliteApiClient::new(&store.api_endpoints.daylite_base_url)?;
-    let token_state = load_daylite_tokens()?;
 
-    let (updated_contact, token_state) =
-        update_contact_ical_urls_core(&client, token_state, &mut store, &input).await?;
+    let updated_contact = with_token_refresh_lock(|tokens| {
+        update_contact_ical_urls_core(&client, tokens, &mut store, &input)
+    })
+    .await?;
 
-    store_daylite_tokens(&token_state)?;
     store.daylite_cache.last_synced_at = Some(current_timestamp_iso8601());
     save_store_or_error(app, store)?;
 

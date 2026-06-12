@@ -484,9 +484,26 @@ pub(crate) fn build_ical_payload(
     let dtstart = format!("{compact}T080000");
     let dtend = format!("{compact}T160000");
     let dtstamp = chrono::Utc::now().format("%Y%m%dT%H%M%SZ");
+    let summary = escape_ical_text(summary);
+    let description = escape_ical_text(&format!("daylite:{project_ref}"));
     format!(
-        "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//lkr-planner//EN\r\nBEGIN:VEVENT\r\nUID:{uid}\r\nDTSTAMP:{dtstamp}\r\nDTSTART:{dtstart}\r\nDTEND:{dtend}\r\nSUMMARY:{summary}\r\nDESCRIPTION:daylite:{project_ref}\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"
+        "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//lkr-planner//EN\r\nBEGIN:VEVENT\r\nUID:{uid}\r\nDTSTAMP:{dtstamp}\r\nDTSTART:{dtstart}\r\nDTEND:{dtend}\r\nSUMMARY:{summary}\r\nDESCRIPTION:{description}\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"
     )
+}
+
+/// Escapes a string for use as an RFC 5545 TEXT value (e.g. SUMMARY, DESCRIPTION).
+/// Per RFC 5545 §3.3.11, backslash, semicolon, comma, and newlines must be escaped.
+/// Backslash is escaped first so the escape characters added afterwards are not doubled.
+/// Line folding (lines > 75 octets) is not implemented; CalDAV servers accept unfolded
+/// lines and assignment summaries are short in practice.
+fn escape_ical_text(value: &str) -> String {
+    value
+        .replace('\\', "\\\\")
+        .replace(';', "\\;")
+        .replace(',', "\\,")
+        .replace("\r\n", "\\n")
+        .replace('\n', "\\n")
+        .replace('\r', "\\n")
 }
 
 // ── CalDAV fetch ──────────────────────────────────────────────────────────────
@@ -1534,6 +1551,45 @@ END:VCALENDAR
         assert!(
             payload.contains("DTEND:20261231T160000\r\n"),
             "DTEND must not have Z suffix"
+        );
+    }
+
+    #[test]
+    fn build_ical_payload_escapes_special_chars_in_summary() {
+        let payload = build_ical_payload(
+            "uid-esc",
+            "2026-05-06",
+            "Müller, Söhne; Bau \\ Test",
+            "/v1/projects/42",
+        );
+        assert!(
+            payload.contains("SUMMARY:Müller\\, Söhne\\; Bau \\\\ Test"),
+            "comma, semicolon and backslash must be escaped, got: {payload}"
+        );
+    }
+
+    #[test]
+    fn build_ical_payload_escapes_newline_in_summary_to_literal() {
+        let payload =
+            build_ical_payload("uid-nl", "2026-05-06", "Zeile1\nZeile2", "/v1/projects/42");
+        assert!(
+            payload.contains("SUMMARY:Zeile1\\nZeile2"),
+            "newline must become the two-char escape, got: {payload}"
+        );
+        assert!(
+            !payload.contains("SUMMARY:Zeile1\r\nZeile2"),
+            "a raw newline must not split the SUMMARY property line"
+        );
+    }
+
+    #[test]
+    fn build_ical_payload_keeps_path_separators_in_description() {
+        // Forward slashes are not RFC 5545 special characters and must survive so the
+        // daylite: project reference round-trips through classification on read-back.
+        let payload = build_ical_payload("uid-d", "2026-05-06", "Projekt", "/v1/projects/42");
+        assert!(
+            payload.contains("DESCRIPTION:daylite:/v1/projects/42"),
+            "got: {payload}"
         );
     }
 
