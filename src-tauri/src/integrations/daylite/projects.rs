@@ -11,6 +11,37 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use specta::Type;
 
+// Raw project record as returned by the Daylite API. Daylite uses snake_case
+// field names, which the Rust field names match directly, so no rename/alias is
+// needed beyond `self` (a Rust keyword). Normalized into the frontend-facing
+// `DayliteProjectSummary` / `PlanningProjectRecord`.
+#[derive(Debug, Clone, Deserialize)]
+struct DayliteProjectSummaryDto {
+    #[serde(rename = "self")]
+    reference: String,
+    #[serde(default)]
+    name: String,
+    #[serde(default)]
+    status: Option<String>,
+    #[serde(default)]
+    category: Option<String>,
+    #[serde(default)]
+    keywords: Vec<String>,
+    #[serde(default)]
+    due: Option<String>,
+    #[serde(default)]
+    started: Option<String>,
+    #[serde(default)]
+    completed: Option<String>,
+    #[serde(default)]
+    create_date: Option<String>,
+    #[serde(default)]
+    modify_date: Option<String>,
+}
+
+// Frontend-facing project summary returned by `daylite_search_projects`. Uses
+// camelCase to match the TypeScript bindings; built by normalizing a
+// `DayliteProjectSummaryDto`, so it carries no Daylite-ingestion aliases.
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct DayliteProjectSummary {
@@ -29,9 +60,9 @@ pub struct DayliteProjectSummary {
     pub started: Option<String>,
     #[serde(default)]
     pub completed: Option<String>,
-    #[serde(default, alias = "create_date")]
+    #[serde(default)]
     pub create_date: Option<String>,
-    #[serde(default, alias = "modify_date")]
+    #[serde(default)]
     pub modify_date: Option<String>,
 }
 
@@ -105,7 +136,7 @@ pub(super) async fn list_projects_core(
     token_state: DayliteTokenState,
 ) -> Result<(Vec<PlanningProjectRecord>, DayliteTokenState), DayliteApiError> {
     let (search_result, token_state) =
-        send_authenticated_json::<DayliteSearchResult<DayliteProjectSummary>>(
+        send_authenticated_json::<DayliteSearchResult<DayliteProjectSummaryDto>>(
             client,
             token_state,
             DayliteHttpMethod::Post,
@@ -160,7 +191,7 @@ pub(super) async fn search_projects_core(
     }
 
     let (search_result, token_state) =
-        send_authenticated_json::<DayliteSearchResult<DayliteProjectSummary>>(
+        send_authenticated_json::<DayliteSearchResult<DayliteProjectSummaryDto>>(
             client,
             token_state,
             DayliteHttpMethod::Post,
@@ -201,7 +232,7 @@ fn extract_numeric_id(reference: &str) -> u64 {
         .unwrap_or(u64::MAX)
 }
 
-fn map_daylite_project_summary(project: DayliteProjectSummary) -> PlanningProjectRecord {
+fn map_daylite_project_summary(project: DayliteProjectSummaryDto) -> PlanningProjectRecord {
     let project = normalize_project_summary(project);
 
     PlanningProjectRecord {
@@ -218,7 +249,7 @@ fn map_daylite_project_summary(project: DayliteProjectSummary) -> PlanningProjec
     }
 }
 
-fn normalize_project_summary(project: DayliteProjectSummary) -> DayliteProjectSummary {
+fn normalize_project_summary(project: DayliteProjectSummaryDto) -> DayliteProjectSummary {
     DayliteProjectSummary {
         reference: normalize_reference(project.reference),
         name: normalize_required_string(project.name),
@@ -331,7 +362,7 @@ pub(crate) async fn fetch_project_by_reference(
     let client = DayliteApiClient::new(&store.api_endpoints.daylite_base_url).ok()?;
     let tokens = load_daylite_tokens().ok()?;
 
-    let (summary, _): (DayliteProjectSummary, _) =
+    let (summary, _): (DayliteProjectSummaryDto, _) =
         send_authenticated_json(&client, tokens, DayliteHttpMethod::Get, path, vec![], None)
             .await
             .ok()?;
@@ -356,7 +387,7 @@ fn project_status_to_string(status: &PlanningProjectStatus) -> &'static str {
 mod tests {
     use super::{
         list_projects_core, map_daylite_project_summary, map_project_status, search_projects_core,
-        DayliteProjectSummary, PlanningProjectStatus,
+        DayliteProjectSummaryDto, PlanningProjectStatus,
     };
     use crate::integrations::daylite::client::{
         BoxFuture, DayliteApiClient, DayliteHttpMethod, DayliteHttpRequest, DayliteHttpResponse,
@@ -370,7 +401,7 @@ mod tests {
 
     #[test]
     fn maps_project_summary_to_planning_project_record() {
-        let project = DayliteProjectSummary {
+        let project = DayliteProjectSummaryDto {
             reference: " /v1/projects/7000 ".to_string(),
             name: " Projekt Nord ".to_string(),
             status: Some(" NEW ".to_string()),
