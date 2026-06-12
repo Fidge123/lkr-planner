@@ -502,8 +502,7 @@ fn escape_ical_text(value: &str) -> String {
         .replace(';', "\\;")
         .replace(',', "\\,")
         .replace("\r\n", "\\n")
-        .replace('\n', "\\n")
-        .replace('\r', "\\n")
+        .replace(['\n', '\r'], "\\n")
 }
 
 // ── CalDAV fetch ──────────────────────────────────────────────────────────────
