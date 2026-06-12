@@ -186,8 +186,8 @@ pub(super) async fn search_projects_core(
     if input.full_records == Some(true) {
         query.push(("full-records".to_string(), "true".to_string()));
     }
-    if let Some(start) = input.start {
-        query.push(("start".to_string(), start.to_string()));
+    if let Some(start) = &input.start {
+        query.push(("start".to_string(), start.clone()));
     }
 
     let (search_result, token_state) =
@@ -982,7 +982,7 @@ mod tests {
                     limit: None,
                     statuses: None,
                     full_records: None,
-                    start: Some(3001),
+                    start: Some("3001".to_string()),
                 },
             )
             .await
