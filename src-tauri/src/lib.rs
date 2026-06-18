@@ -10,7 +10,7 @@ pub fn run() {
             integrations::health::check_health,
             integrations::local_store::load_local_store,
             integrations::local_store::save_local_store,
-            integrations::calendar::load_week_events,
+            integrations::calendar::commands::load_week_events,
             integrations::holidays::get_holidays_for_week,
             integrations::daylite::auth::daylite_connect_refresh_token,
             integrations::daylite::projects::daylite_list_projects,
@@ -23,9 +23,9 @@ pub fn run() {
             integrations::zep::zep_test_credentials,
             integrations::zep::zep_discover_calendars,
             integrations::zep::zep_save_and_test_calendar,
-            integrations::calendar::create_assignment,
-            integrations::calendar::update_assignment,
-            integrations::calendar::delete_assignment,
+            integrations::calendar::commands::create_assignment,
+            integrations::calendar::commands::update_assignment,
+            integrations::calendar::commands::delete_assignment,
         ]);
 
     #[cfg(debug_assertions)]
