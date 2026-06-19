@@ -8,6 +8,8 @@
 
 - [ ] 2.1 (RED) Extend `src/app/util.spec.ts` with failing cases asserting `getWeekDays` returns 5 days (Mon-Fri) when `showWeekend` is false and 7 days (Mon-Sun) when true
 - [ ] 2.2 (GREEN) Update `getWeekDays` in `src/app/util.ts` to take an optional `showWeekend = false` flag and return 5 or 7 days so the tests pass; the default keeps existing callers compiling and behaving as before until they are updated in task 5.2, avoiding a `bun test` breakage window
+- [ ] 2.3 (RED) Add failing cases (mocking the system date to a Saturday and a Sunday) asserting weekend-aware anchoring: with `showWeekend` on, `getWeekDays(0, true)` returns the Mon-Sun block containing today (today's weekend day is present); with `showWeekend` off, `getWeekDays(0, false)` still anchors to the upcoming Monday
+- [ ] 2.4 (GREEN) Make `mondayOffset` weekend-aware in `getWeekDays`: when `showWeekend` is on use Sunday `-6` / Saturday `-5` / Monday-Friday `1 - day`; when off keep the existing Sunday `+1` / Saturday `+2` / Monday-Friday `1 - day`
 
 ## 3. Display-settings service (frontend)
 

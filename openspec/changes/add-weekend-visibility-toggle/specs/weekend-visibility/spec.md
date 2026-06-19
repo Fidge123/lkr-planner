@@ -29,6 +29,32 @@ The system SHALL render Monday to Friday when weekend visibility is off and Mond
 - **THEN** seven day columns are shown, from Monday to Sunday
 - **AND** Saturday and Sunday appear after Friday
 
+### Requirement: Current-week anchoring is weekend-aware
+The system SHALL anchor the current week (the default, non-navigated week) so that today is always visible.
+When weekend visibility is on, the current week SHALL be the Monday-to-Sunday block that contains today, including when today is Saturday or Sunday.
+When weekend visibility is off, the existing behavior is retained: on a Saturday or Sunday the current week anchors to the upcoming Monday, since the present weekend day cannot be shown anyway.
+
+#### Scenario: Saturday with weekend on
+- **GIVEN** the weekend visibility setting is on
+- **AND** today is a Saturday
+- **WHEN** the planning view loads the current (non-navigated) week
+- **THEN** the week shown is the Monday-to-Sunday block that contains today
+- **AND** today's Saturday column is visible without navigating to a previous week
+
+#### Scenario: Sunday with weekend on
+- **GIVEN** the weekend visibility setting is on
+- **AND** today is a Sunday
+- **WHEN** the planning view loads the current (non-navigated) week
+- **THEN** the week shown is the Monday-to-Sunday block that contains today
+- **AND** today's Sunday column is visible without navigating to a previous week
+
+#### Scenario: Weekend off retains upcoming-Monday anchoring
+- **GIVEN** the weekend visibility setting is off
+- **AND** today is a Saturday or Sunday
+- **WHEN** the planning view loads the current (non-navigated) week
+- **THEN** the week shown starts on the upcoming Monday
+- **AND** Monday to Friday of the upcoming week are shown
+
 ### Requirement: Toggle in settings dialog
 The system SHALL expose the weekend visibility setting as a toggle in the settings dialog under the "Anzeige" section, labelled "Wochenende anzeigen".
 
