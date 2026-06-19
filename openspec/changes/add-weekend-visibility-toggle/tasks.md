@@ -1,7 +1,7 @@
 ## 1. Persist the setting (backend)
 
 - [ ] 1.1 (RED) Add Rust tests in `src-tauri/src/integrations/local_store.rs` asserting `DisplaySettings::default().show_weekend == false`, a load/save round-trip of `show_weekend`, and that a stored value missing the field deserializes to `false`
-- [ ] 1.2 (GREEN) Add `show_weekend: bool` to `DisplaySettings` with field documentation, default it to `false`, and make missing values deserialize to `false` so the tests pass
+- [ ] 1.2 (GREEN) Add `show_weekend: bool` to `DisplaySettings` with field documentation, set it to `false` in the existing manual `impl Default` block (do not switch to `#[derive(Default)]`, which would reset `hide_non_plannable_employees` to `false`), and make missing values deserialize to `false` so the tests pass
 - [ ] 1.3 Regenerate the TypeScript bindings so `DisplaySettings` includes `showWeekend: boolean`
 
 ## 2. Week-day generation
@@ -11,8 +11,10 @@
 
 ## 3. Display-settings service (frontend)
 
-- [ ] 3.1 (RED) Add failing tests for `loadShowWeekend` (defaults to false when unset) and `saveShowWeekend` (persists the value while preserving `hideNonPlannableEmployees`)
-- [ ] 3.2 (GREEN) Add `DEFAULT_SHOW_WEEKEND = false` and `loadShowWeekend` / `saveShowWeekend` helpers in `src/services/display-settings.ts`, merging rather than overwriting other display settings
+- [ ] 3.1 (RED) Add a failing test proving the existing `saveHideNonPlannableEmployees` drops `showWeekend`: save `showWeekend = true`, then call `saveHideNonPlannableEmployees(false)`, and assert the reloaded store still has `showWeekend === true`
+- [ ] 3.2 (GREEN) Fix `saveHideNonPlannableEmployees` to merge into the existing `displaySettings` instead of overwriting the whole object, so it no longer zeroes out `showWeekend`
+- [ ] 3.3 (RED) Add failing tests for `loadShowWeekend` (defaults to false when unset) and `saveShowWeekend` (persists the value while preserving `hideNonPlannableEmployees`)
+- [ ] 3.4 (GREEN) Add `DEFAULT_SHOW_WEEKEND = false` and `loadShowWeekend` / `saveShowWeekend` helpers in `src/services/display-settings.ts`, merging into the existing `displaySettings` rather than overwriting other fields
 
 ## 4. Settings dialog toggle
 

@@ -30,7 +30,7 @@ The system SHALL render Monday to Friday when weekend visibility is off and Mond
 - **AND** Saturday and Sunday appear after Friday
 
 ### Requirement: Toggle in settings dialog
-The system SHALL expose the weekend visibility setting as a toggle in the settings dialog under the "Anzeige" section, labelled in German.
+The system SHALL expose the weekend visibility setting as a toggle in the settings dialog under the "Anzeige" section, labelled "Wochenende anzeigen".
 
 #### Scenario: Turning the toggle on
 - **GIVEN** the settings dialog is open with the weekend toggle off

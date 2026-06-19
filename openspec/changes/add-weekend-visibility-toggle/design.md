@@ -20,8 +20,9 @@ Display preferences are already persisted via `DisplaySettings` in the local sto
 ## Decisions
 
 ### Storage: extend DisplaySettings
-**Decision**: Add `show_weekend: bool` to the Rust `DisplaySettings` struct with a `Default` of `false`, and mirror it as `showWeekend: boolean` in the generated TypeScript type.
-- Follows the existing `hide_non_plannable_employees` precedent exactly, including `#[serde(default)]`-style tolerance so older local stores without the field load as off.
+**Decision**: Add `show_weekend: bool` to the Rust `DisplaySettings` struct, defaulting to `false`, and mirror it as `showWeekend: boolean` in the generated TypeScript type.
+- `DisplaySettings` has a hand-written `impl Default` (not `#[derive(Default)]`) because `hide_non_plannable_employees` defaults to `true`. The new field must be added to that manual block as `show_weekend: false`. Switching to `#[derive(Default)]` would silently reset `hide_non_plannable_employees` to `false`.
+- Follows the existing `hide_non_plannable_employees` precedent, including `#[serde(default)]`-style tolerance so older local stores without the field load as off.
 - Keeps a single display-settings object rather than introducing a new persistence surface.
 
 ### Week-day generation
@@ -34,8 +35,19 @@ Display preferences are already persisted via `DisplaySettings` in the local sto
 **Decision**: Load `showWeekend` alongside the existing display settings in `app.tsx`, pass it into `getWeekDays`, and extend `display-settings.ts` with load/save helpers plus a `DEFAULT_SHOW_WEEKEND = false` constant.
 - The settings dialog adds a toggle mirroring the `hideNonPlannable` checkbox, labelled "Wochenende anzeigen" with a short German description.
 
+### Fix the existing overwrite bug in `saveHideNonPlannableEmployees`
+**Decision**: Change both save helpers to merge into the existing `displaySettings` rather than replacing it.
+- Today `saveHideNonPlannableEmployees` writes `displaySettings: { hideNonPlannableEmployees }`, replacing the whole object.
+- With a second field live, the helper that saves last wins and silently drops the other field's value.
+- `saveHideNonPlannableEmployees` and the new `saveShowWeekend` must both spread the loaded `displaySettings` and override only their own field.
+
 ## Risks / Trade-offs
 
-- **Risk**: Existing local stores lack the new field. **Mitigation**: serde default and a frontend default of `false` resolve missing values to off.
-- **Trade-off**: `getWeekDays` gains a parameter, touching its callers and tests. Accepted because it keeps the day list as the single source of truth for column count.
-- **Risk**: Weekend columns may surface holidays or absences not previously visible. **Mitigation**: those item types already render by date, so showing them on Saturday/Sunday is the intended behavior, not a regression.
+- **Risk**: Existing local stores lack the new field.
+  - **Mitigation**: serde default and a frontend default of `false` resolve missing values to off.
+- **Risk**: The existing `saveHideNonPlannableEmployees` overwrites the whole `displaySettings` object, so adding a second field means one save can drop the other.
+  - **Mitigation**: fix both save helpers to merge into the loaded `displaySettings`, covered by a dedicated regression test.
+- **Trade-off**: `getWeekDays` gains a parameter, touching its callers and tests.
+  - Accepted because it keeps the day list as the single source of truth for column count.
+- **Risk**: Weekend columns may surface holidays or absences not previously visible.
+  - **Mitigation**: those item types already render by date, so showing them on Saturday/Sunday is the intended behavior, not a regression.

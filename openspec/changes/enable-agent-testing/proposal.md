@@ -1,6 +1,7 @@
 ## Why
 
-Claude currently cannot verify UI and integration behavior by running the application, which limits code quality when using agentic engineering. Adding Playwright-based end-to-end testing against the Vite frontend — with mocked Tauri backend calls — gives Claude a reliable way to start the app, interact with it, and assert correctness before declaring tasks complete.
+Claude currently cannot verify UI and integration behavior by running the application, which limits code quality when using agentic engineering.
+Adding Playwright-based end-to-end testing against the Vite frontend, with mocked Tauri backend calls, gives Claude a reliable way to start the app, interact with it, and assert correctness before declaring tasks complete.
 
 ## What Changes
 
@@ -17,8 +18,7 @@ Claude currently cannot verify UI and integration behavior by running the applic
 - `e2e-testing`: Playwright setup with Vite dev server and mocked Tauri backend, plus a `test:e2e` script and baseline smoke tests, enabling Claude to run automated UI tests
 
 ### Modified Capabilities
-
-- `http-recording`: No requirement changes — implementation detail only (Playwright test runner is separate from VCR tests)
+<!-- No existing spec requirements are changing -->
 
 ## Impact
 
