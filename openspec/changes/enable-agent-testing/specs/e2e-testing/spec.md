@@ -18,7 +18,7 @@ The mock SHALL throw an error for any `invoke` call that has not been explicitly
 Tests SHALL register stubs before navigation (via `page.addInitScript`) so `invoke` calls made during initial render are covered, and the registry SHALL be reset before each test so handlers do not bleed between tests.
 
 #### Scenario: Registered invoke call returns stub value
-- **WHEN** a Playwright test registers a mock for command `"load_local_store"` returning `{ employees: [] }` before navigating
+- **WHEN** a Playwright test registers a mock for command `"load_local_store"` returning a `LocalStore`-shaped value (for example `{ employeeSettings: [] }`, illustrative and partial) before navigating
 - **THEN** any `invoke("load_local_store")` call from the frontend, including calls during initial render, returns that value
 
 #### Scenario: Handlers reset between tests

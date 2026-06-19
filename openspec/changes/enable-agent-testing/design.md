@@ -61,7 +61,7 @@ The script checks for `bun`, `cargo`, and the Playwright browser binaries on `PA
 - **Tauri invoke mock drift**: as `src/generated/tauri.ts` grows, tests may call commands that have no mock handler.
   - **Mitigation**: the mock throws by default for unregistered commands, requiring tests to explicitly stub each call they depend on.
 - **Playwright browser download**: first run downloads roughly 100 MB of browser binaries.
-  - **Mitigation**: documented in README; `scripts/check-dev-env.sh` warns if not installed.
+  - **Mitigation**: captured as the one-time prerequisite step in tasks.md, and `scripts/check-dev-env.sh` warns if not installed.
 - **Vite port conflicts**: Playwright's `webServer` uses port 5173 by default.
   - **Mitigation**: configure a dedicated port (5174) in `vite.playwright.config.ts` so it does not clash with `bun dev`.
 - **Smoke test brittleness**: UI-level selectors break on refactors.

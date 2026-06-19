@@ -34,12 +34,12 @@ The system SHALL expose the weekend visibility setting as a toggle in the settin
 
 #### Scenario: Turning the toggle on
 - **GIVEN** the settings dialog is open with the weekend toggle off
-- **WHEN** the user enables the weekend toggle and saves
+- **WHEN** the user enables the weekend toggle and saves the dialog
 - **THEN** the setting is persisted as on
-- **AND** the planning view shows Saturday and Sunday
+- **AND** once the dialog is saved the planning view refreshes and shows Saturday and Sunday
 
 #### Scenario: Turning the toggle off
 - **GIVEN** the settings dialog is open with the weekend toggle on
-- **WHEN** the user disables the weekend toggle and saves
+- **WHEN** the user disables the weekend toggle and saves the dialog
 - **THEN** the setting is persisted as off
-- **AND** the planning view shows only Monday to Friday
+- **AND** once the dialog is saved the planning view refreshes and shows only Monday to Friday

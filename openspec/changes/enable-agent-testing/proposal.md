@@ -24,5 +24,5 @@ Adding Playwright-based end-to-end testing against the Vite frontend, with mocke
 
 - `package.json`: new `test:e2e` script, new Playwright devDependencies
 - `.claude/settings.json`: new `SessionStart` hook
-- New files: `playwright.config.ts`, `src/test/tauri-mock.ts`, `tests/e2e/` directory with baseline smoke tests
+- New files: `playwright.config.ts`, `vite.playwright.config.ts`, `src/test/tauri-mock.ts`, `scripts/check-dev-env.sh`, `tests/e2e/` directory with baseline smoke tests
 - No changes to Rust backend or existing Bun/Cargo test suites

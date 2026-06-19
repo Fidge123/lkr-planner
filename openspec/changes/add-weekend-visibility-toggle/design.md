@@ -21,8 +21,9 @@ Display preferences are already persisted via `DisplaySettings` in the local sto
 
 ### Storage: extend DisplaySettings
 **Decision**: Add `show_weekend: bool` to the Rust `DisplaySettings` struct, defaulting to `false`, and mirror it as `showWeekend: boolean` in the generated TypeScript type.
-- `DisplaySettings` has a hand-written `impl Default` (not `#[derive(Default)]`) because `hide_non_plannable_employees` defaults to `true`. The new field must be added to that manual block as `show_weekend: false`. Switching to `#[derive(Default)]` would silently reset `hide_non_plannable_employees` to `false`.
-- Follows the existing `hide_non_plannable_employees` precedent, including `#[serde(default)]`-style tolerance so older local stores without the field load as off.
+- `DisplaySettings` has a hand-written `impl Default` (not `#[derive(Default)]`) because `hide_non_plannable_employees` defaults to `true`.
+- The new field must be added to that manual block as `show_weekend: false`; switching to `#[derive(Default)]` would silently reset `hide_non_plannable_employees` to `false`.
+- The `show_weekend` field itself must carry `#[serde(default)]` so a stored `DisplaySettings` written before this field existed deserializes (the struct-level default does not fill in individual missing fields), resolving to `false`.
 - Keeps a single display-settings object rather than introducing a new persistence surface.
 
 ### Week-day generation

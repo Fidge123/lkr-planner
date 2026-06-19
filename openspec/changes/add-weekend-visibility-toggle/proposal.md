@@ -21,5 +21,6 @@ Some teams occasionally work weekends and need to see those days, while most pre
 ## Impact
 
 - Code: `getWeekDays` (week-day generation) becomes weekend-aware, the planning page reads the setting, and the settings dialog gains a toggle.
+- Behavior change: fixes an existing bug where `saveHideNonPlannableEmployees` overwrites the whole `displaySettings` object; both save helpers now merge so saving one display field no longer drops the other.
 - Storage: New `showWeekend` field on the existing `DisplaySettings` in the local store (Rust + generated TypeScript types).
 - Dependencies: Builds on the existing display-settings persistence used by `hideNonPlannableEmployees`.
