@@ -29,6 +29,12 @@ function runCheck(env: Record<string, string>) {
   };
 }
 
+function markBrowserInstalled(browsersDir: string, dirName: string) {
+  const dir = join(browsersDir, dirName);
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "INSTALLATION_COMPLETE"), "");
+}
+
 describe("check-dev-env.sh", () => {
   test("warns for each missing tool and exits 0", () => {
     const emptyBrowsers = join(workDir, "no-browsers");
@@ -44,6 +50,21 @@ describe("check-dev-env.sh", () => {
     expect(stderr).toContain("bun");
     expect(stderr).toContain("cargo");
     expect(stderr).toContain("chromium");
+    expect(stderr).toContain("webkit");
+  });
+
+  test("warns only for the missing browser when one engine is installed", () => {
+    const browsers = join(workDir, "browsers");
+    markBrowserInstalled(browsers, "chromium-1234");
+
+    const { stderr } = runCheck({
+      PATH: "",
+      HOME: workDir,
+      PLAYWRIGHT_BROWSERS_PATH: browsers,
+    });
+
+    expect(stderr).not.toContain("chromium");
+    expect(stderr).toContain("webkit");
   });
 
   test("stays silent and exits 0 when all tools are present", () => {
@@ -56,11 +77,8 @@ describe("check-dev-env.sh", () => {
     }
 
     const browsers = join(workDir, "browsers");
-    const chromeDir = join(browsers, "chromium-1234", "chrome-linux");
-    mkdirSync(chromeDir, { recursive: true });
-    const chrome = join(chromeDir, "chrome");
-    writeFileSync(chrome, "#!/bin/sh\n");
-    chmodSync(chrome, 0o755);
+    markBrowserInstalled(browsers, "chromium-1234");
+    markBrowserInstalled(browsers, "webkit-2215");
 
     const { exitCode, stderr } = runCheck({
       PATH: bin,

@@ -36,6 +36,6 @@
 ## 4. SessionStart Hook
 
 - [x] 4.1 (RED) Write a unit test (Bun) that runs `scripts/check-dev-env.sh` with a controlled `PATH` and asserts it warns for each missing tool (`bun`, `cargo`, Playwright chromium) and always exits 0, plus a case proving it stays silent when all are present; it fails because the script does not exist yet
-- [x] 4.2 (GREEN) Create the POSIX shell script `scripts/check-dev-env.sh` that checks for `bun`, `cargo`, and a Playwright chromium binary (under `PLAYWRIGHT_BROWSERS_PATH` or the default cache), prints a non-blocking warning for each missing tool, and always exits 0. It uses only shell builtins so it works with an empty `PATH`, and is a shell script (not a `bun`-run TS file) so it can still report a missing `bun`
+- [x] 4.2 (GREEN) Create the POSIX shell script `scripts/check-dev-env.sh` that checks for `bun`, `cargo`, and the Playwright browsers chromium and webkit (each engine's `INSTALLATION_COMPLETE` marker under `PLAYWRIGHT_BROWSERS_PATH` or the default cache), prints a non-blocking warning for each missing tool, and always exits 0. It uses only shell builtins so it works with an empty `PATH`, and is a shell script (not a `bun`-run TS file) so it can still report a missing `bun`
 - [x] 4.3 Add a `SessionStart` hook entry to `.claude/settings.json` that runs `sh scripts/check-dev-env.sh` directly (not through `bun`)
 - [x] 4.4 Verify the hook command runs cleanly: with `bun` and `cargo` present and chromium pre-staged it exits 0 silently. A full new-session run is exercised when this branch is next opened on the web

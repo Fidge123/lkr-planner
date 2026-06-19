@@ -82,6 +82,14 @@ Bun has no path-exclude for test discovery, and a single `bunfig` `root` cannot 
 The two runners then never collect each other's files.
 This is a deviation from the original task filenames (`setup.spec.ts`, `smoke.spec.ts`), made to keep both `bun test` and `bun test:e2e` green.
 
+### Run both chromium and webkit
+The app ships on macOS only (`aarch64-apple-darwin`), where Tauri renders in WebKit (WKWebView + JavaScriptCore), so webkit is the production-representative engine and chromium (Blink + V8) represents no real users.
+The tests mock the Tauri backend and run in plain Vite, so the engine only affects rendering and JS-engine fidelity, not the IPC bridge; and Playwright's webkit is its own build (the WebKitGTK-family port on Linux CI), not the OS-pinned WKWebView, so it is the closest practical proxy rather than an exact match (`tauri-driver` does not support driving the real macOS webview).
+The divergence matters here in practice: Tailwind v4 and DaisyUI 5 lean on modern CSS (`oklch()`, `color-mix()`, `@property`, `:has()`, container queries) that Blink and WebKit shipped at different times, and the app's German locale runs through JavaScriptCore in production but V8 under chromium.
+Both engines run as Playwright projects.
+webkit is the fidelity gate that must be green in CI; chromium stays as a fast, stable baseline that can also run in the Claude cloud sandbox, where only chromium is pre-staged and webkit cannot be downloaded (the browser CDN is blocked).
+A single engine can be run locally with `--project=chromium`.
+
 ### Playwright pinned to 1.56.1 for the web environment
 Claude Code on the web pre-stages the Playwright browser at `/opt/pw-browsers` for a specific Playwright version (chromium 141, revision 1194, matching `@playwright/test` 1.56.1).
 A floating `^` would resolve to a newer Playwright that expects a different browser revision and fail to find the pre-staged one, with no network to download it.
@@ -90,7 +98,7 @@ Pinning to `1.56.1` lets the E2E suite run in web sessions without a browser dow
 ### SessionStart hook (shell script)
 The hook runs a POSIX shell script (`scripts/check-dev-env.sh`) invoked directly by the shell, not through `bun`.
 Running it through `bun run` would make it unable to report a missing `bun`, because the interpreter itself would be absent.
-The script checks for `bun`, `cargo`, and the Playwright browser binaries on `PATH`, prints a clear non-blocking warning for anything missing, and always exits 0 to avoid slowing or blocking session startup.
+The script checks for `bun`, `cargo`, and the Playwright browsers (both chromium and webkit, via each engine's `INSTALLATION_COMPLETE` marker under the browsers dir), prints a clear non-blocking warning for anything missing, and always exits 0 to avoid slowing or blocking session startup.
 
 ## Risks / Trade-offs
 

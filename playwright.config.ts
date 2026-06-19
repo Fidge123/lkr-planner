@@ -14,10 +14,19 @@ export default defineConfig({
     baseURL: "http://localhost:5174",
     trace: "on-first-retry",
   },
+  // The app ships on macOS only, where Tauri renders in WebKit (WKWebView), so
+  // webkit is the production-representative engine and must be green in CI.
+  // chromium is kept as a fast, stable baseline that can also run in the Claude
+  // cloud sandbox (where only chromium is pre-staged and webkit cannot be
+  // downloaded). Run a single project locally with `--project=chromium`.
   projects: [
     {
       name: "chromium",
       use: { ...devices["Desktop Chrome"] },
+    },
+    {
+      name: "webkit",
+      use: { ...devices["Desktop Safari"] },
     },
   ],
   webServer: {

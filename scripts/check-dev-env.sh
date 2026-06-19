@@ -21,17 +21,25 @@ if ! command -v cargo >/dev/null 2>&1; then
 fi
 
 browsers_dir="${PLAYWRIGHT_BROWSERS_PATH:-$HOME/.cache/ms-playwright}"
-chromium_found=0
-for chrome in \
-  "$browsers_dir"/chromium-*/chrome-linux*/chrome \
-  "$browsers_dir"/chromium-*/chrome-mac*/Chromium.app/Contents/MacOS/Chromium; do
-  if [ -x "$chrome" ]; then
-    chromium_found=1
-    break
-  fi
-done
-if [ "$chromium_found" -eq 0 ]; then
+
+# A browser is installed when Playwright has written its INSTALLATION_COMPLETE
+# marker into a "<engine>-<revision>" directory. This is engine- and
+# platform-agnostic, so the same check works for chromium and webkit.
+browser_installed() {
+  for marker in "$browsers_dir"/"$1"-*/INSTALLATION_COMPLETE; do
+    if [ -f "$marker" ]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+if ! browser_installed chromium; then
   warn "Playwright chromium not installed. Run: bunx playwright install chromium"
+fi
+
+if ! browser_installed webkit; then
+  warn "Playwright webkit not installed. Run: bunx playwright install webkit"
 fi
 
 exit 0
