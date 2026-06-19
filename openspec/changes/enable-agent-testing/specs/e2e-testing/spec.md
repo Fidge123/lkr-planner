@@ -31,7 +31,8 @@ Tests SHALL register stubs before navigation (via `page.addInitScript`) so `invo
 
 ### Requirement: Mock stubs are type-checked against the generated bindings
 The system SHALL type the mock registry and its fixtures against the generated command bindings (`src/generated/tauri.ts`), which are the source of truth derived from the Rust backend.
-Registering a stub for a command SHALL require a return value assignable to that command's generated return type, so a stub that does not match the real shape fails type checking (`bun test` / `tsc`) rather than passing silently.
+Because the mock replaces the raw `invoke` that the generated `typedError` wrapper consumes, the target type is the command's success payload (the value `invoke` resolves to), not the wrapped `Result` return type.
+Registering a stub for a command SHALL require a return value assignable to that command's success payload, so a stub that does not match the real shape fails type checking (`bun test` / `tsc`) rather than passing silently.
 Reusable typed fixture builders SHALL be provided for the commands the tests depend on, so the expected shape is defined in one place and drift surfaces as a single compile error when the Rust types change and the bindings are regenerated.
 
 #### Scenario: Mismatched stub fails type checking
@@ -42,13 +43,15 @@ Reusable typed fixture builders SHALL be provided for the commands the tests dep
 - **WHEN** a Rust command type gains a required field and the bindings are regenerated
 - **THEN** the corresponding typed fixture builder fails type checking, pointing to the single place that must be updated
 
-### Requirement: Smoke tests cover the main application views
-The system SHALL include at least one Playwright smoke test per top-level view of the application.
-Each smoke test SHALL verify that the view renders without JavaScript errors.
+### Requirement: Smoke tests cover the main application view
+The system SHALL include at least one Playwright smoke test for the main view.
+The application has a single top-level view (`app.tsx`, the planning view) with no router, so this main-view test is the baseline.
+Each smoke test SHALL verify that the view renders without JavaScript errors, asserting on both page errors and unhandled promise rejections since unregistered commands reach the page through both channels.
+The test SHALL register every command the initial render fires (`daylite_list_contacts`, `daylite_list_cached_contacts`, `load_local_store`, `load_week_events`, `get_holidays_for_week`, `zep_load_credentials`) so an unregistered command does not throw and trip the no-JS-errors assertion.
 
 #### Scenario: Planning view loads
-- **WHEN** Playwright navigates to `/`
-- **THEN** the page title or a prominent heading is visible and no unhandled JavaScript errors occur
+- **WHEN** Playwright registers the startup command mocks and navigates to `/`
+- **THEN** the main view (`data-testid="planning-view"`) and the heading are visible, and no page errors or unhandled rejections occur
 
 ### Requirement: SessionStart hook checks the development environment
 The system SHALL execute a fast environment check at the start of each Claude Code session via a POSIX shell script (`scripts/check-dev-env.sh`) run directly by the shell, not through `bun`, so that a missing `bun` can still be reported.
