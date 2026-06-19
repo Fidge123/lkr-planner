@@ -120,7 +120,7 @@ function App() {
   }, [loadEmployeeSettings, planningAssignmentsState.reloadAssignments]);
 
   return (
-    <article className="min-h-screen flex flex-col">
+    <article className="min-h-screen flex flex-col" data-testid="planning-view">
       <header className="navbar p-4 shadow-sm border-b border-base-300">
         <div className="navbar-start gap-2">
           <h1 className="text-2xl font-bold">Wochenplanung</h1>

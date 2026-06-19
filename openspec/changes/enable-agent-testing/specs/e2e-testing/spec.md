@@ -46,12 +46,12 @@ Reusable typed fixture builders SHALL be provided for the commands the tests dep
 ### Requirement: Smoke tests cover the main application view
 The system SHALL include at least one Playwright smoke test for the main view.
 The application has a single top-level view (`app.tsx`, the planning view) with no router, so this main-view test is the baseline.
-Each smoke test SHALL verify that the view renders without JavaScript errors.
-The test SHALL register the commands the initial render fires (`daylite_list_contacts`, `load_local_store`, `load_week_events`, `get_holidays_for_week`) so an unregistered command does not throw and trip the no-JS-errors assertion.
+Each smoke test SHALL verify that the view renders without JavaScript errors, asserting on both page errors and unhandled promise rejections since unregistered commands reach the page through both channels.
+The test SHALL register every command the initial render fires (`daylite_list_contacts`, `daylite_list_cached_contacts`, `load_local_store`, `load_week_events`, `get_holidays_for_week`, `zep_load_credentials`) so an unregistered command does not throw and trip the no-JS-errors assertion.
 
 #### Scenario: Planning view loads
 - **WHEN** Playwright registers the startup command mocks and navigates to `/`
-- **THEN** the page title or a prominent heading is visible and no unhandled JavaScript errors occur
+- **THEN** the main view (`data-testid="planning-view"`) and the heading are visible, and no page errors or unhandled rejections occur
 
 ### Requirement: SessionStart hook checks the development environment
 The system SHALL execute a fast environment check at the start of each Claude Code session via a POSIX shell script (`scripts/check-dev-env.sh`) run directly by the shell, not through `bun`, so that a missing `bun` can still be reported.
