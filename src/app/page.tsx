@@ -14,6 +14,7 @@ import { getWeekDays, toLocalISODate } from "./util";
 
 export function PlanningGrid({
   weekOffset,
+  showWeekend = false,
   projectState,
   employeeState,
   assignmentState,
@@ -21,7 +22,7 @@ export function PlanningGrid({
   hideNonPlannableEmployees = true,
   onOpenIcalDialog,
 }: Props) {
-  const weekDays = getWeekDays(weekOffset);
+  const weekDays = getWeekDays(weekOffset, showWeekend);
   const weekStart = toLocalISODate(weekDays[0]);
 
   const planningProjectsState = usePlanningProjects();
@@ -214,6 +215,7 @@ export function PlanningGridTable({
 
 interface Props {
   weekOffset: number;
+  showWeekend?: boolean;
   projectState?: PlanningGridProjectsState;
   employeeState?: PlanningGridEmployeesState;
   assignmentState: PlanningGridAssignmentState;

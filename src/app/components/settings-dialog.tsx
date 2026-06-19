@@ -9,7 +9,9 @@ import {
 } from "../../services/daylite-auth";
 import {
   loadHideNonPlannableEmployees,
+  loadShowWeekend,
   saveHideNonPlannableEmployees,
+  saveShowWeekend,
 } from "../../services/display-settings";
 import {
   loadZepCredentials,
@@ -371,8 +373,12 @@ function ZepSettingsPanel({ onClose }: PanelProps) {
   );
 }
 
-function DisplaySettingsPanel({ onClose, onChanged }: DisplayPanelProps) {
+export function DisplaySettingsPanel({
+  onClose,
+  onChanged,
+}: DisplayPanelProps) {
   const [hideNonPlannable, setHideNonPlannable] = useState(true);
+  const [showWeekend, setShowWeekend] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [status, setStatus] = useState<PanelStatus | null>(null);
 
@@ -386,6 +392,15 @@ function DisplaySettingsPanel({ onClose, onChanged }: DisplayPanelProps) {
       })
       .catch(() => {
         // Fall back to the default (hide) if the store cannot be read.
+      });
+    void loadShowWeekend()
+      .then((value) => {
+        if (isActive) {
+          setShowWeekend(value);
+        }
+      })
+      .catch(() => {
+        // Fall back to the default (weekend hidden) if the store cannot be read.
       });
     return () => {
       isActive = false;
@@ -404,6 +419,30 @@ function DisplaySettingsPanel({ onClose, onChanged }: DisplayPanelProps) {
     } catch (error) {
       // Revert the optimistic change so the UI matches the persisted state.
       setHideNonPlannable(!nextValue);
+      setStatus({
+        type: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Die Anzeige-Einstellung konnte nicht gespeichert werden.",
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const onToggleWeekend = async (event: ChangeEvent<HTMLInputElement>) => {
+    const nextValue = event.target.checked;
+    setShowWeekend(nextValue);
+    setIsSaving(true);
+    setStatus(null);
+
+    try {
+      await saveShowWeekend(nextValue);
+      onChanged?.();
+    } catch (error) {
+      // Revert the optimistic change so the UI matches the persisted state.
+      setShowWeekend(!nextValue);
       setStatus({
         type: "error",
         message:
@@ -441,6 +480,22 @@ function DisplaySettingsPanel({ onClose, onChanged }: DisplayPanelProps) {
           <span className="label-text text-base-content/60">
             Blendet Mitarbeiter ohne konfigurierten Kalender sowie Mitarbeiter
             der Kategorie „Test“ aus.
+          </span>
+        </span>
+      </label>
+
+      <label className="label mt-4 cursor-pointer items-start justify-start gap-3">
+        <input
+          type="checkbox"
+          className="toggle toggle-primary"
+          checked={showWeekend}
+          onChange={onToggleWeekend}
+          disabled={isSaving}
+        />
+        <span className="flex flex-col gap-1">
+          <span className="label-text font-medium">Wochenende anzeigen</span>
+          <span className="label-text text-base-content/60">
+            Zeigt zusätzlich Samstag und Sonntag in der Planungsansicht an.
           </span>
         </span>
       </label>

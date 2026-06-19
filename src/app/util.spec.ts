@@ -1,4 +1,11 @@
-import { beforeAll, describe, expect, it, setSystemTime } from "bun:test";
+import {
+  afterAll,
+  beforeAll,
+  describe,
+  expect,
+  it,
+  setSystemTime,
+} from "bun:test";
 import { getWeekDays, isToday, toLocalISODate } from "./util";
 
 describe("util", () => {
@@ -32,6 +39,75 @@ describe("util", () => {
         expect(day.getMinutes()).toBe(0);
         expect(day.getSeconds()).toBe(0);
       }
+    });
+
+    it("returns 5 days from Monday to Friday when showWeekend is false", () => {
+      const weekDays = getWeekDays(0, false);
+      expect(weekDays).toHaveLength(5);
+      expect(weekDays[0].getDay()).toBe(1); // Monday
+      expect(weekDays[4].getDay()).toBe(5); // Friday
+    });
+
+    it("returns 7 days from Monday to Sunday when showWeekend is true", () => {
+      const weekDays = getWeekDays(0, true);
+      expect(weekDays).toHaveLength(7);
+      expect(weekDays[0].getDay()).toBe(1); // Monday
+      expect(weekDays[5].getDay()).toBe(6); // Saturday
+      expect(weekDays[6].getDay()).toBe(0); // Sunday
+    });
+  });
+
+  // Anchoring only differs on weekends, so these blocks pin the system clock to
+  // a Saturday and a Sunday respectively.
+  describe("getWeekDays weekend-aware anchoring", () => {
+    describe("when today is a Saturday", () => {
+      beforeAll(() => {
+        // 2026-01-03 is a Saturday.
+        setSystemTime(new Date(2026, 0, 3, 12, 0, 0));
+      });
+      afterAll(() => {
+        setSystemTime(new Date(2026, 0, 1, 12, 34, 56));
+      });
+
+      it("anchors to the current week so today stays visible when showWeekend is on", () => {
+        const weekDays = getWeekDays(0, true);
+        expect(weekDays).toHaveLength(7);
+        expect(weekDays[0].getDay()).toBe(1); // Monday
+        expect(weekDays.map(toLocalISODate)).toContain("2026-01-03");
+        expect(toLocalISODate(weekDays[5])).toBe("2026-01-03"); // Saturday is today
+      });
+
+      it("anchors to the upcoming Monday when showWeekend is off", () => {
+        const weekDays = getWeekDays(0, false);
+        expect(weekDays).toHaveLength(5);
+        expect(toLocalISODate(weekDays[0])).toBe("2026-01-05");
+        expect(weekDays.map(toLocalISODate)).not.toContain("2026-01-03");
+      });
+    });
+
+    describe("when today is a Sunday", () => {
+      beforeAll(() => {
+        // 2026-01-04 is a Sunday.
+        setSystemTime(new Date(2026, 0, 4, 12, 0, 0));
+      });
+      afterAll(() => {
+        setSystemTime(new Date(2026, 0, 1, 12, 34, 56));
+      });
+
+      it("anchors to the current week so today stays visible when showWeekend is on", () => {
+        const weekDays = getWeekDays(0, true);
+        expect(weekDays).toHaveLength(7);
+        expect(weekDays[0].getDay()).toBe(1); // Monday
+        expect(weekDays.map(toLocalISODate)).toContain("2026-01-04");
+        expect(toLocalISODate(weekDays[6])).toBe("2026-01-04"); // Sunday is today
+      });
+
+      it("anchors to the upcoming Monday when showWeekend is off", () => {
+        const weekDays = getWeekDays(0, false);
+        expect(weekDays).toHaveLength(5);
+        expect(toLocalISODate(weekDays[0])).toBe("2026-01-05");
+        expect(weekDays.map(toLocalISODate)).not.toContain("2026-01-04");
+      });
     });
   });
 

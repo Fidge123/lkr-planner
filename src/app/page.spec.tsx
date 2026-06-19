@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { CalendarCellEvent } from "../generated/tauri";
 import type { HolidaysState } from "./hooks/use-holidays";
 import {
+  PlanningGrid,
   type PlanningGridAssignmentState,
   type PlanningGridEmployeesState,
   type PlanningGridProjectsState,
@@ -436,5 +437,46 @@ describe("planning grid assignment states", () => {
     expect(html).toContain("CalDAV server unreachable");
     expect(html).toContain("Erneut laden");
     expect(html).not.toContain("bg-secondary");
+  });
+});
+
+describe("planning grid weekend visibility", () => {
+  beforeAll(() => {
+    setSystemTime(new Date(2026, 0, 28, 9, 0, 0));
+  });
+
+  // Each day column renders exactly one <time> header cell; with no employees or
+  // events the only <time> elements are the day headers.
+  const countDayColumns = (html: string) => (html.match(/<time/g) ?? []).length;
+
+  it("renders 5 day columns by default (weekend hidden)", () => {
+    const html = renderToStaticMarkup(
+      <PlanningGrid
+        weekOffset={0}
+        projectState={{ ...defaultState }}
+        employeeState={{ ...defaultEmployeeState }}
+        assignmentState={{ ...defaultAssignmentState }}
+        employeeSettings={[]}
+        onOpenIcalDialog={() => {}}
+      />,
+    );
+
+    expect(countDayColumns(html)).toBe(5);
+  });
+
+  it("renders 7 day columns when showWeekend is on", () => {
+    const html = renderToStaticMarkup(
+      <PlanningGrid
+        weekOffset={0}
+        showWeekend
+        projectState={{ ...defaultState }}
+        employeeState={{ ...defaultEmployeeState }}
+        assignmentState={{ ...defaultAssignmentState }}
+        employeeSettings={[]}
+        onOpenIcalDialog={() => {}}
+      />,
+    );
+
+    expect(countDayColumns(html)).toBe(7);
   });
 });

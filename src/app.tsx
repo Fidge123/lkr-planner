@@ -17,7 +17,12 @@ import { discoverZepCalendars } from "./services/zep";
 
 function App() {
   const [weekOffset, setWeekOffset] = useState(0);
-  const weekStart = getWeekDays(weekOffset)[0].toISOString().slice(0, 10);
+  // Display preference: show Saturday and Sunday in the planning view.
+  // Defaults to false (matches the backend DisplaySettings default).
+  const [showWeekend, setShowWeekend] = useState(false);
+  const weekStart = getWeekDays(weekOffset, showWeekend)[0]
+    .toISOString()
+    .slice(0, 10);
   const planningAssignmentsState = usePlanningAssignments(weekStart);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [icalDialogEmployee, setIcalDialogEmployee] =
@@ -46,6 +51,7 @@ function App() {
       setHideNonPlannableEmployees(
         result.data.displaySettings?.hideNonPlannableEmployees ?? true,
       );
+      setShowWeekend(result.data.displaySettings?.showWeekend ?? false);
       setEmployeeSettingsError(null);
     } else {
       setEmployeeSettingsError(result.error.userMessage);
@@ -171,6 +177,7 @@ function App() {
         ) : null}
         <PlanningGrid
           weekOffset={weekOffset}
+          showWeekend={showWeekend}
           assignmentState={planningAssignmentsState}
           employeeSettings={employeeSettings}
           hideNonPlannableEmployees={hideNonPlannableEmployees}

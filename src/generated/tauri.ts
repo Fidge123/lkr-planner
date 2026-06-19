@@ -169,6 +169,16 @@ export type DisplaySettings = {
 	 *  Defaults to true so the planning view is uncluttered out of the box.
 	 */
 	hideNonPlannableEmployees: boolean,
+	/**
+	 *  When true, the planning view shows Saturday and Sunday in addition to the
+	 *  work week (Monday to Friday). Defaults to false so the view stays focused
+	 *  on the work week out of the box.
+	 *
+	 *  Carries `#[serde(default)]` so a `DisplaySettings` object persisted before
+	 *  this field existed still deserializes (resolving to false); the struct-level
+	 *  `Default` does not fill in individual missing fields.
+	 */
+	showWeekend: boolean,
 };
 
 export type EmployeeSetting = {
