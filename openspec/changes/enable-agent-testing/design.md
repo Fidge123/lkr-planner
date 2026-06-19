@@ -47,6 +47,13 @@ The mock exposes its registry through a stable global (`window.__tauriMock`) tha
 Because the Vite server process and its module graph are shared across tests, mock handler state can bleed between tests.
 The mock SHALL expose a `reset()` that clears all registered handlers, and the Playwright setup SHALL call it in `beforeEach` (via an `addInitScript` that resets then registers, so each test starts from an empty registry).
 
+### Type-safe mocks against the generated bindings
+The mock data is hand-authored per test, not recorded from a real backend, so without a type boundary it can silently drift from the real shapes.
+`src/generated/tauri.ts` (produced by tauri-specta from the Rust structs and commands) is the source of truth for command argument and return types.
+The mock registry SHALL be generic over the generated `commands`, so `registerMock(name, handler)` only accepts a handler whose return value is assignable to that command's generated return type; a mismatched stub then fails `tsc` (the `bun` job) instead of passing silently.
+Reusable typed fixture builders (for example `makeLocalStore(overrides)`) SHALL define each command's expected shape in one place against the generated types, so tests compose fixtures instead of scattering object literals, and a Rust type change plus regeneration surfaces as a single compile error in the builder.
+Note the `page.addInitScript` boundary serializes the handler to a string, so the typed `registerMock` wrapper and fixtures live in Node-side test code; only the already-constructed, type-checked data crosses into the browser.
+
 ### Separate `vite.playwright.config.ts`
 Playwright needs to start Vite with the mock alias active, but the normal `vite.config.ts` must stay unchanged so `bun dev` and production builds are unaffected.
 A thin override config extends the base config and adds the alias.
@@ -58,8 +65,8 @@ The script checks for `bun`, `cargo`, and the Playwright browser binaries on `PA
 
 ## Risks / Trade-offs
 
-- **Tauri invoke mock drift**: as `src/generated/tauri.ts` grows, tests may call commands that have no mock handler.
-  - **Mitigation**: the mock throws by default for unregistered commands, requiring tests to explicitly stub each call they depend on.
+- **Tauri invoke mock drift**: as `src/generated/tauri.ts` grows, tests may call commands that have no mock handler, or stub a command with a value that no longer matches its real shape.
+  - **Mitigation**: the mock throws by default for unregistered commands (catching missing handlers at runtime), and the registry plus fixtures are typed against the generated bindings (catching shape mismatches at compile time), so both the call coverage and the data shape are guarded.
 - **Playwright browser download**: first run downloads roughly 100 MB of browser binaries.
   - **Mitigation**: captured as the one-time prerequisite step in tasks.md, and `scripts/check-dev-env.sh` warns if not installed.
 - **Vite port conflicts**: Playwright's `webServer` uses port 5173 by default.

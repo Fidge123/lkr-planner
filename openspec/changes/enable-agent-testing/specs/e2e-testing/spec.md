@@ -29,6 +29,19 @@ Tests SHALL register stubs before navigation (via `page.addInitScript`) so `invo
 - **WHEN** the frontend calls `invoke` for a command that no test stub covers
 - **THEN** the mock throws a descriptive error identifying the unregistered command name
 
+### Requirement: Mock stubs are type-checked against the generated bindings
+The system SHALL type the mock registry and its fixtures against the generated command bindings (`src/generated/tauri.ts`), which are the source of truth derived from the Rust backend.
+Registering a stub for a command SHALL require a return value assignable to that command's generated return type, so a stub that does not match the real shape fails type checking (`bun test` / `tsc`) rather than passing silently.
+Reusable typed fixture builders SHALL be provided for the commands the tests depend on, so the expected shape is defined in one place and drift surfaces as a single compile error when the Rust types change and the bindings are regenerated.
+
+#### Scenario: Mismatched stub fails type checking
+- **WHEN** a test registers a stub for `"load_local_store"` whose value is missing a field required by the generated `LocalStore` type
+- **THEN** type checking fails and the test suite does not run until the stub is corrected
+
+#### Scenario: Drift surfaces at one place after regeneration
+- **WHEN** a Rust command type gains a required field and the bindings are regenerated
+- **THEN** the corresponding typed fixture builder fails type checking, pointing to the single place that must be updated
+
 ### Requirement: Smoke tests cover the main application views
 The system SHALL include at least one Playwright smoke test per top-level view of the application.
 Each smoke test SHALL verify that the view renders without JavaScript errors.

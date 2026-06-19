@@ -19,9 +19,16 @@
 - [ ] 2.5 Register stubs via `page.addInitScript` (which runs before any app code on each navigation), not `page.evaluate` after `page.goto`, so early `invoke` calls during initial render are covered
 - [ ] 2.6 Add a Playwright `beforeEach` (an `addInitScript` that calls `reset()` before registering) so handler state never bleeds between tests sharing the Vite server process
 
+## 2a. Type-safe mock registry and fixtures
+
+- [ ] 2a.1 (RED) Add a type-level test (for example a `tsc`-checked `*.test-d.ts` or a compile-failure assertion) proving that `registerMock("load_local_store", ...)` rejects a value not assignable to the generated `LocalStore` return type; it fails because `registerMock` is currently untyped
+- [ ] 2a.2 (GREEN) Make `registerMock` generic over the generated `commands` from `src/generated/tauri.ts`, so the handler's return type must match the selected command's generated return type, turning shape mismatches into `tsc` (`bun`) failures
+- [ ] 2a.3 (RED) Add a test for a typed fixture builder (for example `makeLocalStore(overrides)`) asserting it returns a valid `LocalStore` and applies overrides; it fails because the builder does not exist yet
+- [ ] 2a.4 (GREEN) Create reusable typed fixture builders for the commands the smoke tests depend on (`load_local_store`, `load_week_events`, `get_holidays_for_week`), typed against the generated bindings so drift surfaces in one place after regeneration
+
 ## 3. Baseline Smoke Tests
 
-- [ ] 3.1 (RED) Create `tests/e2e/smoke.spec.ts` that navigates to `/`, registers the minimal `invoke` mocks the planning view needs (at minimum: `load_local_store`, `load_week_events`, `get_holidays_for_week`), and asserts a `data-testid`-selected element is visible with no unhandled JavaScript errors; it fails because the test ids do not exist yet
+- [ ] 3.1 (RED) Create `tests/e2e/smoke.spec.ts` that navigates to `/`, registers the minimal `invoke` mocks the planning view needs using the typed fixture builders from task 2a (at minimum: `load_local_store`, `load_week_events`, `get_holidays_for_week`), and asserts a `data-testid`-selected element is visible with no unhandled JavaScript errors; it fails because the test ids do not exist yet
 - [ ] 3.2 (GREEN) Add `data-testid` attributes to key structural elements in the main view component so the smoke test can use stable selectors
 - [ ] 3.3 Run `bun test:e2e` and confirm all smoke tests pass
 
