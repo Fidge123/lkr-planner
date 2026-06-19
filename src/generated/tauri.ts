@@ -101,6 +101,10 @@ export type DayliteContactCacheEntry = {
 	urls: DayliteContactUrl[],
 };
 
+/**
+ *  A single labelled URL on a Daylite contact. Shared by the wire, domain, and on-disk
+ *  cache representations of a contact (they had identical shapes).
+ */
 export type DayliteContactUrl = {
 	label?: string | null,
 	url?: string | null,
