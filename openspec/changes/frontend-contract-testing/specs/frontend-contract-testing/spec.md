@@ -2,13 +2,13 @@
 
 ### Requirement: Command fixtures are generated from the real backend
 The system SHALL generate frontend test fixtures by serializing each captured Tauri command's real typed output in Rust, using the same serde serialization the generated bindings are derived from.
-Daylite command fixtures SHALL be captured by running the command's `_core` logic under `VCR_MODE=replay` against committed cassettes (recorded-real).
-Commands without a replay seam (store, secret, holiday, CalDAV) SHALL be captured as type-true values built from the real Rust structs.
+Daylite, holiday, and CalDAV/ZEP command fixtures SHALL be captured by running the command's core logic under `VCR_MODE=replay` against committed cassettes (recorded-real).
+Only local store and secret commands (for example `load_local_store`, `daylite_list_cached_contacts`, `zep_load_credentials`) SHALL be captured as type-true values built from the real Rust structs.
 Fixtures SHALL be serialized deterministically (stable field order, ordered map keys, no wall-clock values) and committed under `tests/fixtures/`.
 
-#### Scenario: Daylite fixture captured from a cassette
+#### Scenario: HTTP-backed fixture captured from a cassette
 - **WHEN** the fixture generator runs in `VCR_MODE=replay`
-- **THEN** `tests/fixtures/daylite_list_contacts.json` is produced from the command's `_core` output against the committed cassette, with no network call
+- **THEN** the fixtures for `daylite_list_contacts`, `get_holidays_for_week`, and `load_week_events` are produced from each command's core output against committed cassettes, with no network call
 
 #### Scenario: Type change forces fixture regeneration
 - **WHEN** a captured command's Rust type changes
@@ -54,3 +54,15 @@ At least one component test SHALL render the planning view from fixtures and ass
 #### Scenario: Error result renders the German error UI
 - **WHEN** a command fixture represents an error result
 - **THEN** the planning view shows the corresponding German error message
+
+### Requirement: A minimal layout check verifies the UI renders with CSS
+The system SHALL include one Playwright test on chromium that renders the app with the fixtures and asserts that the main regions are visible with non-zero size and that CSS is applied.
+The test SHALL run on chromium only; cross-engine (macOS WKWebView) differences are covered by manual spot checks, not CI.
+
+#### Scenario: App renders with applied styles
+- **WHEN** the Playwright layout test renders the app on chromium with the fixture-fed `invoke` mock
+- **THEN** the main view regions are visible with non-zero bounding boxes and a styled element has a non-default computed style
+
+#### Scenario: e2e tests excluded from the bun runner
+- **WHEN** `bun test` runs
+- **THEN** the `*.e2e.ts` Playwright tests are not collected, because they use a suffix the native runner does not match
