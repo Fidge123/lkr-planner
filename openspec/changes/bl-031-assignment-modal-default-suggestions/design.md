@@ -52,6 +52,13 @@ The assignment modal needs default suggestions to help users quickly select proj
 - Recent project comes directly from the client last-used cache
 - Sort overdue by project ID for consistent tie-breaking
 
+### Empty-state ownership (relationship to BL-032)
+**Decision**: All default-suggestion behavior lives here, plugged into BL-032's combobox empty state
+- BL-032 ships the combobox shell (input + result list + keyboard nav) with a generic empty state
+- This change supplies the empty-state content (recent + overdue) and the behavior of restoring it when the filter is cleared or Escape resets a non-empty filter
+- Keyboard navigation is BL-032's mechanism operating on the displayed list; this change only ensures suggestions feed into that same list structure so arrow/Enter work over them
+- This change therefore depends on BL-032; BL-032 does not depend on it
+
 ## Risks / Trade-offs
 
 - **Risk**: Slow query affecting modal open time

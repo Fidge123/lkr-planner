@@ -2,11 +2,11 @@
 
 ### Requirement: Live project filter
 The system SHALL filter projects as user types in the filter input.
+The result list starts empty; default content for the empty state is supplied by the `assignment-modal-suggestions` capability and is out of scope here.
 
-#### Scenario: Filter replaces suggestions
-- **WHEN** user types at least 1 character in filter input
-- **THEN** default suggestions are hidden
-- **AND** filtered results are shown instead
+#### Scenario: Typing shows filtered results
+- **WHEN** user types at least 1 character in the filter input
+- **THEN** filtered results are shown in the result list
 - **AND** only projects with status `new_status` or `in_progress` are included
 
 #### Scenario: Filtered results limited to 5
@@ -14,25 +14,29 @@ The system SHALL filter projects as user types in the filter input.
 - **THEN** maximum 5 matching projects are shown
 - **AND** results are sorted by project name
 
-#### Scenario: Clear filter restores suggestions
+#### Scenario: Clear filter empties the result list
 - **WHEN** user clears the filter input
 - **THEN** filtered results are hidden
-- **AND** default suggestions are restored
+- **AND** the result list returns to its empty default state
 
 ### Requirement: Keyboard navigation
-The system SHALL support keyboard selection in filtered list.
+The system SHALL support keyboard selection over whichever result list is currently displayed (filtered results or the empty-state default content).
 
 #### Scenario: Arrow key navigation
-- **WHEN** filtered list is shown and user presses Arrow Down
-- **THEN** next project is highlighted
-- **AND** pressing Arrow Up highlights previous project
+- **WHEN** a result list is shown and user presses Arrow Down
+- **THEN** the next item is highlighted
+- **AND** pressing Arrow Up highlights the previous item
 
 #### Scenario: Enter to select
-- **WHEN** a project is highlighted and user presses Enter
-- **THEN** that project is selected
-- **AND** modal closes with selection
+- **WHEN** an item is highlighted and user presses Enter
+- **THEN** that project is selected into the assignment field
 
-#### Scenario: Escape to clear filter
-- **WHEN** user presses Escape
-- **THEN** filter input is cleared
-- **AND** default suggestions are restored
+#### Scenario: Escape clears a non-empty filter
+- **WHEN** the filter input is non-empty and user presses Escape
+- **THEN** the filter input is cleared
+- **AND** the result list returns to its empty default state
+- **AND** the modal does not close
+
+#### Scenario: Escape closes the modal when filter is empty
+- **WHEN** the filter input is empty and user presses Escape
+- **THEN** the modal close flow runs (existing unsaved-changes guard applies)

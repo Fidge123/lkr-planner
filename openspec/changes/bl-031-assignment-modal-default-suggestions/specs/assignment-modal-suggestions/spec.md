@@ -33,6 +33,19 @@ The system SHALL show deterministic default suggestions when assignment modal op
 - **THEN** show German message "Keine Vorschläge verfügbar"
 - **AND** modal allows free-text search
 
+### Requirement: Default suggestions fill the combobox empty state
+The system SHALL render default suggestions as the combobox empty-state content, including when the filter is cleared or Escape resets a non-empty filter.
+
+#### Scenario: Suggestions restored when filter is cleared
+- **WHEN** the filter input is cleared (manually or via Escape on a non-empty filter)
+- **THEN** the result list returns to its empty default state
+- **AND** the default suggestions (recent + overdue) are shown again
+
+#### Scenario: Keyboard navigation over suggestions
+- **WHEN** the default suggestions are displayed and the user presses Arrow Down / Arrow Up
+- **THEN** the highlighted suggestion moves accordingly
+- **AND** pressing Enter selects the highlighted suggestion into the assignment field
+
 ### Requirement: Suggestion count limit
 The system SHALL cap total suggestions at 5.
 
