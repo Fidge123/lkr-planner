@@ -68,6 +68,8 @@ export type CalendarCellEvent = {
 	endTime: string | null,
 	/**  CalDAV resource URL (d:href from REPORT) needed for PUT/DELETE. None if unknown. */
 	href: string | null,
+	/**  Daylite project reference (e.g. "/v1/projects/42") stored in DESCRIPTION. None for bare events. */
+	projectRef: string | null,
 };
 
 export type CalendarEventKind = 

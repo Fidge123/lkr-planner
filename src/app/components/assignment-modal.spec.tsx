@@ -37,16 +37,18 @@ describe("AssignmentModal", () => {
 
     expect(html).toContain("<dialog");
     expect(html).toContain("Einsatz erstellen");
+    expect(html).toContain("<select");
     expect(html).toContain("Speichern");
     expect(html).not.toContain("Löschen");
   });
 
-  it("edit mode: renders pre-populated project and delete button", () => {
+  it("edit mode: renders project picker and delete button", () => {
     const existingAssignment: CalendarCellEvent = {
       uid: "uid-1",
       kind: "assignment",
       title: "Projekt Alpha",
       projectStatus: "in_progress",
+      projectRef: "/v1/projects/1",
       date: "2026-05-06",
       startTime: "08:00",
       endTime: "16:00",
@@ -59,7 +61,7 @@ describe("AssignmentModal", () => {
 
     expect(html).toContain("<dialog");
     expect(html).toContain("Einsatz bearbeiten");
-    expect(html).toContain("Projekt Alpha");
+    expect(html).toContain("<select");
     expect(html).toContain("Speichern");
     expect(html).toContain("Löschen");
   });
@@ -85,6 +87,7 @@ describe("AssignmentModal", () => {
       kind: "assignment",
       title: "Projekt Beta",
       projectStatus: "new_status",
+      projectRef: "/v1/projects/2",
       date: "2026-05-06",
       startTime: null,
       endTime: null,

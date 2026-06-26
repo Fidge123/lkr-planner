@@ -55,6 +55,19 @@ This change implements the assignment modal for creating, editing, and deleting 
 - Delete: `DELETE {href}` using the stored resource URL
 - Quirks discovered during manual testing are fixed as they arise
 
+### CalDAV href Resolution
+**Decision**: Resolve `d:href` values against the server origin, not the full `zep_caldav_root_url`
+- CalDAV REPORT responses return root-absolute paths (e.g. `/caldav/admin/emp/uid.ics`) per RFC 4918 / RFC 3986
+- Naively concatenating these onto `zep_caldav_root_url` (which itself carries a path prefix) duplicates path segments and produces HTTP 404 on update and delete
+- Fix: use `reqwest::Url::join` on `base_url` so the root-absolute href replaces the base path, resolving correctly against the server origin
+- `CalendarCellEvent` also exposes `projectRef` so the edit-mode picker can pre-select the current project
+
+### Edit Mode Project Picker
+**Decision**: Edit mode renders the same `<select>` picker as create mode, pre-populated from `CalendarCellEvent.projectRef`
+- `projectRef` (the Daylite reference stored in DESCRIPTION) is surfaced through the Rust type and TypeScript bindings
+- On open, `selectedProjectRef` is initialised from `assignment.projectRef`
+- The user can change or keep the project; the picker behaves identically in both modes
+
 ### Project Picker
 **Decision**: Simple filtered list via BL-022 query service
 - Uses `daylite-project-query` capability from BL-022
