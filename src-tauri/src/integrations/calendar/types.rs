@@ -31,6 +31,8 @@ pub struct CalendarCellEvent {
     pub end_time: Option<String>,
     /// CalDAV resource URL (d:href from REPORT) needed for PUT/DELETE. None if unknown.
     pub href: Option<String>,
+    /// Daylite project reference (e.g. "/v1/projects/42") stored in DESCRIPTION. None for bare events.
+    pub project_ref: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]

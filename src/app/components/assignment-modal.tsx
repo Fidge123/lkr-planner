@@ -37,10 +37,15 @@ export function AssignmentModal({
     setIsSaving(false);
     setShowDeleteConfirm(initialShowDeleteConfirm);
     setShowUnsavedConfirm(initialShowUnsavedConfirm);
-    setSelectedProjectRef("");
+    setSelectedProjectRef(assignment?.projectRef ?? "");
     setIsDirty(false);
     void loadProjectsForAssignmentPicker().then(setProjects);
-  }, [isOpen, initialShowDeleteConfirm, initialShowUnsavedConfirm]);
+  }, [
+    isOpen,
+    initialShowDeleteConfirm,
+    initialShowUnsavedConfirm,
+    assignment?.projectRef,
+  ]);
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -179,7 +184,7 @@ export function AssignmentModal({
         assignment.href,
         assignment.uid,
         date,
-        selectedProjectRef || assignment.title,
+        selectedProjectRef,
         projectName,
       );
     } else {
@@ -216,29 +221,25 @@ export function AssignmentModal({
         ) : null}
 
         <section className="mt-4 flex flex-col gap-3">
-          {isEditMode ? (
-            <p className="text-sm font-medium">{assignment.title}</p>
-          ) : (
-            <label className="form-control w-full">
-              <span className="label-text mb-1">Projekt</span>
-              <select
-                className="select select-bordered w-full"
-                value={selectedProjectRef}
-                onChange={(e) => {
-                  setSelectedProjectRef(e.target.value);
-                  setIsDirty(true);
-                }}
-                disabled={isSaving}
-              >
-                <option value="">Projekt auswählen...</option>
-                {projects.map((p) => (
-                  <option key={p.self} value={p.self}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
+          <label className="form-control w-full">
+            <span className="label-text mb-1">Projekt</span>
+            <select
+              className="select select-bordered w-full"
+              value={selectedProjectRef}
+              onChange={(e) => {
+                setSelectedProjectRef(e.target.value);
+                setIsDirty(true);
+              }}
+              disabled={isSaving}
+            >
+              <option value="">Projekt auswählen...</option>
+              {projects.map((p) => (
+                <option key={p.self} value={p.self}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </label>
         </section>
 
         <section className="modal-action">

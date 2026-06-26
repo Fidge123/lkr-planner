@@ -113,6 +113,27 @@ fn parse_caldav_report(xml_text: &str) -> Result<Vec<RawVEvent>, String> {
     Ok(events)
 }
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/// Resolves a CalDAV `d:href` (which is a URI reference per RFC 4918 / RFC 3986) against the
+/// server origin extracted from `base_url`.
+///
+/// CalDAV servers return root-absolute paths like `/caldav/admin/emp/uid.ics` in REPORT responses.
+/// Concatenating those onto a `base_url` that already contains a path (e.g.
+/// `https://app.zep.de/caldav/admin`) would duplicate the path segment and produce a 404.
+/// Instead we extract just the scheme+host from `base_url` and join the href against that.
+fn resolve_href(href: &str, base_url: &str) -> Result<String, String> {
+    if href.starts_with("http://") || href.starts_with("https://") {
+        return Ok(href.to_string());
+    }
+    let origin =
+        reqwest::Url::parse(base_url).map_err(|e| format!("Ungültige Kalender-URL: {e}"))?;
+    let resolved = origin
+        .join(href)
+        .map_err(|e| format!("Kalender-URL konnte nicht aufgelöst werden: {e}"))?;
+    Ok(resolved.to_string())
+}
+
 // ── CalDAV write cores ────────────────────────────────────────────────────────
 
 pub(crate) async fn create_assignment_core(
@@ -159,11 +180,7 @@ pub(crate) async fn update_assignment_core(
     project_ref: &str,
     project_name: &str,
 ) -> Result<(), String> {
-    let resource_url = if href.starts_with("http://") || href.starts_with("https://") {
-        href.to_string()
-    } else {
-        format!("{}{}", base_url.trim_end_matches('/'), href)
-    };
+    let resource_url = resolve_href(href, base_url)?;
 
     let payload = build_ical_payload(uid, date, project_name, project_ref);
 
@@ -191,11 +208,7 @@ pub(crate) async fn delete_assignment_core(
     username: &str,
     password: &str,
 ) -> Result<(), String> {
-    let resource_url = if href.starts_with("http://") || href.starts_with("https://") {
-        href.to_string()
-    } else {
-        format!("{}{}", base_url.trim_end_matches('/'), href)
-    };
+    let resource_url = resolve_href(href, base_url)?;
 
     let response = client
         .delete(&resource_url)
@@ -216,6 +229,28 @@ pub(crate) async fn delete_assignment_core(
 mod tests {
     use super::*;
     use std::time::Duration;
+
+    // ── resolve_href ──
+
+    #[test]
+    fn resolve_href_joins_root_absolute_path_against_server_origin() {
+        // base_url carries a path prefix; href must NOT be appended onto it
+        let result = resolve_href(
+            "/caldav/admin/emp-1/uid-1.ics",
+            "https://app.zep.de/caldav/admin",
+        )
+        .unwrap();
+        assert_eq!(result, "https://app.zep.de/caldav/admin/emp-1/uid-1.ics");
+    }
+
+    #[test]
+    fn resolve_href_passes_through_absolute_url_unchanged() {
+        let abs = "https://app.zep.de/caldav/admin/emp-1/uid-1.ics";
+        assert_eq!(
+            resolve_href(abs, "https://app.zep.de/caldav/admin").unwrap(),
+            abs
+        );
+    }
 
     // ── Resource URL (href) capture ──
 
