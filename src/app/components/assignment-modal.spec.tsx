@@ -176,6 +176,9 @@ describe("ProjectResultList", () => {
 
     expect(html).toContain('aria-current="true"');
     expect(html).toContain('aria-current="false"');
+    // The highlight uses explicit utility classes so it stays visible
+    // independent of DaisyUI's menu-active styling.
+    expect(html).toContain("bg-primary");
   });
 });
 
