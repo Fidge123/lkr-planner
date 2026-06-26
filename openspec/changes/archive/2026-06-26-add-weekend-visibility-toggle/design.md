@@ -27,14 +27,18 @@ Display preferences are already persisted via `DisplaySettings` in the local sto
 - Keeps a single display-settings object rather than introducing a new persistence surface.
 
 ### Week-day generation
-**Decision**: Change `getWeekDays` to accept the weekend flag and return 5 or 7 days.
+**Decision**: Change `getWeekDays` to accept the weekend flag and return 5 or 7 days, with weekend-aware current-week anchoring.
 - Signature becomes `getWeekDays(weekOffset, showWeekend)`; length is `showWeekend ? 7 : 5`.
 - Saturday and Sunday are appended after Friday, keeping Monday as the first column.
+- The Monday anchor (`mondayOffset`) becomes weekend-aware. Today's `getDay()` drives it:
+  - `showWeekend` off (unchanged): Sunday `+1`, Saturday `+2`, Monday-Friday `1 - day`. On a weekend this jumps to the upcoming Monday, which is fine because the present weekend day is not rendered anyway.
+  - `showWeekend` on (new): Sunday `-6`, Saturday `-5`, Monday-Friday `1 - day`. This anchors to the Monday of the week that contains today, so today's Saturday or Sunday stays visible at `weekOffset` 0 instead of forcing the user to page back a week.
+- `getWeekDays(weekOffset, showWeekend)[0]` is still a Monday in both modes, so `app.tsx`'s `weekStart` cache key for assignments stays valid; weekend-aware anchoring only shifts which Monday is chosen on a weekend.
 - Downstream components need no structural change because they already key off `weekDays.length`.
 
 ### Frontend wiring
 **Decision**: Load `showWeekend` alongside the existing display settings in `app.tsx`, pass it into `getWeekDays`, and extend `display-settings.ts` with load/save helpers plus a `DEFAULT_SHOW_WEEKEND = false` constant.
-- The settings dialog adds a toggle mirroring the `hideNonPlannable` checkbox, labelled "Wochenende anzeigen" with a short German description.
+- The settings dialog adds a toggle mirroring the `hideNonPlannable` checkbox, labelled "Wochenende anzeigen". It carries no secondary description line: a second description in the narrow "Anzeige" panel overflowed the modal, and the label alone is self-explanatory.
 
 ### Fix the existing overwrite bug in `saveHideNonPlannableEmployees`
 **Decision**: Change both save helpers to merge into the existing `displaySettings` rather than replacing it.

@@ -79,12 +79,22 @@ pub struct DisplaySettings {
     /// primary calendar and those with the Daylite category "Test" are hidden.
     /// Defaults to true so the planning view is uncluttered out of the box.
     pub hide_non_plannable_employees: bool,
+    /// When true, the planning view shows Saturday and Sunday in addition to the
+    /// work week (Monday to Friday). Defaults to false so the view stays focused
+    /// on the work week out of the box.
+    ///
+    /// Carries `#[serde(default)]` so a `DisplaySettings` object persisted before
+    /// this field existed still deserializes (resolving to false); the struct-level
+    /// `Default` does not fill in individual missing fields.
+    #[serde(default)]
+    pub show_weekend: bool,
 }
 
 impl Default for DisplaySettings {
     fn default() -> Self {
         Self {
             hide_non_plannable_employees: true,
+            show_weekend: false,
         }
     }
 }
@@ -330,6 +340,7 @@ mod tests {
             }],
             display_settings: DisplaySettings {
                 hide_non_plannable_employees: false,
+                show_weekend: false,
             },
             daylite_cache: DayliteCache {
                 last_synced_at: Some("2026-02-13T12:00:00Z".to_string()),
@@ -537,5 +548,48 @@ mod tests {
                 .display_settings
                 .hide_non_plannable_employees
         );
+    }
+
+    #[test]
+    fn display_settings_default_hides_weekend() {
+        assert!(!DisplaySettings::default().show_weekend);
+        assert!(!LocalStore::default().display_settings.show_weekend);
+    }
+
+    #[test]
+    fn show_weekend_round_trips_through_save_and_load() {
+        let test_path = unique_test_path("show-weekend-round-trip.json");
+        let store = LocalStore {
+            display_settings: DisplaySettings {
+                hide_non_plannable_employees: true,
+                show_weekend: true,
+            },
+            ..LocalStore::default()
+        };
+
+        save_store_to_path(&test_path, &store).expect("save should succeed");
+        let loaded = load_store_from_path(&test_path).expect("reload should succeed");
+
+        assert!(loaded.display_settings.show_weekend);
+        assert!(loaded.display_settings.hide_non_plannable_employees);
+    }
+
+    #[test]
+    fn display_settings_without_show_weekend_field_defaults_to_false() {
+        let test_path = unique_test_path("no-show-weekend.json");
+        write_test_file(
+            &test_path,
+            r#"{
+              "apiEndpoints": {"dayliteBaseUrl":"","planradarBaseUrl":"","zepCaldavRootUrl":""},
+              "employeeSettings": [],
+              "displaySettings": {"hideNonPlannableEmployees": true},
+              "dayliteCache": {"projects":[],"contacts":[]}
+            }"#,
+        );
+
+        let loaded = load_store_from_path(&test_path).expect("should load without showWeekend");
+        // showWeekend absent in a previously stored displaySettings must default to off.
+        assert!(!loaded.display_settings.show_weekend);
+        assert!(loaded.display_settings.hide_non_plannable_employees);
     }
 }

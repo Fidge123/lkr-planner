@@ -290,6 +290,37 @@ mod tests {
     }
 
     #[test]
+    fn week_filter_includes_holidays_on_weekend_days() {
+        // Week starting Monday 2026-01-26; the window must reach Sunday 2026-02-01.
+        let start = NaiveDate::from_ymd_opt(2026, 1, 26).unwrap();
+        let end = start + chrono::Duration::days(6);
+        assert_eq!(end, NaiveDate::from_ymd_opt(2026, 2, 1).unwrap());
+
+        let all_holidays = [
+            Holiday {
+                date: "2026-01-31".to_string(), // Saturday
+                name: "Samstagsfeiertag".to_string(),
+            },
+            Holiday {
+                date: "2026-02-01".to_string(), // Sunday (week end)
+                name: "Sonntagsfeiertag".to_string(),
+            },
+        ];
+
+        let filtered: Vec<&Holiday> = all_holidays
+            .iter()
+            .filter(|h| {
+                let date = NaiveDate::parse_from_str(&h.date, "%Y-%m-%d").unwrap();
+                date >= start && date <= end
+            })
+            .collect();
+
+        assert_eq!(filtered.len(), 2);
+        assert!(filtered.iter().any(|h| h.date == "2026-01-31"));
+        assert!(filtered.iter().any(|h| h.date == "2026-02-01"));
+    }
+
+    #[test]
     fn cache_entry_is_fresh_within_30_days() {
         let today = NaiveDate::from_ymd_opt(2024, 6, 30).unwrap();
         let entry = HolidayCacheEntry {
