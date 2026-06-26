@@ -36,6 +36,7 @@ export function AssignmentModal({
   );
   const [isDirty, setIsDirty] = useState(false);
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const filterInputRef = useRef<HTMLInputElement>(null);
 
   const { results, errorMessage: searchError } =
     useAssignmentProjectSearch(filter);
@@ -51,6 +52,8 @@ export function AssignmentModal({
     setFilter("");
     setHighlightedIndex(-1);
     setIsDirty(false);
+    // Focus the filter so the user can start typing immediately.
+    filterInputRef.current?.focus();
   }, [
     isOpen,
     initialShowDeleteConfirm,
@@ -277,6 +280,7 @@ export function AssignmentModal({
           <label className="form-control w-full">
             <span className="label-text mb-1">Projekt</span>
             <input
+              ref={filterInputRef}
               type="text"
               className="input input-bordered w-full"
               value={filter}
