@@ -40,7 +40,12 @@ export function AssignmentModal({
     setSelectedProjectRef(assignment?.projectRef ?? "");
     setIsDirty(false);
     void loadProjectsForAssignmentPicker().then(setProjects);
-  }, [isOpen, initialShowDeleteConfirm, initialShowUnsavedConfirm]);
+  }, [
+    isOpen,
+    initialShowDeleteConfirm,
+    initialShowUnsavedConfirm,
+    assignment?.projectRef,
+  ]);
 
   useEffect(() => {
     const dialog = dialogRef.current;
