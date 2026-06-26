@@ -134,22 +134,47 @@ fn resolve_href(href: &str, base_url: &str) -> Result<String, String> {
     Ok(resolved.to_string())
 }
 
+/// Returns true if `target_url` points at (or inside) any of the configured absence calendars.
+/// Used as a safety guard so assignment writes never land in an employee's absence calendar,
+/// even if the local store is misconfigured (primary == absence) or an href is corrupted.
+/// Trailing slashes are ignored; a collection URL matches itself and any resource beneath it.
+pub(crate) fn targets_absence_calendar(target_url: &str, absence_urls: &[String]) -> bool {
+    let target = target_url.trim_end_matches('/');
+    absence_urls.iter().any(|raw| {
+        let absence = raw.trim_end_matches('/');
+        !absence.is_empty() && (target == absence || target.starts_with(&format!("{absence}/")))
+    })
+}
+
 // ── CalDAV write cores ────────────────────────────────────────────────────────
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn create_assignment_core(
     client: &reqwest::Client,
     calendar_url: &str,
+    absence_urls: &[String],
     username: &str,
     password: &str,
     date: &str,
     project_ref: &str,
     project_name: &str,
 ) -> Result<String, String> {
+    if targets_absence_calendar(calendar_url, absence_urls) {
+        eprintln!(
+            "calendar: refused create_assignment write to absence calendar URL '{calendar_url}'"
+        );
+        return Err(
+            "Einsätze können nicht in einen Abwesenheitskalender geschrieben werden.".to_string(),
+        );
+    }
+
     let uid = Uuid::new_v4().to_string();
     let payload = build_ical_payload(&uid, date, project_name, project_ref);
 
     let base = calendar_url.trim_end_matches('/');
     let resource_url = format!("{base}/{uid}.ics");
+
+    eprintln!("calendar: create_assignment PUT {resource_url}");
 
     let response = client
         .put(&resource_url)
@@ -173,6 +198,7 @@ pub(crate) async fn update_assignment_core(
     client: &reqwest::Client,
     href: &str,
     base_url: &str,
+    absence_urls: &[String],
     uid: &str,
     username: &str,
     password: &str,
@@ -182,7 +208,18 @@ pub(crate) async fn update_assignment_core(
 ) -> Result<(), String> {
     let resource_url = resolve_href(href, base_url)?;
 
+    if targets_absence_calendar(&resource_url, absence_urls) {
+        eprintln!(
+            "calendar: refused update_assignment write to absence calendar URL '{resource_url}'"
+        );
+        return Err(
+            "Einsätze können nicht in einen Abwesenheitskalender geschrieben werden.".to_string(),
+        );
+    }
+
     let payload = build_ical_payload(uid, date, project_name, project_ref);
+
+    eprintln!("calendar: update_assignment PUT {resource_url}");
 
     let response = client
         .put(&resource_url)
@@ -205,10 +242,22 @@ pub(crate) async fn delete_assignment_core(
     client: &reqwest::Client,
     href: &str,
     base_url: &str,
+    absence_urls: &[String],
     username: &str,
     password: &str,
 ) -> Result<(), String> {
     let resource_url = resolve_href(href, base_url)?;
+
+    if targets_absence_calendar(&resource_url, absence_urls) {
+        eprintln!(
+            "calendar: refused delete_assignment write to absence calendar URL '{resource_url}'"
+        );
+        return Err(
+            "Einsätze können nicht in einen Abwesenheitskalender geschrieben werden.".to_string(),
+        );
+    }
+
+    eprintln!("calendar: delete_assignment DELETE {resource_url}");
 
     let response = client
         .delete(&resource_url)
@@ -218,6 +267,10 @@ pub(crate) async fn delete_assignment_core(
         .map_err(|e| format!("Einsatz konnte nicht gelöscht werden: {e}"))?;
 
     let status = response.status().as_u16();
+    // Treat a missing event as success: delete is idempotent (no error if already absent).
+    if status == 404 {
+        return Ok(());
+    }
     if !(200..300).contains(&status) {
         return Err(format!("Kalenderserver antwortete mit HTTP {status}"));
     }
@@ -343,6 +396,7 @@ END:VCALENDAR
         let href = create_assignment_core(
             &client,
             &calendar_url,
+            &[],
             &username,
             &password,
             "2026-05-06",
@@ -374,6 +428,7 @@ END:VCALENDAR
             &client,
             &href,
             &base_url,
+            &[],
             &uid,
             &username,
             &password,
@@ -398,8 +453,46 @@ END:VCALENDAR
             .build()
             .unwrap();
 
-        delete_assignment_core(&client, &href, &base_url, &username, &password)
+        delete_assignment_core(&client, &href, &base_url, &[], &username, &password)
             .await
             .expect("delete_assignment_core should succeed");
+    }
+
+    // ── targets_absence_calendar ──
+
+    #[test]
+    fn targets_absence_calendar_matches_collection_and_resources_beneath_it() {
+        let absence = vec!["https://app.zep.de/caldav/admin/emp/absence".to_string()];
+
+        // The collection URL itself (e.g. create target) matches.
+        assert!(targets_absence_calendar(
+            "https://app.zep.de/caldav/admin/emp/absence",
+            &absence,
+        ));
+        // A trailing slash does not change the verdict.
+        assert!(targets_absence_calendar(
+            "https://app.zep.de/caldav/admin/emp/absence/",
+            &absence,
+        ));
+        // A resource inside the collection (e.g. update/delete target) matches.
+        assert!(targets_absence_calendar(
+            "https://app.zep.de/caldav/admin/emp/absence/uid-1.ics",
+            &absence,
+        ));
+    }
+
+    #[test]
+    fn targets_absence_calendar_allows_primary_calendar() {
+        let absence = vec!["https://app.zep.de/caldav/admin/emp/absence".to_string()];
+
+        assert!(!targets_absence_calendar(
+            "https://app.zep.de/caldav/admin/emp/primary/uid-1.ics",
+            &absence,
+        ));
+        // Empty absence list never blocks a write.
+        assert!(!targets_absence_calendar(
+            "https://app.zep.de/caldav/admin/emp/primary",
+            &[],
+        ));
     }
 }

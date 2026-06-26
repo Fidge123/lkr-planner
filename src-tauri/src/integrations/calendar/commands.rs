@@ -213,6 +213,8 @@ pub async fn create_assignment(
         .ok_or_else(|| "Kein Kalender für diesen Mitarbeiter konfiguriert.".to_string())?
         .to_string();
 
+    let absence_urls = absence_calendar_urls(&store);
+
     let (username, password) = crate::integrations::zep::load_zep_credentials_from_keychain()
         .map(|c| (c.username, c.password))
         .map_err(|e| e.user_message)?;
@@ -225,6 +227,7 @@ pub async fn create_assignment(
     create_assignment_core(
         &client,
         &calendar_url,
+        &absence_urls,
         &username,
         &password,
         &date,
@@ -232,6 +235,17 @@ pub async fn create_assignment(
         &project_name,
     )
     .await
+}
+
+/// Collects every configured ZEP absence calendar URL across all employees.
+/// Used to guard assignment writes against landing in an absence calendar.
+fn absence_calendar_urls(store: &crate::integrations::local_store::LocalStore) -> Vec<String> {
+    store
+        .employee_settings
+        .iter()
+        .filter_map(|s| s.zep_absence_calendar.clone())
+        .filter(|u| !u.is_empty())
+        .collect()
 }
 
 /// Updates an existing assignment event in place using the stored CalDAV href.
@@ -253,6 +267,7 @@ pub async fn update_assignment(
         crate::integrations::local_store::load_local_store(app).map_err(|e| e.user_message)?;
 
     let base_url = store.api_endpoints.zep_caldav_root_url.clone();
+    let absence_urls = absence_calendar_urls(&store);
 
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(30))
@@ -263,6 +278,7 @@ pub async fn update_assignment(
         &client,
         &href,
         &base_url,
+        &absence_urls,
         &uid,
         &username,
         &password,
@@ -285,11 +301,20 @@ pub async fn delete_assignment(app: tauri::AppHandle, href: String) -> Result<()
         crate::integrations::local_store::load_local_store(app).map_err(|e| e.user_message)?;
 
     let base_url = store.api_endpoints.zep_caldav_root_url.clone();
+    let absence_urls = absence_calendar_urls(&store);
 
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(30))
         .build()
         .map_err(|e| format!("HTTP-Client konnte nicht erstellt werden: {e}"))?;
 
-    delete_assignment_core(&client, &href, &base_url, &username, &password).await
+    delete_assignment_core(
+        &client,
+        &href,
+        &base_url,
+        &absence_urls,
+        &username,
+        &password,
+    )
+    .await
 }
