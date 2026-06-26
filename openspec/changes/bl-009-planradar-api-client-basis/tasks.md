@@ -21,9 +21,9 @@
 
 ## 4. Configuration
 
-- [ ] 4.1 Add tenant/account configuration options in the local config store
-- [ ] 4.2 Store the user-provided API token in the OS keychain via the secret manager
-- [ ] 4.3 Investigate whether the API token scopes to one tenant or the user must select from a list, then implement tenant resolution accordingly
+- [ ] 4.1 Add the Customer ID and tenant/account configuration options in the local config store
+- [ ] 4.2 Store the user-provided API token in the OS keychain via the secret manager (service `lkr-planner-planradar`, username `LKR Planner Planradar Token`)
+- [ ] 4.3 Include the configured Customer ID as the `/api/v1/{customer_id}/...` path segment in all requests
 
 ## 5. Testing
 

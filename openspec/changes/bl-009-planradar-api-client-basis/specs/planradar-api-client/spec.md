@@ -1,11 +1,12 @@
 ## ADDED Requirements
 
 ### Requirement: Authentication
-The system SHALL authenticate Planradar requests with a static, user-provided API token.
+The system SHALL authenticate Planradar requests with a static, user-provided API token and target the configured customer.
 
 #### Scenario: Authenticated request
 - **WHEN** the client sends a request to the Planradar API
-- **THEN** the configured API token is attached to the request
+- **THEN** the configured API token is attached in the `X-PlanRadar-API-Key` header
+- **AND** the request targets the configured Customer ID path segment
 - **AND** no OAuth flow or token rotation is performed
 
 #### Scenario: Missing or invalid token
