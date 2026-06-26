@@ -23,7 +23,11 @@ pub struct DayliteTokenSyncStatus {
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct DayliteSearchResult<T> {
+    // Daylite omits `results` entirely (returning a bare `{}`) when a search has
+    // no matches, so default to an empty list instead of failing to deserialize.
+    #[serde(default = "Vec::new")]
     pub results: Vec<T>,
+    #[serde(default)]
     pub next: Option<String>,
 }
 
@@ -73,6 +77,16 @@ pub struct DayliteRefreshTokenRequest {
     pub refresh_token: String,
 }
 
+/// Result ordering for `search_projects_core`. Numeric ID is the default so the
+/// BL-022 contract stays unchanged; callers opt in to name sort explicitly.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Type, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum DayliteSearchSort {
+    #[default]
+    Id,
+    Name,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct DayliteSearchInput {
@@ -86,6 +100,9 @@ pub struct DayliteSearchInput {
     /// Pagination cursor: object ID of the first result to return (`?start=<id>`).
     #[serde(default)]
     pub start: Option<String>,
+    /// Result ordering. Defaults to numeric ID; `name` opts into name sort.
+    #[serde(default)]
+    pub sort: Option<DayliteSearchSort>,
 }
 
 pub(super) fn build_limit_query(limit: Option<u16>) -> Vec<(String, String)> {

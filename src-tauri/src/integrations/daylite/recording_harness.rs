@@ -113,6 +113,7 @@ fn record_daylite_cassettes_from_live_api() {
                 statuses: None,
                 full_records: None,
                 start: None,
+                sort: None,
             },
         )
         .await
@@ -128,6 +129,7 @@ fn record_daylite_cassettes_from_live_api() {
                 statuses: Some(vec!["new_status".to_string(), "in_progress".to_string()]),
                 full_records: Some(true),
                 start: None,
+                sort: None,
             },
         )
         .await
