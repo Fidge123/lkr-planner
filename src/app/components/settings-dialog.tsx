@@ -473,14 +473,8 @@ export function DisplaySettingsPanel({
           onChange={onToggle}
           disabled={isSaving}
         />
-        <span className="flex flex-col gap-1">
-          <span className="label-text font-medium">
-            Nicht planbare Mitarbeiter ausblenden
-          </span>
-          <span className="label-text text-base-content/60">
-            Blendet Mitarbeiter ohne konfigurierten Kalender sowie Mitarbeiter
-            der Kategorie „Test“ aus.
-          </span>
+        <span className="label-text font-medium">
+          Nicht planbare Mitarbeiter ausblenden
         </span>
       </label>
 
