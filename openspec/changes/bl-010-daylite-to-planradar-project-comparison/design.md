@@ -18,7 +18,8 @@ This change enables linking Daylite projects to existing Planradar projects. It 
 ## Decisions
 
 ### Link Storage
-**Decision**: Store Planradar project ID in Daylite custom field
+**Decision**: Store Planradar project ID in the `planradar-link` Daylite custom field
+- The field key is configurable; `planradar-link` is the default
 - Uses existing Daylite custom field infrastructure
 - Persists link data with the Daylite project
 - Supports synchronization across devices

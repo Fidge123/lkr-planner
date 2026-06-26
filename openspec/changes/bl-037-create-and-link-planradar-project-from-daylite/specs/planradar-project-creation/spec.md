@@ -3,16 +3,17 @@
 ### Requirement: Create Planradar project
 The system SHALL create a new Planradar project from an unlinked Daylite project.
 
-#### Scenario: Create from template
-- **GIVEN** user selects template project
+#### Scenario: Create from a source project
+- **GIVEN** user selects a source project
 - **WHEN** creating Planradar project
-- **THEN** a new project is created with template's properties
+- **THEN** the source project's data is read
+- **AND** a new project is created from that data
 - **AND** the new project ID is returned
 
-#### Scenario: Create without template
-- **GIVEN** user does not select template
+#### Scenario: Create without a source project
+- **GIVEN** user does not select a source project
 - **WHEN** creating Planradar project
-- **THEN** a new project is created with Daylite project name
+- **THEN** a new project is created with the Daylite project name
 - **AND** the new project ID is returned
 
 ### Requirement: Idempotent creation
@@ -45,15 +46,15 @@ The system SHALL persist created Planradar ID to Daylite.
 - **THEN** operation is queued for retry
 - **AND** sync issue is logged
 
-### Requirement: Template selection
-The system SHALL allow user to filter and select template projects.
+### Requirement: Source project selection
+The system SHALL allow user to filter and select a source project.
 
-#### Scenario: Filter templates
+#### Scenario: Filter source projects
 - **GIVEN** user types search filter
-- **WHEN** filtering template list
+- **WHEN** filtering the source project list
 - **THEN** only matching projects are shown
 
-#### Scenario: Select template
-- **GIVEN** user selects a template project
+#### Scenario: Select source project
+- **GIVEN** user selects a source project
 - **WHEN** confirming selection
-- **THEN** template ID is stored for creation
+- **THEN** the source project ID is stored for creation

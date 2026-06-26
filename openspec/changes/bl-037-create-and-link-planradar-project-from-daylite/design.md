@@ -6,8 +6,8 @@ Users need to create Planradar projects for Daylite projects that don't have lin
 
 **Goals:**
 - Create new Planradar project from unlinked Daylite project
-- Support template selection from existing projects
-- Persist Planradar ID to Daylite custom field
+- Support source project selection from existing projects (read-then-create)
+- Persist Planradar ID to the `planradar-link` Daylite custom field
 - Ensure idempotent operation
 
 **Non-Goals:**
@@ -21,11 +21,12 @@ Users need to create Planradar projects for Daylite projects that don't have lin
 - Unlinked Daylite project shows "Create in Planradar" option
 - User selects template project or starts blank
 
-### Template Selection
-**Decision**: Show list of existing Planradar projects as templates
-- Allow filtering/search to find right template
-- Default to blank if no template selected
-- Copy name, description, and optionally custom fields from template
+### Source Project Selection
+**Decision**: Show list of existing Planradar projects to use as a source
+- Planradar has no clone or template endpoint, so creation reads the source project and creates a new project from its data (see BL-009)
+- Allow filtering/search to find the right source project
+- Default to a blank project (Daylite name only) if no source project is selected
+- Copy name, description, and optionally custom fields from the source project
 
 ### Idempotency
 **Decision**: Check for existing link before creation
@@ -34,8 +35,8 @@ Users need to create Planradar projects for Daylite projects that don't have lin
 - Log warning if ID exists but project missing in Planradar (sync issue)
 
 ### Persistence
-**Decision**: Write Planradar ID to Daylite custom field after creation
-- Use Daylite API to update custom field
+**Decision**: Write Planradar ID to the `planradar-link` Daylite custom field after creation
+- Use Daylite API to update the custom field
 - Store mapping locally in sync state as backup
 - Handle write failure gracefully (retry queue)
 

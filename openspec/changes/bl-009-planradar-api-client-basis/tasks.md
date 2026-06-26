@@ -7,7 +7,7 @@
 ## 2. Client Implementation
 
 - [ ] 2.1 Implement PlanradarClient struct with HTTP client
-- [ ] 2.2 Add authentication header handling
+- [ ] 2.2 Add static API token authentication header handling
 - [ ] 2.3 Implement project search/list method
 - [ ] 2.4 Implement project create method
 - [ ] 2.5 Implement project status read method
@@ -22,7 +22,7 @@
 ## 4. Configuration
 
 - [ ] 4.1 Add tenant/account configuration options
-- [ ] 4.2 Support environment variable configuration
+- [ ] 4.2 Store the user-provided API token in the local config store
 
 ## 5. Testing
 
