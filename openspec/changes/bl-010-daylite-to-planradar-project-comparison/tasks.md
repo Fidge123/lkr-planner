@@ -16,8 +16,16 @@
 - [ ] 3.2 Log successful links with timestamp
 - [ ] 3.3 Log failed link attempts with error details
 
-## 4. Testing
+## 4. Project Title Fallback (folded in from BL-036)
 
-- [ ] 4.1 Service tests for linked/unlinked/project-not-found flows
-- [ ] 4.2 Persistence tests for Daylite custom field writes
-- [ ] 4.3 Idempotency tests for repeated link operations
+- [ ] 4.1 Implement title resolution: Planradar project name → single Daylite company → Daylite project name
+- [ ] 4.2 Add helper to determine whether a Daylite project has exactly one linked company
+- [ ] 4.3 Leave a custom-name slot at the top of the chain (no-op until a custom-name feature exists)
+- [ ] 4.4 Wire the resolved title into the assignment card (rendering already exists in assignment-persistence / timetable-cell)
+
+## 5. Testing
+
+- [ ] 5.1 Service tests for linked/unlinked/project-not-found flows
+- [ ] 5.2 Persistence tests for Daylite custom field writes
+- [ ] 5.3 Idempotency tests for repeated link operations
+- [ ] 5.4 Title-fallback tests: Planradar name, single Daylite company, Daylite project name
