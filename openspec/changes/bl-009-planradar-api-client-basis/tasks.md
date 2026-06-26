@@ -21,8 +21,9 @@
 
 ## 4. Configuration
 
-- [ ] 4.1 Add tenant/account configuration options
-- [ ] 4.2 Store the user-provided API token in the local config store
+- [ ] 4.1 Add tenant/account configuration options in the local config store
+- [ ] 4.2 Store the user-provided API token in the OS keychain via the secret manager
+- [ ] 4.3 Investigate whether the API token scopes to one tenant or the user must select from a list, then implement tenant resolution accordingly
 
 ## 5. Testing
 

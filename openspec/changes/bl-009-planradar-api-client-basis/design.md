@@ -32,8 +32,14 @@ The application needs to integrate with Planradar for project management. The Pl
 **Decision**: Authenticate with a static, user-provided API token, separate from Daylite auth
 - Planradar uses a static API token rather than OAuth
 - No refresh or rotation flow is required (unlike Daylite, ADR-0006)
-- The token is user-provided and stored securely (token storage per archived BL-040)
+- The token is user-provided and stored in the OS keychain via the existing secret manager (`secret_manager.rs`, archived BL-040), never in the local config store
 - The client attaches the token to each request and surfaces auth failures via the normalized error type
+
+### Tenant selection
+**Decision**: The app operates against exactly one correct tenant, but the user may belong to several
+- Open question: does the API token already scope requests to a single tenant, or must the user pick the tenant from a list?
+- This must be investigated against the Planradar API before the client finalizes how the tenant is resolved (see open points)
+- If selection is required, the chosen tenant is persisted in the local config store (non-secret)
 
 ### Error Handling
 **Decision**: Normalize all API errors into standardized error types
@@ -41,9 +47,10 @@ The application needs to integrate with Planradar for project management. The Pl
 - Include status code and error message for debugging
 
 ### Configuration
-**Decision**: Use the local config store for tenant/account settings and the API token
+**Decision**: Split storage by sensitivity
 - The Planradar base URL already exists in the local store (`planradar_base_url`)
-- The user-provided API token and tenant/account settings are stored alongside it
+- Non-secret tenant/account settings are stored in the local config store alongside it
+- The API token is stored only in the OS keychain via the secret manager
 - Allows switching between environments without code changes
 
 ## Risks / Trade-offs

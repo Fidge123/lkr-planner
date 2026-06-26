@@ -46,7 +46,7 @@ Users need to create Planradar projects for Daylite projects that don't have lin
   - **Mitigation**: Add delay between creations; batch if API supports
 
 - **Risk**: Custom field doesn't exist in Daylite
-  - **Mitigation**: Detect missing field; prompt user to create it
+  - **Mitigation**: App creates the fixed `planradar-link` field automatically if missing
 
 - **Risk**: User cancels during creation
   - **Mitigation**: Partial state cleaned up; no orphan Planradar projects

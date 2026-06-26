@@ -6,7 +6,7 @@ The application needs to link Daylite projects with existing Planradar projects.
 
 - Determine if Daylite project has a linked Planradar project reference
 - Allow linking an already existing Planradar project when no link exists
-- Persist Planradar project ID into the configured Daylite custom field (default `planradar-link`)
+- Persist Planradar project ID into the fixed `planradar-link` Daylite custom field, creating it if missing
 - Ensure idempotent link behavior across repeated runs
 - Resolve the assignment display title via a fallback chain that prefers the linked Planradar project name (folded in from the dropped BL-036; rendering itself already ships via assignment-persistence)
 
