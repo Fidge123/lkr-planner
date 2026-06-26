@@ -38,7 +38,7 @@ Display preferences are already persisted via `DisplaySettings` in the local sto
 
 ### Frontend wiring
 **Decision**: Load `showWeekend` alongside the existing display settings in `app.tsx`, pass it into `getWeekDays`, and extend `display-settings.ts` with load/save helpers plus a `DEFAULT_SHOW_WEEKEND = false` constant.
-- The settings dialog adds a toggle mirroring the `hideNonPlannable` checkbox, labelled "Wochenende anzeigen" with a short German description.
+- The settings dialog adds a toggle mirroring the `hideNonPlannable` checkbox, labelled "Wochenende anzeigen". It carries no secondary description line: a second description in the narrow "Anzeige" panel overflowed the modal, and the label alone is self-explanatory.
 
 ### Fix the existing overwrite bug in `saveHideNonPlannableEmployees`
 **Decision**: Change both save helpers to merge into the existing `displaySettings` rather than replacing it.

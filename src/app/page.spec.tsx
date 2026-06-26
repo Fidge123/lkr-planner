@@ -479,4 +479,26 @@ describe("planning grid weekend visibility", () => {
 
     expect(countDayColumns(html)).toBe(7);
   });
+
+  it("displays a holiday that falls on a weekend day when showWeekend is on", () => {
+    // System time is 2026-01-28 (Wed); getWeekDays(0, true) spans Mon 2026-01-26
+    // to Sun 2026-02-01, so 2026-01-31 is the Saturday column.
+    const html = renderToStaticMarkup(
+      <PlanningGridTable
+        weekDays={getWeekDays(0, true)}
+        projectState={{ ...defaultState }}
+        employeeState={{ ...defaultEmployeeState }}
+        assignmentState={{ ...defaultAssignmentState }}
+        employeeSettings={[]}
+        hideNonPlannableEmployees={false}
+        holidaysState={{
+          ...defaultHolidaysState,
+          holidays: [{ date: "2026-01-31", name: "Test-Samstagsfeiertag" }],
+        }}
+        onOpenIcalDialog={() => {}}
+      />,
+    );
+
+    expect(html).toContain("Test-Samstagsfeiertag");
+  });
 });

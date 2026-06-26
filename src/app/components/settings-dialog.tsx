@@ -492,12 +492,7 @@ export function DisplaySettingsPanel({
           onChange={onToggleWeekend}
           disabled={isSaving}
         />
-        <span className="flex flex-col gap-1">
-          <span className="label-text font-medium">Wochenende anzeigen</span>
-          <span className="label-text text-base-content/60">
-            Zeigt zusätzlich Samstag und Sonntag in der Planungsansicht an.
-          </span>
-        </span>
+        <span className="label-text font-medium">Wochenende anzeigen</span>
       </label>
 
       <section className="mt-6 flex items-center justify-end">
