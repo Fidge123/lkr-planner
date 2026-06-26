@@ -2,7 +2,7 @@
 
 - [ ] 1.1 Write failing test: `search_projects_core` sorts by name when sort = name
 - [ ] 1.2 Add optional sort field to `DayliteSearchInput` (default numeric ID)
-- [ ] 1.3 Implement name sort (case-insensitive, locale-aware for ä/ö/ü); keep ID as default
+- [ ] 1.3 Implement name sort using Rust default ordering (locale-aware ä/ö/ü only if trivial); keep ID as default
 - [ ] 1.4 Confirm existing callers default to ID sort (BL-022 contract unchanged)
 
 ## 2. Trailing Debounce Hook
@@ -18,7 +18,7 @@
 
 ## 4. Live Filtering
 
-- [ ] 4.1 Call BL-022 query with filter text (sort = name)
+- [ ] 4.1 Query only when the filter has at least 3 characters (sort = name)
 - [ ] 4.2 Show filtered results in the result list
 - [ ] 4.3 Limit results to 5
 - [ ] 4.4 Filter to new_status and in_progress only

@@ -45,6 +45,7 @@ The system SHALL render default suggestions as the combobox empty-state content,
 - **WHEN** the default suggestions are displayed and the user presses Arrow Down / Arrow Up
 - **THEN** the highlighted suggestion moves accordingly
 - **AND** pressing Enter selects the highlighted suggestion into the assignment field
+- **AND** the modal stays open so the user confirms with the Speichern button
 
 ### Requirement: Suggestion count limit
 The system SHALL cap total suggestions at 5.

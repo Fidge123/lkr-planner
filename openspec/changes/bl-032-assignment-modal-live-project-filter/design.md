@@ -24,7 +24,8 @@ The assignment modal needs live filtering as the user types. This provides insta
 - This breaks the previous circular reference: BL-031 depends on this combobox shell, this change depends on nothing from BL-031
 
 ### Filter Trigger
-**Decision**: Show filtered results when filter input has at least 1 character
+**Decision**: Show filtered results when filter input has at least 3 characters
+- Below 3 characters no query is sent and the list stays in its empty default state
 - Debounce input to avoid excessive queries (300ms)
 - Clearing the filter returns the list to its empty default state
 
@@ -45,13 +46,13 @@ The assignment modal needs live filtering as the user types. This provides insta
 - `DayliteSearchInput` gains an optional sort field (e.g. `id` default | `name`)
 - Numeric-ID sort remains the default for all existing callers (BL-022 contract unchanged)
 - bl-032 passes sort = name; BL-031's overdue query keeps the default ID sort
-- Name sort must be case-insensitive and locale-aware for German names (ä/ö/ü); decide collation when implementing
+- Name sort uses Rust's default string ordering (byte order); German locale-aware collation (ä/ö/ü) is only worth adding if it turns out to be very simple, otherwise deferred
 
 ### Keyboard Navigation
 **Decision**: Support arrow keys and Enter over whichever list is displayed
 - Up/Down navigate the currently displayed items (filtered results or, once BL-031 lands, default suggestions)
 - Navigation operates on the unified list structure, so it covers BL-031 content automatically
-- Enter selects the highlighted project into the assignment field
+- Enter selects the highlighted project into the assignment field and leaves the modal open; the user confirms with Speichern (no save-and-close shortcut for now, can be added later if needed)
 - Escape clears a non-empty filter (returns to empty default state); on an empty filter it falls through to the modal close flow
 
 ### Escape precedence

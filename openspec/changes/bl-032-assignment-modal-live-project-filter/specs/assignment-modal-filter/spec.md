@@ -5,9 +5,14 @@ The system SHALL filter projects as user types in the filter input.
 The result list starts empty; default content for the empty state is supplied by the `assignment-modal-suggestions` capability and is out of scope here.
 
 #### Scenario: Typing shows filtered results
-- **WHEN** user types at least 1 character in the filter input
+- **WHEN** user types at least 3 characters in the filter input
 - **THEN** filtered results are shown in the result list
 - **AND** only projects with status `new_status` or `in_progress` are included
+
+#### Scenario: Short filter does not query
+- **WHEN** the filter input holds fewer than 3 characters
+- **THEN** no filter query is sent
+- **AND** the result list stays in its empty default state
 
 #### Scenario: Filtered results limited to 5
 - **WHEN** user filters projects
@@ -30,6 +35,7 @@ The system SHALL support keyboard selection over whichever result list is curren
 #### Scenario: Enter to select
 - **WHEN** an item is highlighted and user presses Enter
 - **THEN** that project is selected into the assignment field
+- **AND** the modal stays open so the user confirms with the Speichern button
 
 #### Scenario: Escape clears a non-empty filter
 - **WHEN** the filter input is non-empty and user presses Escape

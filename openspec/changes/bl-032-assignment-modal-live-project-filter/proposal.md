@@ -5,7 +5,7 @@ The assignment modal needs live filtering as the user types. This allows quick p
 ## What Changes
 
 - Build the combobox shell that replaces today's `<select>`: a filter input plus a result list
-- The result list starts empty; filtered results appear once the user types
+- The result list starts empty; filtered results appear once the user types at least 3 characters
 - Show first 5 matching projects from `new_status` and `in_progress` states, sorted by project name
 - Support keyboard selection (arrow keys + enter) over whichever list is displayed
 - Clear filter returns the list to its empty default state (default-suggestion content is owned by BL-031)
