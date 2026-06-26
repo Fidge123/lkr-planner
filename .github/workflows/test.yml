@@ -13,7 +13,7 @@ jobs:
   bun:
     runs-on: "ubuntu-latest"
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: oven-sh/setup-bun@v2
 
@@ -28,7 +28,7 @@ jobs:
     env:
       HAS_GIT_CRYPT_KEY: ${{ secrets.GIT_CRYPT_KEY_B64 != '' && 'true' || 'false' }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Verify cassettes are encrypted before unlock
         run: bash scripts/assert-cassette-encrypted.sh --encrypted tests/cassettes
