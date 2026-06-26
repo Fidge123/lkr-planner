@@ -1,15 +1,24 @@
 import { commands, type DayliteProjectSummary } from "../generated/tauri";
 import { readDayliteApiErrorMessage } from "./daylite-service-helpers";
 
+// Number of matches shown to the user.
+const DISPLAY_LIMIT = 5;
+// Candidate pool fetched from Daylite before the name sort. Daylite applies its
+// own ordering when truncating to `limit`, so fetching only 5 would let it drop
+// matches that sort earlier by name. Fetching a wider pool lets the backend
+// name-sort pick the true alphabetically-first matches; we then show the top 5.
+const CANDIDATE_LIMIT = 50;
+
 // Up to 5 active projects (new_status / in_progress) matching the filter term,
-// sorted by name. The backend enforces the limit, status filter and name sort;
-// this function just shapes the request and unwraps the result.
+// sorted by name. The backend applies the status filter and name sort over the
+// candidate pool; this function shapes the request and trims to the display
+// limit.
 export async function searchProjectsForAssignmentPicker(
   searchTerm: string,
 ): Promise<DayliteProjectSummary[]> {
   const result = await commands.dayliteSearchProjects({
     searchTerm,
-    limit: 5,
+    limit: CANDIDATE_LIMIT,
     statuses: ["new_status", "in_progress"],
     fullRecords: null,
     start: null,
@@ -25,5 +34,5 @@ export async function searchProjectsForAssignmentPicker(
     );
   }
 
-  return result.data.results;
+  return result.data.results.slice(0, DISPLAY_LIMIT);
 }
