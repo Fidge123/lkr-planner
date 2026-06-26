@@ -5,8 +5,9 @@ The assignment modal needs to show default suggestions when opened. This helps u
 ## What Changes
 
 - Show deterministic default suggestions when modal opens
-- First suggestion: most recently assigned project (across any employee/day)
-- Next 4-5 suggestions: overdue projects
+- First suggestion: most recently assigned project, taken from a temporary client last-used cache (in-memory, session-scoped)
+- Remaining suggestions: overdue projects, deduplicated against the recent project, capped at 5 total
+- When no recent project is cached, show up to 5 overdue projects
 - Define fallback behavior when recent assignment or overdue projects unavailable
 - Show German empty-state message when no suggestions available
 
@@ -20,10 +21,11 @@ The assignment modal needs to show default suggestions when opened. This helps u
 
 ## Impact
 
-- Code: New React component logic for suggestion generation + Rust overdue project query
+- Code: New React component logic for suggestion generation + client last-used cache + Rust overdue project query
 - Dependencies:
   - BL-022 for project search infrastructure (status filter, timeout, numeric sort)
   - BL-016 for assignment modal where suggestions are displayed
+  - BL-032 for the combobox shell the suggestions render into (replaces today's plain `<select>` and provides the free-text search referenced in the empty state)
 
 ## Note
 

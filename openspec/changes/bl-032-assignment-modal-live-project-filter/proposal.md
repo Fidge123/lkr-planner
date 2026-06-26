@@ -4,11 +4,13 @@ The assignment modal needs live filtering as the user types. This allows quick p
 
 ## What Changes
 
-- Add text input field above default suggestions
-- While filter text is present, replace default suggestions with filtered results
-- Show first 5 matching projects from `new_status` and `in_progress` states
-- Support keyboard selection (arrow keys + enter) in filtered list
-- Restore default suggestions when input is cleared
+- Build the combobox shell that replaces today's `<select>`: a filter input plus a result list
+- The result list starts empty; filtered results appear once the user types at least 3 characters
+- Show first 5 matching projects from `new_status` and `in_progress` states, sorted by project name
+- Support keyboard selection (arrow keys + enter) over whichever list is displayed
+- Clear filter returns the list to its empty default state (default-suggestion content is owned by BL-031)
+- Add optional sort support to `search_projects_core` (default numeric ID, opt-in name sort)
+- Add a new trailing-edge debounce hook for search-as-you-type
 
 ## Capabilities
 
@@ -20,5 +22,6 @@ The assignment modal needs live filtering as the user types. This allows quick p
 
 ## Impact
 
-- Code: New React component for filter input and filtered list
+- Code: New React combobox component (filter input + result list + keyboard nav), new trailing debounce hook, sort option added to `search_projects_core` / `DayliteSearchInput`; removes the `<select>` and the bulk `loadProjectsForAssignmentPicker` pre-load
 - Dependencies: Uses Daylite query capabilities from BL-022
+- Dependents: BL-031 plugs its default suggestions into this combobox's empty state; this change has no dependency on BL-031
