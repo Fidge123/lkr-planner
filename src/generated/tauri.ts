@@ -145,7 +145,14 @@ export type DayliteSearchInput = {
 	fullRecords?: boolean | null,
 	/**  Pagination cursor: object ID of the first result to return (`?start=<id>`). */
 	start?: string | null,
+	/**  Result ordering. Defaults to numeric ID; `name` opts into name sort. */
+	sort?: DayliteSearchSort | null,
 };
+/**
+ * Result ordering for `search_projects_core`. Numeric ID is the default so the
+ * BL-022 contract stays unchanged; callers opt in to name sort explicitly.
+ */
+export type DayliteSearchSort = "id" | "name";
 
 export type DayliteSearchResult<T> = {
 	results: T[],

@@ -4,7 +4,7 @@ import {
   commands,
   type DayliteProjectSummary,
 } from "../../generated/tauri";
-import { loadProjectsForAssignmentPicker } from "../../services/assignment-project-picker";
+import { useAssignmentProjectSearch } from "../hooks/use-assignment-project-search";
 
 export function AssignmentModal({
   isOpen,
@@ -18,8 +18,14 @@ export function AssignmentModal({
 }: Props) {
   const isEditMode = assignment !== null;
 
-  const [projects, setProjects] = useState<DayliteProjectSummary[]>([]);
-  const [selectedProjectRef, setSelectedProjectRef] = useState<string>("");
+  const [filter, setFilter] = useState("");
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const [selectedProjectRef, setSelectedProjectRef] = useState<string>(
+    assignment?.projectRef ?? "",
+  );
+  const [selectedProjectName, setSelectedProjectName] = useState<string>(
+    assignment?.title ?? "",
+  );
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(
@@ -31,6 +37,9 @@ export function AssignmentModal({
   const [isDirty, setIsDirty] = useState(false);
   const dialogRef = useRef<HTMLDialogElement>(null);
 
+  const { results, errorMessage: searchError } =
+    useAssignmentProjectSearch(filter);
+
   useEffect(() => {
     if (!isOpen) return;
     setErrorMessage(null);
@@ -38,13 +47,16 @@ export function AssignmentModal({
     setShowDeleteConfirm(initialShowDeleteConfirm);
     setShowUnsavedConfirm(initialShowUnsavedConfirm);
     setSelectedProjectRef(assignment?.projectRef ?? "");
+    setSelectedProjectName(assignment?.title ?? "");
+    setFilter("");
+    setHighlightedIndex(-1);
     setIsDirty(false);
-    void loadProjectsForAssignmentPicker().then(setProjects);
   }, [
     isOpen,
     initialShowDeleteConfirm,
     initialShowUnsavedConfirm,
     assignment?.projectRef,
+    assignment?.title,
   ]);
 
   useEffect(() => {
@@ -171,12 +183,53 @@ export function AssignmentModal({
     );
   }
 
+  const selectProject = (project: DayliteProjectSummary) => {
+    setSelectedProjectRef(project.self);
+    setSelectedProjectName(project.name);
+    setIsDirty(true);
+    // Selecting returns the list to its empty default state.
+    setFilter("");
+    setHighlightedIndex(-1);
+  };
+
+  const handleProjectKeyDown = (
+    event: React.KeyboardEvent<HTMLInputElement>,
+  ) => {
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setHighlightedIndex((index) =>
+        nextHighlightIndex(index, results.length, 1),
+      );
+      return;
+    }
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setHighlightedIndex((index) =>
+        nextHighlightIndex(index, results.length, -1),
+      );
+      return;
+    }
+    if (event.key === "Enter") {
+      const highlighted = results[highlightedIndex];
+      if (highlighted) {
+        event.preventDefault();
+        selectProject(highlighted);
+      }
+      return;
+    }
+    if (event.key === "Escape" && resolveEscapeAction(filter) === "clear") {
+      // Intercept before the native <dialog> cancel: clear instead of close.
+      event.preventDefault();
+      setFilter("");
+      setHighlightedIndex(-1);
+    }
+  };
+
   const handleSave = async () => {
     setIsSaving(true);
     setErrorMessage(null);
 
-    const project = projects.find((p) => p.self === selectedProjectRef);
-    const projectName = project?.name ?? assignment?.title ?? "";
+    const projectName = selectedProjectName || assignment?.title || "";
 
     let result: { status: string; error?: string };
     if (isEditMode && assignment.href) {
@@ -223,23 +276,36 @@ export function AssignmentModal({
         <section className="mt-4 flex flex-col gap-3">
           <label className="form-control w-full">
             <span className="label-text mb-1">Projekt</span>
-            <select
-              className="select select-bordered w-full"
-              value={selectedProjectRef}
+            <input
+              type="text"
+              className="input input-bordered w-full"
+              value={filter}
+              placeholder="Projekt suchen..."
               onChange={(e) => {
-                setSelectedProjectRef(e.target.value);
-                setIsDirty(true);
+                // Typing changes the result set, so the previous highlight is stale.
+                setFilter(e.target.value);
+                setHighlightedIndex(-1);
               }}
+              onKeyDown={handleProjectKeyDown}
               disabled={isSaving}
-            >
-              <option value="">Projekt auswählen...</option>
-              {projects.map((p) => (
-                <option key={p.self} value={p.self}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
+              role="combobox"
+              aria-expanded={results.length > 0}
+              aria-controls="assignment-project-results"
+            />
           </label>
+          {selectedProjectRef ? (
+            <p className="text-sm">
+              Ausgewählt: <strong>{selectedProjectName}</strong>
+            </p>
+          ) : null}
+          {searchError ? (
+            <p className="text-sm text-error">{searchError}</p>
+          ) : null}
+          <ProjectResultList
+            projects={results}
+            highlightedIndex={highlightedIndex}
+            onSelect={selectProject}
+          />
         </section>
 
         <section className="modal-action">
@@ -292,4 +358,60 @@ interface Props {
   onClose: () => void;
   showDeleteConfirm?: boolean;
   showUnsavedConfirm?: boolean;
+}
+
+// Renders the currently displayed result list. Returns nothing when empty, so
+// an empty filter keeps the list in its empty default state.
+export function ProjectResultList({
+  projects,
+  highlightedIndex,
+  onSelect,
+}: ProjectResultListProps) {
+  if (projects.length === 0) return null;
+
+  return (
+    <ul
+      id="assignment-project-results"
+      className="menu menu-sm bg-base-200 rounded-box w-full p-1"
+    >
+      {projects.map((project, index) => (
+        <li key={project.self}>
+          <button
+            type="button"
+            aria-current={index === highlightedIndex}
+            className={index === highlightedIndex ? "active" : undefined}
+            onClick={() => onSelect(project)}
+          >
+            {project.name}
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+interface ProjectResultListProps {
+  projects: DayliteProjectSummary[];
+  highlightedIndex: number;
+  onSelect: (project: DayliteProjectSummary) => void;
+}
+
+// Clamps arrow-key movement to the bounds of the displayed list. From the
+// unhighlighted state (-1), Arrow Down lands on the first item.
+export function nextHighlightIndex(
+  current: number,
+  length: number,
+  direction: 1 | -1,
+): number {
+  if (length === 0) return -1;
+  const next = current + direction;
+  if (next < 0) return 0;
+  if (next > length - 1) return length - 1;
+  return next;
+}
+
+// Escape clears a non-empty filter (returning to the empty default state);
+// on an empty filter it falls through to the modal close flow.
+export function resolveEscapeAction(filter: string): "clear" | "close" {
+  return filter.length > 0 ? "clear" : "close";
 }

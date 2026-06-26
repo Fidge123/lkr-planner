@@ -1,19 +1,19 @@
 import { commands, type DayliteProjectSummary } from "../generated/tauri";
 import { readDayliteApiErrorMessage } from "./daylite-service-helpers";
 
-let cache: DayliteProjectSummary[] | null = null;
-
-export async function loadProjectsForAssignmentPicker(): Promise<
-  DayliteProjectSummary[]
-> {
-  if (cache) return cache;
-
+// Up to 5 active projects (new_status / in_progress) matching the filter term,
+// sorted by name. The backend enforces the limit, status filter and name sort;
+// this function just shapes the request and unwraps the result.
+export async function searchProjectsForAssignmentPicker(
+  searchTerm: string,
+): Promise<DayliteProjectSummary[]> {
   const result = await commands.dayliteSearchProjects({
-    searchTerm: "",
-    limit: null,
+    searchTerm,
+    limit: 5,
     statuses: ["new_status", "in_progress"],
     fullRecords: null,
     start: null,
+    sort: "name",
   });
 
   if (result.status === "error") {
@@ -25,10 +25,5 @@ export async function loadProjectsForAssignmentPicker(): Promise<
     );
   }
 
-  cache = result.data.results;
-  return cache;
-}
-
-export function test_resetAssignmentProjectPickerCache(): void {
-  cache = null;
+  return result.data.results;
 }
