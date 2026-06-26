@@ -574,6 +574,37 @@ mod tests {
     }
 
     #[test]
+    fn search_treats_empty_object_response_as_no_results() {
+        tauri::async_runtime::block_on(async {
+            // Daylite returns a bare `{}` (HTTP 200) when nothing matches.
+            let transport = MockTransport::new(vec![Ok(mock_response(200, r#"{}"#))]);
+            let client = DayliteApiClient::with_transport(Box::new(transport));
+
+            let (result, _) = search_projects_core(
+                &client,
+                DayliteTokenState {
+                    access_token: "at".to_string(),
+                    refresh_token: "rt".to_string(),
+                    access_token_expires_at_ms: Some(u64::MAX),
+                },
+                &DayliteSearchInput {
+                    search_term: "Nord".to_string(),
+                    limit: Some(5),
+                    statuses: None,
+                    full_records: None,
+                    start: None,
+                    sort: None,
+                },
+            )
+            .await
+            .expect("empty object response should be treated as no results");
+
+            assert!(result.results.is_empty());
+            assert_eq!(result.next, None);
+        });
+    }
+
+    #[test]
     fn search_sorts_by_name_when_sort_is_name() {
         tauri::async_runtime::block_on(async {
             // IDs ascend but names do not, so an ID sort and a name sort diverge.

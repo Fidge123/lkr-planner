@@ -23,7 +23,11 @@ pub struct DayliteTokenSyncStatus {
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct DayliteSearchResult<T> {
+    // Daylite omits `results` entirely (returning a bare `{}`) when a search has
+    // no matches, so default to an empty list instead of failing to deserialize.
+    #[serde(default = "Vec::new")]
     pub results: Vec<T>,
+    #[serde(default)]
     pub next: Option<String>,
 }
 
