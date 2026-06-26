@@ -7,9 +7,10 @@
 
 ## 2. Suggestion Logic
 
-- [ ] 2.1 Implement query for most recently assigned project
-- [ ] 2.2 Combine overdue results with recent project first
-- [ ] 2.3 Cap total suggestions at 5
+- [ ] 2.1 Implement client last-used cache that records the last assigned project (in-memory, session-scoped)
+- [ ] 2.2 Combine overdue results with the cached recent project first
+- [ ] 2.3 Deduplicate the recent project out of the overdue portion
+- [ ] 2.4 Cap total suggestions at 5 (recent first if present, otherwise up to 5 overdue)
 
 ## 3. UI Implementation
 
@@ -26,7 +27,9 @@
 
 ## 5. Testing
 
-- [ ] 5.1 Write UI tests for suggestion ordering
+- [ ] 5.1 Write UI tests for suggestion ordering (recent first, then overdue)
 - [ ] 5.2 Write UI tests for suggestion count limit (max 5)
-- [ ] 5.3 Write service tests for fallback behavior
-- [ ] 5.4 Write tests for empty state message display
+- [ ] 5.3 Write test for dedup: recent project that is also overdue appears once
+- [ ] 5.4 Write test for empty cache: shows up to 5 overdue projects
+- [ ] 5.5 Write service tests for fallback behavior
+- [ ] 5.6 Write tests for empty state message display

@@ -11,8 +11,8 @@ The assignment modal needs default suggestions to help users quickly select proj
 - Handle empty states gracefully with German messages
 
 **Non-Goals:**
-- Free-text filtering behavior (covered by BL-032)
-- Persisting personal search history
+- Free-text filtering behavior (covered by BL-032, which also provides the combobox shell this change renders suggestions into)
+- Persisting personal search history across sessions (the last-used cache is in-memory and resets on restart)
 
 ## Decisions
 
@@ -23,26 +23,39 @@ The assignment modal needs default suggestions to help users quickly select proj
 - This is a new Tauri command added in this change, building on BL-022 infrastructure
 - Sort by numeric project ID ascending (same as BL-022), limit to 5
 
+### Most Recently Assigned Project Source
+**Decision**: Derive "most recently assigned" from a client-side last-used cache, not from CalDAV history
+- Assignments live as CalDAV VEVENTs loaded per week per employee; there is no cross-time assignment history query, and the iCal parser does not retain `CREATED`/`LAST-MODIFIED`
+- Instead, remember the last project the user assigned during the current session in a temporary client cache (in-memory, reset on app restart)
+- This avoids a slow multi-calendar CalDAV scan and keeps the feature deterministic for a given cache state
+- Trade-off: "recent" is session-scoped, so a freshly started session shows overdue-only suggestions until the user makes an assignment
+
 ### Suggestion Ordering
-**Decision**: Most recently assigned project first, then overdue projects
-- Query assignment history for most recent project
-- Query overdue projects via new overdue command
+**Decision**: Recent project first (if cached), then overdue projects
+- Read the most recent project from the client last-used cache
+- Query overdue projects via the new overdue command
 - Combine results, cap at 5 total suggestions
+- When the cache is empty, show up to 5 overdue projects
+
+### Deduplication
+**Decision**: A project appears at most once across the combined list
+- If the recent project is also in the overdue results, keep it only in the first (recent) position and drop it from the overdue portion
+- Dedup happens before the cap of 5 is applied, so the list holds 5 distinct projects when that many exist
 
 ### Fallback Behavior
 **Decision**: Show empty state message when no suggestions available
-- If no recent assignment AND no overdue projects
+- If the client last-used cache is empty AND no overdue projects exist
 - Show "Keine Vorschläge verfügbar" in German
 
 ### Determinism
 **Decision**: Use consistent ordering for identical states
-- Sort by assignment date descending for recent
-- Sort by project ID for overdue (consistent tie-breaking)
+- Recent project comes directly from the client last-used cache
+- Sort overdue by project ID for consistent tie-breaking
 
 ## Risks / Trade-offs
 
 - **Risk**: Slow query affecting modal open time
-  - **Mitigation**: Cache recent assignment query result
+  - **Mitigation**: Recent project comes from an in-memory cache (no query); only the overdue query hits the network
 
 - **Risk**: Many overdue projects
   - **Mitigation**: Strict limit of 5 suggestions total
