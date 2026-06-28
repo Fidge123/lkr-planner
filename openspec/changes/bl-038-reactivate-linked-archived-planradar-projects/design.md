@@ -22,6 +22,12 @@ Planradar projects can be archived/closed. Linked projects that are archived nee
 - Check `status` or `archived` field
 - Differentiate: active, archived, closed states
 
+### Reactivation Mechanism
+**Decision**: Reactivate via the shared archive-project endpoint
+- Planradar has no dedicated reactivate endpoint; `PUT /api/v1/{customer_id}/projects/{project_id}/archive_project` handles both directions
+- The body sets `data.attributes.status`: `1` unarchives (reactivates), `9` archives
+- Reactivation sends status `1` (see BL-009)
+
 ### Reactivation Trigger
 **Decision**: Explicit user action or pre-sync automation
 - User can manually trigger reactivation from UI

@@ -1,18 +1,33 @@
 ## ADDED Requirements
 
-### Requirement: Create Planradar project
-The system SHALL create a new Planradar project from an unlinked Daylite project.
+### Requirement: Create a blank Planradar project from a form
+The system SHALL create a new Planradar project from a user-editable form, for an unlinked Daylite project.
 
-#### Scenario: Create from template
-- **GIVEN** user selects template project
-- **WHEN** creating Planradar project
-- **THEN** a new project is created with template's properties
+#### Scenario: Submit create form
+- **GIVEN** user has filled the create form
+- **WHEN** user submits the form
+- **THEN** a new project is created from the form values
 - **AND** the new project ID is returned
 
-#### Scenario: Create without template
-- **GIVEN** user does not select template
-- **WHEN** creating Planradar project
-- **THEN** a new project is created with Daylite project name
+#### Scenario: Default form values
+- **GIVEN** user opens the create form without selecting a source project
+- **WHEN** the form is shown
+- **THEN** the project name defaults to the Daylite project name
+- **AND** the remaining fields start empty
+
+### Requirement: Create by copying a source project then editing
+The system SHALL let the user create a project by copying an existing Planradar project, then editing the copy.
+
+#### Scenario: Choose aspects to copy
+- **GIVEN** user selects a source project
+- **WHEN** configuring the copy
+- **THEN** the user chooses a name and which aspects to copy (details, groups, ticket types, users, components)
+
+#### Scenario: Copy then edit
+- **GIVEN** user confirms the copy
+- **WHEN** the project is created
+- **THEN** the source project is copied via the copy-project endpoint with the selected toggles and name
+- **AND** an edit form is opened to adjust the copied project's details before finishing
 - **AND** the new project ID is returned
 
 ### Requirement: Idempotent creation
@@ -45,15 +60,15 @@ The system SHALL persist created Planradar ID to Daylite.
 - **THEN** operation is queued for retry
 - **AND** sync issue is logged
 
-### Requirement: Template selection
-The system SHALL allow user to filter and select template projects.
+### Requirement: Source project selection
+The system SHALL allow user to filter and select a source project.
 
-#### Scenario: Filter templates
+#### Scenario: Filter source projects
 - **GIVEN** user types search filter
-- **WHEN** filtering template list
+- **WHEN** filtering the source project list
 - **THEN** only matching projects are shown
 
-#### Scenario: Select template
-- **GIVEN** user selects a template project
+#### Scenario: Select source project
+- **GIVEN** user selects a source project
 - **WHEN** confirming selection
-- **THEN** template ID is stored for creation
+- **THEN** the source project ID is stored for creation
