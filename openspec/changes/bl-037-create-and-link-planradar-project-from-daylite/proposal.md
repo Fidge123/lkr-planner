@@ -5,7 +5,7 @@ When planning a project that exists in Daylite but not in Planradar, users need 
 ## What Changes
 
 - Allow creation of new Planradar project from unlinked Daylite project
-- Present source project selection from existing Planradar projects (read the source project and create from its data)
+- Present source project selection from existing Planradar projects (copy via the copy-project endpoint, then edit)
 - Persist created Planradar project ID to the `planradar-link` Daylite custom field
 - Ensure idempotent operation (no duplicate creation on repeated runs)
 

@@ -28,15 +28,19 @@ The system SHALL provide functionality to search and list Planradar projects.
 - **AND** pagination is handled automatically
 
 ### Requirement: Project create
-The system SHALL provide functionality to create new Planradar projects.
+The system SHALL provide functionality to create new Planradar projects, either blank or copied from a source project.
 
-The Planradar API has no native clone or template endpoint.
-Creation therefore reads the source project's data and sends that data as the body of a new project create request.
+Blank creation uses the create-project endpoint with project attributes (name, address, dates, description).
+Copying uses the dedicated copy-project endpoint with a new name and per-aspect toggles for details, groups, ticket types (forms), users, and components (layers).
 
-#### Scenario: Create project from a source project's data
-- **WHEN** user creates a project based on an existing source project
-- **THEN** the client reads the source project's data
-- **AND** a new project is created in Planradar from that data
+#### Scenario: Create a blank project
+- **WHEN** user creates a project without a source project
+- **THEN** a new project is created from the provided attributes
+- **AND** the new project ID is returned
+
+#### Scenario: Copy from a source project
+- **WHEN** user creates a project from a source project
+- **THEN** the source project is copied via the copy-project endpoint with the new name and selected aspect toggles
 - **AND** the new project ID is returned
 
 ### Requirement: Project status read
@@ -49,7 +53,8 @@ The system SHALL provide functionality to read project status.
 
 #### Scenario: Reactivate archived project
 - **WHEN** user requests to reopen an archived project
-- **THEN** the project status changes to active
+- **THEN** the archive-project endpoint is called with status set to active (status `1`)
+- **AND** the project status changes to active
 - **AND** success confirmation is returned
 
 ### Requirement: Error normalization

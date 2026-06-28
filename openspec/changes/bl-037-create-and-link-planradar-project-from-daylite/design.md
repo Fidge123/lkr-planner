@@ -6,7 +6,7 @@ Users need to create Planradar projects for Daylite projects that don't have lin
 
 **Goals:**
 - Create new Planradar project from unlinked Daylite project
-- Support source project selection from existing projects (read-then-create)
+- Support source project selection from existing projects (copy-project then edit)
 - Persist Planradar ID to the `planradar-link` Daylite custom field
 - Ensure idempotent operation
 
@@ -21,12 +21,13 @@ Users need to create Planradar projects for Daylite projects that don't have lin
 - Unlinked Daylite project shows "Create in Planradar" option
 - User selects template project or starts blank
 
-### Source Project Selection
-**Decision**: Show list of existing Planradar projects to use as a source
-- Planradar has no clone or template endpoint, so creation reads the source project and creates a new project from its data (see BL-009)
-- Allow filtering/search to find the right source project
+### Source Project Selection and copy flow
+**Decision**: Use the Planradar copy-project endpoint, then edit (hybrid flow)
+- Source-based creation uses `copy_project` (see BL-009) rather than a manual read-then-recreate, matching the native Planradar copy feature
+- Show a list of existing Planradar projects to use as a source, with filtering/search
+- The user picks a name and which aspects to copy via the endpoint toggles: details, groups, ticket types (forms), users, components (layers)
+- After the server-side copy, open an edit form to adjust the new project's details (address, dates, description) via `PUT projects/{id}` before finishing
 - Default to a blank project (Daylite name only) if no source project is selected
-- Copy name, description, and optionally custom fields from the source project
 
 ### Idempotency
 **Decision**: Check for existing link before creation

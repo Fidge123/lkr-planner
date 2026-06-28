@@ -8,10 +8,11 @@
 
 - [ ] 2.1 Implement PlanradarClient struct with HTTP client
 - [ ] 2.2 Add static API token authentication header handling
-- [ ] 2.3 Implement project search/list method
-- [ ] 2.4 Implement project create method
-- [ ] 2.5 Implement project status read method
-- [ ] 2.6 Implement project reactivate method
+- [ ] 2.3 Implement project search/list method (paginated: sort, page, pagesize)
+- [ ] 2.4 Implement blank project create method (POST projects)
+- [ ] 2.5 Implement copy-project method with name and aspect toggles (details, groups, ticket_types, users, components)
+- [ ] 2.6 Implement project status read method
+- [ ] 2.7 Implement project reactivate method via archive_project with status 1
 
 ## 3. Error Handling
 

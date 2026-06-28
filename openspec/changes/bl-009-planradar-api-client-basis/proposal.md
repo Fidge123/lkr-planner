@@ -5,7 +5,7 @@ The application needs to integrate with Planradar for project management. A type
 ## What Changes
 
 - Implement typed Planradar client with project search/list capabilities
-- Add project create functionality (read a source project and create a new project from its data)
+- Add project create functionality (blank create, plus copy from a source project with per-aspect toggles)
 - Add project status read (active/archived/reopen support)
 - Normalize API error payloads for frontend usage
 - Authenticate with a static, user-provided API token (no OAuth or token rotation)

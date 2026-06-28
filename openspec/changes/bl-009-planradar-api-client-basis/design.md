@@ -23,10 +23,17 @@ The application needs to integrate with Planradar for project management. The Pl
 - Mirror the existing Daylite client structure (transport trait plus VCR replay cassettes per ADR-0010)
 
 ### Project creation mechanism
-**Decision**: Implement creation as read-then-create, not native clone
-- Planradar exposes no clone or template endpoint
-- To create from a source project, read that project's data and POST it as the body of a new create request
-- This matches the "create from existing project" affordance in the Planradar UI
+**Decision**: Use the dedicated copy-project endpoint for source-based creation, and the create-project endpoint for blank creation
+- Planradar exposes `POST /api/v1/{customer_id}/projects/{project_id}/copy_project` with a new `name` and boolean toggles `details`, `groups`, `ticket_types` (forms), `users`, `components` (layers)
+- This is the same "copy project" affordance offered in the Planradar UI, so it is preferred over a manual read-then-recreate
+- Blank creation uses `POST /api/v1/{customer_id}/projects` with `data.attributes` (name, street, zipcode, city, country, description, start/end dates)
+- The copy is server-side; field-level edits happen afterward via `PUT /api/v1/{customer_id}/projects/{project_id}` (see BL-037 hybrid flow)
+
+### Project reactivation mechanism
+**Decision**: Reactivate via the archive-project endpoint, not a separate reopen endpoint
+- Planradar has no dedicated reactivate endpoint; archive and unarchive share `PUT /api/v1/{customer_id}/projects/{project_id}/archive_project`
+- The body sets `data.attributes.status`: `9` archives, `1` unarchives
+- Reactivation therefore sends status `1`
 
 ### Authentication
 **Decision**: Authenticate with a static, user-provided API token, separate from Daylite auth

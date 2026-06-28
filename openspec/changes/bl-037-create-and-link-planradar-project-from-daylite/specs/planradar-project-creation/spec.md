@@ -1,6 +1,6 @@
 ## ADDED Requirements
 
-### Requirement: Create Planradar project from a form
+### Requirement: Create a blank Planradar project from a form
 The system SHALL create a new Planradar project from a user-editable form, for an unlinked Daylite project.
 
 #### Scenario: Submit create form
@@ -9,26 +9,26 @@ The system SHALL create a new Planradar project from a user-editable form, for a
 - **THEN** a new project is created from the form values
 - **AND** the new project ID is returned
 
-#### Scenario: Default form without pre-fill
+#### Scenario: Default form values
 - **GIVEN** user opens the create form without selecting a source project
 - **WHEN** the form is shown
 - **THEN** the project name defaults to the Daylite project name
 - **AND** the remaining fields start empty
 
-### Requirement: Pre-fill the create form from a source project
-The system SHALL let the user pre-fill the create form from an existing Planradar project.
+### Requirement: Create by copying a source project then editing
+The system SHALL let the user create a project by copying an existing Planradar project, then editing the copy.
 
-#### Scenario: Pre-fill plausible fields
+#### Scenario: Choose aspects to copy
 - **GIVEN** user selects a source project
-- **WHEN** the form is pre-filled
-- **THEN** the source project's data is read
-- **AND** fields where reuse is plausible are copied from the source project
-- **AND** fields where reuse is not plausible are left empty
+- **WHEN** configuring the copy
+- **THEN** the user chooses a name and which aspects to copy (details, groups, ticket types, users, components)
 
-#### Scenario: Edit pre-filled fields before submit
-- **GIVEN** the form has been pre-filled from a source project
-- **WHEN** user edits any field
-- **THEN** the edited values are used on submit instead of the source values
+#### Scenario: Copy then edit
+- **GIVEN** user confirms the copy
+- **WHEN** the project is created
+- **THEN** the source project is copied via the copy-project endpoint with the selected toggles and name
+- **AND** an edit form is opened to adjust the copied project's details before finishing
+- **AND** the new project ID is returned
 
 ### Requirement: Idempotent creation
 The system SHALL prevent duplicate Planradar project creation.
