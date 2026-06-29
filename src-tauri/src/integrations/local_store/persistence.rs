@@ -146,7 +146,7 @@ mod tests {
         let store = LocalStore {
             api_endpoints: ApiEndpoints {
                 daylite_base_url: "https://daylite.example/v1".to_string(),
-                planradar_base_url: "https://planradar.example/api".to_string(),
+                planradar_base_url: "https://planradar.example".to_string(),
                 planradar_customer_id: "1234".to_string(),
                 zep_caldav_root_url: "https://app.zep.de/caldav/admin".to_string(),
             },
