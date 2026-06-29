@@ -62,10 +62,18 @@ The application needs to integrate with Planradar for project management. The Pl
 - The API token is stored only in the OS keychain via the secret manager
 - Allows switching between environments without code changes
 
+### Rate limiting
+**Decision**: Enforce a conservative client-side request budget in addition to retry backoff
+- Planradar allows roughly 30 requests per minute per token and imposes a long forced cooldown (during which all requests are rejected) once that is exceeded, so reactive backoff alone is not enough
+- A process-wide sliding-window limiter caps outbound requests at 15 per 60 seconds, shared across all commands (each builds its own client) so the budget is global per account token
+- The cap is set well below 30 because the same personal token may be used by other tools or sessions at the same time
+- Retries count against the budget because each retry is a real request
+- Only idempotent requests (GET, and the idempotent PUT archive_project) are auto-retried; POST create/copy are never retried, to avoid duplicate projects when a response is lost
+
 ## Risks / Trade-offs
 
-- **Risk**: Planradar API rate limiting
-  - **Mitigation**: Implement exponential backoff retry logic
+- **Risk**: Planradar API rate limiting and forced cooldown on overuse
+  - **Mitigation**: Conservative client-side sliding-window limiter (15 req/60s) plus exponential backoff retry on transient/rate-limit responses
 
 - **Risk**: API changes breaking the client
   - **Mitigation**: Version the client and document API contract
