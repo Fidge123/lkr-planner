@@ -4,14 +4,23 @@ use crate::integrations::http_record_replay::{
     RecordReplayConfig, RecordedInteraction, RecordedRequest, RecordedResponse, VcrMode,
 };
 use serde_json::Value;
+use std::collections::VecDeque;
 use std::future::Future;
 use std::pin::Pin;
-use std::time::Duration;
+use std::sync::{Arc, OnceLock};
+use std::time::{Duration, Instant};
 use tauri_plugin_http::reqwest;
+use tokio::sync::Mutex;
 
 /// Header carrying the static Planradar personal access token, per the Open API spec
 /// (`securityDefinitions.apiKey` → `X-PlanRadar-API-Key`).
 const PLANRADAR_API_KEY_HEADER: &str = "X-PlanRadar-API-Key";
+
+/// Conservative client-side request budget. Planradar enforces ~30 requests/minute and, once
+/// exceeded, imposes a long forced cooldown during which every request is rejected. We cap well
+/// below that because the same personal token may be used by other tools/sessions concurrently.
+const PLANRADAR_RATE_LIMIT_MAX_REQUESTS: usize = 15;
+const PLANRADAR_RATE_LIMIT_WINDOW: Duration = Duration::from_secs(60);
 
 /// Retry behavior for transient Planradar failures (rate limiting and 5xx/network errors).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -46,9 +55,102 @@ impl RetryPolicy {
     }
 }
 
+/// Process-wide sliding-window rate limiter. A `None` inner is a disabled limiter (used by
+/// tests with mock/cassette transports so they never block on the shared budget).
+#[derive(Clone)]
+pub(super) struct RateLimiter {
+    state: Option<Arc<Mutex<VecDeque<Instant>>>>,
+    max_requests: usize,
+    window: Duration,
+}
+
+impl RateLimiter {
+    /// The shared, process-wide limiter every production client uses, so the budget is enforced
+    /// across all commands (each command builds its own client) against the single account token.
+    pub(super) fn global() -> Self {
+        static GLOBAL: OnceLock<Arc<Mutex<VecDeque<Instant>>>> = OnceLock::new();
+        let state = GLOBAL
+            .get_or_init(|| Arc::new(Mutex::new(VecDeque::new())))
+            .clone();
+        Self {
+            state: Some(state),
+            max_requests: PLANRADAR_RATE_LIMIT_MAX_REQUESTS,
+            window: PLANRADAR_RATE_LIMIT_WINDOW,
+        }
+    }
+
+    #[cfg(test)]
+    pub(super) fn disabled() -> Self {
+        Self {
+            state: None,
+            max_requests: 0,
+            window: Duration::ZERO,
+        }
+    }
+
+    #[cfg(test)]
+    fn for_test(max_requests: usize, window: Duration) -> Self {
+        Self {
+            state: Some(Arc::new(Mutex::new(VecDeque::new()))),
+            max_requests,
+            window,
+        }
+    }
+
+    /// Blocks until sending one more request stays within the window, then records it. A disabled
+    /// limiter returns immediately. The lock is never held across the sleep, so concurrent
+    /// callers re-evaluate the window after each wait.
+    async fn acquire(&self) {
+        let Some(state) = &self.state else {
+            return;
+        };
+
+        loop {
+            let wait = {
+                let mut timestamps = state.lock().await;
+                let now = Instant::now();
+                let wait = compute_wait(&mut timestamps, now, self.max_requests, self.window);
+                if wait.is_zero() {
+                    timestamps.push_back(now);
+                    return;
+                }
+                wait
+            };
+            tokio::time::sleep(wait).await;
+        }
+    }
+}
+
+/// Evicts timestamps older than the window, then returns how long to wait before another request
+/// fits. `Duration::ZERO` means a slot is free now (the caller should record the timestamp).
+fn compute_wait(
+    timestamps: &mut VecDeque<Instant>,
+    now: Instant,
+    max_requests: usize,
+    window: Duration,
+) -> Duration {
+    while let Some(&oldest) = timestamps.front() {
+        if now.duration_since(oldest) >= window {
+            timestamps.pop_front();
+        } else {
+            break;
+        }
+    }
+
+    if timestamps.len() < max_requests {
+        return Duration::ZERO;
+    }
+
+    let oldest = *timestamps
+        .front()
+        .expect("a full window has at least one timestamp");
+    (oldest + window).saturating_duration_since(now)
+}
+
 pub(super) struct PlanradarApiClient {
     transport: Box<dyn PlanradarHttpTransport>,
     retry: RetryPolicy,
+    rate_limiter: RateLimiter,
 }
 
 impl PlanradarApiClient {
@@ -57,6 +159,7 @@ impl PlanradarApiClient {
         Ok(Self {
             transport: Box::new(transport),
             retry: RetryPolicy::standard(),
+            rate_limiter: RateLimiter::global(),
         })
     }
 
@@ -65,6 +168,7 @@ impl PlanradarApiClient {
         Self {
             transport,
             retry: RetryPolicy::none(),
+            rate_limiter: RateLimiter::disabled(),
         }
     }
 
@@ -73,7 +177,11 @@ impl PlanradarApiClient {
         transport: Box<dyn PlanradarHttpTransport>,
         retry: RetryPolicy,
     ) -> Self {
-        Self { transport, retry }
+        Self {
+            transport,
+            retry,
+            rate_limiter: RateLimiter::disabled(),
+        }
     }
 
     #[cfg(test)]
@@ -88,6 +196,7 @@ impl PlanradarApiClient {
         Ok(Self {
             transport: Box::new(transport),
             retry: RetryPolicy::none(),
+            rate_limiter: RateLimiter::disabled(),
         })
     }
 
@@ -104,6 +213,7 @@ impl PlanradarApiClient {
         Ok(Self {
             transport: Box::new(transport),
             retry: RetryPolicy::standard(),
+            rate_limiter: RateLimiter::global(),
         })
     }
 
@@ -126,6 +236,10 @@ impl PlanradarApiClient {
                 body: body.clone(),
                 api_key: api_key.clone(),
             };
+
+            // Reserve a slot in the request budget before every network attempt; retries are real
+            // requests and must count too, so this sits inside the loop.
+            self.rate_limiter.acquire().await;
 
             let result = self.transport.send(request).await;
             let should_retry = attempt < self.retry.max_retries
@@ -544,6 +658,83 @@ mod tests {
 
             assert_eq!(response.status, 503);
             assert_eq!(transport.requests().len(), 2);
+        });
+    }
+
+    #[test]
+    fn compute_wait_allows_requests_under_the_limit() {
+        let now = Instant::now();
+        let mut timestamps = VecDeque::from(vec![now - Duration::from_secs(10)]);
+
+        let wait = compute_wait(&mut timestamps, now, 15, Duration::from_secs(60));
+
+        assert_eq!(wait, Duration::ZERO);
+    }
+
+    #[test]
+    fn compute_wait_evicts_expired_timestamps() {
+        let now = Instant::now();
+        // Two entries older than the 60s window plus one inside it: only the recent one counts.
+        let mut timestamps = VecDeque::from(vec![
+            now - Duration::from_secs(120),
+            now - Duration::from_secs(90),
+            now - Duration::from_secs(5),
+        ]);
+
+        let wait = compute_wait(&mut timestamps, now, 2, Duration::from_secs(60));
+
+        assert_eq!(wait, Duration::ZERO);
+        assert_eq!(timestamps.len(), 1, "expired timestamps should be evicted");
+    }
+
+    #[test]
+    fn compute_wait_blocks_when_window_is_full() {
+        let now = Instant::now();
+        // Window full (max 2): oldest is 50s old, so a slot frees in ~10s.
+        let mut timestamps = VecDeque::from(vec![
+            now - Duration::from_secs(50),
+            now - Duration::from_secs(20),
+        ]);
+
+        let wait = compute_wait(&mut timestamps, now, 2, Duration::from_secs(60));
+
+        assert!(
+            wait > Duration::from_secs(9) && wait <= Duration::from_secs(10),
+            "expected ~10s wait, got {wait:?}"
+        );
+    }
+
+    #[test]
+    fn rate_limiter_throttles_once_the_window_is_full() {
+        tauri::async_runtime::block_on(async {
+            // max 2 per 80ms window: the first two acquires are instant, the third must wait.
+            let limiter = RateLimiter::for_test(2, Duration::from_millis(80));
+
+            let started_at = Instant::now();
+            limiter.acquire().await;
+            limiter.acquire().await;
+            assert!(
+                started_at.elapsed() < Duration::from_millis(40),
+                "first two acquires should not block"
+            );
+
+            limiter.acquire().await;
+            assert!(
+                started_at.elapsed() >= Duration::from_millis(70),
+                "third acquire should block until the window slides"
+            );
+        });
+    }
+
+    #[test]
+    fn disabled_rate_limiter_never_blocks() {
+        tauri::async_runtime::block_on(async {
+            let limiter = RateLimiter::disabled();
+            let started_at = Instant::now();
+            for _ in 0..100 {
+                limiter.acquire().await;
+            }
+            assert!(started_at.elapsed() < Duration::from_millis(50));
         });
     }
 
