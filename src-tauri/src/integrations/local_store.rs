@@ -37,6 +37,12 @@ impl LocalStore {
 pub struct ApiEndpoints {
     pub daylite_base_url: String,
     pub planradar_base_url: String,
+    /// Non-secret Planradar Customer ID (Account ID from PlanRadar Settings > Account).
+    /// Used as the `{customer_id}` path segment on every Planradar request. The matching
+    /// API token is stored in the OS keychain, never here. Carries `#[serde(default)]`
+    /// so stores persisted before this field existed still load.
+    #[serde(default)]
+    pub planradar_customer_id: String,
     #[serde(default)]
     pub zep_caldav_root_url: String,
 }
@@ -324,7 +330,8 @@ mod tests {
         let store = LocalStore {
             api_endpoints: ApiEndpoints {
                 daylite_base_url: "https://daylite.example/v1".to_string(),
-                planradar_base_url: "https://planradar.example/api".to_string(),
+                planradar_base_url: "https://planradar.example".to_string(),
+                planradar_customer_id: "1234".to_string(),
                 zep_caldav_root_url: "https://app.zep.de/caldav/admin".to_string(),
             },
             employee_settings: vec![EmployeeSetting {
