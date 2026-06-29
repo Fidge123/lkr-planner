@@ -1,6 +1,8 @@
+use super::client::PlanradarApiClient;
+use super::projects::{list_projects_core, PlanradarListProjectsInput};
 use super::shared::{
-    has_api_token, load_store_or_error, normalize_base_url, save_store_or_error, store_api_token,
-    PlanradarApiError, PlanradarApiErrorCode,
+    delete_api_token, has_api_token, load_store_or_error, normalize_base_url, save_store_or_error,
+    store_api_token, PlanradarApiError, PlanradarApiErrorCode,
 };
 use serde::{Deserialize, Serialize};
 use specta::Type;
@@ -23,6 +25,12 @@ pub struct PlanradarConnectionStatus {
 /// Stores the user-provided Planradar credentials: the API token goes into the OS keychain
 /// (via the secret manager), while the non-secret base URL and Customer ID go into the local
 /// config store. There is no OAuth or token rotation; the token is used verbatim per request.
+///
+/// The credentials are verified against the live API with a lightweight authenticated probe
+/// (a one-record project list) before anything is persisted, so an invalid token or wrong
+/// Customer ID fails fast instead of silently succeeding here and erroring on the first real
+/// call. Nothing is written unless the probe succeeds, and the token is rolled back if the
+/// config store write fails, so the keychain and store never end up out of sync.
 #[tauri::command]
 #[specta::specta]
 pub async fn planradar_connect(
@@ -50,12 +58,31 @@ pub async fn planradar_connect(
         ));
     }
 
+    // Verify the credentials before persisting anything: a single-record project list both
+    // authenticates the token and exercises the Customer ID path segment.
+    let client = PlanradarApiClient::new(&base_url)?;
+    list_projects_core(
+        &client,
+        api_token,
+        &customer_id,
+        &PlanradarListProjectsInput {
+            pagesize: Some(1),
+            ..PlanradarListProjectsInput::default()
+        },
+    )
+    .await?;
+
     store_api_token(api_token)?;
 
     let mut store = load_store_or_error(app.clone())?;
     store.api_endpoints.planradar_base_url = base_url;
     store.api_endpoints.planradar_customer_id = customer_id.clone();
-    save_store_or_error(app, store)?;
+    if let Err(error) = save_store_or_error(app, store) {
+        // Roll back the token so a store-write failure cannot leave a keychain token without
+        // its matching Customer ID / base URL in the config store.
+        let _ = delete_api_token();
+        return Err(error);
+    }
 
     Ok(PlanradarConnectionStatus {
         has_token: has_api_token()?,

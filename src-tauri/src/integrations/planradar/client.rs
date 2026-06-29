@@ -129,6 +129,7 @@ impl PlanradarApiClient {
 
             let result = self.transport.send(request).await;
             let should_retry = attempt < self.retry.max_retries
+                && is_idempotent(method)
                 && match &result {
                     Ok(response) => is_retryable_status(response.status),
                     Err(error) => is_retryable_error(error),
@@ -142,6 +143,14 @@ impl PlanradarApiClient {
             attempt += 1;
         }
     }
+}
+
+/// Only idempotent requests are safe to auto-retry. A retried POST (create/copy project) that
+/// already succeeded server-side but whose response was lost (timeout, dropped connection, or a
+/// 5xx raised after the write committed) would create a duplicate project, so POSTs are never
+/// retried. GET and the PUT archive_project toggle are idempotent and safe.
+fn is_idempotent(method: PlanradarHttpMethod) -> bool {
+    matches!(method, PlanradarHttpMethod::Get | PlanradarHttpMethod::Put)
 }
 
 fn is_retryable_status(status: u16) -> bool {
@@ -535,6 +544,27 @@ mod tests {
 
             assert_eq!(response.status, 503);
             assert_eq!(transport.requests().len(), 2);
+        });
+    }
+
+    #[test]
+    fn send_request_does_not_retry_non_idempotent_post() {
+        tauri::async_runtime::block_on(async {
+            // A POST that fails transiently must NOT be retried: the server may have already
+            // created the resource, so a retry would duplicate it.
+            let transport = MockTransport::new(vec![Ok(mock_response(503, "down"))]);
+            let client = PlanradarApiClient::with_transport_and_retry(
+                Box::new(transport.clone()),
+                RetryPolicy::immediate(3),
+            );
+
+            let response = client
+                .send_request(PlanradarHttpMethod::Post, "/x", vec![], None, None)
+                .await
+                .expect("post should return the first response without retrying");
+
+            assert_eq!(response.status, 503);
+            assert_eq!(transport.requests().len(), 1);
         });
     }
 

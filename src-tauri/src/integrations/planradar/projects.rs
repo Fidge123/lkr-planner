@@ -319,8 +319,12 @@ fn build_create_project_body(request: &PlanradarCreateProjectRequest) -> Value {
     insert_optional(&mut attributes, "city", &request.city);
     insert_optional(&mut attributes, "country", &request.country);
     insert_optional(&mut attributes, "description", &request.description);
-    insert_optional(&mut attributes, "drstart_date", &request.start_date);
-    insert_optional(&mut attributes, "drend_date", &request.end_date);
+    // The Planradar Open API documents the project start/end dates under the hyphenated
+    // attribute keys `drstart-date` / `drend-date` (the variants that carry descriptions and
+    // examples in the spec). Unknown attribute keys are silently ignored by the API, so these
+    // must match exactly or the dates are dropped.
+    insert_optional(&mut attributes, "drstart-date", &request.start_date);
+    insert_optional(&mut attributes, "drend-date", &request.end_date);
 
     json!({ "data": { "attributes": Value::Object(attributes) } })
 }
@@ -571,10 +575,10 @@ mod tests {
             let attributes = &body["data"]["attributes"];
             assert_eq!(attributes["name"], "Neu");
             assert_eq!(attributes["city"], "Wien");
-            assert_eq!(attributes["drstart_date"], "2026-02-23T10:02:25.000Z");
+            assert_eq!(attributes["drstart-date"], "2026-02-23T10:02:25.000Z");
             // Unset optional fields must be omitted entirely.
             assert!(attributes.get("street").is_none());
-            assert!(attributes.get("drend_date").is_none());
+            assert!(attributes.get("drend-date").is_none());
         });
     }
 
@@ -760,6 +764,48 @@ mod tests {
             .expect("create should replay from cassette");
 
             assert!(!new_id.is_empty());
+        });
+    }
+
+    #[test]
+    #[ignore = "requires a recorded git-crypt cassette: record via recording_harness with live Planradar creds and VCR_MODE=record"]
+    fn copy_project_replays_vcr_cassette() {
+        tauri::async_runtime::block_on(async {
+            let client = PlanradarApiClient::with_replay_cassette("planradar-copy-project.json")
+                .expect("replay client should be created");
+
+            let new_id = copy_project_core(
+                &client,
+                "replay-token",
+                "1234",
+                "1",
+                &PlanradarCopyProjectOptions {
+                    name: "Cassette Projekt (Kopie)".to_string(),
+                    details: true,
+                    groups: true,
+                    ticket_types: true,
+                    users: false,
+                    components: true,
+                },
+            )
+            .await
+            .expect("copy should replay from cassette");
+
+            assert!(!new_id.is_empty());
+        });
+    }
+
+    #[test]
+    #[ignore = "requires a recorded git-crypt cassette: record via recording_harness with live Planradar creds and VCR_MODE=record"]
+    fn reactivate_project_replays_vcr_cassette() {
+        tauri::async_runtime::block_on(async {
+            let client =
+                PlanradarApiClient::with_replay_cassette("planradar-reactivate-project.json")
+                    .expect("replay client should be created");
+
+            reactivate_project_core(&client, "replay-token", "1234", "1")
+                .await
+                .expect("reactivate should replay from cassette");
         });
     }
 }

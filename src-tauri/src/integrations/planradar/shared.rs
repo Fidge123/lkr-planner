@@ -56,8 +56,12 @@ pub(super) struct PlanradarConfig {
     pub customer_id: String,
 }
 
+/// Normalizes the configured Planradar base URL to the scheme+host root the client expects.
+/// Request paths already carry the `/api/v1/...` prefix, so a base URL that the user pasted
+/// with a trailing `/api` (or `/`) is trimmed here to avoid building a doubled `/api/api/v1/...`.
 pub(super) fn normalize_base_url(base_url: &str) -> Result<String, PlanradarApiError> {
     let trimmed = base_url.trim().trim_end_matches('/');
+    let trimmed = trimmed.strip_suffix("/api").unwrap_or(trimmed);
     if trimmed.is_empty() {
         return Err(PlanradarApiError::new(
             PlanradarApiErrorCode::InvalidConfiguration,
@@ -113,12 +117,29 @@ pub(super) fn store_api_token(token: &str) -> Result<(), PlanradarApiError> {
     )
     .map_err(|e| {
         PlanradarApiError::new(
-            PlanradarApiErrorCode::ServerError,
+            PlanradarApiErrorCode::InvalidConfiguration,
             None,
             "Das Planradar-Token konnte nicht sicher gespeichert werden (Keychain verweigert?).",
             e.to_string(),
         )
     })
+}
+
+/// Removes the stored Planradar token. Used to roll back a partial `planradar_connect` so a
+/// token is never left in the keychain without its matching config in the store.
+pub(super) fn delete_api_token() -> Result<(), PlanradarApiError> {
+    match crate::secret_manager::delete_token(
+        PLANRADAR_KEYCHAIN_SERVICE,
+        PLANRADAR_KEYCHAIN_USERNAME,
+    ) {
+        Ok(()) | Err(crate::secret_manager::SecretError::NotFound) => Ok(()),
+        Err(e) => Err(PlanradarApiError::new(
+            PlanradarApiErrorCode::InvalidConfiguration,
+            None,
+            "Das Planradar-Token konnte nicht aus dem Keychain entfernt werden.",
+            e.to_string(),
+        )),
+    }
 }
 
 pub(super) fn has_api_token() -> Result<bool, PlanradarApiError> {
@@ -243,6 +264,25 @@ mod tests {
         let normalized =
             normalize_base_url("https://www.planradar.com/").expect("should normalize");
         assert_eq!(normalized, "https://www.planradar.com");
+    }
+
+    #[test]
+    fn normalize_base_url_strips_trailing_api_segment() {
+        // Request paths already carry `/api/v1/...`, so a base URL pasted with `/api` must be
+        // trimmed to avoid a doubled `/api/api/v1/...` path.
+        assert_eq!(
+            normalize_base_url("https://www.planradar.com/api").expect("should normalize"),
+            "https://www.planradar.com"
+        );
+        assert_eq!(
+            normalize_base_url("https://www.planradar.com/api/").expect("should normalize"),
+            "https://www.planradar.com"
+        );
+        // A host that merely ends in "api" (no path segment) must be left intact.
+        assert_eq!(
+            normalize_base_url("https://myapi.example.com").expect("should normalize"),
+            "https://myapi.example.com"
+        );
     }
 
     #[test]

@@ -1,7 +1,8 @@
 use super::client::PlanradarApiClient;
 use super::projects::{
-    create_project_core, list_projects_core, read_project_status_core,
-    PlanradarCreateProjectRequest, PlanradarListProjectsInput,
+    copy_project_core, create_project_core, list_projects_core, reactivate_project_core,
+    read_project_status_core, PlanradarCopyProjectOptions, PlanradarCreateProjectRequest,
+    PlanradarListProjectsInput,
 };
 use crate::integrations::http_record_replay::VcrMode;
 
@@ -85,6 +86,39 @@ fn record_planradar_cassettes_from_live_api() {
         )
         .await
         .expect("create cassette should be recorded");
+
+        copy_project_core(
+            &PlanradarApiClient::with_env_cassette(&config.base_url, "planradar-copy-project.json")
+                .expect("copy cassette client should be created"),
+            &config.api_token,
+            &config.customer_id,
+            &config.project_id,
+            &PlanradarCopyProjectOptions {
+                name: format!("{} (Kopie)", config.new_project_name),
+                details: true,
+                groups: true,
+                ticket_types: true,
+                users: false,
+                components: true,
+            },
+        )
+        .await
+        .expect("copy cassette should be recorded");
+
+        // Reactivation is idempotent (sets status=1); re-activating an already active project is
+        // a safe no-op that still exercises the archive_project endpoint contract.
+        reactivate_project_core(
+            &PlanradarApiClient::with_env_cassette(
+                &config.base_url,
+                "planradar-reactivate-project.json",
+            )
+            .expect("reactivate cassette client should be created"),
+            &config.api_token,
+            &config.customer_id,
+            &config.project_id,
+        )
+        .await
+        .expect("reactivate cassette should be recorded");
     });
 }
 
