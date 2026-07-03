@@ -137,7 +137,8 @@ Required environment variables:
 - `VCR_MODE=record`
 - `DAYLITE_BASE_URL`
 - `DAYLITE_REFRESH_TOKEN`
-- `DAYLITE_VCR_PROJECT_SEARCH_TERM`
+- `DAYLITE_VCR_PROJECT_SEARCH_TERM` (a term expected to match at least one project)
+- `DAYLITE_VCR_PROJECT_NO_MATCH_SEARCH_TERM` (a term expected to match no projects, to capture Daylite's empty-result response shape)
 
 Optional environment variables:
 
@@ -165,6 +166,7 @@ DAYLITE_VCR_SCOPE=readonly \
 DAYLITE_BASE_URL="https://app.daylite.app/api/v1" \
 DAYLITE_REFRESH_TOKEN="..." \
 DAYLITE_VCR_PROJECT_SEARCH_TERM="Nord" \
+DAYLITE_VCR_PROJECT_NO_MATCH_SEARCH_TERM="XXXXX" \
 cargo test --manifest-path src-tauri/Cargo.toml \
   record_daylite_cassettes_from_live_api -- --ignored --nocapture
 ```
@@ -177,6 +179,7 @@ DAYLITE_VCR_SCOPE=all \
 DAYLITE_BASE_URL="https://app.daylite.app/api/v1" \
 DAYLITE_REFRESH_TOKEN="..." \
 DAYLITE_VCR_PROJECT_SEARCH_TERM="Nord" \
+DAYLITE_VCR_PROJECT_NO_MATCH_SEARCH_TERM="XXXXX" \
 DAYLITE_VCR_CONTACT_REFERENCE="/v1/contacts/500" \
 DAYLITE_VCR_PRIMARY_ICAL_URL="https://example.com/primary.ics" \
 DAYLITE_VCR_ABSENCE_ICAL_URL="https://example.com/absence.ics" \

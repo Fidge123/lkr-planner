@@ -4,7 +4,7 @@ use super::contacts::{
     list_contacts_core, update_contact_ical_urls_core, DayliteUpdateContactIcalUrlsInput,
 };
 use super::projects::{list_projects_core, search_projects_core};
-use super::shared::{DayliteSearchInput, DayliteTokenState};
+use super::shared::{DayliteSearchInput, DayliteSearchSort, DayliteTokenState};
 use crate::integrations::http_record_replay::VcrMode;
 use crate::integrations::local_store::LocalStore;
 use std::sync::{Mutex, OnceLock};
@@ -13,6 +13,8 @@ const DAYLITE_BASE_URL_ENV: &str = "DAYLITE_BASE_URL";
 const DAYLITE_REFRESH_TOKEN_ENV: &str = "DAYLITE_REFRESH_TOKEN";
 const DAYLITE_VCR_SCOPE_ENV: &str = "DAYLITE_VCR_SCOPE";
 const DAYLITE_VCR_PROJECT_SEARCH_TERM_ENV: &str = "DAYLITE_VCR_PROJECT_SEARCH_TERM";
+const DAYLITE_VCR_PROJECT_NO_MATCH_SEARCH_TERM_ENV: &str =
+    "DAYLITE_VCR_PROJECT_NO_MATCH_SEARCH_TERM";
 const DAYLITE_VCR_CONTACT_REFERENCE_ENV: &str = "DAYLITE_VCR_CONTACT_REFERENCE";
 const DAYLITE_VCR_PRIMARY_ICAL_URL_ENV: &str = "DAYLITE_VCR_PRIMARY_ICAL_URL";
 const DAYLITE_VCR_ABSENCE_ICAL_URL_ENV: &str = "DAYLITE_VCR_ABSENCE_ICAL_URL";
@@ -45,6 +47,7 @@ struct DayliteVcrConfig {
     refresh_token: String,
     scope: DayliteVcrScope,
     project_search_term: String,
+    project_no_match_search_term: String,
     update_contact_input: Option<DayliteUpdateContactIcalUrlsInput>,
 }
 
@@ -69,6 +72,9 @@ impl DayliteVcrConfig {
             refresh_token: required_env(DAYLITE_REFRESH_TOKEN_ENV)?,
             scope,
             project_search_term: required_env(DAYLITE_VCR_PROJECT_SEARCH_TERM_ENV)?,
+            project_no_match_search_term: required_env(
+                DAYLITE_VCR_PROJECT_NO_MATCH_SEARCH_TERM_ENV,
+            )?,
             update_contact_input,
         })
     }
@@ -134,6 +140,25 @@ fn record_daylite_cassettes_from_live_api() {
         )
         .await
         .expect("project search cassette should be recorded");
+
+        // Captures Daylite's real "no matches" response shape (a bare `{}` body),
+        // which the empty-search-result fix relies on. Mirrors the assignment
+        // picker's actual request shape (candidate pool + name sort + status filter).
+        search_projects_core(
+            &DayliteApiClient::with_env_cassette(&config.base_url, "daylite-search-projects.json")
+                .expect("project search cassette client should be created"),
+            stable_token_state.clone(),
+            &DayliteSearchInput {
+                search_term: config.project_no_match_search_term.clone(),
+                limit: Some(50),
+                statuses: Some(vec!["new_status".to_string(), "in_progress".to_string()]),
+                full_records: None,
+                start: None,
+                sort: Some(DayliteSearchSort::Name),
+            },
+        )
+        .await
+        .expect("no-match project search cassette should be recorded");
 
         list_contacts_core(
             &DayliteApiClient::with_env_cassette(&config.base_url, "daylite-list-contacts.json")
@@ -226,6 +251,7 @@ mod tests {
             std::env::set_var(DAYLITE_BASE_URL_ENV, "https://daylite.example");
             std::env::set_var(DAYLITE_REFRESH_TOKEN_ENV, "refresh-token");
             std::env::set_var(DAYLITE_VCR_PROJECT_SEARCH_TERM_ENV, "Nord");
+            std::env::set_var(DAYLITE_VCR_PROJECT_NO_MATCH_SEARCH_TERM_ENV, "XXXXX");
         }
 
         let config =
@@ -261,6 +287,7 @@ mod tests {
             DAYLITE_REFRESH_TOKEN_ENV,
             DAYLITE_VCR_SCOPE_ENV,
             DAYLITE_VCR_PROJECT_SEARCH_TERM_ENV,
+            DAYLITE_VCR_PROJECT_NO_MATCH_SEARCH_TERM_ENV,
             DAYLITE_VCR_CONTACT_REFERENCE_ENV,
             DAYLITE_VCR_PRIMARY_ICAL_URL_ENV,
             DAYLITE_VCR_ABSENCE_ICAL_URL_ENV,

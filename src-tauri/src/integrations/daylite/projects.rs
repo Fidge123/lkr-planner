@@ -875,6 +875,38 @@ mod tests {
         });
     }
 
+    #[test]
+    fn search_projects_no_match_replays_vcr_cassette() {
+        tauri::async_runtime::block_on(async {
+            let client = DayliteApiClient::with_replay_cassette("daylite-search-projects.json")
+                .expect("no-match cassette client should be created");
+
+            let (search_result, token_state) = search_projects_core(
+                &client,
+                DayliteTokenState {
+                    access_token: "test-token".to_string(),
+                    refresh_token: "test-refresh".to_string(),
+                    access_token_expires_at_ms: Some(u64::MAX),
+                },
+                &DayliteSearchInput {
+                    search_term: "XXXXX".to_string(),
+                    limit: Some(50),
+                    full_records: None,
+                    statuses: Some(vec!["new_status".to_string(), "in_progress".to_string()]),
+                    start: None,
+                    sort: Some(DayliteSearchSort::Name),
+                },
+            )
+            .await
+            .expect("no-match search should replay from cassette");
+
+            // Daylite returns a bare `{}` for a search with no matches; confirms
+            // the empty-response fix against a real recorded interaction.
+            assert!(search_result.results.is_empty());
+            assert_eq!(token_state.access_token, "test-token");
+        });
+    }
+
     #[derive(Clone)]
     struct MockTransport {
         responses: Arc<Mutex<VecDeque<Result<DayliteHttpResponse, DayliteApiError>>>>,
