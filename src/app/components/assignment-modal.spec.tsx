@@ -11,6 +11,7 @@ import {
   ProjectResultList,
   resolveDisplayedProjects,
   resolveEscapeAction,
+  resolveSaveAction,
   SuggestionEmptyState,
 } from "./assignment-modal";
 
@@ -343,5 +344,25 @@ describe("resolveEscapeAction", () => {
 
   it("falls through to the modal close flow when the filter is empty", () => {
     expect(resolveEscapeAction("")).toBe("close");
+  });
+});
+
+// ── bl-033 1.1 / 1.3 – only a create carries a next-day ghost payload ─────────
+describe("resolveSaveAction", () => {
+  it("builds a create action carrying the saved project", () => {
+    expect(
+      resolveSaveAction(false, "2026-05-06", "/v1/projects/1", "Projekt Nord"),
+    ).toEqual({
+      kind: "create",
+      date: "2026-05-06",
+      projectRef: "/v1/projects/1",
+      projectName: "Projekt Nord",
+    });
+  });
+
+  it("builds a bare edit action regardless of the selected project", () => {
+    expect(
+      resolveSaveAction(true, "2026-05-06", "/v1/projects/1", "Projekt Nord"),
+    ).toEqual({ kind: "edit" });
   });
 });

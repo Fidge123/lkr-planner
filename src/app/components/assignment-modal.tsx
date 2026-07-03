@@ -7,6 +7,7 @@ import {
 import { recordLastAssignedProject } from "../../services/assignment-suggestions";
 import { useAssignmentDefaultSuggestions } from "../hooks/use-assignment-default-suggestions";
 import { useAssignmentProjectSearch } from "../hooks/use-assignment-project-search";
+import type { ModalSaveAction } from "../next-day-quick-add";
 
 export function AssignmentModal({
   isOpen,
@@ -176,7 +177,7 @@ export function AssignmentModal({
                   setIsSaving(false);
                   return;
                 }
-                onSave();
+                onSave({ kind: "delete" });
               }}
             >
               {isSaving ? "Lösche..." : "Endgültig löschen"}
@@ -272,7 +273,9 @@ export function AssignmentModal({
         name: projectName,
       });
     }
-    onSave();
+    onSave(
+      resolveSaveAction(isEditMode, date, selectedProjectRef, projectName),
+    );
   };
 
   return (
@@ -378,7 +381,7 @@ interface Props {
   assignment: CalendarCellEvent | null;
   employeeReference: string;
   date: string;
-  onSave: () => void;
+  onSave: (action: ModalSaveAction) => void;
   onClose: () => void;
   showDeleteConfirm?: boolean;
   showUnsavedConfirm?: boolean;
@@ -483,4 +486,17 @@ export function nextHighlightIndex(
 // on an empty filter it falls through to the modal close flow.
 export function resolveEscapeAction(filter: string): "clear" | "close" {
   return filter.length > 0 ? "clear" : "close";
+}
+
+// Only a create carries enough information (and intent) to seed a next-day
+// ghost; an edit never should, no matter what project ended up selected.
+export function resolveSaveAction(
+  isEditMode: boolean,
+  date: string,
+  projectRef: string,
+  projectName: string,
+): ModalSaveAction {
+  return isEditMode
+    ? { kind: "edit" }
+    : { kind: "create", date, projectRef, projectName };
 }
