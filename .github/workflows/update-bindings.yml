@@ -1,0 +1,42 @@
+name: Update Bindings
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "src-tauri/src/**"
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-bindings-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  update-bindings:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Regenerate Tauri Specta bindings
+        run: cargo test --manifest-path src-tauri/Cargo.toml regenerate_generated_bindings
+
+      - name: Commit and push bindings if changed
+        run: |
+          if git diff --quiet -- src/generated; then
+            echo "Bindings are up to date."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add src/generated
+          git commit -m "chore: update generated Tauri bindings"
+          git push
