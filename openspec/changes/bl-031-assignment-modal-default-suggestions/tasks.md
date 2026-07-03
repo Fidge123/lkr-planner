@@ -1,6 +1,6 @@
 ## 1. Overdue Project Query (Rust, TDD)
 
-- [x] 1.1 Write failing test: overdue query sends `{"category": {"equal": "Überfällig"}}` in body (single call, no status filter)
+- [x] 1.1 Write failing test: overdue query sends `{"category": {"equal": "Überfällig"}}` paired with status `new_status` / `in_progress` as OR clauses (single call)
 - [x] 1.2 Implement `daylite_query_overdue_projects` Tauri command using BL-022 `DayliteSearchInput` infrastructure
 - [x] 1.3 Write failing test: overdue results are sorted by numeric ID and limited to 5
 - [x] 1.4 Add VCR cassette for overdue project query

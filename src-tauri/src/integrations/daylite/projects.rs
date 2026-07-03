@@ -112,11 +112,13 @@ pub async fn daylite_list_projects(
     Ok(projects)
 }
 
-// Daylite category that marks a project as overdue. Projects in this category
-// are active by definition, so the query needs no additional status filter and
-// stays a single call (the Daylite API has no multi-value operator for scalar
-// fields).
+// Daylite category that marks a project as overdue.
 const OVERDUE_CATEGORY: &str = "Überfällig";
+// Only active projects qualify as overdue suggestions; matches the status
+// filter of the assignment picker search. The Daylite API has no multi-value
+// operator for scalar fields, so the query pairs the category filter with each
+// status as OR clauses to stay a single call.
+const OVERDUE_STATUSES: [&str; 2] = ["new_status", "in_progress"];
 // Maximum overdue suggestions returned to the frontend.
 const OVERDUE_DISPLAY_LIMIT: usize = 5;
 // Candidate pool fetched before the numeric-ID sort. Daylite applies its own
@@ -183,6 +185,16 @@ pub(super) async fn query_overdue_projects_core(
     client: &DayliteApiClient,
     token_state: DayliteTokenState,
 ) -> Result<(Vec<DayliteProjectSummary>, DayliteTokenState), DayliteApiError> {
+    let clauses: Vec<serde_json::Value> = OVERDUE_STATUSES
+        .iter()
+        .map(|status| {
+            json!({
+                "category": { "equal": OVERDUE_CATEGORY },
+                "status": { "equal": status }
+            })
+        })
+        .collect();
+
     let (search_result, token_state) =
         send_authenticated_json::<DayliteSearchResult<DayliteProjectSummaryDto>>(
             client,
@@ -190,7 +202,7 @@ pub(super) async fn query_overdue_projects_core(
             DayliteHttpMethod::Post,
             "/projects/_search",
             build_limit_query(Some(OVERDUE_CANDIDATE_LIMIT)),
-            Some(json!({ "category": { "equal": OVERDUE_CATEGORY } })),
+            Some(json!(clauses)),
         )
         .await?;
 
@@ -774,7 +786,7 @@ mod tests {
     }
 
     #[test]
-    fn overdue_query_sends_category_filter_in_a_single_call() {
+    fn overdue_query_sends_category_and_status_filter_in_a_single_call() {
         tauri::async_runtime::block_on(async {
             let transport = MockTransport::new(vec![Ok(mock_response(
                 200,
@@ -800,8 +812,17 @@ mod tests {
             let body = requests[0].body.as_ref().expect("body should be present");
             assert_eq!(
                 *body,
-                serde_json::json!({ "category": { "equal": "Überfällig" } }),
-                "body must filter by category only, without a status filter"
+                serde_json::json!([
+                    {
+                        "category": { "equal": "Überfällig" },
+                        "status": { "equal": "new_status" }
+                    },
+                    {
+                        "category": { "equal": "Überfällig" },
+                        "status": { "equal": "in_progress" }
+                    }
+                ]),
+                "body must pair the category filter with each allowed status as OR clauses"
             );
         });
     }
