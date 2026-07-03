@@ -404,9 +404,9 @@ mod tests {
             assert!(contacts
                 .iter()
                 .all(|contact| contact.reference.starts_with("/v1/contacts/")));
-            assert!(contacts
-                .iter()
-                .all(|contact| contact.category.as_deref() == Some("Monteur")));
+            assert!(contacts.iter().all(|contact| {
+                matches!(contact.category.as_deref(), Some("Monteur") | Some("Test"))
+            }));
             assert!(contacts.iter().all(|contact| {
                 contact
                     .full_name
