@@ -21,6 +21,13 @@ export const commands = {
 	 *  Stores the user-provided Planradar credentials: the API token goes into the OS keychain
 	 *  (via the secret manager), while the non-secret base URL and Customer ID go into the local
 	 *  config store. There is no OAuth or token rotation; the token is used verbatim per request.
+	 * 
+	 *  The credentials are verified against the live API with a lightweight authenticated probe
+	 *  (a one-record project list) before anything is persisted, so an invalid token or wrong
+	 *  Customer ID fails fast instead of silently succeeding here and erroring on the first real
+	 *  call. Persistence is ordered so the keychain and store never end up out of sync: the config
+	 *  store is loaded before the token is written, the previous token is snapshotted, and if the
+	 *  store write fails the previous token is restored (or removed if there was none).
 	 */
 	planradarConnect: (request: PlanradarConnectRequest) => typedError<PlanradarConnectionStatus, PlanradarApiError>(__TAURI_INVOKE("planradar_connect", { request })),
 	planradarGetProjectStatus: (projectId: string) => typedError<PlanradarProject, PlanradarApiError>(__TAURI_INVOKE("planradar_get_project_status", { projectId })),

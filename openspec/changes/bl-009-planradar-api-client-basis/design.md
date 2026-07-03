@@ -69,11 +69,14 @@ The application needs to integrate with Planradar for project management. The Pl
 - The cap is set well below 30 because the same personal token may be used by other tools or sessions at the same time
 - Retries count against the budget because each retry is a real request
 - Only idempotent requests (GET, and the idempotent PUT archive_project) are auto-retried; POST create/copy are never retried, to avoid duplicate projects when a response is lost
+- If Planradar itself returns a 429, the limiter enters a cooldown (at least the rate window) during which all requests are held back, and that 429 is surfaced immediately rather than retried, so the client stops feeding a forced cooldown that would otherwise be prolonged
+- Planradar does not send a `Retry-After` header, so the cooldown is a fixed conservative duration rather than server-driven
+- A single request waits at most a bounded time for the budget before returning a rate-limit error, so a burst of commands cannot hang a Tauri call indefinitely
 
 ## Risks / Trade-offs
 
 - **Risk**: Planradar API rate limiting and forced cooldown on overuse
-  - **Mitigation**: Conservative client-side sliding-window limiter (15 req/60s) plus exponential backoff retry on transient/rate-limit responses
+  - **Mitigation**: Conservative client-side sliding-window limiter (15 req/60s), a cooldown that engages when Planradar returns a 429, and exponential backoff retry on transient (5xx/network) responses
 
 - **Risk**: API changes breaking the client
   - **Mitigation**: Version the client and document API contract

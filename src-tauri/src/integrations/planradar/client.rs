@@ -21,6 +21,13 @@ const PLANRADAR_API_KEY_HEADER: &str = "X-PlanRadar-API-Key";
 /// below that because the same personal token may be used by other tools/sessions concurrently.
 const PLANRADAR_RATE_LIMIT_MAX_REQUESTS: usize = 15;
 const PLANRADAR_RATE_LIMIT_WINDOW: Duration = Duration::from_secs(60);
+/// How long to hold back all requests after Planradar itself returns a 429. Planradar does not
+/// send a `Retry-After` header, so we assume its forced cooldown is at least the rate window and
+/// back off for that long rather than hammering into the cooldown and prolonging it.
+const PLANRADAR_RATE_LIMIT_COOLDOWN: Duration = Duration::from_secs(60);
+/// Upper bound on how long a single request may sit waiting for the budget before it gives up
+/// with a `RateLimited` error, so a burst of commands cannot hang a Tauri call indefinitely.
+const PLANRADAR_RATE_LIMIT_MAX_WAIT: Duration = Duration::from_secs(120);
 
 /// Retry behavior for transient Planradar failures (rate limiting and 5xx/network errors).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -55,27 +62,39 @@ impl RetryPolicy {
     }
 }
 
+/// Shared limiter state: the sliding window of recent request timestamps plus, when Planradar has
+/// signalled a 429, the instant until which all requests must be held back.
+#[derive(Default)]
+struct RateLimiterState {
+    timestamps: VecDeque<Instant>,
+    blocked_until: Option<Instant>,
+}
+
 /// Process-wide sliding-window rate limiter. A `None` inner is a disabled limiter (used by
 /// tests with mock/cassette transports so they never block on the shared budget).
 #[derive(Clone)]
 pub(super) struct RateLimiter {
-    state: Option<Arc<Mutex<VecDeque<Instant>>>>,
+    state: Option<Arc<Mutex<RateLimiterState>>>,
     max_requests: usize,
     window: Duration,
+    cooldown: Duration,
+    max_wait: Duration,
 }
 
 impl RateLimiter {
     /// The shared, process-wide limiter every production client uses, so the budget is enforced
     /// across all commands (each command builds its own client) against the single account token.
     pub(super) fn global() -> Self {
-        static GLOBAL: OnceLock<Arc<Mutex<VecDeque<Instant>>>> = OnceLock::new();
+        static GLOBAL: OnceLock<Arc<Mutex<RateLimiterState>>> = OnceLock::new();
         let state = GLOBAL
-            .get_or_init(|| Arc::new(Mutex::new(VecDeque::new())))
+            .get_or_init(|| Arc::new(Mutex::new(RateLimiterState::default())))
             .clone();
         Self {
             state: Some(state),
             max_requests: PLANRADAR_RATE_LIMIT_MAX_REQUESTS,
             window: PLANRADAR_RATE_LIMIT_WINDOW,
+            cooldown: PLANRADAR_RATE_LIMIT_COOLDOWN,
+            max_wait: PLANRADAR_RATE_LIMIT_MAX_WAIT,
         }
     }
 
@@ -85,39 +104,90 @@ impl RateLimiter {
             state: None,
             max_requests: 0,
             window: Duration::ZERO,
+            cooldown: Duration::ZERO,
+            max_wait: Duration::ZERO,
         }
     }
 
     #[cfg(test)]
-    fn for_test(max_requests: usize, window: Duration) -> Self {
+    fn for_test(
+        max_requests: usize,
+        window: Duration,
+        cooldown: Duration,
+        max_wait: Duration,
+    ) -> Self {
         Self {
-            state: Some(Arc::new(Mutex::new(VecDeque::new()))),
+            state: Some(Arc::new(Mutex::new(RateLimiterState::default()))),
             max_requests,
             window,
+            cooldown,
+            max_wait,
         }
     }
 
-    /// Blocks until sending one more request stays within the window, then records it. A disabled
-    /// limiter returns immediately. The lock is never held across the sleep, so concurrent
-    /// callers re-evaluate the window after each wait.
-    async fn acquire(&self) {
+    /// Blocks until sending one more request stays within the window (and any 429 cooldown has
+    /// elapsed), then records it. A disabled limiter returns immediately. The lock is never held
+    /// across the sleep, so concurrent callers re-evaluate after each wait. Gives up with a
+    /// `RateLimited` error once the cumulative wait exceeds `max_wait`, so a Tauri command cannot
+    /// hang indefinitely under a burst.
+    async fn acquire(&self) -> Result<(), PlanradarApiError> {
+        let Some(state) = &self.state else {
+            return Ok(());
+        };
+
+        let mut waited = Duration::ZERO;
+        loop {
+            let wait = {
+                let mut state = state.lock().await;
+                let now = Instant::now();
+
+                // Honor an active 429 cooldown before considering the sliding window.
+                match state.blocked_until {
+                    Some(until) if until > now => until.saturating_duration_since(now),
+                    _ => {
+                        state.blocked_until = None;
+                        let wait = compute_wait(
+                            &mut state.timestamps,
+                            now,
+                            self.max_requests,
+                            self.window,
+                        );
+                        if wait.is_zero() {
+                            state.timestamps.push_back(now);
+                            return Ok(());
+                        }
+                        wait
+                    }
+                }
+            };
+
+            waited = waited.saturating_add(wait);
+            if waited > self.max_wait {
+                return Err(PlanradarApiError::new(
+                    PlanradarApiErrorCode::RateLimited,
+                    None,
+                    "Planradar ist momentan überlastet. Bitte kurz warten und erneut versuchen.",
+                    format!("Planradar rate-limit wait exceeded {:?}", self.max_wait),
+                ));
+            }
+            tokio::time::sleep(wait).await;
+        }
+    }
+
+    /// Records that Planradar returned a 429, holding back all further requests for the cooldown
+    /// so the client stops feeding a forced cooldown that would otherwise be prolonged.
+    async fn record_rate_limit_hit(&self) {
         let Some(state) = &self.state else {
             return;
         };
 
-        loop {
-            let wait = {
-                let mut timestamps = state.lock().await;
-                let now = Instant::now();
-                let wait = compute_wait(&mut timestamps, now, self.max_requests, self.window);
-                if wait.is_zero() {
-                    timestamps.push_back(now);
-                    return;
-                }
-                wait
-            };
-            tokio::time::sleep(wait).await;
-        }
+        let mut state = state.lock().await;
+        let until = Instant::now() + self.cooldown;
+        // Extend, never shorten, an existing cooldown.
+        state.blocked_until = Some(match state.blocked_until {
+            Some(existing) if existing > until => existing,
+            _ => until,
+        });
     }
 }
 
@@ -239,9 +309,16 @@ impl PlanradarApiClient {
 
             // Reserve a slot in the request budget before every network attempt; retries are real
             // requests and must count too, so this sits inside the loop.
-            self.rate_limiter.acquire().await;
+            self.rate_limiter.acquire().await?;
 
             let result = self.transport.send(request).await;
+
+            // A 429 means we tripped Planradar's limit: engage the cooldown so subsequent requests
+            // hold back, and do not retry this one (retrying would only deepen the forced cooldown).
+            if matches!(&result, Ok(response) if response.status == 429) {
+                self.rate_limiter.record_rate_limit_hit().await;
+            }
+
             let should_retry = attempt < self.retry.max_retries
                 && is_idempotent(method)
                 && match &result {
@@ -267,8 +344,10 @@ fn is_idempotent(method: PlanradarHttpMethod) -> bool {
     matches!(method, PlanradarHttpMethod::Get | PlanradarHttpMethod::Put)
 }
 
+/// 429 is deliberately excluded: a rate-limit response engages the cooldown and is surfaced
+/// immediately rather than retried, so we do not keep pushing into a forced cooldown.
 fn is_retryable_status(status: u16) -> bool {
-    status == 429 || (500..=599).contains(&status)
+    (500..=599).contains(&status)
 }
 
 fn is_retryable_error(error: &PlanradarApiError) -> bool {
@@ -589,26 +668,23 @@ mod tests {
     }
 
     #[test]
-    fn send_request_retries_rate_limit_then_succeeds() {
+    fn send_request_does_not_retry_rate_limit() {
         tauri::async_runtime::block_on(async {
-            let transport = MockTransport::new(vec![
-                Ok(mock_response(429, "rate limited")),
-                Ok(mock_response(200, r#"{"ok":true}"#)),
-            ]);
+            // A 429 must be surfaced immediately (not retried): retrying would only deepen
+            // Planradar's forced cooldown. The cooldown is engaged separately (see limiter tests).
+            let transport = MockTransport::new(vec![Ok(mock_response(429, "rate limited"))]);
             let client = PlanradarApiClient::with_transport_and_retry(
                 Box::new(transport.clone()),
                 RetryPolicy::immediate(3),
             );
 
-            let started_at = Instant::now();
             let response = client
                 .send_request(PlanradarHttpMethod::Get, "/x", vec![], None, None)
                 .await
-                .expect("retried request should succeed");
+                .expect("429 should return without retrying");
 
-            assert_eq!(response.status, 200);
-            assert_eq!(transport.requests().len(), 2);
-            assert!(started_at.elapsed() < Duration::from_millis(200));
+            assert_eq!(response.status, 429);
+            assert_eq!(transport.requests().len(), 1);
         });
     }
 
@@ -708,21 +784,72 @@ mod tests {
     fn rate_limiter_throttles_once_the_window_is_full() {
         tauri::async_runtime::block_on(async {
             // max 2 per 80ms window: the first two acquires are instant, the third must wait.
-            let limiter = RateLimiter::for_test(2, Duration::from_millis(80));
+            let limiter = RateLimiter::for_test(
+                2,
+                Duration::from_millis(80),
+                Duration::from_millis(80),
+                Duration::from_secs(10),
+            );
 
             let started_at = Instant::now();
-            limiter.acquire().await;
-            limiter.acquire().await;
+            limiter.acquire().await.expect("first acquire should pass");
+            limiter.acquire().await.expect("second acquire should pass");
             assert!(
                 started_at.elapsed() < Duration::from_millis(40),
                 "first two acquires should not block"
             );
 
-            limiter.acquire().await;
+            limiter.acquire().await.expect("third acquire should pass");
             assert!(
                 started_at.elapsed() >= Duration::from_millis(70),
                 "third acquire should block until the window slides"
             );
+        });
+    }
+
+    #[test]
+    fn rate_limiter_holds_back_during_429_cooldown() {
+        tauri::async_runtime::block_on(async {
+            // Generous window so only the cooldown gates the next acquire.
+            let limiter = RateLimiter::for_test(
+                100,
+                Duration::from_secs(10),
+                Duration::from_millis(80),
+                Duration::from_secs(10),
+            );
+
+            limiter.record_rate_limit_hit().await;
+
+            let started_at = Instant::now();
+            limiter
+                .acquire()
+                .await
+                .expect("acquire should pass once cooldown elapses");
+            assert!(
+                started_at.elapsed() >= Duration::from_millis(70),
+                "acquire should wait out the 429 cooldown"
+            );
+        });
+    }
+
+    #[test]
+    fn rate_limiter_gives_up_after_max_wait() {
+        tauri::async_runtime::block_on(async {
+            // Full window (max 1) with a long window but a tiny max wait: the second acquire must
+            // bail out with a RateLimited error instead of blocking for the full window.
+            let limiter = RateLimiter::for_test(
+                1,
+                Duration::from_secs(30),
+                Duration::from_secs(30),
+                Duration::from_millis(20),
+            );
+
+            limiter.acquire().await.expect("first acquire should pass");
+            let error = limiter
+                .acquire()
+                .await
+                .expect_err("second acquire should give up after max wait");
+            assert_eq!(error.code, PlanradarApiErrorCode::RateLimited);
         });
     }
 
@@ -732,7 +859,10 @@ mod tests {
             let limiter = RateLimiter::disabled();
             let started_at = Instant::now();
             for _ in 0..100 {
-                limiter.acquire().await;
+                limiter
+                    .acquire()
+                    .await
+                    .expect("disabled limiter never fails");
             }
             assert!(started_at.elapsed() < Duration::from_millis(50));
         });

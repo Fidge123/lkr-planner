@@ -81,6 +81,13 @@ fn record_planradar_cassettes_from_live_api() {
             &config.customer_id,
             &PlanradarCreateProjectRequest {
                 name: config.new_project_name.clone(),
+                // Send address and dates too so a recorded cassette proves Planradar accepts the
+                // exact attribute keys (notably drstart-date / drend-date) and does not silently
+                // drop them.
+                city: Some("Wien".to_string()),
+                country: Some("Österreich".to_string()),
+                start_date: Some("2026-02-23T10:02:25.000Z".to_string()),
+                end_date: Some("2026-02-26T00:00:00.000Z".to_string()),
                 ..PlanradarCreateProjectRequest::default()
             },
         )
@@ -138,11 +145,13 @@ fn required_env(key: &str) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::{Mutex, OnceLock};
+    use crate::integrations::http_record_replay::vcr_env_lock;
 
     #[test]
     fn config_requires_record_mode() {
-        let _guard = env_lock().lock().expect("env lock should not be poisoned");
+        let _guard = vcr_env_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         clear_env();
         unsafe {
             std::env::set_var(PLANRADAR_BASE_URL_ENV, "https://www.planradar.com");
@@ -159,7 +168,9 @@ mod tests {
 
     #[test]
     fn config_reads_all_values_in_record_mode() {
-        let _guard = env_lock().lock().expect("env lock should not be poisoned");
+        let _guard = vcr_env_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         clear_env();
         unsafe {
             std::env::set_var("VCR_MODE", "record");
@@ -178,7 +189,9 @@ mod tests {
 
     #[test]
     fn config_reports_missing_values() {
-        let _guard = env_lock().lock().expect("env lock should not be poisoned");
+        let _guard = vcr_env_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         clear_env();
         unsafe {
             std::env::set_var("VCR_MODE", "record");
@@ -187,11 +200,6 @@ mod tests {
         let error = PlanradarVcrConfig::from_env().expect_err("missing values should fail");
         assert!(error.contains(PLANRADAR_BASE_URL_ENV));
         clear_env();
-    }
-
-    fn env_lock() -> &'static Mutex<()> {
-        static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-        ENV_LOCK.get_or_init(|| Mutex::new(()))
     }
 
     fn clear_env() {

@@ -125,6 +125,15 @@ pub(super) fn store_api_token(token: &str) -> Result<(), PlanradarApiError> {
     })
 }
 
+/// Returns the currently stored token, if any, without treating "not set" as an error. Used by
+/// `planradar_connect` to snapshot the previous token so it can be restored if the connect fails
+/// after the new token was written.
+pub(super) fn peek_api_token() -> Option<String> {
+    crate::secret_manager::get_token(PLANRADAR_KEYCHAIN_SERVICE, PLANRADAR_KEYCHAIN_USERNAME)
+        .ok()
+        .filter(|token| !token.trim().is_empty())
+}
+
 /// Removes the stored Planradar token. Used to roll back a partial `planradar_connect` so a
 /// token is never left in the keychain without its matching config in the store.
 pub(super) fn delete_api_token() -> Result<(), PlanradarApiError> {
@@ -140,18 +149,6 @@ pub(super) fn delete_api_token() -> Result<(), PlanradarApiError> {
             e.to_string(),
         )),
     }
-}
-
-pub(super) fn has_api_token() -> Result<bool, PlanradarApiError> {
-    crate::secret_manager::check_token(PLANRADAR_KEYCHAIN_SERVICE, PLANRADAR_KEYCHAIN_USERNAME)
-        .map_err(|e| {
-            PlanradarApiError::new(
-                PlanradarApiErrorCode::InvalidConfiguration,
-                None,
-                "Auf das Planradar-Token im Keychain konnte nicht zugegriffen werden.",
-                e.to_string(),
-            )
-        })
 }
 
 fn missing_token_error() -> PlanradarApiError {
