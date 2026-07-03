@@ -3,38 +3,45 @@ use tauri_plugin_updater::UpdaterExt;
 mod integrations;
 pub mod secret_manager;
 
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
-pub fn run() {
-    let specta_builder =
-        tauri_specta::Builder::<tauri::Wry>::new().commands(tauri_specta::collect_commands![
-            integrations::health::check_health,
-            integrations::local_store::load_local_store,
-            integrations::local_store::save_local_store,
-            integrations::calendar::commands::load_week_events,
-            integrations::holidays::get_holidays_for_week,
-            integrations::daylite::auth::daylite_connect_refresh_token,
-            integrations::daylite::projects::daylite_list_projects,
-            integrations::daylite::projects::daylite_search_projects,
-            integrations::daylite::contacts::commands::daylite_list_contacts,
-            integrations::daylite::contacts::commands::daylite_list_cached_contacts,
-            integrations::daylite::contacts::commands::daylite_update_contact_ical_urls,
-            integrations::calendar::commands::create_assignment,
-            integrations::calendar::commands::update_assignment,
-            integrations::calendar::commands::delete_assignment,
-            integrations::zep::commands::zep_save_credentials,
-            integrations::zep::commands::zep_load_credentials,
-            integrations::zep::commands::zep_test_credentials,
-            integrations::zep::commands::zep_discover_calendars,
-            integrations::zep::commands::zep_save_and_test_calendar,
-        ]);
+fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
+    tauri_specta::Builder::<tauri::Wry>::new().commands(tauri_specta::collect_commands![
+        integrations::health::check_health,
+        integrations::local_store::load_local_store,
+        integrations::local_store::save_local_store,
+        integrations::calendar::commands::load_week_events,
+        integrations::holidays::get_holidays_for_week,
+        integrations::daylite::auth::daylite_connect_refresh_token,
+        integrations::daylite::projects::daylite_list_projects,
+        integrations::daylite::projects::daylite_search_projects,
+        integrations::daylite::contacts::commands::daylite_list_contacts,
+        integrations::daylite::contacts::commands::daylite_list_cached_contacts,
+        integrations::daylite::contacts::commands::daylite_update_contact_ical_urls,
+        integrations::calendar::commands::create_assignment,
+        integrations::calendar::commands::update_assignment,
+        integrations::calendar::commands::delete_assignment,
+        integrations::zep::commands::zep_save_credentials,
+        integrations::zep::commands::zep_load_credentials,
+        integrations::zep::commands::zep_test_credentials,
+        integrations::zep::commands::zep_discover_calendars,
+        integrations::zep::commands::zep_save_and_test_calendar,
+    ])
+}
 
-    #[cfg(debug_assertions)]
+fn export_bindings(specta_builder: &tauri_specta::Builder<tauri::Wry>) {
     specta_builder
         .export(
             specta_typescript::Typescript::default().header("// @ts-nocheck"),
             "../src/generated/tauri.ts",
         )
         .expect("failed to export tauri specta bindings");
+}
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    let specta_builder = specta_builder();
+
+    #[cfg(debug_assertions)]
+    export_bindings(&specta_builder);
 
     tauri::Builder::default()
         .setup(|app| {
@@ -85,4 +92,14 @@ fn format_update_error<E: std::fmt::Display>(result: Result<(), E>) -> Option<St
     result
         .err()
         .map(|error| format!("Update check failed in background task: {error}"))
+}
+
+#[cfg(test)]
+mod bindings {
+    use super::{export_bindings, specta_builder};
+
+    #[test]
+    fn regenerate_generated_bindings() {
+        export_bindings(&specta_builder());
+    }
 }
