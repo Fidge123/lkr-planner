@@ -8,7 +8,7 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         integrations::health::check_health,
         integrations::local_store::load_local_store,
         integrations::local_store::save_local_store,
-        integrations::calendar::commands::load_week_events, 
+        integrations::calendar::commands::load_week_events,
         integrations::holidays::get_holidays_for_week,
         integrations::daylite::auth::daylite_connect_refresh_token,
         integrations::daylite::projects::daylite_list_projects,
