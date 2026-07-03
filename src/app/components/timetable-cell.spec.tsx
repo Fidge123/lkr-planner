@@ -1,5 +1,6 @@
 import { describe, expect, it, mock } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
+import type { GhostSuggestion } from "../next-day-quick-add";
 import type { CellEvent } from "../types";
 import { TimetableCell } from "./timetable-cell";
 
@@ -42,5 +43,46 @@ describe("TimetableCell", () => {
 
     expect(html).toContain("Bauprojekt Nord");
     expect(html).toContain("<button");
+  });
+
+  // ── 3.1 – ghost rendering: reduced opacity, dashed border, placed before the add affordance ──
+  it("renders a suggestion with reduced opacity and a dashed border", () => {
+    const suggestion: GhostSuggestion = {
+      date: "2026-05-06",
+      projectRef: "/v1/projects/1",
+      projectName: "Projekt Vorschlag",
+    };
+
+    const html = renderToStaticMarkup(
+      <TimetableCell
+        highlight={false}
+        events={[]}
+        suggestion={suggestion}
+        onAddClick={() => {}}
+        onEventClick={() => {}}
+        onSuggestionClick={() => {}}
+      />,
+    );
+
+    expect(html).toContain("Projekt Vorschlag");
+    expect(html).toContain("opacity-50");
+    expect(html).toContain("border-dashed");
+    expect(html.indexOf("Projekt Vorschlag")).toBeLessThan(
+      html.indexOf("Aufgabe hinzufügen"),
+    );
+  });
+
+  it("renders no suggestion markup when there is none", () => {
+    const html = renderToStaticMarkup(
+      <TimetableCell
+        highlight={false}
+        events={[]}
+        onAddClick={() => {}}
+        onEventClick={() => {}}
+      />,
+    );
+
+    expect(html).not.toContain("opacity-50");
+    expect(html).not.toContain("border-dashed");
   });
 });

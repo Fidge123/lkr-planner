@@ -1,11 +1,14 @@
+import type { GhostSuggestion } from "../next-day-quick-add";
 import type { CellEvent } from "../types";
 
 export function TimetableCell({
   highlight = false,
   isHoliday = false,
   events,
+  suggestion,
   onAddClick,
   onEventClick,
+  onSuggestionClick,
 }: Props) {
   return (
     <td className={cellClass(highlight, isHoliday)}>
@@ -51,6 +54,20 @@ export function TimetableCell({
             </li>
           ),
         )}
+        {suggestion ? (
+          <li>
+            <button
+              type="button"
+              className="btn btn-block h-auto justify-start gap-4 p-2 rounded-lg border-2 border-dashed border-base-content/40 bg-transparent text-base-content opacity-50 transition-opacity hover:opacity-80"
+              aria-label={`Vorschlag übernehmen: ${suggestion.projectName}`}
+              onClick={() => onSuggestionClick?.(suggestion)}
+            >
+              <h4 className="flex-1 min-w-0 font-medium">
+                {suggestion.projectName}
+              </h4>
+            </button>
+          </li>
+        ) : null}
         <li>
           <button
             type="button"
@@ -70,8 +87,10 @@ interface Props {
   highlight: boolean;
   isHoliday?: boolean;
   events: CellEvent[];
+  suggestion?: GhostSuggestion;
   onAddClick: () => void;
   onEventClick: (event: CellEvent) => void;
+  onSuggestionClick?: (suggestion: GhostSuggestion) => void;
 }
 
 function EventTime({ startTime, endTime }: TimeProps) {
