@@ -3,7 +3,7 @@ use super::client::DayliteApiClient;
 use super::client::DayliteHttpMethod;
 use super::shared::{
     build_limit_query, load_store_or_error, save_store_or_error, with_token_refresh_lock,
-    DayliteApiError, DayliteSearchInput, DayliteSearchResult, DayliteTokenState,
+    DayliteApiError, DayliteSearchInput, DayliteSearchResult, DayliteSearchSort, DayliteTokenState,
 };
 use chrono::{DateTime, NaiveDate, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
@@ -204,7 +204,10 @@ pub(super) async fn search_projects_core(
         .map(normalize_project_summary)
         .collect();
 
-    results.sort_by_key(|p| extract_numeric_id(&p.reference));
+    match input.sort {
+        Some(DayliteSearchSort::Name) => results.sort_by(|a, b| a.name.cmp(&b.name)),
+        _ => results.sort_by_key(|p| extract_numeric_id(&p.reference)),
+    }
 
     if let Some(limit) = input.limit {
         results.truncate(limit as usize);
@@ -390,7 +393,8 @@ mod tests {
         DayliteHttpTransport,
     };
     use crate::integrations::daylite::shared::{
-        DayliteApiError, DayliteApiErrorCode, DayliteSearchInput, DayliteTokenState,
+        DayliteApiError, DayliteApiErrorCode, DayliteSearchInput, DayliteSearchSort,
+        DayliteTokenState,
     };
     use std::collections::VecDeque;
     use std::sync::{Arc, Mutex};
@@ -499,6 +503,7 @@ mod tests {
                     statuses: None,
                     full_records: None,
                     start: None,
+                    sort: None,
                 },
             )
             .await
@@ -556,6 +561,7 @@ mod tests {
                     statuses: None,
                     full_records: None,
                     start: None,
+                    sort: None,
                 },
             )
             .await
@@ -564,6 +570,113 @@ mod tests {
             assert_eq!(result.results[0].reference, "/v1/projects/3");
             assert_eq!(result.results[1].reference, "/v1/projects/20");
             assert_eq!(result.results[2].reference, "/v1/projects/100");
+        });
+    }
+
+    #[test]
+    fn search_treats_empty_object_response_as_no_results() {
+        tauri::async_runtime::block_on(async {
+            // Daylite returns a bare `{}` (HTTP 200) when nothing matches.
+            let transport = MockTransport::new(vec![Ok(mock_response(200, r#"{}"#))]);
+            let client = DayliteApiClient::with_transport(Box::new(transport));
+
+            let (result, _) = search_projects_core(
+                &client,
+                DayliteTokenState {
+                    access_token: "at".to_string(),
+                    refresh_token: "rt".to_string(),
+                    access_token_expires_at_ms: Some(u64::MAX),
+                },
+                &DayliteSearchInput {
+                    search_term: "Nord".to_string(),
+                    limit: Some(5),
+                    statuses: None,
+                    full_records: None,
+                    start: None,
+                    sort: None,
+                },
+            )
+            .await
+            .expect("empty object response should be treated as no results");
+
+            assert!(result.results.is_empty());
+            assert_eq!(result.next, None);
+        });
+    }
+
+    #[test]
+    fn search_sorts_by_name_when_sort_is_name() {
+        tauri::async_runtime::block_on(async {
+            // IDs ascend but names do not, so an ID sort and a name sort diverge.
+            let transport = MockTransport::new(vec![Ok(mock_response(
+                200,
+                r#"{"results":[
+                    {"self":"/v1/projects/1","name":"Zeta"},
+                    {"self":"/v1/projects/2","name":"Alpha"},
+                    {"self":"/v1/projects/3","name":"Mitte"}
+                ],"next":null}"#,
+            ))]);
+            let client = DayliteApiClient::with_transport(Box::new(transport));
+
+            let (result, _) = search_projects_core(
+                &client,
+                DayliteTokenState {
+                    access_token: "at".to_string(),
+                    refresh_token: "rt".to_string(),
+                    access_token_expires_at_ms: Some(u64::MAX),
+                },
+                &DayliteSearchInput {
+                    search_term: "".to_string(),
+                    limit: None,
+                    statuses: None,
+                    full_records: None,
+                    start: None,
+                    sort: Some(DayliteSearchSort::Name),
+                },
+            )
+            .await
+            .expect("search should succeed");
+
+            assert_eq!(result.results[0].name, "Alpha");
+            assert_eq!(result.results[1].name, "Mitte");
+            assert_eq!(result.results[2].name, "Zeta");
+        });
+    }
+
+    #[test]
+    fn search_defaults_to_numeric_id_sort_when_sort_is_none() {
+        tauri::async_runtime::block_on(async {
+            let transport = MockTransport::new(vec![Ok(mock_response(
+                200,
+                r#"{"results":[
+                    {"self":"/v1/projects/3","name":"Alpha"},
+                    {"self":"/v1/projects/1","name":"Zeta"}
+                ],"next":null}"#,
+            ))]);
+            let client = DayliteApiClient::with_transport(Box::new(transport));
+
+            let (result, _) = search_projects_core(
+                &client,
+                DayliteTokenState {
+                    access_token: "at".to_string(),
+                    refresh_token: "rt".to_string(),
+                    access_token_expires_at_ms: Some(u64::MAX),
+                },
+                &DayliteSearchInput {
+                    search_term: "".to_string(),
+                    limit: None,
+                    statuses: None,
+                    full_records: None,
+                    start: None,
+                    sort: None,
+                },
+            )
+            .await
+            .expect("search should succeed");
+
+            // ID sort wins over name order: project 1 ("Zeta") comes before 3 ("Alpha").
+            assert_eq!(result.results[0].reference, "/v1/projects/1");
+            assert_eq!(result.results[1].reference, "/v1/projects/3");
         });
     }
 
@@ -593,6 +706,7 @@ mod tests {
                     statuses: None,
                     full_records: None,
                     start: None,
+                    sort: None,
                 },
             )
             .await
@@ -695,6 +809,7 @@ mod tests {
                     statuses: None,
                     full_records: None,
                     start: None,
+                    sort: None,
                 },
             )
             .await
@@ -736,6 +851,7 @@ mod tests {
                     full_records: Some(true),
                     statuses: Some(vec!["new_status".to_string(), "in_progress".to_string()]),
                     start: None,
+                    sort: None,
                 },
             )
             .await
@@ -756,6 +872,38 @@ mod tests {
                     project.reference
                 );
             }
+        });
+    }
+
+    #[test]
+    fn search_projects_no_match_replays_vcr_cassette() {
+        tauri::async_runtime::block_on(async {
+            let client = DayliteApiClient::with_replay_cassette("daylite-search-projects.json")
+                .expect("no-match cassette client should be created");
+
+            let (search_result, token_state) = search_projects_core(
+                &client,
+                DayliteTokenState {
+                    access_token: "test-token".to_string(),
+                    refresh_token: "test-refresh".to_string(),
+                    access_token_expires_at_ms: Some(u64::MAX),
+                },
+                &DayliteSearchInput {
+                    search_term: "XXXXX".to_string(),
+                    limit: Some(50),
+                    full_records: None,
+                    statuses: Some(vec!["new_status".to_string(), "in_progress".to_string()]),
+                    start: None,
+                    sort: Some(DayliteSearchSort::Name),
+                },
+            )
+            .await
+            .expect("no-match search should replay from cassette");
+
+            // Daylite returns a bare `{}` for a search with no matches; confirms
+            // the empty-response fix against a real recorded interaction.
+            assert!(search_result.results.is_empty());
+            assert_eq!(token_state.access_token, "test-token");
         });
     }
 
@@ -823,6 +971,7 @@ mod tests {
                     statuses: Some(vec!["new_status".to_string(), "in_progress".to_string()]),
                     full_records: None,
                     start: None,
+                    sort: None,
                 },
             )
             .await
@@ -863,6 +1012,7 @@ mod tests {
                     statuses: None,
                     full_records: None,
                     start: None,
+                    sort: None,
                 },
             )
             .await
@@ -905,6 +1055,7 @@ mod tests {
                     statuses: None,
                     full_records: Some(true),
                     start: None,
+                    sort: None,
                 },
             )
             .await
@@ -943,6 +1094,7 @@ mod tests {
                     statuses: None,
                     full_records: None,
                     start: None,
+                    sort: None,
                 },
             )
             .await
@@ -979,6 +1131,7 @@ mod tests {
                     statuses: None,
                     full_records: None,
                     start: Some("3001".to_string()),
+                    sort: None,
                 },
             )
             .await
@@ -1014,6 +1167,7 @@ mod tests {
                     statuses: None,
                     full_records: None,
                     start: None,
+                    sort: None,
                 },
             )
             .await;
@@ -1052,6 +1206,7 @@ mod tests {
                     statuses: None,
                     full_records: None,
                     start: None,
+                    sort: None,
                 },
             )
             .await;

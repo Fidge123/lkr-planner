@@ -1,9 +1,6 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
 import type { DayliteSearchInput } from "../generated/tauri";
-import {
-  loadProjectsForAssignmentPicker,
-  test_resetAssignmentProjectPickerCache,
-} from "./assignment-project-picker";
+import { searchProjectsForAssignmentPicker } from "./assignment-project-picker";
 
 const mockDayliteSearchProjects = mock((_: DayliteSearchInput) =>
   Promise.resolve({} as unknown),
@@ -18,10 +15,9 @@ mock.module("../generated/tauri", () => ({
 describe("assignment project picker service", () => {
   beforeEach(() => {
     mockDayliteSearchProjects.mockClear();
-    test_resetAssignmentProjectPickerCache();
   });
 
-  it("returns only new_status and in_progress projects via status-filtered search", async () => {
+  it("returns the projects from a successful search", async () => {
     mockDayliteSearchProjects.mockResolvedValue({
       status: "ok",
       data: {
@@ -41,25 +37,48 @@ describe("assignment project picker service", () => {
       },
     });
 
-    const result = await loadProjectsForAssignmentPicker();
+    const result = await searchProjectsForAssignmentPicker("Projekt");
 
     expect(result).toHaveLength(2);
     expect(result[0].self).toBe("/v1/projects/1");
     expect(result[1].self).toBe("/v1/projects/2");
   });
 
-  it("sends search with new_status and in_progress status filter", async () => {
+  it("fetches a candidate pool sorted by name, filtered to new_status and in_progress", async () => {
     mockDayliteSearchProjects.mockResolvedValue({
       status: "ok",
       data: { results: [], next: null },
     });
 
-    await loadProjectsForAssignmentPicker();
+    await searchProjectsForAssignmentPicker("Nord");
 
     expect(mockDayliteSearchProjects).toHaveBeenCalledTimes(1);
     const [input] = mockDayliteSearchProjects.mock.calls[0];
+    expect(input.searchTerm).toBe("Nord");
+    expect(input.limit).toBe(50);
+    expect(input.sort).toBe("name");
     expect(input.statuses).toContain("new_status");
     expect(input.statuses).toContain("in_progress");
+  });
+
+  it("shows at most 5 of the name-sorted candidates", async () => {
+    mockDayliteSearchProjects.mockResolvedValue({
+      status: "ok",
+      data: {
+        results: Array.from({ length: 8 }, (_, index) => ({
+          self: `/v1/projects/${index}`,
+          name: `Projekt ${index}`,
+          status: "in_progress",
+        })),
+        next: null,
+      },
+    });
+
+    const result = await searchProjectsForAssignmentPicker("Projekt");
+
+    expect(result).toHaveLength(5);
+    expect(result[0].self).toBe("/v1/projects/0");
+    expect(result[4].self).toBe("/v1/projects/4");
   });
 
   it("throws a German error message on API failure", async () => {
@@ -73,7 +92,7 @@ describe("assignment project picker service", () => {
       },
     });
 
-    await expect(loadProjectsForAssignmentPicker()).rejects.toThrow(
+    await expect(searchProjectsForAssignmentPicker("Nord")).rejects.toThrow(
       "Serverfehler",
     );
   });
