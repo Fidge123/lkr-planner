@@ -148,16 +148,17 @@ export type DayliteSearchInput = {
 	/**  Result ordering. Defaults to numeric ID; `name` opts into name sort. */
 	sort?: DayliteSearchSort | null,
 };
-/**
- * Result ordering for `search_projects_core`. Numeric ID is the default so the
- * BL-022 contract stays unchanged; callers opt in to name sort explicitly.
- */
-export type DayliteSearchSort = "id" | "name";
 
 export type DayliteSearchResult<T> = {
-	results: T[],
-	next: string | null,
+	results?: T[],
+	next?: string | null,
 };
+
+/**
+ *  Result ordering for `search_projects_core`. Numeric ID is the default so the
+ *  BL-022 contract stays unchanged; callers opt in to name sort explicitly.
+ */
+export type DayliteSearchSort = "id" | "name";
 
 export type DayliteTokenSyncStatus = {
 	hasAccessToken: boolean,
