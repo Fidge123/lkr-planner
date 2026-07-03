@@ -13,14 +13,14 @@ The system SHALL show deterministic default suggestions when assignment modal op
 - **WHEN** modal opens
 - **AND** a recent project exists in the client last-used cache
 - **THEN** show up to 4 overdue projects after the recent project
-- **AND** overdue projects are those with Daylite category `"Überfällig"`
+- **AND** overdue projects are those with Daylite category `"Überfällig"` and status `new_status` or `in_progress`
 - **AND** total suggestions capped at 5
 
 #### Scenario: Show overdue projects with no recent project
 - **WHEN** modal opens
 - **AND** the client last-used cache is empty
 - **THEN** show up to 5 overdue projects
-- **AND** overdue projects are those with Daylite category `"Überfällig"`
+- **AND** overdue projects are those with Daylite category `"Überfällig"` and status `new_status` or `in_progress`
 
 #### Scenario: Recent project that is also overdue appears once
 - **WHEN** modal opens

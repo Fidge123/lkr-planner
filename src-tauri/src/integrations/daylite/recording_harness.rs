@@ -3,7 +3,7 @@ use super::client::DayliteApiClient;
 use super::contacts::{
     list_contacts_core, update_contact_ical_urls_core, DayliteUpdateContactIcalUrlsInput,
 };
-use super::projects::{list_projects_core, search_projects_core};
+use super::projects::{list_projects_core, query_overdue_projects_core, search_projects_core};
 use super::shared::{DayliteSearchInput, DayliteSearchSort, DayliteTokenState};
 use crate::integrations::http_record_replay::VcrMode;
 use crate::integrations::local_store::LocalStore;
@@ -159,6 +159,14 @@ fn record_daylite_cassettes_from_live_api() {
         )
         .await
         .expect("no-match project search cassette should be recorded");
+
+        query_overdue_projects_core(
+            &DayliteApiClient::with_env_cassette(&config.base_url, "daylite-overdue-projects.json")
+                .expect("overdue project cassette client should be created"),
+            stable_token_state.clone(),
+        )
+        .await
+        .expect("overdue project cassette should be recorded");
 
         list_contacts_core(
             &DayliteApiClient::with_env_cassette(&config.base_url, "daylite-list-contacts.json")

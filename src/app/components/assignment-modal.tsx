@@ -4,6 +4,8 @@ import {
   commands,
   type DayliteProjectSummary,
 } from "../../generated/tauri";
+import { recordLastAssignedProject } from "../../services/assignment-suggestions";
+import { useAssignmentDefaultSuggestions } from "../hooks/use-assignment-default-suggestions";
 import { useAssignmentProjectSearch } from "../hooks/use-assignment-project-search";
 
 export function AssignmentModal({
@@ -40,6 +42,13 @@ export function AssignmentModal({
 
   const { results, errorMessage: searchError } =
     useAssignmentProjectSearch(filter);
+  const { suggestions, suggestionsLoaded } =
+    useAssignmentDefaultSuggestions(isOpen);
+  const displayedProjects = resolveDisplayedProjects(
+    filter,
+    suggestions,
+    results,
+  );
 
   useEffect(() => {
     if (!isOpen) return;
@@ -201,19 +210,19 @@ export function AssignmentModal({
     if (event.key === "ArrowDown") {
       event.preventDefault();
       setHighlightedIndex((index) =>
-        nextHighlightIndex(index, results.length, 1),
+        nextHighlightIndex(index, displayedProjects.length, 1),
       );
       return;
     }
     if (event.key === "ArrowUp") {
       event.preventDefault();
       setHighlightedIndex((index) =>
-        nextHighlightIndex(index, results.length, -1),
+        nextHighlightIndex(index, displayedProjects.length, -1),
       );
       return;
     }
     if (event.key === "Enter") {
-      const highlighted = results[highlightedIndex];
+      const highlighted = displayedProjects[highlightedIndex];
       if (highlighted) {
         event.preventDefault();
         selectProject(highlighted);
@@ -257,6 +266,12 @@ export function AssignmentModal({
       setIsSaving(false);
       return;
     }
+    if (selectedProjectRef) {
+      recordLastAssignedProject({
+        self: selectedProjectRef,
+        name: projectName,
+      });
+    }
     onSave();
   };
 
@@ -293,7 +308,7 @@ export function AssignmentModal({
               onKeyDown={handleProjectKeyDown}
               disabled={isSaving}
               role="combobox"
-              aria-expanded={results.length > 0}
+              aria-expanded={displayedProjects.length > 0}
               aria-controls="assignment-project-results"
             />
           </label>
@@ -306,9 +321,14 @@ export function AssignmentModal({
             <p className="text-sm text-error">{searchError}</p>
           ) : null}
           <ProjectResultList
-            projects={results}
+            projects={displayedProjects}
             highlightedIndex={highlightedIndex}
             onSelect={selectProject}
+          />
+          <SuggestionEmptyState
+            filter={filter}
+            suggestionsLoaded={suggestionsLoaded}
+            suggestionCount={suggestions.length}
           />
         </section>
 
@@ -412,6 +432,37 @@ interface ProjectResultListProps {
   projects: DayliteProjectSummary[];
   highlightedIndex: number;
   onSelect: (project: DayliteProjectSummary) => void;
+}
+
+// German empty-state message when neither a recent nor overdue projects exist.
+// Only shown for the empty filter (the suggestion state) and once loading has
+// finished, so it does not flash while the overdue query is in flight.
+export function SuggestionEmptyState({
+  filter,
+  suggestionsLoaded,
+  suggestionCount,
+}: SuggestionEmptyStateProps) {
+  if (filter.length > 0 || !suggestionsLoaded || suggestionCount > 0) {
+    return null;
+  }
+  return <p className="text-sm">Keine Vorschläge verfügbar</p>;
+}
+
+interface SuggestionEmptyStateProps {
+  filter: string;
+  suggestionsLoaded: boolean;
+  suggestionCount: number;
+}
+
+// An empty filter shows the default suggestions (BL-031); any filter text
+// shows the live search results (BL-032). Clearing the filter or resetting it
+// via Escape therefore restores the suggestions.
+export function resolveDisplayedProjects(
+  filter: string,
+  suggestions: DayliteProjectSummary[],
+  results: DayliteProjectSummary[],
+): DayliteProjectSummary[] {
+  return filter.length === 0 ? suggestions : results;
 }
 
 // Clamps arrow-key movement to the bounds of the displayed list. From the

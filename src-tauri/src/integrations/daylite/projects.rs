@@ -112,6 +112,35 @@ pub async fn daylite_list_projects(
     Ok(projects)
 }
 
+// Daylite category that marks a project as overdue.
+const OVERDUE_CATEGORY: &str = "Überfällig";
+// Only active projects qualify as overdue suggestions; matches the status
+// filter of the assignment picker search. The Daylite API has no multi-value
+// operator for scalar fields, so the query pairs the category filter with each
+// status as OR clauses to stay a single call.
+const OVERDUE_STATUSES: [&str; 2] = ["new_status", "in_progress"];
+// Maximum overdue suggestions returned to the frontend.
+const OVERDUE_DISPLAY_LIMIT: usize = 5;
+// Candidate pool fetched before the numeric-ID sort. Daylite applies its own
+// ordering when truncating server-side, so a wider pool keeps the projects
+// with the lowest IDs deterministic.
+const OVERDUE_CANDIDATE_LIMIT: u16 = 50;
+
+#[tauri::command]
+#[specta::specta]
+pub async fn daylite_query_overdue_projects(
+    app: tauri::AppHandle,
+) -> Result<Vec<DayliteProjectSummary>, DayliteApiError> {
+    let store = load_store_or_error(app.clone())?;
+    let client = DayliteApiClient::new(&store.api_endpoints.daylite_base_url)?;
+    let projects =
+        with_token_refresh_lock(|tokens| query_overdue_projects_core(&client, tokens)).await?;
+
+    save_store_or_error(app, store)?;
+
+    Ok(projects)
+}
+
 #[tauri::command]
 #[specta::specta]
 pub async fn daylite_search_projects(
@@ -150,6 +179,42 @@ pub(super) async fn list_projects_core(
         .collect();
 
     Ok((projects, token_state))
+}
+
+pub(super) async fn query_overdue_projects_core(
+    client: &DayliteApiClient,
+    token_state: DayliteTokenState,
+) -> Result<(Vec<DayliteProjectSummary>, DayliteTokenState), DayliteApiError> {
+    let clauses: Vec<serde_json::Value> = OVERDUE_STATUSES
+        .iter()
+        .map(|status| {
+            json!({
+                "category": { "equal": OVERDUE_CATEGORY },
+                "status": { "equal": status }
+            })
+        })
+        .collect();
+
+    let (search_result, token_state) =
+        send_authenticated_json::<DayliteSearchResult<DayliteProjectSummaryDto>>(
+            client,
+            token_state,
+            DayliteHttpMethod::Post,
+            "/projects/_search",
+            build_limit_query(Some(OVERDUE_CANDIDATE_LIMIT)),
+            Some(json!(clauses)),
+        )
+        .await?;
+
+    let mut results: Vec<DayliteProjectSummary> = search_result
+        .results
+        .into_iter()
+        .map(normalize_project_summary)
+        .collect();
+    results.sort_by_key(|project| extract_numeric_id(&project.reference));
+    results.truncate(OVERDUE_DISPLAY_LIMIT);
+
+    Ok((results, token_state))
 }
 
 pub(super) async fn search_projects_core(
@@ -385,8 +450,9 @@ fn project_status_to_string(status: &PlanningProjectStatus) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::{
-        list_projects_core, map_daylite_project_summary, map_project_status, search_projects_core,
-        DayliteProjectSummaryDto, PlanningProjectStatus,
+        list_projects_core, map_daylite_project_summary, map_project_status,
+        query_overdue_projects_core, search_projects_core, DayliteProjectSummaryDto,
+        PlanningProjectStatus,
     };
     use crate::integrations::daylite::client::{
         BoxFuture, DayliteApiClient, DayliteHttpMethod, DayliteHttpRequest, DayliteHttpResponse,
@@ -716,6 +782,155 @@ mod tests {
             // After sort: 3, 20, 100 — limit 2 keeps the two lowest IDs
             assert_eq!(result.results[0].reference, "/v1/projects/3");
             assert_eq!(result.results[1].reference, "/v1/projects/20");
+        });
+    }
+
+    #[test]
+    fn overdue_query_sends_category_and_status_filter_in_a_single_call() {
+        tauri::async_runtime::block_on(async {
+            let transport = MockTransport::new(vec![Ok(mock_response(
+                200,
+                r#"{"results":[],"next":null}"#,
+            ))]);
+            let client = DayliteApiClient::with_transport(Box::new(transport.clone()));
+
+            query_overdue_projects_core(
+                &client,
+                DayliteTokenState {
+                    access_token: "at".to_string(),
+                    refresh_token: "rt".to_string(),
+                    access_token_expires_at_ms: Some(u64::MAX),
+                },
+            )
+            .await
+            .expect("overdue query should succeed");
+
+            let requests = transport.requests();
+            assert_eq!(requests.len(), 1, "overdue query must be a single call");
+            assert_eq!(requests[0].path, "/projects/_search");
+            assert_eq!(requests[0].method, DayliteHttpMethod::Post);
+            let body = requests[0].body.as_ref().expect("body should be present");
+            assert_eq!(
+                *body,
+                serde_json::json!([
+                    {
+                        "category": { "equal": "Überfällig" },
+                        "status": { "equal": "new_status" }
+                    },
+                    {
+                        "category": { "equal": "Überfällig" },
+                        "status": { "equal": "in_progress" }
+                    }
+                ]),
+                "body must pair the category filter with each allowed status as OR clauses"
+            );
+        });
+    }
+
+    #[test]
+    fn overdue_results_are_sorted_by_numeric_id_and_limited_to_five() {
+        tauri::async_runtime::block_on(async {
+            // Unsorted IDs: numeric sort gives 3, 7, 9, 20, 50 and drops 100.
+            let transport = MockTransport::new(vec![Ok(mock_response(
+                200,
+                r#"{"results":[
+                    {"self":"/v1/projects/100","name":"Hundert"},
+                    {"self":"/v1/projects/20","name":"Zwanzig"},
+                    {"self":"/v1/projects/3","name":"Drei"},
+                    {"self":"/v1/projects/50","name":"Fünfzig"},
+                    {"self":"/v1/projects/7","name":"Sieben"},
+                    {"self":"/v1/projects/9","name":"Neun"}
+                ],"next":null}"#,
+            ))]);
+            let client = DayliteApiClient::with_transport(Box::new(transport));
+
+            let (results, _) = query_overdue_projects_core(
+                &client,
+                DayliteTokenState {
+                    access_token: "at".to_string(),
+                    refresh_token: "rt".to_string(),
+                    access_token_expires_at_ms: Some(u64::MAX),
+                },
+            )
+            .await
+            .expect("overdue query should succeed");
+
+            assert_eq!(results.len(), 5);
+            let references: Vec<&str> = results
+                .iter()
+                .map(|project| project.reference.as_str())
+                .collect();
+            assert_eq!(
+                references,
+                vec![
+                    "/v1/projects/3",
+                    "/v1/projects/7",
+                    "/v1/projects/9",
+                    "/v1/projects/20",
+                    "/v1/projects/50"
+                ]
+            );
+        });
+    }
+
+    #[test]
+    fn overdue_query_treats_empty_object_response_as_no_results() {
+        tauri::async_runtime::block_on(async {
+            // Daylite returns a bare `{}` (HTTP 200) when no project is overdue.
+            let transport = MockTransport::new(vec![Ok(mock_response(200, r#"{}"#))]);
+            let client = DayliteApiClient::with_transport(Box::new(transport));
+
+            let (results, _) = query_overdue_projects_core(
+                &client,
+                DayliteTokenState {
+                    access_token: "at".to_string(),
+                    refresh_token: "rt".to_string(),
+                    access_token_expires_at_ms: Some(u64::MAX),
+                },
+            )
+            .await
+            .expect("empty object response should be treated as no results");
+
+            assert!(results.is_empty());
+        });
+    }
+
+    #[test]
+    fn query_overdue_projects_replays_vcr_cassette() {
+        // The cassette is produced by the live recording harness
+        // (`record_daylite_cassettes_from_live_api`), which needs real Daylite
+        // credentials. Skip instead of failing until it has been recorded.
+        let cassette_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../tests/cassettes/daylite-overdue-projects.json");
+        if !cassette_path.exists() {
+            eprintln!(
+                "skipping query_overdue_projects_replays_vcr_cassette: cassette not recorded yet"
+            );
+            return;
+        }
+
+        tauri::async_runtime::block_on(async {
+            let client = DayliteApiClient::with_replay_cassette("daylite-overdue-projects.json")
+                .expect("replay client should be created");
+
+            let (results, token_state) = query_overdue_projects_core(
+                &client,
+                DayliteTokenState {
+                    access_token: "replay-access-token".to_string(),
+                    refresh_token: "replay-refresh-token".to_string(),
+                    access_token_expires_at_ms: Some(u64::MAX),
+                },
+            )
+            .await
+            .expect("overdue query should replay from cassette");
+
+            assert!(results.len() <= 5);
+            assert!(results.iter().all(|project| {
+                project.reference.starts_with("/v1/projects/")
+                    && !project.name.is_empty()
+                    && project.name == project.name.trim()
+            }));
+            assert_eq!(token_state.access_token, "replay-access-token");
         });
     }
 
