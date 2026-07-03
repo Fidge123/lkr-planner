@@ -19,7 +19,8 @@ The system SHALL reactivate archived linked projects.
 #### Scenario: Reactivate archived project
 - **GIVEN** an archived linked project
 - **WHEN** reactivating the project
-- **THEN** the project status changes to active
+- **THEN** the archive-project endpoint is called with status set to active (status `1`)
+- **AND** the project status changes to active
 - **AND** success is logged
 
 #### Scenario: Skip already active project

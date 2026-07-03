@@ -13,12 +13,24 @@ The system SHALL determine if a Daylite project has a linked Planradar project.
 - **THEN** null/no link is returned
 - **AND** user can initiate a new link operation
 
+### Requirement: Link field provisioning
+The system SHALL ensure the fixed `planradar-link` Daylite custom field exists before writing a link.
+
+#### Scenario: Field missing
+- **WHEN** the `planradar-link` custom field does not exist in Daylite
+- **THEN** the app creates it
+- **AND** the link write proceeds
+
+#### Scenario: Field already exists
+- **WHEN** the `planradar-link` custom field already exists
+- **THEN** the app reuses it without creating a duplicate
+
 ### Requirement: Link to existing Planradar project
 The system SHALL allow linking a Daylite project to an existing Planradar project.
 
 #### Scenario: Create new link
 - **WHEN** user selects a Planradar project to link
-- **THEN** the Planradar project ID is persisted to Daylite custom field
+- **THEN** the Planradar project ID is persisted to the `planradar-link` custom field
 - **AND** the link is available for subsequent operations
 
 ### Requirement: Idempotent linking

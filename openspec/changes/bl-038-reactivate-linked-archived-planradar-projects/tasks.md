@@ -1,35 +1,19 @@
-## 1. Project Status Detection
+## 1. Project Status Detection (TDD)
 
-- [ ] 1.1 Implement `getProjectStatus(planradarProjectId)` function
-- [ ] 1.2 Call Planradar API to fetch project details
-- [ ] 1.3 Parse status field (active/archived/closed)
-- [ ] 1.4 Handle API errors gracefully
+- [ ] 1.1 (red) Tests: status parsed as active / archived / closed, and API errors surface gracefully
+- [ ] 1.2 (green) Implement `getProjectStatus` via the project read endpoint
 
-## 2. Reactivation Service
+## 2. Reactivation Service (TDD)
 
-- [ ] 2.1 Implement `reactivateProject(planradarProjectId)` function
-- [ ] 2.2 Check current status before reactivation
-- [ ] 2.3 Call Planradar API to reactivate if archived
-- [ ] 2.4 Return success/error with appropriate status
+- [ ] 2.1 (red) Test reactivate calls archive_project with status 1 only when the project is archived
+- [ ] 2.2 (green) Implement `reactivateProject`
 
-## 3. Idempotency
+## 3. Idempotency (TDD)
 
-- [ ] 3.1 Return success for already active projects (no API call)
-- [ ] 3.2 Handle not-found case with clear error
-- [ ] 3.3 Verify status after reactivation
+- [ ] 3.1 (red) Tests: already-active returns success with no API call; not-found returns a clear error
+- [ ] 3.2 (green) Implement the status check before reactivation and not-found handling
 
-## 4. Logging
+## 4. Logging (TDD)
 
-- [ ] 4.1 Log reactivation attempt with project details
-- [ ] 4.2 Log success with timestamp
-- [ ] 4.3 Log failure with error message and stack trace
-- [ ] 4.4 Include project name in all log entries
-
-## 5. Testing
-
-- [ ] 5.1 Write service tests for archived project scenario
-- [ ] 5.2 Write service tests for active project scenario
-- [ ] 5.3 Write service tests for not-found scenario
-- [ ] 5.4 Write idempotency tests for already active projects
-- [ ] 5.5 Write logging tests for success path
-- [ ] 5.6 Write logging tests for failure path
+- [ ] 4.1 (red) Test reactivation success and failure each emit a sync event with project ID, name and timestamp
+- [ ] 4.2 (green) Emit sync events on the reactivation paths
