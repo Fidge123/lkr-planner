@@ -4,11 +4,14 @@ import type {
   CalendarCellEvent,
   DayliteProjectSummary,
 } from "../../generated/tauri";
+import { combineSuggestions } from "../../services/assignment-suggestions";
 import {
   AssignmentModal,
   nextHighlightIndex,
   ProjectResultList,
+  resolveDisplayedProjects,
   resolveEscapeAction,
+  SuggestionEmptyState,
 } from "./assignment-modal";
 
 mock.module("../../generated/tauri", () => ({
@@ -200,6 +203,135 @@ describe("nextHighlightIndex", () => {
 
   it("stays unhighlighted for an empty list", () => {
     expect(nextHighlightIndex(-1, 0, 1)).toBe(-1);
+  });
+});
+
+// ── BL-031 5.1 / 5.2 / 5.3 – default suggestions in the result list ───────────
+describe("default suggestions rendering", () => {
+  const overdue = [
+    project("Projekt 10", "/v1/projects/10"),
+    project("Projekt 11", "/v1/projects/11"),
+    project("Projekt 12", "/v1/projects/12"),
+    project("Projekt 13", "/v1/projects/13"),
+    project("Projekt 14", "/v1/projects/14"),
+  ];
+
+  it("renders the recent project first, followed by overdue projects", () => {
+    const recent = project("Projekt Zuletzt", "/v1/projects/99");
+
+    const html = renderToStaticMarkup(
+      <ProjectResultList
+        projects={combineSuggestions(recent, overdue)}
+        highlightedIndex={-1}
+        onSelect={() => {}}
+      />,
+    );
+
+    expect(html.indexOf("Projekt Zuletzt")).toBeGreaterThan(-1);
+    expect(html.indexOf("Projekt Zuletzt")).toBeLessThan(
+      html.indexOf("Projekt 10"),
+    );
+  });
+
+  it("renders at most 5 suggestions", () => {
+    const recent = project("Projekt Zuletzt", "/v1/projects/99");
+
+    const html = renderToStaticMarkup(
+      <ProjectResultList
+        projects={combineSuggestions(recent, overdue)}
+        highlightedIndex={-1}
+        onSelect={() => {}}
+      />,
+    );
+
+    expect(html.match(/<button/g)).toHaveLength(5);
+    expect(html).not.toContain("Projekt 14");
+  });
+
+  it("renders a recent project that is also overdue only once", () => {
+    const recent = project("Projekt 11", "/v1/projects/11");
+
+    const html = renderToStaticMarkup(
+      <ProjectResultList
+        projects={combineSuggestions(recent, overdue)}
+        highlightedIndex={-1}
+        onSelect={() => {}}
+      />,
+    );
+
+    expect(html.match(/Projekt 11/g)).toHaveLength(1);
+    expect(html.match(/<button/g)).toHaveLength(5);
+  });
+});
+
+// ── BL-031 5.7 – clearing the filter restores the default suggestions ─────────
+describe("resolveDisplayedProjects", () => {
+  const suggestions = [project("Projekt Zuletzt", "/v1/projects/99")];
+  const results = [project("Projekt Nord", "/v1/projects/10")];
+
+  it("shows the default suggestions for an empty filter", () => {
+    expect(resolveDisplayedProjects("", suggestions, results)).toBe(
+      suggestions,
+    );
+  });
+
+  it("shows the live search results while a filter is set", () => {
+    expect(resolveDisplayedProjects("Nord", suggestions, results)).toBe(
+      results,
+    );
+  });
+
+  it("restores the suggestions after the filter is cleared", () => {
+    expect(resolveDisplayedProjects("Nord", suggestions, results)).toBe(
+      results,
+    );
+    // Escape or manual clearing empties the filter (see resolveEscapeAction).
+    expect(resolveDisplayedProjects("", suggestions, results)).toBe(
+      suggestions,
+    );
+  });
+});
+
+// ── BL-031 5.6 – empty state message display ──────────────────────────────────
+describe("SuggestionEmptyState", () => {
+  it("shows the German message when no suggestions are available", () => {
+    const html = renderToStaticMarkup(
+      <SuggestionEmptyState filter="" suggestionsLoaded suggestionCount={0} />,
+    );
+
+    expect(html).toContain("Keine Vorschläge verfügbar");
+  });
+
+  it("shows nothing while the suggestions are still loading", () => {
+    const html = renderToStaticMarkup(
+      <SuggestionEmptyState
+        filter=""
+        suggestionsLoaded={false}
+        suggestionCount={0}
+      />,
+    );
+
+    expect(html).toBe("");
+  });
+
+  it("shows nothing when suggestions are available", () => {
+    const html = renderToStaticMarkup(
+      <SuggestionEmptyState filter="" suggestionsLoaded suggestionCount={3} />,
+    );
+
+    expect(html).toBe("");
+  });
+
+  it("shows nothing while a filter is set", () => {
+    const html = renderToStaticMarkup(
+      <SuggestionEmptyState
+        filter="Nord"
+        suggestionsLoaded
+        suggestionCount={0}
+      />,
+    );
+
+    expect(html).toBe("");
   });
 });
 

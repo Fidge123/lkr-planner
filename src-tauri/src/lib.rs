@@ -15,6 +15,7 @@ pub fn run() {
             integrations::daylite::auth::daylite_connect_refresh_token,
             integrations::daylite::projects::daylite_list_projects,
             integrations::daylite::projects::daylite_search_projects,
+            integrations::daylite::projects::daylite_query_overdue_projects,
             integrations::daylite::contacts::commands::daylite_list_contacts,
             integrations::daylite::contacts::commands::daylite_list_cached_contacts,
             integrations::daylite::contacts::commands::daylite_update_contact_ical_urls,
