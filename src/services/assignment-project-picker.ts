@@ -34,5 +34,8 @@ export async function searchProjectsForAssignmentPicker(
     );
   }
 
-  return result.data.results.slice(0, DISPLAY_LIMIT);
+  // Daylite omits `results` when a search has no matches; the Rust side
+  // defaults it to an empty list, but that makes the generated binding
+  // optional too.
+  return (result.data.results ?? []).slice(0, DISPLAY_LIMIT);
 }
