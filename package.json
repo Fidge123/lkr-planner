@@ -29,7 +29,7 @@
     "tailwindcss": "^4.3.2"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.5.1",
+    "@biomejs/biome": "2.5.2",
     "@fission-ai/openspec": "^1.5.0",
     "@tauri-apps/cli": "^2.11.4",
     "@types/bun": "^1.3.14",
@@ -38,6 +38,6 @@
     "@vitejs/plugin-react": "^6.0.3",
     "smol-toml": "^1.7.0",
     "typescript": "~6.0.3",
-    "vite": "^8.1.0"
+    "vite": "^8.1.3"
   }
 }
