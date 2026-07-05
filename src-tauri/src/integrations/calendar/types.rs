@@ -28,6 +28,23 @@ pub struct CalendarCellEvent {
     pub project_ref: Option<String>,
 }
 
+/// Outcome of moving an assignment from one employee's calendar to another.
+/// CalDAV has no atomic cross-collection move, so the target copy is created first
+/// and the source deleted afterwards; a failed source delete yields a partial move.
+#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum MoveAssignmentResult {
+    /// Target created and source deleted.
+    #[serde(rename_all = "camelCase")]
+    Moved { new_href: String },
+    /// Target created but the source delete failed; the assignment now exists twice.
+    #[serde(rename_all = "camelCase")]
+    SourceDeleteFailed {
+        new_href: String,
+        source_href: String,
+    },
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct EmployeeWeekEvents {

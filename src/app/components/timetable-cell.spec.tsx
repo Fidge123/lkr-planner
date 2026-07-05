@@ -30,6 +30,7 @@ describe("TimetableCell", () => {
       startTime: "08:00",
       endTime: "16:00",
       href: "/calendars/user/uid-1.ics",
+      projectRef: "/v1/projects/1",
     };
 
     const html = renderToStaticMarkup(
@@ -83,5 +84,79 @@ describe("TimetableCell", () => {
 
     expect(html).not.toContain("opacity-50");
     expect(html).not.toContain("border-dashed");
+  });
+
+  // ── drag-and-drop affordances ──
+
+  const draggableAssignment: CellEvent = {
+    uid: "uid-drag",
+    kind: "assignment",
+    title: "Bauprojekt Süd",
+    color: "bg-primary",
+    startTime: "08:00",
+    endTime: "16:00",
+    href: "/calendars/user/uid-drag.ics",
+    projectRef: "/v1/projects/7",
+  };
+
+  it("marks assignment cards as draggable", () => {
+    const html = renderToStaticMarkup(
+      <TimetableCell
+        highlight={false}
+        events={[draggableAssignment]}
+        onAddClick={() => {}}
+        onEventClick={() => {}}
+      />,
+    );
+
+    expect(html).toContain('aria-roledescription="draggable"');
+  });
+
+  it("keeps a plain button for click-to-edit on assignment cards", () => {
+    const html = renderToStaticMarkup(
+      <TimetableCell
+        highlight={false}
+        events={[draggableAssignment]}
+        onAddClick={() => {}}
+        onEventClick={() => {}}
+      />,
+    );
+
+    expect(html).toContain('type="button"');
+    expect(html).toContain("Bauprojekt Süd");
+  });
+
+  it("does not make bare or absence events draggable", () => {
+    const bare: CellEvent = {
+      uid: "uid-bare",
+      kind: "bare",
+      title: "Werkstatt",
+      color: "bg-base-200",
+      startTime: null,
+      endTime: null,
+      href: null,
+      projectRef: null,
+    };
+    const absence: CellEvent = {
+      uid: "uid-abs",
+      kind: "absence",
+      title: "Urlaub",
+      color: "bg-info/30",
+      startTime: null,
+      endTime: null,
+      href: null,
+      projectRef: null,
+    };
+
+    const html = renderToStaticMarkup(
+      <TimetableCell
+        highlight={false}
+        events={[bare, absence]}
+        onAddClick={() => {}}
+        onEventClick={() => {}}
+      />,
+    );
+
+    expect(html).not.toContain('aria-roledescription="draggable"');
   });
 });

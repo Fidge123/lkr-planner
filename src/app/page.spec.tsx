@@ -7,7 +7,9 @@ import {
   type PlanningGridAssignmentState,
   type PlanningGridEmployeesState,
   type PlanningGridProjectsState,
+  PlanningGridTable,
 } from "./page";
+import { getWeekDays } from "./util";
 
 const defaultState: PlanningGridProjectsState = {
   projects: [],
@@ -431,6 +433,59 @@ describe("planning grid assignment states", () => {
     expect(html).toContain("CalDAV server unreachable");
     expect(html).toContain("Erneut laden");
     expect(html).not.toContain("bg-secondary");
+  });
+});
+
+describe("planning grid drag-and-drop wiring", () => {
+  beforeAll(() => {
+    setSystemTime(new Date(2026, 0, 28, 9, 0, 0));
+  });
+
+  const employee = {
+    self: "/v1/contacts/9001",
+    full_name: "Monteur Aus Daylite",
+    category: "Monteur",
+    urls: [],
+  };
+  const assignmentEvent: CalendarCellEvent = {
+    uid: "event-uid-1",
+    kind: "assignment",
+    title: "Projekt Nord",
+    projectStatus: "in_progress",
+    projectRef: "/v1/projects/1",
+    date: "2026-01-26",
+    startTime: "08:00",
+    endTime: "16:00",
+    href: "/calendars/user/event-uid-1.ics",
+  };
+
+  const renderGrid = () =>
+    renderToStaticMarkup(
+      <PlanningGridTable
+        weekDays={getWeekDays(0)}
+        projectState={{ ...defaultState }}
+        employeeState={{ ...defaultEmployeeState, employees: [employee] }}
+        assignmentState={{
+          ...defaultAssignmentState,
+          eventsByEmployee: { "/v1/contacts/9001": [assignmentEvent] },
+        }}
+        {...defaultIcalProps}
+        onNavigateWeek={() => {}}
+      />,
+    );
+
+  it("renders assignment cards as draggable inside the drag context", () => {
+    const html = renderGrid();
+
+    expect(html).toContain("Projekt Nord");
+    expect(html).toContain('aria-roledescription="draggable"');
+  });
+
+  it("shows no drop error and no reconciliation dialog before any drag", () => {
+    const html = renderGrid();
+
+    expect(html).not.toContain("Einsatz doppelt vorhanden");
+    expect(html).not.toContain("alert-error");
   });
 });
 

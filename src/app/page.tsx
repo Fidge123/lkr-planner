@@ -1,12 +1,23 @@
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import { createPortal } from "react-dom";
 import type {
   EmployeeSetting,
   PlanningContactRecord,
   PlanningProjectRecord,
 } from "../generated/tauri";
+import { MoveReconciliationDialog } from "./components/move-reconciliation-dialog";
 import { ProjectTable } from "./components/project-table";
 import { TimetableHeader } from "./components/timetable-header";
 import { TimetableRow } from "./components/timetable-row";
 import { filterVisibleEmployees } from "./employee-visibility";
+import type { AppointmentDragPayload } from "./hooks/use-appointment-drag";
+import { useAppointmentDrag } from "./hooks/use-appointment-drag";
 import { type HolidaysState, useHolidays } from "./hooks/use-holidays";
 import type { PlanningAssignmentsState } from "./hooks/use-planning-assignments";
 import { usePlanningEmployees } from "./hooks/use-planning-employees";
@@ -23,6 +34,7 @@ export function PlanningGrid({
   hideNonPlannableEmployees = true,
   holidaysState,
   onOpenIcalDialog = () => {},
+  onNavigateWeek,
 }: Props) {
   const weekDays = getWeekDays(weekOffset, showWeekend);
   const weekStart = toLocalISODate(weekDays[0]);
@@ -31,14 +43,39 @@ export function PlanningGrid({
   const fallbackEmployeesState = usePlanningEmployees();
   const fallbackHolidaysState = useHolidays(weekStart);
 
-  const { projects, isLoading, errorMessage, reloadProjects } =
-    projectState ?? fallbackProjectsState;
+  return (
+    <PlanningGridTable
+      weekDays={weekDays}
+      projectState={projectState ?? fallbackProjectsState}
+      employeeState={employeeState ?? fallbackEmployeesState}
+      assignmentState={assignmentState}
+      employeeSettings={employeeSettings}
+      hideNonPlannableEmployees={hideNonPlannableEmployees}
+      holidaysState={holidaysState ?? fallbackHolidaysState}
+      onOpenIcalDialog={onOpenIcalDialog}
+      onNavigateWeek={onNavigateWeek}
+    />
+  );
+}
+
+export function PlanningGridTable({
+  weekDays,
+  projectState,
+  employeeState,
+  assignmentState,
+  employeeSettings,
+  hideNonPlannableEmployees,
+  holidaysState,
+  onOpenIcalDialog,
+  onNavigateWeek,
+}: PlanningGridTableProps) {
+  const { projects, isLoading, errorMessage, reloadProjects } = projectState;
   const {
     employees,
     isLoading: isEmployeeLoading,
     errorMessage: employeeErrorMessage,
     reloadEmployees,
-  } = employeeState ?? fallbackEmployeesState;
+  } = employeeState;
   const {
     eventsByEmployee,
     errorsByEmployee,
@@ -50,7 +87,7 @@ export function PlanningGrid({
     holidays,
     errorMessage: holidayErrorMessage,
     reloadHolidays,
-  } = holidaysState ?? fallbackHolidaysState;
+  } = holidaysState;
   const holidayByDate = new Map(holidays.map((h) => [h.date, h.name]));
   const holidayDates = new Set(holidays.map((h) => h.date));
   const visibleEmployees = filterVisibleEmployees(
@@ -58,6 +95,21 @@ export function PlanningGrid({
     employeeSettings,
     hideNonPlannableEmployees,
   );
+
+  // A small pointer distance keeps plain clicks opening the edit modal.
+  const dragSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+  );
+  const drag = useAppointmentDrag({
+    hasCalendar: (employeeRef) =>
+      employeeSettings.some(
+        (s) =>
+          s.dayliteContactReference === employeeRef &&
+          (s.zepPrimaryCalendar ?? "") !== "",
+      ),
+    onNavigateWeek: onNavigateWeek ?? (() => {}),
+    reloadAssignments,
+  });
 
   return (
     <section className="w-full h-full overflow-auto">
@@ -106,54 +158,100 @@ export function PlanningGrid({
           Einsätze werden geladen...
         </p>
       ) : null}
-      <table className="table table-fixed border-collapse">
-        <thead className="text-base-content">
-          <tr>
-            <th className="w-40 p-4 font-bold">Mitarbeiter</th>
-            {weekDays.map((day) => {
-              const isoDay = toLocalISODate(day);
-              return (
-                <TimetableHeader
-                  key={day.getTime()}
-                  day={day}
-                  holiday={holidayByDate.get(isoDay)}
-                />
-              );
-            })}
-          </tr>
-        </thead>
-        <tbody>
-          {visibleEmployees.map((employee, index) => (
-            <TimetableRow
-              key={buildEmployeeRowKey(employee, index)}
-              employee={employee}
-              calendarEvents={eventsByEmployee[employee.self] ?? []}
-              calendarError={errorsByEmployee[employee.self] ?? null}
-              week={{ days: weekDays, holidayDates }}
-              employeeSetting={
-                employeeSettings.find(
-                  (s) => s.dayliteContactReference === employee.self,
-                ) ?? null
-              }
-              onOpenIcalDialog={onOpenIcalDialog}
-              onReloadAssignments={reloadAssignments}
-            />
-          ))}
-          {!isEmployeeLoading && visibleEmployees.length === 0 ? (
-            <tr key="no-employees-row">
-              <td
-                className="p-4 text-base-content/70"
-                colSpan={weekDays.length + 1}
-              >
-                Keine Mitarbeiter gefunden
-              </td>
+      {drag.errorMessage ? (
+        <section className="alert alert-error m-4">
+          <span>{drag.errorMessage}</span>
+          <button
+            type="button"
+            className="btn btn-sm"
+            onClick={drag.clearError}
+          >
+            Schließen
+          </button>
+        </section>
+      ) : null}
+      <DndContext
+        sensors={dragSensors}
+        onDragStart={drag.onDragStart}
+        onDragMove={drag.onDragMove}
+        onDragEnd={drag.onDragEnd}
+        onDragCancel={drag.onDragCancel}
+      >
+        <table className="table table-fixed border-collapse">
+          <thead className="text-base-content">
+            <tr>
+              <th className="w-40 p-4 font-bold">Mitarbeiter</th>
+              {weekDays.map((day) => {
+                const isoDay = toLocalISODate(day);
+                return (
+                  <TimetableHeader
+                    key={day.getTime()}
+                    day={day}
+                    holiday={holidayByDate.get(isoDay)}
+                  />
+                );
+              })}
             </tr>
-          ) : null}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {visibleEmployees.map((employee, index) => (
+              <TimetableRow
+                key={buildEmployeeRowKey(employee, index)}
+                employee={employee}
+                calendarEvents={eventsByEmployee[employee.self] ?? []}
+                calendarError={errorsByEmployee[employee.self] ?? null}
+                week={{ days: weekDays, holidayDates }}
+                employeeSetting={
+                  employeeSettings.find(
+                    (s) => s.dayliteContactReference === employee.self,
+                  ) ?? null
+                }
+                onOpenIcalDialog={onOpenIcalDialog}
+                onReloadAssignments={reloadAssignments}
+              />
+            ))}
+            {!isEmployeeLoading && visibleEmployees.length === 0 ? (
+              <tr key="no-employees-row">
+                <td
+                  className="p-4 text-base-content/70"
+                  colSpan={weekDays.length + 1}
+                >
+                  Keine Mitarbeiter gefunden
+                </td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
+        {typeof document === "undefined"
+          ? null
+          : createPortal(
+              <DragOverlay>
+                {drag.activePayload ? (
+                  <DragPreviewCard payload={drag.activePayload} />
+                ) : null}
+              </DragOverlay>,
+              document.body,
+            )}
+      </DndContext>
+
+      <MoveReconciliationDialog
+        reconciliation={drag.reconciliation}
+        onResolved={drag.resolveReconciliation}
+      />
 
       <ProjectTable projects={projects} isLoading={isLoading} />
     </section>
+  );
+}
+
+/** Pointer-following preview of the dragged card, portal-mounted so it survives week navigation. */
+function DragPreviewCard({ payload }: { payload: AppointmentDragPayload }) {
+  return (
+    <span
+      className={`flex items-center w-full gap-4 p-2 rounded-lg text-base-100 shadow-lg ${payload.color}`}
+    >
+      <h4 className="flex-1 min-w-0 font-medium">{payload.title}</h4>
+    </span>
   );
 }
 
@@ -167,6 +265,19 @@ interface Props {
   hideNonPlannableEmployees?: boolean;
   holidaysState?: HolidaysState;
   onOpenIcalDialog?: (employee: PlanningContactRecord) => void;
+  onNavigateWeek?: (direction: -1 | 1) => void;
+}
+
+export interface PlanningGridTableProps {
+  weekDays: Date[];
+  projectState: PlanningGridProjectsState;
+  employeeState: PlanningGridEmployeesState;
+  assignmentState: PlanningGridAssignmentState;
+  employeeSettings: EmployeeSetting[];
+  hideNonPlannableEmployees: boolean;
+  holidaysState: HolidaysState;
+  onOpenIcalDialog: (employee: PlanningContactRecord) => void;
+  onNavigateWeek?: (direction: -1 | 1) => void;
 }
 
 export interface PlanningGridProjectsState {

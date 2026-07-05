@@ -6,13 +6,13 @@ use std::time::Duration;
 use tauri_plugin_http::reqwest;
 
 use super::caldav::{
-    create_assignment_core, delete_assignment_core, fetch_calendar_events, update_assignment_core,
-    AssignmentWrite, CaldavSession,
+    create_assignment_core, delete_assignment_core, fetch_calendar_events, move_assignment_core,
+    update_assignment_core, AssignmentWrite, CaldavSession,
 };
 use super::events::{
     classify_event, map_absence_raw_events_for_week, resolve_event, sort_events_absences_first,
 };
-use super::types::{CalendarCellEvent, EmployeeWeekEvents, PendingEvent};
+use super::types::{CalendarCellEvent, EmployeeWeekEvents, MoveAssignmentResult, PendingEvent};
 use crate::integrations::local_store::{DayliteCache, LocalStore};
 
 #[tauri::command]
@@ -311,6 +311,46 @@ pub async fn update_assignment(
             date: input.date,
             project_ref: input.project_ref,
             project_name: input.project_name,
+        },
+    )
+    .await
+}
+
+/// Moves an assignment to another employee's primary calendar by creating the event
+/// there first and then deleting the source event. Returns a structured result so the
+/// frontend can reconcile a partial move (target created, source delete failed).
+#[tauri::command]
+#[specta::specta]
+pub async fn move_assignment(
+    app: tauri::AppHandle,
+    href: String,
+    target_employee_reference: String,
+    date: String,
+    project_ref: String,
+    project_name: String,
+) -> Result<MoveAssignmentResult, String> {
+    let store =
+        crate::integrations::local_store::load_local_store(app).map_err(|e| e.user_message)?;
+
+    let target_calendar_url = store
+        .employee_settings
+        .iter()
+        .find(|s| s.daylite_contact_reference == target_employee_reference)
+        .and_then(|s| s.zep_primary_calendar.as_deref())
+        .filter(|u| !u.is_empty())
+        .ok_or_else(|| "Kein Kalender für diesen Mitarbeiter konfiguriert.".to_string())?
+        .to_string();
+
+    let session = load_caldav_session(&store)?;
+
+    move_assignment_core(
+        &session,
+        &href,
+        &target_calendar_url,
+        &AssignmentWrite {
+            date,
+            project_ref,
+            project_name,
         },
     )
     .await

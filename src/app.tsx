@@ -79,6 +79,11 @@ function App() {
     setIcalDialogEmployee(null);
   };
 
+  // Used by drag-and-drop edge-hover navigation so a card can cross week boundaries.
+  const handleNavigateWeek = useCallback((direction: -1 | 1) => {
+    setWeekOffset((prev) => prev + direction);
+  }, []);
+
   const handleSettingsSaved = useCallback(() => {
     void loadEmployeeSettings();
     planningAssignmentsState.reloadAssignments();
@@ -141,6 +146,7 @@ function App() {
           employeeSettings={employeeSettings}
           hideNonPlannableEmployees={hideNonPlannableEmployees}
           onOpenIcalDialog={handleOpenIcalDialog}
+          onNavigateWeek={handleNavigateWeek}
         />
       </main>
 

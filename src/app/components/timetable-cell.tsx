@@ -1,17 +1,26 @@
+import { useDraggable, useDroppable } from "@dnd-kit/core";
+import type { AppointmentDragPayload } from "../hooks/use-appointment-drag";
 import type { GhostSuggestion } from "../next-day-quick-add";
 import type { CellEvent } from "../types";
 
 export function TimetableCell({
   highlight = false,
   isHoliday = false,
+  employeeRef = "",
+  date = "",
   events,
   suggestion,
   onAddClick,
   onEventClick,
   onSuggestionClick,
 }: Props) {
+  const { isOver, setNodeRef } = useDroppable({
+    id: `cell-${employeeRef}-${date}`,
+    data: { employeeRef, date },
+  });
+
   return (
-    <td className={cellClass(highlight, isHoliday)}>
+    <td ref={setNodeRef} className={cellClass(highlight, isHoliday, isOver)}>
       <ul className="flex flex-col gap-1 list-none">
         {events.map((event) =>
           event.kind === "absence" ? (
@@ -40,17 +49,12 @@ export function TimetableCell({
             </li>
           ) : (
             <li key={event.uid}>
-              <button
-                type="button"
-                className={`btn btn-block h-auto justify-start gap-4 text-base-100 p-2 rounded-lg transition-all hover:brightness-90 active:brightness-75 ${event.color}`}
-                onClick={() => onEventClick(event)}
-              >
-                <EventTime
-                  startTime={event.startTime}
-                  endTime={event.endTime}
-                />
-                <h4 className="flex-1 min-w-0 font-medium">{event.title}</h4>
-              </button>
+              <DraggableAssignmentCard
+                event={event}
+                employeeRef={employeeRef}
+                date={date}
+                onEventClick={onEventClick}
+              />
             </li>
           ),
         )}
@@ -86,11 +90,63 @@ export function TimetableCell({
 interface Props {
   highlight: boolean;
   isHoliday?: boolean;
+  /** Daylite reference of the row's employee; source/target identity for drag-and-drop. */
+  employeeRef?: string;
+  /** ISO date (yyyy-MM-dd) of this day cell; source/target identity for drag-and-drop. */
+  date?: string;
   events: CellEvent[];
   suggestion?: GhostSuggestion;
   onAddClick: () => void;
   onEventClick: (event: CellEvent) => void;
   onSuggestionClick?: (suggestion: GhostSuggestion) => void;
+}
+
+/** An assignment card that can be dragged to another day or employee cell. */
+function DraggableAssignmentCard({
+  event,
+  employeeRef,
+  date,
+  onEventClick,
+}: CardProps) {
+  const payload: AppointmentDragPayload = {
+    uid: event.uid,
+    href: event.href ?? "",
+    projectRef: event.projectRef ?? "",
+    projectName: event.title,
+    employeeRef,
+    date,
+    title: event.title,
+    color: event.color,
+    startTime: event.startTime,
+    endTime: event.endTime,
+  };
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `assignment-${employeeRef}-${event.uid}`,
+    data: payload,
+    // Without an href the event cannot be rescheduled or moved on the server.
+    disabled: !event.href,
+  });
+
+  return (
+    <button
+      ref={setNodeRef}
+      type="button"
+      className={`btn btn-block h-auto justify-start gap-4 text-base-100 p-2 rounded-lg transition-all hover:brightness-90 active:brightness-75 ${event.color} ${isDragging ? "opacity-40" : ""}`}
+      onClick={() => onEventClick(event)}
+      {...listeners}
+      {...attributes}
+    >
+      <EventTime startTime={event.startTime} endTime={event.endTime} />
+      <h4 className="flex-1 min-w-0 font-medium">{event.title}</h4>
+    </button>
+  );
+}
+
+interface CardProps {
+  event: CellEvent;
+  employeeRef: string;
+  date: string;
+  onEventClick: (event: CellEvent) => void;
 }
 
 function EventTime({ startTime, endTime }: TimeProps) {
@@ -108,8 +164,15 @@ interface TimeProps {
   endTime: string | null;
 }
 
-function cellClass(highlight: boolean, isHoliday: boolean): string {
-  if (isHoliday) return "align-top p-2 bg-base-200/60";
-  if (highlight) return "align-top p-2 bg-primary/10";
-  return "align-top p-2";
+function cellClass(
+  highlight: boolean,
+  isHoliday: boolean,
+  isDropTarget: boolean,
+): string {
+  const base = isHoliday
+    ? "align-top p-2 bg-base-200/60"
+    : highlight
+      ? "align-top p-2 bg-primary/10"
+      : "align-top p-2";
+  return isDropTarget ? `${base} ring-2 ring-inset ring-primary` : base;
 }
