@@ -1,7 +1,10 @@
+use chrono::NaiveDate;
 use tauri_plugin_http::reqwest;
 use uuid::Uuid;
 
-use super::super::ical::build_ical_payload;
+use super::super::ical::{build_ical_payload, parse_ical_events};
+use super::super::slots::{full_window, plan_slot_updates};
+use super::report::fetch_events_in_range;
 
 pub(crate) struct CaldavSession {
     pub(crate) client: reqwest::Client,
@@ -15,6 +18,96 @@ pub(crate) struct AssignmentWrite {
     pub(crate) date: String,
     pub(crate) project_ref: String,
     pub(crate) project_name: String,
+}
+
+/// Returns the parent collection URL of a CalDAV resource URL (strips the last path segment).
+/// Used to derive the calendar URL for day re-allocation from an event's resource URL.
+fn parent_collection_url(resource_url: &str) -> &str {
+    resource_url
+        .rsplit_once('/')
+        .map(|(parent, _)| parent)
+        .unwrap_or(resource_url)
+}
+
+/// Fetches a single event resource and returns its DTSTART date (`yyyy-MM-dd`).
+/// Returns `Ok(None)` when the resource does not exist (404) or contains no event.
+async fn fetch_event_date(
+    session: &CaldavSession,
+    resource_url: &str,
+) -> Result<Option<String>, String> {
+    let response = session
+        .client
+        .get(resource_url)
+        .basic_auth(&session.username, Some(&session.password))
+        .send()
+        .await
+        .map_err(|e| format!("Einsatz konnte nicht abgerufen werden: {e}"))?;
+
+    let status = response.status().as_u16();
+    if status == 404 {
+        return Ok(None);
+    }
+    if !(200..300).contains(&status) {
+        return Err(format!("Kalenderserver antwortete mit HTTP {status}"));
+    }
+
+    let ical_text = response
+        .text()
+        .await
+        .map_err(|e| format!("Einsatz konnte nicht gelesen werden: {e}"))?;
+    let events = parse_ical_events(&ical_text)?;
+    Ok(events.into_iter().next().map(|event| event.dtstart))
+}
+
+/// Re-allocates the 08:00-16:00 window across all lkr-planner assignments on `date`
+/// and PUTs every event whose slot changed. Bare, absence, and holiday events are
+/// never touched (see `plan_slot_updates`). A partial failure surfaces a German error;
+/// any later write on the same day re-allocates deterministically and converges.
+async fn reallocate_day(
+    session: &CaldavSession,
+    calendar_url: &str,
+    date: &str,
+) -> Result<(), String> {
+    let day = NaiveDate::parse_from_str(date, "%Y-%m-%d")
+        .map_err(|_| format!("Ungültiges Datum: {date}"))?;
+
+    let events =
+        fetch_events_in_range(session, calendar_url, day, day + chrono::Duration::days(1)).await?;
+
+    for update in plan_slot_updates(&events, date) {
+        let resource_url = resolve_href(&update.href, calendar_url)?;
+        let payload = build_ical_payload(
+            &update.uid,
+            date,
+            &update.summary,
+            &update.project_ref,
+            update.start,
+            update.end,
+        );
+
+        eprintln!("calendar: reallocate_day PUT {resource_url}");
+
+        let response = session
+            .client
+            .put(&resource_url)
+            .basic_auth(&session.username, Some(&session.password))
+            .header("Content-Type", "text/calendar; charset=utf-8")
+            .body(payload)
+            .send()
+            .await
+            .map_err(|e| {
+                format!("Zeitfenster für {date} konnten nicht aktualisiert werden: {e}")
+            })?;
+
+        let status = response.status().as_u16();
+        if !(200..300).contains(&status) {
+            return Err(format!(
+                "Zeitfenster für {date} konnten nicht aktualisiert werden: HTTP {status}"
+            ));
+        }
+    }
+
+    Ok(())
 }
 
 pub(crate) async fn create_assignment_core(
@@ -32,7 +125,15 @@ pub(crate) async fn create_assignment_core(
     }
 
     let uid = Uuid::new_v4().to_string();
-    let payload = build_ical_payload(&uid, &write.date, &write.project_name, &write.project_ref);
+    let (window_start, window_end) = full_window();
+    let payload = build_ical_payload(
+        &uid,
+        &write.date,
+        &write.project_name,
+        &write.project_ref,
+        window_start,
+        window_end,
+    );
 
     let base = calendar_url.trim_end_matches('/');
     let resource_url = format!("{base}/{uid}.ics");
@@ -54,6 +155,8 @@ pub(crate) async fn create_assignment_core(
         return Err(format!("Kalenderserver antwortete mit HTTP {status}"));
     }
 
+    reallocate_day(session, calendar_url, &write.date).await?;
+
     Ok(resource_url)
 }
 
@@ -74,7 +177,28 @@ pub(crate) async fn update_assignment_core(
         );
     }
 
-    let payload = build_ical_payload(uid, &write.date, &write.project_name, &write.project_ref);
+    // Read the event's current day before overwriting it: when the update moves the
+    // assignment to another day, the source day must be re-allocated as well.
+    // A failed read only skips the source-day re-allocation, it never blocks the update.
+    let previous_date = match fetch_event_date(session, &resource_url).await {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!(
+                "calendar: could not read event before update, skipping source-day re-allocation: {e}"
+            );
+            None
+        }
+    };
+
+    let (window_start, window_end) = full_window();
+    let payload = build_ical_payload(
+        uid,
+        &write.date,
+        &write.project_name,
+        &write.project_ref,
+        window_start,
+        window_end,
+    );
 
     eprintln!("calendar: update_assignment PUT {resource_url}");
 
@@ -91,6 +215,14 @@ pub(crate) async fn update_assignment_core(
     let status = response.status().as_u16();
     if !(200..300).contains(&status) {
         return Err(format!("Kalenderserver antwortete mit HTTP {status}"));
+    }
+
+    let calendar_url = parent_collection_url(&resource_url);
+    reallocate_day(session, calendar_url, &write.date).await?;
+    if let Some(previous) = previous_date {
+        if previous != write.date {
+            reallocate_day(session, calendar_url, &previous).await?;
+        }
     }
 
     Ok(())
@@ -111,6 +243,16 @@ pub(crate) async fn delete_assignment_core(
         );
     }
 
+    // Read the event's day before deleting so the remaining same-day assignments
+    // can be re-allocated afterwards. A failed read only skips the re-allocation.
+    let event_date = match fetch_event_date(session, &resource_url).await {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("calendar: could not read event before delete, skipping re-allocation: {e}");
+            None
+        }
+    };
+
     eprintln!("calendar: delete_assignment DELETE {resource_url}");
 
     let response = session
@@ -128,6 +270,11 @@ pub(crate) async fn delete_assignment_core(
     }
     if !(200..300).contains(&status) {
         return Err(format!("Kalenderserver antwortete mit HTTP {status}"));
+    }
+
+    if let Some(date) = event_date {
+        let calendar_url = parent_collection_url(&resource_url);
+        reallocate_day(session, calendar_url, &date).await?;
     }
 
     Ok(())
@@ -182,6 +329,14 @@ mod tests {
         );
     }
 
+    #[test]
+    fn parent_collection_url_strips_the_resource_segment() {
+        assert_eq!(
+            parent_collection_url("https://app.zep.de/caldav/admin/emp-1/uid-1.ics"),
+            "https://app.zep.de/caldav/admin/emp-1"
+        );
+    }
+
     #[tokio::test]
     #[ignore = "VCR: requires live CalDAV server credentials"]
     async fn create_assignment_core_sends_put_and_returns_href() {
@@ -215,6 +370,66 @@ mod tests {
 
         assert!(href.starts_with(&calendar_url.trim_end_matches('/').to_string()));
         assert!(href.ends_with(".ics"));
+    }
+
+    #[tokio::test]
+    #[ignore = "VCR: requires live CalDAV server credentials"]
+    async fn creating_second_assignment_redistributes_day_into_halves() {
+        // To record: set CALDAV_URL, CALDAV_USER, CALDAV_PASS env vars and run with --ignored.
+        let calendar_url = std::env::var("CALDAV_URL").expect("CALDAV_URL");
+        let username = std::env::var("CALDAV_USER").expect("CALDAV_USER");
+        let password = std::env::var("CALDAV_PASS").expect("CALDAV_PASS");
+
+        let session = CaldavSession {
+            client: reqwest::Client::builder()
+                .timeout(Duration::from_secs(30))
+                .build()
+                .unwrap(),
+            username,
+            password,
+            base_url: calendar_url.clone(),
+            absence_urls: vec![],
+        };
+
+        let date = "2026-05-06";
+        for project in ["/v1/projects/42", "/v1/projects/43"] {
+            create_assignment_core(
+                &session,
+                &calendar_url,
+                &AssignmentWrite {
+                    date: date.to_string(),
+                    project_ref: project.to_string(),
+                    project_name: "Testprojekt".to_string(),
+                },
+            )
+            .await
+            .expect("create_assignment_core should succeed");
+        }
+
+        let day = chrono::NaiveDate::parse_from_str(date, "%Y-%m-%d").unwrap();
+        let events = fetch_events_in_range(
+            &session,
+            &calendar_url,
+            day,
+            day + chrono::Duration::days(1),
+        )
+        .await
+        .expect("day fetch should succeed");
+
+        let mut times: Vec<(Option<String>, Option<String>)> = events
+            .iter()
+            .filter(|e| e.dtstart == date && e.description.starts_with("daylite:"))
+            .map(|e| (e.start_time.clone(), e.end_time.clone()))
+            .collect();
+        times.sort();
+        assert_eq!(
+            times,
+            vec![
+                (Some("08:00".to_string()), Some("12:00".to_string())),
+                (Some("12:00".to_string()), Some("16:00".to_string())),
+            ],
+            "the two assignments must split the window into halves"
+        );
     }
 
     #[tokio::test]

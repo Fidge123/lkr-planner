@@ -1,3 +1,4 @@
+use chrono::NaiveTime;
 use icalendar::{Calendar, CalendarComponent, CalendarDateTime, Component, DatePerhapsTime};
 
 use super::types::RawVEvent;
@@ -7,10 +8,12 @@ pub(crate) fn build_ical_payload(
     date: &str,
     summary: &str,
     project_ref: &str,
+    start: NaiveTime,
+    end: NaiveTime,
 ) -> String {
     let compact = date.replace('-', "");
-    let dtstart = format!("{compact}T080000");
-    let dtend = format!("{compact}T160000");
+    let dtstart = format!("{compact}T{}", start.format("%H%M%S"));
+    let dtend = format!("{compact}T{}", end.format("%H%M%S"));
     let dtstamp = chrono::Utc::now().format("%Y%m%dT%H%M%SZ");
     let summary = escape_ical_text(summary);
     let description = escape_ical_text(&format!("daylite:{project_ref}"));
@@ -152,13 +155,23 @@ mod tests {
         assert!(result.is_err(), "expected Err for malformed iCal, got Ok");
     }
 
+    fn window() -> (NaiveTime, NaiveTime) {
+        (
+            NaiveTime::from_hms_opt(8, 0, 0).unwrap(),
+            NaiveTime::from_hms_opt(16, 0, 0).unwrap(),
+        )
+    }
+
     #[test]
     fn build_ical_payload_contains_expected_fields() {
+        let (start, end) = window();
         let payload = build_ical_payload(
             "test-uid-1",
             "2026-05-06",
             "Mein Projekt",
             "/v1/projects/42",
+            start,
+            end,
         );
 
         assert!(payload.contains("BEGIN:VCALENDAR"), "missing VCALENDAR");
@@ -177,7 +190,9 @@ mod tests {
 
     #[test]
     fn build_ical_payload_uses_floating_local_time_no_z_suffix() {
-        let payload = build_ical_payload("uid-2", "2026-12-31", "Test", "/v1/projects/1");
+        let (start, end) = window();
+        let payload =
+            build_ical_payload("uid-2", "2026-12-31", "Test", "/v1/projects/1", start, end);
         assert!(
             payload.contains("DTSTART:20261231T080000\r\n"),
             "DTSTART must not have Z suffix"
@@ -189,12 +204,35 @@ mod tests {
     }
 
     #[test]
+    fn build_ical_payload_writes_allocated_slot_times() {
+        let payload = build_ical_payload(
+            "uid-slot",
+            "2026-05-06",
+            "Test",
+            "/v1/projects/1",
+            NaiveTime::from_hms_opt(10, 40, 0).unwrap(),
+            NaiveTime::from_hms_opt(13, 20, 0).unwrap(),
+        );
+        assert!(
+            payload.contains("DTSTART:20260506T104000"),
+            "DTSTART must carry the allocated slot start, got: {payload}"
+        );
+        assert!(
+            payload.contains("DTEND:20260506T132000"),
+            "DTEND must carry the allocated slot end, got: {payload}"
+        );
+    }
+
+    #[test]
     fn build_ical_payload_escapes_special_chars_in_summary() {
+        let (start, end) = window();
         let payload = build_ical_payload(
             "uid-esc",
             "2026-05-06",
             "Müller, Söhne; Bau \\ Test",
             "/v1/projects/42",
+            start,
+            end,
         );
         assert!(
             payload.contains("SUMMARY:Müller\\, Söhne\\; Bau \\\\ Test"),
@@ -204,8 +242,15 @@ mod tests {
 
     #[test]
     fn build_ical_payload_escapes_newline_in_summary_to_literal() {
-        let payload =
-            build_ical_payload("uid-nl", "2026-05-06", "Zeile1\nZeile2", "/v1/projects/42");
+        let (start, end) = window();
+        let payload = build_ical_payload(
+            "uid-nl",
+            "2026-05-06",
+            "Zeile1\nZeile2",
+            "/v1/projects/42",
+            start,
+            end,
+        );
         assert!(
             payload.contains("SUMMARY:Zeile1\\nZeile2"),
             "newline must become the two-char escape, got: {payload}"
@@ -220,7 +265,15 @@ mod tests {
     fn build_ical_payload_keeps_path_separators_in_description() {
         // Forward slashes are not RFC 5545 special characters and must survive so the
         // daylite: project reference round-trips through classification on read-back.
-        let payload = build_ical_payload("uid-d", "2026-05-06", "Projekt", "/v1/projects/42");
+        let (start, end) = window();
+        let payload = build_ical_payload(
+            "uid-d",
+            "2026-05-06",
+            "Projekt",
+            "/v1/projects/42",
+            start,
+            end,
+        );
         assert!(
             payload.contains("DESCRIPTION:daylite:/v1/projects/42"),
             "got: {payload}"

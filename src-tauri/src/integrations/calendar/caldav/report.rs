@@ -11,8 +11,17 @@ pub(crate) async fn fetch_calendar_events(
     week_start: NaiveDate,
 ) -> Result<Vec<RawVEvent>, String> {
     let week_end = week_start + chrono::Duration::days(7);
-    let start_str = week_start.format("%Y%m%dT000000Z").to_string();
-    let end_str = week_end.format("%Y%m%dT000000Z").to_string();
+    fetch_events_in_range(session, calendar_url, week_start, week_end).await
+}
+
+pub(super) async fn fetch_events_in_range(
+    session: &CaldavSession,
+    calendar_url: &str,
+    range_start: NaiveDate,
+    range_end: NaiveDate,
+) -> Result<Vec<RawVEvent>, String> {
+    let start_str = range_start.format("%Y%m%dT000000Z").to_string();
+    let end_str = range_end.format("%Y%m%dT000000Z").to_string();
 
     let body = build_report_body(&start_str, &end_str);
 
