@@ -3,8 +3,8 @@ use super::client::DayliteApiClient;
 use super::client::DayliteHttpMethod;
 use super::client::DayliteHttpRequest;
 use super::shared::{
-    build_limit_query, load_store_or_error, save_store_or_error, with_token_refresh_lock,
-    DayliteApiError, DayliteSearchInput, DayliteSearchResult, DayliteSearchSort, DayliteTokenState,
+    build_limit_query, run_daylite_command, with_token_refresh_lock, DayliteApiError,
+    DayliteSearchInput, DayliteSearchResult, DayliteSearchSort, DayliteTokenState,
 };
 use chrono::{DateTime, NaiveDate, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
@@ -99,13 +99,10 @@ pub struct PlanningProjectRecord {
 pub async fn daylite_list_projects(
     app: tauri::AppHandle,
 ) -> Result<Vec<PlanningProjectRecord>, DayliteApiError> {
-    let store = load_store_or_error(app.clone())?;
-    let client = DayliteApiClient::new(&store.api_endpoints.daylite_base_url)?;
-    let projects = with_token_refresh_lock(|tokens| list_projects_core(&client, tokens)).await?;
-
-    save_store_or_error(app, store)?;
-
-    Ok(projects)
+    run_daylite_command(app, |client, tokens| async move {
+        list_projects_core(&client, tokens).await
+    })
+    .await
 }
 
 const OVERDUE_CATEGORY: &str = "Überfällig";
@@ -123,14 +120,10 @@ const OVERDUE_CANDIDATE_LIMIT: u16 = 50;
 pub async fn daylite_query_overdue_projects(
     app: tauri::AppHandle,
 ) -> Result<Vec<DayliteProjectSummary>, DayliteApiError> {
-    let store = load_store_or_error(app.clone())?;
-    let client = DayliteApiClient::new(&store.api_endpoints.daylite_base_url)?;
-    let projects =
-        with_token_refresh_lock(|tokens| query_overdue_projects_core(&client, tokens)).await?;
-
-    save_store_or_error(app, store)?;
-
-    Ok(projects)
+    run_daylite_command(app, |client, tokens| async move {
+        query_overdue_projects_core(&client, tokens).await
+    })
+    .await
 }
 
 #[tauri::command]
@@ -139,14 +132,10 @@ pub async fn daylite_search_projects(
     app: tauri::AppHandle,
     input: DayliteSearchInput,
 ) -> Result<DayliteSearchResult<DayliteProjectSummary>, DayliteApiError> {
-    let store = load_store_or_error(app.clone())?;
-    let client = DayliteApiClient::new(&store.api_endpoints.daylite_base_url)?;
-    let search_result =
-        with_token_refresh_lock(|tokens| search_projects_core(&client, tokens, &input)).await?;
-
-    save_store_or_error(app, store)?;
-
-    Ok(search_result)
+    run_daylite_command(app, |client, tokens| async move {
+        search_projects_core(&client, tokens, &input).await
+    })
+    .await
 }
 
 pub(super) async fn list_projects_core(

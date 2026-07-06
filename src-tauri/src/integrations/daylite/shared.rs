@@ -1,4 +1,5 @@
 use super::super::local_store::{self, LocalStore};
+use super::client::DayliteApiClient;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use specta::Type;
@@ -199,6 +200,22 @@ where
     let (value, updated_tokens) = operation(tokens).await?;
     store_daylite_tokens(&updated_tokens)?;
     Ok(value)
+}
+
+/// Runs a read-only Daylite command body: builds the API client from the stored
+/// base URL and executes `operation` under the token refresh lock. Commands that
+/// mutate the local store manage it themselves instead.
+pub(super) async fn run_daylite_command<T, F, Fut>(
+    app: tauri::AppHandle,
+    operation: F,
+) -> Result<T, DayliteApiError>
+where
+    F: FnOnce(DayliteApiClient, DayliteTokenState) -> Fut,
+    Fut: std::future::Future<Output = Result<(T, DayliteTokenState), DayliteApiError>>,
+{
+    let store = load_store_or_error(app)?;
+    let client = DayliteApiClient::new(&store.api_endpoints.daylite_base_url)?;
+    with_token_refresh_lock(move |tokens| operation(client, tokens)).await
 }
 
 pub(super) fn load_store_or_error(app: tauri::AppHandle) -> Result<LocalStore, DayliteApiError> {
