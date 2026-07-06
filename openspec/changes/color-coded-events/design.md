@@ -52,22 +52,22 @@ Reuse the codebase's existing `bg-<token>/<opacity>` convention to encode intens
 - Unmatched → `bg-info/30` (unchanged default)
 
 ### Code matching rule
-Match the absence title's leading token (split on whitespace/`-`/`:`) case-insensitively against the six codes, rather than a bare substring search — a naive "contains" check risks false positives for two-letter codes like `SU` appearing inside unrelated words. This assumption about Zep's title format (code as a leading token) should be verified against real title samples during implementation; if Zep formats titles differently, the matching rule is the only piece that needs adjusting.
+Match the absence title against the six codes.
+Trim the title and check for equivalence to match the title.
 
 ### Conflict indicator: status color, not a category
-When a cell contains both an absence event and an assignment (`kind === "assignment"`) event for the same employee/day, add a red conflict indicator — a `ring-2 ring-error` (or equivalent border) on the cell plus a small warning icon (Lucide) with a German tooltip/label (e.g. `"Termin während Abwesenheit"`), never color alone, per the dataviz skill's status-color rule that state (good/warning/critical) must never be encoded as "just another category color."
+When a cell contains both an absence event and an assignment (`kind === "assignment"`) event for the same employee/day, add a red conflict indicator — a `ring-2 ring-error` (or equivalent border) on the cell plus a small warning icon (Lucide).
 Bare (non-assignment) events also trigger the conflict indicator.
 
 ## Risks / Trade-offs
 
-- [Code-matching assumption about title format is unverified against real Zep data] → Mitigate by isolating the matching rule behind a single function with test coverage that's easy to adjust if the real title format differs (e.g. code embedded rather than leading).
 - [`vacation` ↔ `special` CVD separation sits at the floor, not the full target] → Mitigated by the event title always being visible as text on the card (secondary encoding), per the skill's floor-band rule.
 - [Dark-surface contrast for the three new tokens sits below 3:1 at low opacity] → Accepted, same as the app's existing absence/status color usage (all applied as low-opacity washes with the title text as the readable channel, not the fill itself).
 
 ## Migration Plan
 
 - Add the three new CSS custom properties to `src/app.css` first (additive, no visual change yet).
-- Implement and test the code classifier and conflict detector in `src/app/types.ts`.
+- Implement and test the conflict detector in `src/app/types.ts`.
 - Wire the new colors and conflict indicator into `toCellEvent()`/`timetable-cell.tsx`.
 - Update the `employee-absence-display` spec delta and archive it alongside the code change.
 
