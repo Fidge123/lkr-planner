@@ -49,7 +49,7 @@ Reuse the "Absence calendar is never written" pattern: reject before the network
 
 - [Guard adds a CalDAV GET before every update/delete] → Accepted trade-off: correctness (cannot be bypassed) outweighs one extra round-trip on a low-frequency write path; the recently-proposed CalDAV event cache (see `caldav-caching-improvements`) may serve this GET from cache once implemented.
 - [Frontend cache and backend guard could disagree if the category changes between page load and save] → Mitigate by making the backend guard authoritative and always re-derived fresh; the frontend disabled-state is just a UX hint.
-- [Deleting a protected event that no longer resolves its project reference (e.g. project renamed/removed in Daylite)] → If the project lookup fails, treat as unprotected (fail open) so a broken Daylite link does not permanently lock an event; log the lookup failure for visibility.
+- [Deleting a protected event that no longer resolves its project reference (e.g. project renamed/removed in Daylite)] → If the project lookup fails, treat as unprotected (fail open) so a broken Daylite link does not permanently lock an event; the user sees very obvious warnings so any changes are made knowing the risks.
 
 ## Migration Plan
 
