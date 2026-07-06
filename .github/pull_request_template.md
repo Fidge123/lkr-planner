@@ -5,15 +5,28 @@ Don't break sentences across multiple lines.
 
 ## Description
 
-## Notable decisions / What to look out for (optional)
+## Notable decisions
+
+<!-- optional -->
+
+## What to look out for
+
+<!-- optional -->
+
+## Screenshots / evidence of successful implementation
+
+<!--
+optional
+Make sure not to share any private data here.
+-->
 
 ## Reviewer checklist
 
 <!--
 Example:
-- [ ] `bun test` passes
-- [ ] `cargo test` passes
 - [ ] Manually verified the change in the app
+- [ ] Tested against a real Daylite/Planradar/CalDAV account
+- [ ] Checked behaviour with empty/missing data
 -->
 
 - [ ]
