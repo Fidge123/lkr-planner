@@ -24,18 +24,22 @@ The user confirmed the category source is the Daylite project the event is linke
 
 ### Guard fetches the event fresh rather than trusting a client-supplied project ref
 `update_assignment`/`delete_assignment` will issue a CalDAV GET on `href` to read the event's current DESCRIPTION, parse the `daylite:/<path>` reference, and look up that project's category — before performing the PUT/DELETE.
-Alternative considered: have the frontend pass the currently-known `project_ref` (already visible in the modal) as a parameter for the backend to check. Rejected because the user explicitly required a guard that "cannot be bypassed by a modified frontend" — trusting a client-supplied value would defeat that.
+Alternative considered: have the frontend pass the currently-known `project_ref` (already visible in the modal) as a parameter for the backend to check.
+Rejected because the user explicitly required a guard that "cannot be bypassed by a modified frontend" — trusting a client-supplied value would defeat that.
 
 ### Extract description-parsing into a reusable function
 Pull the `daylite:` prefix-stripping logic out of `classify_event` (`events.rs:12-58`) into a standalone function operating on a bare description string, callable both from event classification and from the new guard.
-Alternative considered: duplicate the parsing logic in the guard. Rejected as unnecessary duplication once extraction is straightforward.
+Alternative considered: duplicate the parsing logic in the guard.
+Rejected as unnecessary duplication once extraction is straightforward.
 
 ### Extend `fetch_project_by_reference` to return category
 Change its return type from `(name, status)` to include `category`, updating the one existing call site in `load_week_events` to ignore the new field.
-Alternative considered: add a separate `fetch_project_category_by_reference` function. Rejected — it would duplicate the same HTTP call `fetch_project_by_reference` already makes for the same project.
+Alternative considered: add a separate `fetch_project_category_by_reference` function.
+Rejected — it would duplicate the same HTTP call `fetch_project_by_reference` already makes for the same project.
 
 ### Frontend disables affordances using the already-cached project category
-The assignment modal already resolves the linked project via the Daylite project cache (`daylite-projects.ts`) for status/color; that cached `PlanningProjectRecord` already includes `category`. Disable edit/delete controls when `category === "Termin FIX geplant"`, with a German explanatory notice.
+The assignment modal already resolves the linked project via the Daylite project cache (`daylite-projects.ts`) for status/color; that cached `PlanningProjectRecord` already includes `category`.
+Disable edit/delete controls when `category === "Termin FIX geplant"`, with a German explanatory notice.
 This is advisory only — the backend guard is the actual enforcement, since the cache could be stale or the category could differ from what the backend independently determines.
 
 ### Error convention
