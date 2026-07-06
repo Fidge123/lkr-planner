@@ -4,30 +4,19 @@ Don't break sentences across multiple lines.
 -->
 
 ## Description
+<!-- Keep it short and simple -->
 
-## Notable decisions
+### Notable decisions
+<!-- optional, remove this section if not needed -->
 
-<!-- optional -->
+### What to look out for
+<!-- optional, remove this section if not needed -->
 
-## What to look out for
-
-<!-- optional -->
-
-## Screenshots / evidence of successful implementation
-
-<!--
-optional
-Make sure not to share any private data here.
--->
+### Screenshots / evidence of successful implementation
+<!-- optional, remove this section if not needed -->
 
 ## Reviewer checklist
-
-<!--
-Example:
-- [ ] Manually verified the change in the app
-- [ ] Tested against a real Daylite/Planradar/CalDAV account
-- [ ] Checked behaviour with empty/missing data
--->
+<!-- A checklist of manual steps the reviewer should do to verify the PR. -->
 
 - [ ]
 - [ ]
