@@ -7,7 +7,14 @@ Don't break sentences across multiple lines.
 
 ## Notable decisions / What to look out for (optional)
 
-## What should be checked by the reviewer?
+## Reviewer checklist
+
+<!--
+Example:
+- [ ] `bun test` passes
+- [ ] `cargo test` passes
+- [ ] Manually verified the change in the app
+-->
 
 - [ ]
 - [ ]
