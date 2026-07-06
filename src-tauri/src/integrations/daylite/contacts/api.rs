@@ -9,7 +9,9 @@ use super::types::{
 use crate::integrations::daylite::auth_flow::{
     send_authenticated_json, send_authenticated_request,
 };
-use crate::integrations::daylite::client::{DayliteApiClient, DayliteHttpMethod};
+use crate::integrations::daylite::client::{
+    DayliteApiClient, DayliteHttpMethod, DayliteHttpRequest,
+};
 use crate::integrations::daylite::shared::{
     with_token_refresh_lock, DayliteApiError, DayliteApiErrorCode, DayliteSearchResult,
     DayliteTokenState,
@@ -44,10 +46,7 @@ pub(in crate::integrations::daylite) async fn update_contact_ical_urls_core(
     let (current_contact, token_state) = send_authenticated_json::<DayliteContactSummary>(
         client,
         token_state,
-        DayliteHttpMethod::Get,
-        &contact_path,
-        Vec::new(),
-        None,
+        DayliteHttpRequest::new(DayliteHttpMethod::Get, contact_path.clone()),
     )
     .await?;
     let merged_urls = merge_contact_ical_urls(
@@ -60,12 +59,12 @@ pub(in crate::integrations::daylite) async fn update_contact_ical_urls_core(
     let token_state = send_authenticated_request(
         client,
         token_state,
-        DayliteHttpMethod::Patch,
-        &contact_path,
-        Vec::new(),
-        Some(json!({
-            "urls": merged_urls,
-        })),
+        DayliteHttpRequest {
+            body: Some(json!({
+                "urls": merged_urls,
+            })),
+            ..DayliteHttpRequest::new(DayliteHttpMethod::Patch, contact_path)
+        },
     )
     .await?;
     let updated_contact = map_daylite_contact_summary(DayliteContactSummary {
@@ -102,17 +101,18 @@ pub(in crate::integrations::daylite) async fn list_contacts_core(
         send_authenticated_json::<DayliteSearchResult<DayliteContactSummary>>(
             client,
             token_state,
-            DayliteHttpMethod::Post,
-            "/contacts/_search",
-            vec![("full-records".to_string(), "true".to_string())],
-            // A top-level array of clauses is matched with OR semantics, so this
-            // fetches both planning categories: "Monteur" and "Test". The "Test"
-            // employees are filtered out in the view unless the user disables the
-            // "hide non-plannable employees" toggle.
-            Some(json!([
-                { "category": { "equal": "Monteur" } },
-                { "category": { "equal": "Test" } },
-            ])),
+            DayliteHttpRequest {
+                query: vec![("full-records".to_string(), "true".to_string())],
+                // A top-level array of clauses is matched with OR semantics, so this
+                // fetches both planning categories: "Monteur" and "Test". The "Test"
+                // employees are filtered out in the view unless the user disables the
+                // "hide non-plannable employees" toggle.
+                body: Some(json!([
+                    { "category": { "equal": "Monteur" } },
+                    { "category": { "equal": "Test" } },
+                ])),
+                ..DayliteHttpRequest::new(DayliteHttpMethod::Post, "/contacts/_search")
+            },
         )
         .await?;
     let contacts = sort_contacts(filter_planning_contacts(

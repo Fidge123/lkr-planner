@@ -27,9 +27,9 @@ export const commands = {
 	 *  Creates a new assignment event on the employee's primary CalDAV calendar.
 	 *  Returns the CalDAV resource href (e.g. `{calendar_url}/{uid}.ics`) of the new event.
 	 */
-	createAssignment: (employeeReference: string, date: string, projectRef: string, projectName: string) => typedError<string, string>(__TAURI_INVOKE("create_assignment", { employeeReference, date, projectRef, projectName })),
+	createAssignment: (input: CreateAssignmentInput) => typedError<string, string>(__TAURI_INVOKE("create_assignment", { input })),
 	/**  Updates an existing assignment event in place using the stored CalDAV href. */
-	updateAssignment: (href: string, uid: string, date: string, projectRef: string, projectName: string) => typedError<null, string>(__TAURI_INVOKE("update_assignment", { href, uid, date, projectRef, projectName })),
+	updateAssignment: (input: UpdateAssignmentInput) => typedError<null, string>(__TAURI_INVOKE("update_assignment", { input })),
 	/**  Deletes an assignment event using the stored CalDAV href. */
 	deleteAssignment: (href: string) => typedError<null, string>(__TAURI_INVOKE("delete_assignment", { href })),
 	zepSaveCredentials: (rootUrl: string, username: string, password: string) => typedError<null, ZepError>(__TAURI_INVOKE("zep_save_credentials", { rootUrl, username, password })),
@@ -80,6 +80,13 @@ export type CalendarEventKind =
 "bare" | 
 /**  An all-day absence from the employee's dedicated ZEP absence calendar. */
 "absence";
+
+export type CreateAssignmentInput = {
+	employeeReference: string,
+	date: string,
+	projectRef: string,
+	projectName: string,
+};
 
 export type DayliteApiError = {
 	code: DayliteApiErrorCode,
@@ -292,6 +299,14 @@ export type StoreError = {
 };
 
 export type StoreErrorCode = "READ_FAILED" | "WRITE_FAILED" | "CORRUPT_FILE" | "MISSING_FIELDS";
+
+export type UpdateAssignmentInput = {
+	href: string,
+	uid: string,
+	date: string,
+	projectRef: string,
+	projectName: string,
+};
 
 export type ZepCalendar = {
 	displayName: string,

@@ -246,20 +246,20 @@ export function AssignmentModal({
 
     let result: { status: string; error?: string };
     if (isEditMode && assignment.href) {
-      result = await commands.updateAssignment(
-        assignment.href,
-        assignment.uid,
+      result = await commands.updateAssignment({
+        href: assignment.href,
+        uid: assignment.uid,
         date,
-        selectedProjectRef,
+        projectRef: selectedProjectRef,
         projectName,
-      );
+      });
     } else {
-      result = await commands.createAssignment(
+      result = await commands.createAssignment({
         employeeReference,
         date,
-        selectedProjectRef,
+        projectRef: selectedProjectRef,
         projectName,
-      );
+      });
     }
 
     if (result.status === "error") {

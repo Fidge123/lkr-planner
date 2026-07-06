@@ -148,18 +148,29 @@ pub(crate) fn targets_absence_calendar(target_url: &str, absence_urls: &[String]
 
 // ── CalDAV write cores ────────────────────────────────────────────────────────
 
-#[allow(clippy::too_many_arguments)]
+/// Connection details shared by every CalDAV write: the HTTP client, the
+/// credentials, the server root for href resolution, and the absence calendar
+/// URLs guarding against misdirected writes.
+pub(crate) struct CaldavSession {
+    pub(crate) client: reqwest::Client,
+    pub(crate) username: String,
+    pub(crate) password: String,
+    pub(crate) base_url: String,
+    pub(crate) absence_urls: Vec<String>,
+}
+
+pub(crate) struct AssignmentWrite {
+    pub(crate) date: String,
+    pub(crate) project_ref: String,
+    pub(crate) project_name: String,
+}
+
 pub(crate) async fn create_assignment_core(
-    client: &reqwest::Client,
+    session: &CaldavSession,
     calendar_url: &str,
-    absence_urls: &[String],
-    username: &str,
-    password: &str,
-    date: &str,
-    project_ref: &str,
-    project_name: &str,
+    write: &AssignmentWrite,
 ) -> Result<String, String> {
-    if targets_absence_calendar(calendar_url, absence_urls) {
+    if targets_absence_calendar(calendar_url, &session.absence_urls) {
         eprintln!(
             "calendar: refused create_assignment write to absence calendar URL '{calendar_url}'"
         );
@@ -169,16 +180,17 @@ pub(crate) async fn create_assignment_core(
     }
 
     let uid = Uuid::new_v4().to_string();
-    let payload = build_ical_payload(&uid, date, project_name, project_ref);
+    let payload = build_ical_payload(&uid, &write.date, &write.project_name, &write.project_ref);
 
     let base = calendar_url.trim_end_matches('/');
     let resource_url = format!("{base}/{uid}.ics");
 
     eprintln!("calendar: create_assignment PUT {resource_url}");
 
-    let response = client
+    let response = session
+        .client
         .put(&resource_url)
-        .basic_auth(username, Some(password))
+        .basic_auth(&session.username, Some(&session.password))
         .header("Content-Type", "text/calendar; charset=utf-8")
         .body(payload)
         .send()
@@ -193,22 +205,15 @@ pub(crate) async fn create_assignment_core(
     Ok(resource_url)
 }
 
-#[allow(clippy::too_many_arguments)]
 pub(crate) async fn update_assignment_core(
-    client: &reqwest::Client,
+    session: &CaldavSession,
     href: &str,
-    base_url: &str,
-    absence_urls: &[String],
     uid: &str,
-    username: &str,
-    password: &str,
-    date: &str,
-    project_ref: &str,
-    project_name: &str,
+    write: &AssignmentWrite,
 ) -> Result<(), String> {
-    let resource_url = resolve_href(href, base_url)?;
+    let resource_url = resolve_href(href, &session.base_url)?;
 
-    if targets_absence_calendar(&resource_url, absence_urls) {
+    if targets_absence_calendar(&resource_url, &session.absence_urls) {
         eprintln!(
             "calendar: refused update_assignment write to absence calendar URL '{resource_url}'"
         );
@@ -217,13 +222,14 @@ pub(crate) async fn update_assignment_core(
         );
     }
 
-    let payload = build_ical_payload(uid, date, project_name, project_ref);
+    let payload = build_ical_payload(uid, &write.date, &write.project_name, &write.project_ref);
 
     eprintln!("calendar: update_assignment PUT {resource_url}");
 
-    let response = client
+    let response = session
+        .client
         .put(&resource_url)
-        .basic_auth(username, Some(password))
+        .basic_auth(&session.username, Some(&session.password))
         .header("Content-Type", "text/calendar; charset=utf-8")
         .body(payload)
         .send()
@@ -239,16 +245,12 @@ pub(crate) async fn update_assignment_core(
 }
 
 pub(crate) async fn delete_assignment_core(
-    client: &reqwest::Client,
+    session: &CaldavSession,
     href: &str,
-    base_url: &str,
-    absence_urls: &[String],
-    username: &str,
-    password: &str,
 ) -> Result<(), String> {
-    let resource_url = resolve_href(href, base_url)?;
+    let resource_url = resolve_href(href, &session.base_url)?;
 
-    if targets_absence_calendar(&resource_url, absence_urls) {
+    if targets_absence_calendar(&resource_url, &session.absence_urls) {
         eprintln!(
             "calendar: refused delete_assignment write to absence calendar URL '{resource_url}'"
         );
@@ -259,9 +261,10 @@ pub(crate) async fn delete_assignment_core(
 
     eprintln!("calendar: delete_assignment DELETE {resource_url}");
 
-    let response = client
+    let response = session
+        .client
         .delete(&resource_url)
-        .basic_auth(username, Some(password))
+        .basic_auth(&session.username, Some(&session.password))
         .send()
         .await
         .map_err(|e| format!("Einsatz konnte nicht gelöscht werden: {e}"))?;
@@ -388,20 +391,25 @@ END:VCALENDAR
         let username = std::env::var("CALDAV_USER").expect("CALDAV_USER");
         let password = std::env::var("CALDAV_PASS").expect("CALDAV_PASS");
 
-        let client = reqwest::Client::builder()
-            .timeout(Duration::from_secs(30))
-            .build()
-            .unwrap();
+        let session = CaldavSession {
+            client: reqwest::Client::builder()
+                .timeout(Duration::from_secs(30))
+                .build()
+                .unwrap(),
+            username,
+            password,
+            base_url: calendar_url.clone(),
+            absence_urls: vec![],
+        };
 
         let href = create_assignment_core(
-            &client,
+            &session,
             &calendar_url,
-            &[],
-            &username,
-            &password,
-            "2026-05-06",
-            "/v1/projects/42",
-            "Testprojekt",
+            &AssignmentWrite {
+                date: "2026-05-06".to_string(),
+                project_ref: "/v1/projects/42".to_string(),
+                project_name: "Testprojekt".to_string(),
+            },
         )
         .await
         .expect("create_assignment_core should succeed");
@@ -419,22 +427,26 @@ END:VCALENDAR
         let username = std::env::var("CALDAV_USER").expect("CALDAV_USER");
         let password = std::env::var("CALDAV_PASS").expect("CALDAV_PASS");
 
-        let client = reqwest::Client::builder()
-            .timeout(Duration::from_secs(30))
-            .build()
-            .unwrap();
+        let session = CaldavSession {
+            client: reqwest::Client::builder()
+                .timeout(Duration::from_secs(30))
+                .build()
+                .unwrap(),
+            username,
+            password,
+            base_url,
+            absence_urls: vec![],
+        };
 
         update_assignment_core(
-            &client,
+            &session,
             &href,
-            &base_url,
-            &[],
             &uid,
-            &username,
-            &password,
-            "2026-05-07",
-            "/v1/projects/42",
-            "Aktualisiertes Projekt",
+            &AssignmentWrite {
+                date: "2026-05-07".to_string(),
+                project_ref: "/v1/projects/42".to_string(),
+                project_name: "Aktualisiertes Projekt".to_string(),
+            },
         )
         .await
         .expect("update_assignment_core should succeed");
@@ -448,12 +460,18 @@ END:VCALENDAR
         let username = std::env::var("CALDAV_USER").expect("CALDAV_USER");
         let password = std::env::var("CALDAV_PASS").expect("CALDAV_PASS");
 
-        let client = reqwest::Client::builder()
-            .timeout(Duration::from_secs(30))
-            .build()
-            .unwrap();
+        let session = CaldavSession {
+            client: reqwest::Client::builder()
+                .timeout(Duration::from_secs(30))
+                .build()
+                .unwrap(),
+            username,
+            password,
+            base_url,
+            absence_urls: vec![],
+        };
 
-        delete_assignment_core(&client, &href, &base_url, &[], &username, &password)
+        delete_assignment_core(&session, &href)
             .await
             .expect("delete_assignment_core should succeed");
     }

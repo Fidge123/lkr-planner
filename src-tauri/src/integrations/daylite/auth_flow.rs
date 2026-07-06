@@ -1,5 +1,6 @@
 use super::client::DayliteApiClient;
 use super::client::DayliteHttpMethod;
+use super::client::DayliteHttpRequest;
 use super::shared::{
     current_epoch_ms, missing_token_error, normalize_http_error, parse_json_body,
     parse_success_json_body, should_refresh_access_token, truncate_for_log, DayliteApiError,
@@ -7,7 +8,6 @@ use super::shared::{
 };
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
-use serde_json::Value;
 
 pub(super) async fn ensure_access_token(
     client: &DayliteApiClient,
@@ -40,13 +40,10 @@ pub(super) async fn refresh_tokens(
     }
 
     let response = client
-        .send_request(
-            DayliteHttpMethod::Get,
-            "/personal_token/refresh_token",
-            vec![("refresh_token".to_string(), refresh_token)],
-            None,
-            None,
-        )
+        .send_request(DayliteHttpRequest {
+            query: vec![("refresh_token".to_string(), refresh_token)],
+            ..DayliteHttpRequest::new(DayliteHttpMethod::Get, "/personal_token/refresh_token")
+        })
         .await?;
 
     if !(200..300).contains(&response.status) {
@@ -114,23 +111,14 @@ pub(super) async fn refresh_tokens(
 pub(super) async fn send_authenticated_request(
     client: &DayliteApiClient,
     token_state: DayliteTokenState,
-    method: DayliteHttpMethod,
-    path: &str,
-    query: Vec<(String, String)>,
-    body: Option<Value>,
+    mut request: DayliteHttpRequest,
 ) -> Result<DayliteTokenState, DayliteApiError> {
     let token_state = ensure_access_token(client, token_state).await?;
-    let response = client
-        .send_request(
-            method,
-            path,
-            query,
-            body,
-            Some(token_state.access_token.clone()),
-        )
-        .await?;
+    let path = request.path.clone();
+    request.access_token = Some(token_state.access_token.clone());
+    let response = client.send_request(request).await?;
     if !(200..300).contains(&response.status) {
-        return Err(normalize_http_error(response.status, &response.body, path));
+        return Err(normalize_http_error(response.status, &response.body, &path));
     }
     Ok(token_state)
 }
@@ -138,22 +126,13 @@ pub(super) async fn send_authenticated_request(
 pub(super) async fn send_authenticated_json<T: DeserializeOwned>(
     client: &DayliteApiClient,
     token_state: DayliteTokenState,
-    method: DayliteHttpMethod,
-    path: &str,
-    query: Vec<(String, String)>,
-    body: Option<Value>,
+    mut request: DayliteHttpRequest,
 ) -> Result<(T, DayliteTokenState), DayliteApiError> {
     let token_state = ensure_access_token(client, token_state).await?;
-    let response = client
-        .send_request(
-            method,
-            path,
-            query,
-            body,
-            Some(token_state.access_token.clone()),
-        )
-        .await?;
-    let data = parse_success_json_body::<T>(response.status, &response.body, path)?;
+    let path = request.path.clone();
+    request.access_token = Some(token_state.access_token.clone());
+    let response = client.send_request(request).await?;
+    let data = parse_success_json_body::<T>(response.status, &response.body, &path)?;
 
     Ok((data, token_state))
 }
@@ -183,7 +162,9 @@ fn parse_refresh_response_body(
 #[cfg(test)]
 mod tests {
     use super::{ensure_access_token, refresh_tokens, send_authenticated_json};
-    use crate::integrations::daylite::client::{DayliteApiClient, DayliteHttpMethod};
+    use crate::integrations::daylite::client::{
+        DayliteApiClient, DayliteHttpMethod, DayliteHttpRequest,
+    };
     use crate::integrations::daylite::shared::{DayliteApiErrorCode, DayliteTokenState};
     use crate::integrations::daylite::test_support::{mock_response, token_state, MockTransport};
     use serde::Deserialize;
@@ -245,10 +226,10 @@ mod tests {
             let (data, token_state) = send_authenticated_json::<AuthFlowFixture>(
                 &client,
                 token_state("existing-access-token", "refresh-token"),
-                DayliteHttpMethod::Post,
-                "/projects/_search",
-                vec![("full-records".to_string(), "true".to_string())],
-                None,
+                DayliteHttpRequest {
+                    query: vec![("full-records".to_string(), "true".to_string())],
+                    ..DayliteHttpRequest::new(DayliteHttpMethod::Post, "/projects/_search")
+                },
             )
             .await
             .expect("request should succeed");
@@ -290,10 +271,7 @@ mod tests {
                     refresh_token: "initial-refresh-token".to_string(),
                     access_token_expires_at_ms: None,
                 },
-                DayliteHttpMethod::Get,
-                "/contacts/100",
-                Vec::new(),
-                None,
+                DayliteHttpRequest::new(DayliteHttpMethod::Get, "/contacts/100"),
             )
             .await
             .expect("request should succeed after refresh");
@@ -410,10 +388,7 @@ mod tests {
             let error = send_authenticated_json::<AuthFlowFixture>(
                 &client,
                 token_state("valid-token", "refresh"),
-                DayliteHttpMethod::Get,
-                "/projects/123",
-                Vec::new(),
-                None,
+                DayliteHttpRequest::new(DayliteHttpMethod::Get, "/projects/123"),
             )
             .await
             .expect_err("non-2xx response should fail");
@@ -433,10 +408,7 @@ mod tests {
             let error = send_authenticated_json::<AuthFlowFixture>(
                 &client,
                 token_state("valid-token", "refresh"),
-                DayliteHttpMethod::Get,
-                "/contacts/100",
-                Vec::new(),
-                None,
+                DayliteHttpRequest::new(DayliteHttpMethod::Get, "/contacts/100"),
             )
             .await
             .expect_err("invalid JSON response should fail");

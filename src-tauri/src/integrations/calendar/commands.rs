@@ -1,10 +1,13 @@
 use chrono::NaiveDate;
+use serde::{Deserialize, Serialize};
+use specta::Type;
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 use tauri_plugin_http::reqwest;
 
 use super::caldav::{
     create_assignment_core, delete_assignment_core, fetch_calendar_events, update_assignment_core,
+    AssignmentWrite, CaldavSession,
 };
 use super::events::{
     classify_event, map_absence_raw_events_for_week, resolve_event, sort_events_absences_first,
@@ -190,16 +193,32 @@ pub async fn load_week_events(
     Ok(results)
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateAssignmentInput {
+    pub employee_reference: String,
+    pub date: String,
+    pub project_ref: String,
+    pub project_name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateAssignmentInput {
+    pub href: String,
+    pub uid: String,
+    pub date: String,
+    pub project_ref: String,
+    pub project_name: String,
+}
+
 /// Creates a new assignment event on the employee's primary CalDAV calendar.
 /// Returns the CalDAV resource href (e.g. `{calendar_url}/{uid}.ics`) of the new event.
 #[tauri::command]
 #[specta::specta]
 pub async fn create_assignment(
     app: tauri::AppHandle,
-    employee_reference: String,
-    date: String,
-    project_ref: String,
-    project_name: String,
+    input: CreateAssignmentInput,
 ) -> Result<String, String> {
     let store =
         crate::integrations::local_store::load_local_store(app).map_err(|e| e.user_message)?;
@@ -207,16 +226,33 @@ pub async fn create_assignment(
     let calendar_url = store
         .employee_settings
         .iter()
-        .find(|s| s.daylite_contact_reference == employee_reference)
+        .find(|s| s.daylite_contact_reference == input.employee_reference)
         .and_then(|s| s.zep_primary_calendar.as_deref())
         .filter(|u| !u.is_empty())
         .ok_or_else(|| "Kein Kalender für diesen Mitarbeiter konfiguriert.".to_string())?
         .to_string();
 
-    let absence_urls = absence_calendar_urls(&store);
+    let session = load_caldav_session(&store)?;
 
-    let (username, password) = crate::integrations::zep::load_zep_credentials_from_keychain()
-        .map(|c| (c.username, c.password))
+    create_assignment_core(
+        &session,
+        &calendar_url,
+        &AssignmentWrite {
+            date: input.date,
+            project_ref: input.project_ref,
+            project_name: input.project_name,
+        },
+    )
+    .await
+}
+
+/// Builds the CalDAV session for a write command from the stored ZEP endpoint,
+/// the keychain credentials, and every configured absence calendar URL (the
+/// guard against assignment writes landing in an absence calendar).
+fn load_caldav_session(
+    store: &crate::integrations::local_store::LocalStore,
+) -> Result<CaldavSession, String> {
+    let credentials = crate::integrations::zep::load_zep_credentials_from_keychain()
         .map_err(|e| e.user_message)?;
 
     let client = reqwest::Client::builder()
@@ -224,28 +260,18 @@ pub async fn create_assignment(
         .build()
         .map_err(|e| format!("HTTP-Client konnte nicht erstellt werden: {e}"))?;
 
-    create_assignment_core(
-        &client,
-        &calendar_url,
-        &absence_urls,
-        &username,
-        &password,
-        &date,
-        &project_ref,
-        &project_name,
-    )
-    .await
-}
-
-/// Collects every configured ZEP absence calendar URL across all employees.
-/// Used to guard assignment writes against landing in an absence calendar.
-fn absence_calendar_urls(store: &crate::integrations::local_store::LocalStore) -> Vec<String> {
-    store
-        .employee_settings
-        .iter()
-        .filter_map(|s| s.zep_absence_calendar.clone())
-        .filter(|u| !u.is_empty())
-        .collect()
+    Ok(CaldavSession {
+        client,
+        username: credentials.username,
+        password: credentials.password,
+        base_url: store.api_endpoints.zep_caldav_root_url.clone(),
+        absence_urls: store
+            .employee_settings
+            .iter()
+            .filter_map(|s| s.zep_absence_calendar.clone())
+            .filter(|u| !u.is_empty())
+            .collect(),
+    })
 }
 
 /// Updates an existing assignment event in place using the stored CalDAV href.
@@ -253,38 +279,21 @@ fn absence_calendar_urls(store: &crate::integrations::local_store::LocalStore) -
 #[specta::specta]
 pub async fn update_assignment(
     app: tauri::AppHandle,
-    href: String,
-    uid: String,
-    date: String,
-    project_ref: String,
-    project_name: String,
+    input: UpdateAssignmentInput,
 ) -> Result<(), String> {
-    let (username, password) = crate::integrations::zep::load_zep_credentials_from_keychain()
-        .map(|c| (c.username, c.password))
-        .map_err(|e| e.user_message)?;
-
     let store =
         crate::integrations::local_store::load_local_store(app).map_err(|e| e.user_message)?;
-
-    let base_url = store.api_endpoints.zep_caldav_root_url.clone();
-    let absence_urls = absence_calendar_urls(&store);
-
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(30))
-        .build()
-        .map_err(|e| format!("HTTP-Client konnte nicht erstellt werden: {e}"))?;
+    let session = load_caldav_session(&store)?;
 
     update_assignment_core(
-        &client,
-        &href,
-        &base_url,
-        &absence_urls,
-        &uid,
-        &username,
-        &password,
-        &date,
-        &project_ref,
-        &project_name,
+        &session,
+        &input.href,
+        &input.uid,
+        &AssignmentWrite {
+            date: input.date,
+            project_ref: input.project_ref,
+            project_name: input.project_name,
+        },
     )
     .await
 }
@@ -293,28 +302,9 @@ pub async fn update_assignment(
 #[tauri::command]
 #[specta::specta]
 pub async fn delete_assignment(app: tauri::AppHandle, href: String) -> Result<(), String> {
-    let (username, password) = crate::integrations::zep::load_zep_credentials_from_keychain()
-        .map(|c| (c.username, c.password))
-        .map_err(|e| e.user_message)?;
-
     let store =
         crate::integrations::local_store::load_local_store(app).map_err(|e| e.user_message)?;
+    let session = load_caldav_session(&store)?;
 
-    let base_url = store.api_endpoints.zep_caldav_root_url.clone();
-    let absence_urls = absence_calendar_urls(&store);
-
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(30))
-        .build()
-        .map_err(|e| format!("HTTP-Client konnte nicht erstellt werden: {e}"))?;
-
-    delete_assignment_core(
-        &client,
-        &href,
-        &base_url,
-        &absence_urls,
-        &username,
-        &password,
-    )
-    .await
+    delete_assignment_core(&session, &href).await
 }

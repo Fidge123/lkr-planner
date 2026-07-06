@@ -1,6 +1,7 @@
 use super::auth_flow::send_authenticated_json;
 use super::client::DayliteApiClient;
 use super::client::DayliteHttpMethod;
+use super::client::DayliteHttpRequest;
 use super::shared::{
     build_limit_query, load_store_or_error, save_store_or_error, with_token_refresh_lock,
     DayliteApiError, DayliteSearchInput, DayliteSearchResult, DayliteSearchSort, DayliteTokenState,
@@ -156,10 +157,11 @@ pub(super) async fn list_projects_core(
         send_authenticated_json::<DayliteSearchResult<DayliteProjectSummaryDto>>(
             client,
             token_state,
-            DayliteHttpMethod::Post,
-            "/projects/_search",
-            vec![("full-records".to_string(), "true".to_string())],
-            Some(json!({})),
+            DayliteHttpRequest {
+                query: vec![("full-records".to_string(), "true".to_string())],
+                body: Some(json!({})),
+                ..DayliteHttpRequest::new(DayliteHttpMethod::Post, "/projects/_search")
+            },
         )
         .await?;
 
@@ -190,10 +192,11 @@ pub(super) async fn query_overdue_projects_core(
         send_authenticated_json::<DayliteSearchResult<DayliteProjectSummaryDto>>(
             client,
             token_state,
-            DayliteHttpMethod::Post,
-            "/projects/_search",
-            build_limit_query(Some(OVERDUE_CANDIDATE_LIMIT)),
-            Some(json!(clauses)),
+            DayliteHttpRequest {
+                query: build_limit_query(Some(OVERDUE_CANDIDATE_LIMIT)),
+                body: Some(json!(clauses)),
+                ..DayliteHttpRequest::new(DayliteHttpMethod::Post, "/projects/_search")
+            },
         )
         .await?;
 
@@ -247,10 +250,11 @@ pub(super) async fn search_projects_core(
         send_authenticated_json::<DayliteSearchResult<DayliteProjectSummaryDto>>(
             client,
             token_state,
-            DayliteHttpMethod::Post,
-            "/projects/_search",
-            query,
-            Some(body),
+            DayliteHttpRequest {
+                query,
+                body: Some(body),
+                ..DayliteHttpRequest::new(DayliteHttpMethod::Post, "/projects/_search")
+            },
         )
         .await?;
 
@@ -414,9 +418,12 @@ pub(crate) async fn fetch_project_by_reference(
     let client = DayliteApiClient::new(&store.api_endpoints.daylite_base_url).ok()?;
 
     with_token_refresh_lock(|tokens| async move {
-        let (summary, tokens): (DayliteProjectSummaryDto, _) =
-            send_authenticated_json(&client, tokens, DayliteHttpMethod::Get, path, vec![], None)
-                .await?;
+        let (summary, tokens): (DayliteProjectSummaryDto, _) = send_authenticated_json(
+            &client,
+            tokens,
+            DayliteHttpRequest::new(DayliteHttpMethod::Get, path),
+        )
+        .await?;
         let mapped = map_daylite_project_summary(summary);
         let status_str = project_status_to_string(&mapped.status);
         Ok(((mapped.name, status_str.to_string()), tokens))

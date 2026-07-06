@@ -55,12 +55,12 @@ export function TimetableRow({
   };
 
   const handleSuggestionClick = async (suggestion: GhostSuggestion) => {
-    const result = await commands.createAssignment(
-      employee.self,
-      suggestion.date,
-      suggestion.projectRef,
-      suggestion.projectName,
-    );
+    const result = await commands.createAssignment({
+      employeeReference: employee.self,
+      date: suggestion.date,
+      projectRef: suggestion.projectRef,
+      projectName: suggestion.projectName,
+    });
     if (result.status === "error") return;
     recordLastAssignedProject({
       self: suggestion.projectRef,
