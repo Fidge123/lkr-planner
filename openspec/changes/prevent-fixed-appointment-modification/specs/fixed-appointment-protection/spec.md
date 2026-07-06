@@ -14,12 +14,14 @@ The system SHALL identify a CalDAV event as protected when the Daylite project i
 - **THEN** the event is not treated as protected
 
 #### Scenario: Event has no Daylite project reference
-- **WHEN** an event's DESCRIPTION contains no `daylite:/<path>` reference
-- **THEN** the event is not treated as protected
+- **WHEN** an event's DESCRIPTION contains no `daylite:/<path>` reference (bare event)
+- **THEN** the event is protected
 
 #### Scenario: Project lookup fails
 - **WHEN** the Daylite project referenced by an event cannot be resolved (network error, project not found)
 - **THEN** the event is treated as not protected
+- **AND** a warning message is shown to the user
+- **AND** the event has a warning icon
 - **AND** the lookup failure is logged
 
 ### Requirement: Reject modification of protected events
