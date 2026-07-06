@@ -34,14 +34,14 @@ The system SHALL highlight a timetable cell in red, with an icon and German labe
 
 #### Scenario: Absence and appointment coincide
 - **WHEN** a timetable cell contains both an absence event and an assignment event for the same employee and day
-- **THEN** the cell shows a red conflict indicator
-- **AND** the indicator includes an icon and a German label explaining the conflict
+- **THEN** the cell shows a red conflict indicator icon
 - **AND** the absence and assignment events keep their own category/status colors alongside the indicator
 
 #### Scenario: Absence without an appointment
 - **WHEN** a timetable cell contains an absence event and no assignment event
 - **THEN** no conflict indicator is shown
 
-#### Scenario: Bare event does not trigger a conflict
+#### Scenario: Bare event triggers a conflict
 - **WHEN** a timetable cell contains an absence event and a bare (non-assignment) event
-- **THEN** no conflict indicator is shown
+- **THEN** the cell shows a red conflict indicator icon
+- **AND** the absence and assignment events keep their own category/status colors alongside the indicator
