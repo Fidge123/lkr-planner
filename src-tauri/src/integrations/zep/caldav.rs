@@ -303,8 +303,6 @@ mod tests {
         assert!(calendars.is_empty());
     }
 
-    // ── VCR tests (recorded PROPFIND response bodies) ─────────────────────────
-
     #[test]
     fn vcr_typical_multi_employee_response_extracts_all_calendars() {
         let body = include_str!("zep_vcr/propfind_typical_multi_employee.xml");

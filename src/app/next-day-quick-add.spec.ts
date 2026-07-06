@@ -32,7 +32,6 @@ function event(
   };
 }
 
-// ── 2.1 – target day resolution and the last-visible-day boundary ─────────────
 describe("nextVisibleDay", () => {
   it("returns the following day within the visible week", () => {
     expect(nextVisibleDay(weekDays, "2026-05-05")).toBe("2026-05-06");
@@ -47,7 +46,6 @@ describe("nextVisibleDay", () => {
   });
 });
 
-// ── 1.1 / 1.3 / 2.1 / 4.3 / 4.4 / 5.1 – ghost lifecycle ────────────────────────
 describe("nextGhostState", () => {
   it("sets a ghost on the next visible day after a create", () => {
     const result = nextGhostState(
@@ -154,7 +152,6 @@ describe("nextGhostState", () => {
   });
 });
 
-// ── 2.3 – suppression when the target day already holds an event ──────────────
 describe("isGhostVisible", () => {
   const ghost: GhostSuggestion = {
     date: "2026-05-06",

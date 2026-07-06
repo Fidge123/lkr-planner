@@ -16,7 +16,6 @@ const EMPLOYEE: PlanningContactRecord = {
   urls: [],
 };
 
-// ── 10.8 / 10.9 – CalendarSection unit tests ──────────────────────────────────
 // CalendarSection is tested in isolation so that submitting/idle states can be
 // controlled directly via props, proving the two sections are fully independent.
 
@@ -147,8 +146,6 @@ describe("CalendarSection (10.9 – in-flight state)", () => {
     expect(html).not.toMatch(/disabled/);
   });
 });
-
-// ── 10.10 – Discovery failure ─────────────────────────────────────────────────
 
 describe("EmployeeIcalDialog (10.10 – discovery failure)", () => {
   it("shows error banner with reload button when calendar discovery failed", () => {

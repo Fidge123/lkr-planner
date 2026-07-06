@@ -2,8 +2,6 @@ use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
-// ── Public types (exposed to frontend via Tauri Specta) ──────────────────────
-
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum CalendarEventKind {
@@ -43,8 +41,6 @@ pub struct EmployeeWeekEvents {
     /// Set when the CalDAV fetch for this employee fails entirely.
     pub error: Option<String>,
 }
-
-// ── Internal types ────────────────────────────────────────────────────────────
 
 /// A raw VEVENT as parsed from iCal text.
 /// `dtstart` holds an ISO date string in the form `yyyy-MM-dd` (already formatted).

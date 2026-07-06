@@ -40,7 +40,6 @@ describe("last-used cache", () => {
   });
 });
 
-// ── 5.1 / 5.2 / 5.3 / 5.4 – ordering, cap, dedup, empty cache ─────────────────
 describe("combineSuggestions", () => {
   const overdue = [
     project("Projekt 10", "/v1/projects/10"),
@@ -103,7 +102,6 @@ describe("combineSuggestions", () => {
     ]);
   });
 
-  // ── 4.2 / 4.3 – fallback combinations ───────────────────────────────────────
   it("returns only the recent project when there are no overdue projects", () => {
     const recent = project("Projekt Zuletzt", "/v1/projects/99");
 
@@ -115,7 +113,6 @@ describe("combineSuggestions", () => {
   });
 });
 
-// ── 5.5 – service fallback behavior ───────────────────────────────────────────
 describe("loadDefaultSuggestions", () => {
   beforeEach(() => {
     resetLastAssignedProject();

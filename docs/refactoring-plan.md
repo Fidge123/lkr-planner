@@ -37,8 +37,8 @@ Files using `// ── Section ──` markers are self-identified split candida
 
 | File | Lines | Sections / contents | Split |
 |---|---|---|---|
-| `daylite/projects.rs` | 1444 | ~450 prod + ~1000 test lines | Move tests to `projects/tests.rs`; extract shared test support (see finding 5) |
-| `calendar/events.rs` | 721 | classification, resolution, ordering, absence mapping | `calendar/events/` with `classify.rs`, `resolve.rs`, `absences.rs` |
+| `daylite/projects.rs` | 1444 | ~450 prod + ~1000 test lines | Shrink the inline test module via shared test support (see finding 5); inline `#[cfg(test)] mod tests` stays, which is idiomatic Rust |
+| `calendar/events.rs` | 721 | classification, resolution, ordering, absence mapping | `calendar/events/` with `classify.rs`, `resolve.rs`, `order.rs`, `absences.rs` |
 | `local_store.rs` | 595 | types, persistence commands, tests | `local_store/types.rs` + `local_store/persistence.rs` |
 | `settings-dialog.tsx` | 519 | dialog shell + 3 panel components | `components/settings/` with one file per panel |
 | `assignment-modal.tsx` | 502 | modal + 2 confirm dialogs + list + 4 pure helpers | Extract confirm dialogs, `ProjectResultList`, and pure helpers |
@@ -96,7 +96,7 @@ Comment cleanup (finding 1) is folded into whichever phase touches the file, so 
 
 1. Add `daylite/test_support.rs` with `MockTransport`, `mock_response`, and token fixtures; delete the three copies.
 2. Derive `Default` for `DayliteSearchInput` and collapse test literals.
-3. Move the test module of `projects.rs` to `daylite/projects/tests.rs`.
+3. Test modules stay inline in their source files (`#[cfg(test)] mod tests`), which is idiomatic Rust; splitting a file always keeps each test next to the code it tests.
 
 ### Phase 2: Parameter objects in Rust
 
@@ -112,7 +112,7 @@ Comment cleanup (finding 1) is folded into whichever phase touches the file, so 
 
 ### Phase 4: File splits
 
-1. `calendar/events.rs` into `events/classify.rs`, `events/resolve.rs`, `events/absences.rs` with co-located tests.
+1. `calendar/events.rs` into `events/classify.rs`, `events/resolve.rs`, `events/order.rs`, `events/absences.rs` with co-located tests.
 2. `calendar/caldav.rs` into `caldav/report.rs` and `caldav/write.rs`.
 3. `local_store.rs` into `local_store/types.rs` and `local_store/persistence.rs`.
 4. `settings-dialog.tsx` into `components/settings/` (dialog shell, `daylite-panel.tsx`, `zep-panel.tsx`, `display-panel.tsx`, shared status alert).

@@ -45,7 +45,6 @@ describe("TimetableCell", () => {
     expect(html).toContain("<button");
   });
 
-  // ── 3.1 – ghost rendering: reduced opacity, dashed border, placed before the add affordance ──
   it("renders a suggestion with reduced opacity and a dashed border", () => {
     const suggestion: GhostSuggestion = {
       date: "2026-05-06",

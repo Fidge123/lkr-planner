@@ -2,8 +2,6 @@ use icalendar::{Calendar, CalendarComponent, CalendarDateTime, Component, DatePe
 
 use super::types::RawVEvent;
 
-// ── iCal payload builder ──────────────────────────────────────────────────────
-
 /// Builds an RFC 5545 VCALENDAR payload for a lkr-planner assignment.
 /// Uses a fixed floating 08:00–16:00 time window (local time, no timezone).
 pub(crate) fn build_ical_payload(
@@ -36,8 +34,6 @@ fn escape_ical_text(value: &str) -> String {
         .replace("\r\n", "\\n")
         .replace(['\n', '\r'], "\\n")
 }
-
-// ── iCal parsing ──────────────────────────────────────────────────────────────
 
 /// Parses iCal text and returns all VEVENT entries found, or an error if the text is not
 /// valid iCal. Uses the `icalendar` crate for RFC 5545-compliant parsing (line unfolding,
@@ -116,8 +112,6 @@ mod tests {
     use super::*;
     use chrono::NaiveDate;
 
-    // ── iCal parsing ──
-
     #[test]
     fn parses_vevent_with_all_properties() {
         let ical = "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:test-uid-1\r\nSUMMARY:Projekt Nord\r\nDESCRIPTION:daylite:/v1/projects/3001\r\nDTSTART;VALUE=DATE:20260126\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
@@ -170,8 +164,6 @@ mod tests {
         let result = parse_ical_events("this is definitely not valid ical");
         assert!(result.is_err(), "expected Err for malformed iCal, got Ok");
     }
-
-    // ── iCal payload builder ──
 
     #[test]
     fn build_ical_payload_contains_expected_fields() {
