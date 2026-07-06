@@ -13,10 +13,11 @@ Every step is a behavior-preserving refactor verified by the existing test suite
 
 ### 1. Comments
 
-Most comments in this codebase are good constraint comments and must stay.
+The only comments that stay are non-obvious constraint comments, and each constraint is stated exactly once, at the definition that owns it.
 Examples worth keeping: the Daylite bare `{}` empty-response quirk (`daylite/shared.rs`), the token rotation lock rationale (`daylite/shared.rs`), the CalDAV href-vs-origin resolution rule (`calendar/caldav.rs`), and the BOM/zero-width-space stripping (`calendar/events.rs`).
+When a constraint is repeated at call sites or in tests (for example the bare `{}` quirk is restated in `projects.rs` tests, and the PATCH 204 No Content quirk appears in both production code and tests of `contacts/api.rs`), the copies go and only the owning definition keeps it.
 
-Three categories should be removed or made redundant by naming:
+These categories should be removed or made redundant by naming:
 
 - Narration comments that restate the next line.
   Examples: `// Try the local Daylite cache first.` and `// Placeholder: project could not be resolved.` in `calendar/events.rs`, `// Focus the filter so the user can start typing immediately.` in `assignment-modal.tsx`.
@@ -45,7 +46,7 @@ Files using `// ── Section ──` markers are self-identified split candida
 | `daylite/contacts/api.rs` | 515 | already modular, mostly tests | Test support extraction only |
 | `employee-ical-dialog.tsx` | 370 | dialog + `CalendarSection` | Extract `CalendarSection` |
 
-Section markers inside spec files (`assignment-modal.spec.tsx`, `next-day-quick-add.spec.ts`) reference backlog task IDs and act as test documentation; they stay.
+Section markers inside spec files (`assignment-modal.spec.tsx`, `next-day-quick-add.spec.ts`) reference backlog task IDs; test names must describe the behavior on their own, so these markers are removed as well.
 
 ### 3. Thin wrappers
 
@@ -128,14 +129,14 @@ Comment cleanup (finding 1) is folded into whichever phase touches the file, so 
 
 ### Phase 6: Final comment sweep
 
-Remove remaining narration and history comments repo-wide using the rule: a comment stays only if it states a constraint the code cannot express (API quirk, ordering requirement, safety guard rationale).
+Remove remaining narration, history, and backlog-ID comments repo-wide using the rule: a comment stays only if it states a non-obvious constraint the code cannot express (API quirk, ordering requirement, safety guard rationale), and each constraint appears exactly once, at its owning definition.
+This includes the backlog-ID section markers in the spec files.
 
 ## Non-goals
 
 - No behavior changes, no new features, and no changes to German user-facing texts.
 - The `lib.rs` command registration list stays a single `collect_commands!` block (macro requirement); keeping it grouped by integration is enough to limit merge conflicts.
 - `src/generated/tauri.ts` is generated and exempt from all of the above.
-- Section markers in spec files that map tests to backlog IDs stay.
 
 ## Verification per phase
 

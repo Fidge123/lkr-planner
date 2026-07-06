@@ -87,7 +87,7 @@ pub enum DayliteSearchSort {
     Name,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct DayliteSearchInput {
     pub search_term: String,

@@ -148,12 +148,8 @@ fn parse_contact_id(contact_reference: &str) -> Result<u64, DayliteApiError> {
 mod tests {
     use super::super::mapping::contact_display_name;
     use super::*;
-    use crate::integrations::daylite::client::{
-        BoxFuture, DayliteHttpRequest, DayliteHttpResponse, DayliteHttpTransport,
-    };
+    use crate::integrations::daylite::test_support::{mock_response, token_state, MockTransport};
     use crate::integrations::local_store::DayliteContactCacheEntry;
-    use std::collections::VecDeque;
-    use std::sync::{Arc, Mutex};
 
     #[test]
     fn list_contacts_searches_both_monteur_and_test_categories() {
@@ -165,18 +161,10 @@ mod tests {
             let transport = MockTransport::new(vec![Ok(search_response)]);
             let client = DayliteApiClient::with_transport(Box::new(transport.clone()));
 
-            let (contacts, _) = list_contacts_core(
-                &client,
-                DayliteTokenState {
-                    access_token: "token".to_string(),
-                    refresh_token: "refresh".to_string(),
-                    access_token_expires_at_ms: Some(u64::MAX),
-                },
-            )
-            .await
-            .expect("list should succeed");
+            let (contacts, _) = list_contacts_core(&client, token_state("token", "refresh"))
+                .await
+                .expect("list should succeed");
 
-            // Both planning categories are returned to the caller.
             assert_eq!(contacts.len(), 2);
 
             let requests = transport.requests();
@@ -218,11 +206,7 @@ mod tests {
 
             let (contact, token_state) = update_contact_ical_urls_core(
                 &client,
-                DayliteTokenState {
-                    access_token: "token".to_string(),
-                    refresh_token: "refresh".to_string(),
-                    access_token_expires_at_ms: Some(u64::MAX),
-                },
+                token_state("token", "refresh"),
                 &mut store,
                 &DayliteUpdateContactIcalUrlsInput {
                     contact_reference: "/v1/contacts/500".to_string(),
@@ -251,8 +235,6 @@ mod tests {
 
     #[test]
     fn update_ical_urls_handles_204_no_content_from_patch() {
-        // Daylite returns 204 No Content (empty body) for PATCH /contacts/:id.
-        // The result must still be correct (built from GET data + merged URLs).
         tauri::async_runtime::block_on(async {
             let get_response = mock_response(
                 200,
@@ -265,11 +247,7 @@ mod tests {
 
             let (contact, _) = update_contact_ical_urls_core(
                 &client,
-                DayliteTokenState {
-                    access_token: "token".to_string(),
-                    refresh_token: "refresh".to_string(),
-                    access_token_expires_at_ms: Some(u64::MAX),
-                },
+                token_state("token", "refresh"),
                 &mut store,
                 &DayliteUpdateContactIcalUrlsInput {
                     contact_reference: "/v1/contacts/800".to_string(),
@@ -314,11 +292,7 @@ mod tests {
 
             let (contact, _) = update_contact_ical_urls_core(
                 &client,
-                DayliteTokenState {
-                    access_token: "token".to_string(),
-                    refresh_token: "refresh".to_string(),
-                    access_token_expires_at_ms: Some(u64::MAX),
-                },
+                token_state("token", "refresh"),
                 &mut store,
                 &DayliteUpdateContactIcalUrlsInput {
                     contact_reference: "/v1/contacts/600".to_string(),
@@ -363,11 +337,7 @@ mod tests {
 
             let (contact, _) = update_contact_ical_urls_core(
                 &client,
-                DayliteTokenState {
-                    access_token: "token".to_string(),
-                    refresh_token: "refresh".to_string(),
-                    access_token_expires_at_ms: Some(u64::MAX),
-                },
+                token_state("token", "refresh"),
                 &mut store,
                 &DayliteUpdateContactIcalUrlsInput {
                     contact_reference: "/v1/contacts/700".to_string(),
@@ -391,11 +361,7 @@ mod tests {
 
             let (contacts, token_state) = list_contacts_core(
                 &client,
-                DayliteTokenState {
-                    access_token: "replay-access-token".to_string(),
-                    refresh_token: "replay-refresh-token".to_string(),
-                    access_token_expires_at_ms: Some(u64::MAX),
-                },
+                token_state("replay-access-token", "replay-refresh-token"),
             )
             .await
             .expect("list should replay from cassette");
@@ -437,11 +403,7 @@ mod tests {
 
             let (contact, token_state) = update_contact_ical_urls_core(
                 &client,
-                DayliteTokenState {
-                    access_token: "replay-access-token".to_string(),
-                    refresh_token: "replay-refresh-token".to_string(),
-                    access_token_expires_at_ms: Some(u64::MAX),
-                },
+                token_state("replay-access-token", "replay-refresh-token"),
                 &mut store,
                 &DayliteUpdateContactIcalUrlsInput {
                     contact_reference: "/v1/contacts/1029".to_string(),
@@ -462,54 +424,5 @@ mod tests {
                 "/v1/contacts/1029"
             );
         });
-    }
-
-    #[derive(Clone)]
-    struct MockTransport {
-        responses: Arc<Mutex<VecDeque<Result<DayliteHttpResponse, DayliteApiError>>>>,
-        requests: Arc<Mutex<Vec<DayliteHttpRequest>>>,
-    }
-
-    impl MockTransport {
-        fn new(responses: Vec<Result<DayliteHttpResponse, DayliteApiError>>) -> Self {
-            Self {
-                responses: Arc::new(Mutex::new(VecDeque::from(responses))),
-                requests: Arc::new(Mutex::new(Vec::new())),
-            }
-        }
-
-        fn requests(&self) -> Vec<DayliteHttpRequest> {
-            self.requests
-                .lock()
-                .expect("request lock should succeed")
-                .clone()
-        }
-    }
-
-    impl DayliteHttpTransport for MockTransport {
-        fn send<'a>(
-            &'a self,
-            request: DayliteHttpRequest,
-        ) -> BoxFuture<'a, Result<DayliteHttpResponse, DayliteApiError>> {
-            Box::pin(async move {
-                self.requests
-                    .lock()
-                    .expect("request lock should succeed")
-                    .push(request);
-
-                self.responses
-                    .lock()
-                    .expect("response lock should succeed")
-                    .pop_front()
-                    .expect("mock should contain enough responses")
-            })
-        }
-    }
-
-    fn mock_response(status: u16, body: &str) -> DayliteHttpResponse {
-        DayliteHttpResponse {
-            status,
-            body: body.to_string(),
-        }
     }
 }

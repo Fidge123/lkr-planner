@@ -183,14 +183,10 @@ fn parse_refresh_response_body(
 #[cfg(test)]
 mod tests {
     use super::{ensure_access_token, refresh_tokens, send_authenticated_json};
-    use crate::integrations::daylite::client::{
-        BoxFuture, DayliteApiClient, DayliteHttpMethod, DayliteHttpRequest, DayliteHttpResponse,
-        DayliteHttpTransport,
-    };
+    use crate::integrations::daylite::client::{DayliteApiClient, DayliteHttpMethod};
     use crate::integrations::daylite::shared::{DayliteApiErrorCode, DayliteTokenState};
+    use crate::integrations::daylite::test_support::{mock_response, token_state, MockTransport};
     use serde::Deserialize;
-    use std::collections::VecDeque;
-    use std::sync::{Arc, Mutex};
 
     #[test]
     fn ensure_access_token_returns_missing_token_error_when_both_tokens_are_missing() {
@@ -211,11 +207,7 @@ mod tests {
         tauri::async_runtime::block_on(async {
             let client =
                 DayliteApiClient::new("https://daylite.example").expect("client should be created");
-            let original_state = DayliteTokenState {
-                access_token: "existing-access-token".to_string(),
-                refresh_token: "refresh-token".to_string(),
-                access_token_expires_at_ms: Some(u64::MAX),
-            };
+            let original_state = token_state("existing-access-token", "refresh-token");
 
             let token_state = ensure_access_token(&client, original_state.clone())
                 .await
@@ -252,11 +244,7 @@ mod tests {
 
             let (data, token_state) = send_authenticated_json::<AuthFlowFixture>(
                 &client,
-                DayliteTokenState {
-                    access_token: "existing-access-token".to_string(),
-                    refresh_token: "refresh-token".to_string(),
-                    access_token_expires_at_ms: Some(u64::MAX),
-                },
+                token_state("existing-access-token", "refresh-token"),
                 DayliteHttpMethod::Post,
                 "/projects/_search",
                 vec![("full-records".to_string(), "true".to_string())],
@@ -421,11 +409,7 @@ mod tests {
 
             let error = send_authenticated_json::<AuthFlowFixture>(
                 &client,
-                DayliteTokenState {
-                    access_token: "valid-token".to_string(),
-                    refresh_token: "refresh".to_string(),
-                    access_token_expires_at_ms: Some(u64::MAX),
-                },
+                token_state("valid-token", "refresh"),
                 DayliteHttpMethod::Get,
                 "/projects/123",
                 Vec::new(),
@@ -448,11 +432,7 @@ mod tests {
 
             let error = send_authenticated_json::<AuthFlowFixture>(
                 &client,
-                DayliteTokenState {
-                    access_token: "valid-token".to_string(),
-                    refresh_token: "refresh".to_string(),
-                    access_token_expires_at_ms: Some(u64::MAX),
-                },
+                token_state("valid-token", "refresh"),
                 DayliteHttpMethod::Get,
                 "/contacts/100",
                 Vec::new(),
@@ -479,70 +459,5 @@ mod tests {
             assert_eq!(token_state.refresh_token, "replayed-refresh-token");
             assert!(token_state.access_token_expires_at_ms.is_some());
         });
-    }
-
-    #[derive(Clone)]
-    struct MockTransport {
-        responses: Arc<
-            Mutex<
-                VecDeque<
-                    Result<
-                        DayliteHttpResponse,
-                        crate::integrations::daylite::shared::DayliteApiError,
-                    >,
-                >,
-            >,
-        >,
-        requests: Arc<Mutex<Vec<DayliteHttpRequest>>>,
-    }
-
-    impl MockTransport {
-        fn new(
-            responses: Vec<
-                Result<DayliteHttpResponse, crate::integrations::daylite::shared::DayliteApiError>,
-            >,
-        ) -> Self {
-            Self {
-                responses: Arc::new(Mutex::new(VecDeque::from(responses))),
-                requests: Arc::new(Mutex::new(Vec::new())),
-            }
-        }
-
-        fn requests(&self) -> Vec<DayliteHttpRequest> {
-            self.requests
-                .lock()
-                .expect("request lock should succeed")
-                .clone()
-        }
-    }
-
-    impl DayliteHttpTransport for MockTransport {
-        fn send<'a>(
-            &'a self,
-            request: DayliteHttpRequest,
-        ) -> BoxFuture<
-            'a,
-            Result<DayliteHttpResponse, crate::integrations::daylite::shared::DayliteApiError>,
-        > {
-            Box::pin(async move {
-                self.requests
-                    .lock()
-                    .expect("request lock should succeed")
-                    .push(request);
-
-                self.responses
-                    .lock()
-                    .expect("response lock should succeed")
-                    .pop_front()
-                    .expect("mock should contain enough responses")
-            })
-        }
-    }
-
-    fn mock_response(status: u16, body: &str) -> DayliteHttpResponse {
-        DayliteHttpResponse {
-            status,
-            body: body.to_string(),
-        }
     }
 }
