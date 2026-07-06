@@ -1,14 +1,5 @@
-/// Integration modules for external services and APIs
-///
-/// This module contains all integration code for:
-/// - External API clients (Daylite, Planradar, iCal)
-/// - Health checks and status monitoring
-/// - Any other external service integrations
-///
-/// Architecture principle:
-/// - Network calls and secrets are handled here in Rust
-/// - Frontend consumes these via Tauri commands
-/// - Each integration exposes Tauri commands for the frontend service layer
+/// Integrations with external services. Network calls and secrets stay in Rust;
+/// the frontend consumes them via Tauri commands (see docs/adr/0001 and 0002).
 pub mod calendar;
 pub mod daylite;
 pub mod health;

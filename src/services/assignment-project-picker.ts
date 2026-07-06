@@ -1,7 +1,6 @@
 import { commands, type DayliteProjectSummary } from "../generated/tauri";
 import { unwrapCommandResult } from "./daylite-service-helpers";
 
-// Number of matches shown to the user.
 const DISPLAY_LIMIT = 5;
 // Candidate pool fetched from Daylite before the name sort. Daylite applies its
 // own ordering when truncating to `limit`, so fetching only 5 would let it drop

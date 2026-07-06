@@ -119,7 +119,7 @@ pub async fn zep_save_and_test_calendar(
     // Load local store once — all in-memory mutations use this copy.
     let mut store = crate::integrations::local_store::load_local_store(app.clone())?;
 
-    // Step 1: Sync to Daylite — empty string removes the URL entry via normalize_non_empty.
+    // An empty URL string removes the entry in Daylite via normalize_non_empty.
     let current_setting =
         find_or_default_setting(&store.employee_settings, &daylite_contact_reference);
     let (primary_url, absence_url) = match source {
@@ -156,7 +156,7 @@ pub async fn zep_save_and_test_calendar(
         )
     })?;
 
-    // Step 2: Save to local store (None = cleared), clear old test timestamps.
+    // A changed URL invalidates the previous test result.
     update_setting(
         &mut store.employee_settings,
         &daylite_contact_reference,
@@ -185,7 +185,6 @@ pub async fn zep_save_and_test_calendar(
         });
     };
 
-    // Step 3: Run CalDAV connection test.
     let creds = load_zep_credentials_from_keychain()?;
     let timestamp = current_timestamp();
     let test_result = probe_calendar(cal_url, &creds.username, &creds.password).await;
@@ -194,7 +193,6 @@ pub async fn zep_save_and_test_calendar(
         Err(e) => (false, Some(e.user_message.clone())),
     };
 
-    // Step 4: Store test result timestamp.
     update_setting(
         &mut store.employee_settings,
         &daylite_contact_reference,

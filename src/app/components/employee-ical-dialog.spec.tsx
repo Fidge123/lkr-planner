@@ -66,9 +66,7 @@ describe("CalendarSection (10.8 – independent state)", () => {
       />,
     );
 
-    // Primary is in-flight
     expect(primaryHtml).toContain("Teste...");
-    // Absence remains at rest — its own isSubmitting is false
     expect(absenceHtml).toContain("Speichern");
     expect(absenceHtml).not.toContain("Teste...");
   });
@@ -175,11 +173,8 @@ describe("EmployeeIcalDialog (10.10 – discovery failure)", () => {
       />,
     );
 
-    // Error message is displayed
     expect(html).toContain(errorMessage);
-    // A reload button is present
     expect(html).toContain("Neu laden");
-    // The dialog itself still renders
     expect(html).toContain("<dialog");
     expect(html).toContain("iCal-Konfiguration");
   });

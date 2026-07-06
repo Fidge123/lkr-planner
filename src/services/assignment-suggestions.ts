@@ -1,6 +1,5 @@
 import { commands, type DayliteProjectSummary } from "../generated/tauri";
 
-// Total suggestions shown when the assignment modal opens.
 const SUGGESTION_LIMIT = 5;
 
 // Last project assigned during this session. In-memory by design: it resets on
@@ -17,7 +16,6 @@ export function getLastAssignedProject(): DayliteProjectSummary | null {
   return lastAssignedProject;
 }
 
-// The cache is module state, so tests reset it between cases.
 export function resetLastAssignedProject(): void {
   lastAssignedProject = null;
 }

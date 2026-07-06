@@ -1,6 +1,6 @@
 # Refactoring Plan: Readability, File Granularity, Wrappers, and Parameter Lists
 
-Status: Proposed
+Status: Implemented (all phases, see the git history of this change)
 Date: 2026-07-06
 
 ## Goal

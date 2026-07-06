@@ -158,7 +158,6 @@ mod tests {
         );
     }
 
-    // M3 (red): malformed iCal text should return an error from parse_ical_events.
     #[test]
     fn malformed_ical_text_returns_error() {
         let result = parse_ical_events("this is definitely not valid ical");

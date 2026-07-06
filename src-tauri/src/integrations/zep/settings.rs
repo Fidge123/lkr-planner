@@ -12,7 +12,6 @@ pub(super) fn current_timestamp() -> String {
 /// are not configured. Intended to be called after Daylite reconciliation so that
 /// newly-discovered calendar URLs are validated immediately without a manual save.
 pub(crate) async fn test_untested_calendar_urls(settings: &mut [EmployeeSetting]) {
-    // Collect (contact_reference, url, is_primary) triples that need testing.
     let to_test: Vec<(String, String, bool)> = settings
         .iter()
         .flat_map(|s| {
