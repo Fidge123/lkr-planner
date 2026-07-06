@@ -53,4 +53,4 @@ Use an in-flight request map (`(employee_id, calendar_url, week_start) -> shared
 
 ## Open Questions
 
-- Should the backend cache TTL be configurable via local settings (as ADR 0007 flagged as future work for Daylite), or is a fixed 30s constant sufficient for this change?
+None — confirmed with the user that a fixed 30s TTL constant is sufficient for this change; no configurable TTL is needed.
