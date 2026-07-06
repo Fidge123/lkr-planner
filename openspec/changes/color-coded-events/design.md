@@ -56,7 +56,7 @@ Match the absence title's leading token (split on whitespace/`-`/`:`) case-insen
 
 ### Conflict indicator: status color, not a category
 When a cell contains both an absence event and an assignment (`kind === "assignment"`) event for the same employee/day, add a red conflict indicator — a `ring-2 ring-error` (or equivalent border) on the cell plus a small warning icon (Lucide) with a German tooltip/label (e.g. `"Termin während Abwesenheit"`), never color alone, per the dataviz skill's status-color rule that state (good/warning/critical) must never be encoded as "just another category color."
-Bare (non-assignment) events do not trigger the conflict indicator — only assignment events count as "an appointment" for this purpose.
+Bare (non-assignment) events also trigger the conflict indicator.
 
 ## Risks / Trade-offs
 
