@@ -8,6 +8,15 @@ import { recordLastAssignedProject } from "../../services/assignment-suggestions
 import { useAssignmentDefaultSuggestions } from "../hooks/use-assignment-default-suggestions";
 import { useAssignmentProjectSearch } from "../hooks/use-assignment-project-search";
 import type { ModalSaveAction } from "../next-day-quick-add";
+import {
+  nextHighlightIndex,
+  resolveDisplayedProjects,
+  resolveEscapeAction,
+  resolveSaveAction,
+} from "./assignment-modal-logic";
+import { DeleteConfirmDialog } from "./delete-confirm-dialog";
+import { ProjectResultList, SuggestionEmptyState } from "./project-result-list";
+import { UnsavedChangesDialog } from "./unsaved-changes-dialog";
 
 export function AssignmentModal({
   isOpen,
@@ -62,7 +71,6 @@ export function AssignmentModal({
     setFilter("");
     setHighlightedIndex(-1);
     setIsDirty(false);
-    // Focus the filter so the user can start typing immediately.
     filterInputRef.current?.focus();
   }, [
     isOpen,
@@ -96,103 +104,33 @@ export function AssignmentModal({
 
   if (showUnsavedConfirm) {
     return (
-      <dialog
-        className="modal modal-open"
-        open
-        aria-labelledby="assignment-unsaved-title"
-      >
-        <section className="modal-box max-w-sm">
-          <h2 id="assignment-unsaved-title" className="text-lg font-semibold">
-            Ungespeicherte Änderungen
-          </h2>
-          <p className="mt-3 text-sm">
-            Es gibt ungespeicherte Änderungen. Möchten Sie diese verwerfen?
-          </p>
-          <section className="modal-action">
-            <button
-              type="button"
-              className="btn btn-sm"
-              onClick={() => setShowUnsavedConfirm(false)}
-            >
-              Weiterbearbeiten
-            </button>
-            <button
-              type="button"
-              className="btn btn-sm btn-warning"
-              onClick={onClose}
-            >
-              Verwerfen
-            </button>
-          </section>
-        </section>
-        <button
-          type="button"
-          className="modal-backdrop"
-          onClick={() => setShowUnsavedConfirm(false)}
-          aria-label="Dialog schließen"
-        >
-          Schließen
-        </button>
-      </dialog>
+      <UnsavedChangesDialog
+        onContinueEditing={() => setShowUnsavedConfirm(false)}
+        onDiscard={onClose}
+      />
     );
   }
 
   if (showDeleteConfirm) {
     return (
-      <dialog
-        className="modal modal-open"
-        open
-        aria-labelledby="assignment-delete-title"
-      >
-        <section className="modal-box max-w-sm">
-          <h2 id="assignment-delete-title" className="text-lg font-semibold">
-            Einsatz löschen
-          </h2>
-          <p className="mt-3 text-sm">
-            Soll dieser Einsatz wirklich gelöscht werden?
-          </p>
-          {errorMessage ? (
-            <p className="mt-3 text-sm text-error">{errorMessage}</p>
-          ) : null}
-          <section className="modal-action">
-            <button
-              type="button"
-              className="btn btn-sm"
-              onClick={() => setShowDeleteConfirm(false)}
-              disabled={isSaving}
-            >
-              Abbrechen
-            </button>
-            <button
-              type="button"
-              className="btn btn-sm btn-error"
-              disabled={isSaving}
-              onClick={async () => {
-                if (!assignment?.href) return;
-                setIsSaving(true);
-                setErrorMessage(null);
-                const result = await commands.deleteAssignment(assignment.href);
-                if (result.status === "error") {
-                  setErrorMessage(result.error);
-                  setIsSaving(false);
-                  return;
-                }
-                onSave({ kind: "delete" });
-              }}
-            >
-              {isSaving ? "Lösche..." : "Endgültig löschen"}
-            </button>
-          </section>
-        </section>
-        <button
-          type="button"
-          className="modal-backdrop"
-          onClick={requestClose}
-          aria-label="Dialog schließen"
-        >
-          Schließen
-        </button>
-      </dialog>
+      <DeleteConfirmDialog
+        isDeleting={isSaving}
+        errorMessage={errorMessage}
+        onCancel={() => setShowDeleteConfirm(false)}
+        onConfirm={async () => {
+          if (!assignment?.href) return;
+          setIsSaving(true);
+          setErrorMessage(null);
+          const result = await commands.deleteAssignment(assignment.href);
+          if (result.status === "error") {
+            setErrorMessage(result.error);
+            setIsSaving(false);
+            return;
+          }
+          onSave({ kind: "delete" });
+        }}
+        onRequestClose={requestClose}
+      />
     );
   }
 
@@ -385,118 +323,4 @@ interface Props {
   onClose: () => void;
   showDeleteConfirm?: boolean;
   showUnsavedConfirm?: boolean;
-}
-
-// Renders the currently displayed result list. Returns nothing when empty, so
-// an empty filter keeps the list in its empty default state.
-export function ProjectResultList({
-  projects,
-  highlightedIndex,
-  onSelect,
-}: ProjectResultListProps) {
-  const activeRef = useRef<HTMLButtonElement>(null);
-
-  // Keep the highlighted item visible while navigating with the keyboard.
-  useEffect(() => {
-    if (highlightedIndex < 0) return;
-    activeRef.current?.scrollIntoView({ block: "nearest" });
-  }, [highlightedIndex]);
-
-  if (projects.length === 0) return null;
-
-  return (
-    <ul
-      id="assignment-project-results"
-      className="menu menu-sm bg-base-200 rounded-box w-full p-1"
-    >
-      {projects.map((project, index) => {
-        const isActive = index === highlightedIndex;
-        return (
-          <li key={project.self}>
-            <button
-              ref={isActive ? activeRef : undefined}
-              type="button"
-              aria-current={isActive}
-              className={
-                isActive ? "bg-primary text-primary-content" : undefined
-              }
-              onClick={() => onSelect(project)}
-            >
-              {project.name}
-            </button>
-          </li>
-        );
-      })}
-    </ul>
-  );
-}
-
-interface ProjectResultListProps {
-  projects: DayliteProjectSummary[];
-  highlightedIndex: number;
-  onSelect: (project: DayliteProjectSummary) => void;
-}
-
-// German empty-state message when neither a recent nor overdue projects exist.
-// Only shown for the empty filter (the suggestion state) and once loading has
-// finished, so it does not flash while the overdue query is in flight.
-export function SuggestionEmptyState({
-  filter,
-  suggestionsLoaded,
-  suggestionCount,
-}: SuggestionEmptyStateProps) {
-  if (filter.length > 0 || !suggestionsLoaded || suggestionCount > 0) {
-    return null;
-  }
-  return <p className="text-sm">Keine Vorschläge verfügbar</p>;
-}
-
-interface SuggestionEmptyStateProps {
-  filter: string;
-  suggestionsLoaded: boolean;
-  suggestionCount: number;
-}
-
-// An empty filter shows the default suggestions (BL-031); any filter text
-// shows the live search results (BL-032). Clearing the filter or resetting it
-// via Escape therefore restores the suggestions.
-export function resolveDisplayedProjects(
-  filter: string,
-  suggestions: DayliteProjectSummary[],
-  results: DayliteProjectSummary[],
-): DayliteProjectSummary[] {
-  return filter.length === 0 ? suggestions : results;
-}
-
-// Clamps arrow-key movement to the bounds of the displayed list. From the
-// unhighlighted state (-1), Arrow Down lands on the first item.
-export function nextHighlightIndex(
-  current: number,
-  length: number,
-  direction: 1 | -1,
-): number {
-  if (length === 0) return -1;
-  const next = current + direction;
-  if (next < 0) return 0;
-  if (next > length - 1) return length - 1;
-  return next;
-}
-
-// Escape clears a non-empty filter (returning to the empty default state);
-// on an empty filter it falls through to the modal close flow.
-export function resolveEscapeAction(filter: string): "clear" | "close" {
-  return filter.length > 0 ? "clear" : "close";
-}
-
-// Only a create carries enough information (and intent) to seed a next-day
-// ghost; an edit never should, no matter what project ended up selected.
-export function resolveSaveAction(
-  isEditMode: boolean,
-  date: string,
-  projectRef: string,
-  projectName: string,
-): ModalSaveAction {
-  return isEditMode
-    ? { kind: "edit" }
-    : { kind: "create", date, projectRef, projectName };
 }

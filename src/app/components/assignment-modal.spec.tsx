@@ -5,15 +5,14 @@ import type {
   DayliteProjectSummary,
 } from "../../generated/tauri";
 import { combineSuggestions } from "../../services/assignment-suggestions";
+import { AssignmentModal } from "./assignment-modal";
 import {
-  AssignmentModal,
   nextHighlightIndex,
-  ProjectResultList,
   resolveDisplayedProjects,
   resolveEscapeAction,
   resolveSaveAction,
-  SuggestionEmptyState,
-} from "./assignment-modal";
+} from "./assignment-modal-logic";
+import { ProjectResultList, SuggestionEmptyState } from "./project-result-list";
 
 mock.module("../../generated/tauri", () => ({
   commands: {

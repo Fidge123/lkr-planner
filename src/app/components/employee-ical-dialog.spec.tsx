@@ -1,7 +1,22 @@
 import { describe, expect, it } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { PlanningContactRecord, ZepCalendar } from "../../generated/tauri";
-import { CalendarSection, EmployeeIcalDialog } from "./employee-ical-dialog";
+import type { ZepCalendarsState } from "../hooks/use-zep-calendars";
+import { CalendarSection } from "./calendar-section";
+import { EmployeeIcalDialog } from "./employee-ical-dialog";
+
+function calendarState(
+  overrides: Partial<ZepCalendarsState>,
+): ZepCalendarsState {
+  return {
+    calendars: null,
+    isLoading: false,
+    errorMessage: null,
+    reload: () => {},
+    ensureLoaded: () => {},
+    ...overrides,
+  };
+}
 
 const CALENDARS: ZepCalendar[] = [
   { displayName: "Team-Kalender", url: "https://zep.example.com/calendars/1" },
@@ -156,10 +171,7 @@ describe("EmployeeIcalDialog (10.10 – discovery failure)", () => {
         employeeSetting={null}
         onClose={() => {}}
         onSettingsSaved={() => {}}
-        zepCalendars={null}
-        isLoadingCalendars={false}
-        calendarsError={errorMessage}
-        onReloadCalendars={() => {}}
+        calendarState={calendarState({ errorMessage })}
       />,
     );
 
@@ -179,10 +191,7 @@ describe("EmployeeIcalDialog (10.10 – discovery failure)", () => {
         employeeSetting={null}
         onClose={() => {}}
         onSettingsSaved={() => {}}
-        zepCalendars={null}
-        isLoadingCalendars={false}
-        calendarsError="Fehler"
-        onReloadCalendars={() => {}}
+        calendarState={calendarState({ errorMessage: "Fehler" })}
       />,
     );
 
@@ -198,10 +207,7 @@ describe("EmployeeIcalDialog (10.10 – discovery failure)", () => {
         employeeSetting={null}
         onClose={() => {}}
         onSettingsSaved={() => {}}
-        zepCalendars={null}
-        isLoadingCalendars={false}
-        calendarsError={null}
-        onReloadCalendars={() => {}}
+        calendarState={calendarState({})}
       />,
     );
 

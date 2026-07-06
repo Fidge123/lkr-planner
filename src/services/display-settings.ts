@@ -2,7 +2,7 @@ import { commands, type DisplaySettings } from "../generated/tauri";
 import { unwrapCommandResult } from "./daylite-service-helpers";
 
 // Mirrors DisplaySettings::default() in the Rust backend.
-const defaultDisplaySettings: DisplaySettings = {
+const defaultDisplaySettings: Required<DisplaySettings> = {
   hideNonPlannableEmployees: true,
   showWeekend: false,
 };
@@ -10,12 +10,20 @@ const defaultDisplaySettings: DisplaySettings = {
 const loadErrorMessage =
   "Die lokale Konfiguration konnte nicht geladen werden.";
 
-export async function loadDisplaySettings(): Promise<DisplaySettings> {
+export async function loadDisplaySettings(): Promise<
+  Required<DisplaySettings>
+> {
   const store = unwrapCommandResult(
     await commands.loadLocalStore(),
     loadErrorMessage,
   );
-  return { ...defaultDisplaySettings, ...store.displaySettings };
+  return {
+    hideNonPlannableEmployees:
+      store.displaySettings?.hideNonPlannableEmployees ??
+      defaultDisplaySettings.hideNonPlannableEmployees,
+    showWeekend:
+      store.displaySettings?.showWeekend ?? defaultDisplaySettings.showWeekend,
+  };
 }
 
 export async function saveDisplaySettings(

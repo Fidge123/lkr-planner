@@ -7,9 +7,7 @@ import {
   type PlanningGridAssignmentState,
   type PlanningGridEmployeesState,
   type PlanningGridProjectsState,
-  PlanningGridTable,
 } from "./page";
-import { getWeekDays } from "./util";
 
 const defaultState: PlanningGridProjectsState = {
   projects: [],
@@ -56,8 +54,8 @@ describe("planning grid project loading states", () => {
 
   it("shows initial german loading state when projects are loading", () => {
     const html = renderToStaticMarkup(
-      <PlanningGridTable
-        weekDays={getWeekDays(0)}
+      <PlanningGrid
+        weekOffset={0}
         projectState={{ ...defaultState, isLoading: true }}
         employeeState={{ ...defaultEmployeeState }}
         assignmentState={{ ...defaultAssignmentState }}
@@ -71,8 +69,8 @@ describe("planning grid project loading states", () => {
 
   it("shows german error banner with retry action", () => {
     const html = renderToStaticMarkup(
-      <PlanningGridTable
-        weekDays={getWeekDays(0)}
+      <PlanningGrid
+        weekOffset={0}
         projectState={{
           ...defaultState,
           errorMessage: "Die Daten konnten nicht von Daylite geladen werden.",
@@ -91,8 +89,8 @@ describe("planning grid project loading states", () => {
 
   it("renders daylite-backed project names instead of dummy projects", () => {
     const html = renderToStaticMarkup(
-      <PlanningGridTable
-        weekDays={getWeekDays(0)}
+      <PlanningGrid
+        weekOffset={0}
         projectState={{
           ...defaultState,
           projects: [
@@ -116,8 +114,8 @@ describe("planning grid project loading states", () => {
 
   it("shows empty state when no projects are loaded", () => {
     const html = renderToStaticMarkup(
-      <PlanningGridTable
-        weekDays={getWeekDays(0)}
+      <PlanningGrid
+        weekOffset={0}
         projectState={{ ...defaultState }}
         employeeState={{ ...defaultEmployeeState }}
         assignmentState={{ ...defaultAssignmentState }}
@@ -136,8 +134,8 @@ describe("planning grid project loading states", () => {
 
   it("renders project status and due date in loaded projects section", () => {
     const html = renderToStaticMarkup(
-      <PlanningGridTable
-        weekDays={getWeekDays(0)}
+      <PlanningGrid
+        weekOffset={0}
         projectState={{
           ...defaultState,
           projects: [
@@ -162,8 +160,8 @@ describe("planning grid project loading states", () => {
 
   it("does not crash when a project record is missing self", () => {
     const html = renderToStaticMarkup(
-      <PlanningGridTable
-        weekDays={getWeekDays(0)}
+      <PlanningGrid
+        weekOffset={0}
         projectState={{
           ...defaultState,
           projects: [
@@ -185,8 +183,8 @@ describe("planning grid project loading states", () => {
 
   it("renders daylite-backed employee names instead of dummy employee names", () => {
     const html = renderToStaticMarkup(
-      <PlanningGridTable
-        weekDays={getWeekDays(0)}
+      <PlanningGrid
+        weekOffset={0}
         projectState={{ ...defaultState }}
         employeeState={{
           ...defaultEmployeeState,
@@ -210,8 +208,8 @@ describe("planning grid project loading states", () => {
 
   it("hides employees without a calendar and test employees when the toggle is enabled", () => {
     const html = renderToStaticMarkup(
-      <PlanningGridTable
-        weekDays={getWeekDays(0)}
+      <PlanningGrid
+        weekOffset={0}
         projectState={{ ...defaultState }}
         employeeState={{
           ...defaultEmployeeState,
@@ -265,8 +263,8 @@ describe("planning grid assignment states", () => {
 
   it("shows german loading state when assignments are loading", () => {
     const html = renderToStaticMarkup(
-      <PlanningGridTable
-        weekDays={getWeekDays(0)}
+      <PlanningGrid
+        weekOffset={0}
         projectState={{ ...defaultState }}
         employeeState={{ ...defaultEmployeeState }}
         assignmentState={{ ...defaultAssignmentState, isLoading: true }}
@@ -279,8 +277,8 @@ describe("planning grid assignment states", () => {
 
   it("shows german error banner with retry when assignment fetch fails", () => {
     const html = renderToStaticMarkup(
-      <PlanningGridTable
-        weekDays={getWeekDays(0)}
+      <PlanningGrid
+        weekOffset={0}
         projectState={{ ...defaultState }}
         employeeState={{ ...defaultEmployeeState }}
         assignmentState={{
@@ -315,8 +313,8 @@ describe("planning grid assignment states", () => {
     };
 
     const html = renderToStaticMarkup(
-      <PlanningGridTable
-        weekDays={getWeekDays(0)}
+      <PlanningGrid
+        weekOffset={0}
         projectState={{ ...defaultState }}
         employeeState={{ ...defaultEmployeeState, employees: [employee] }}
         assignmentState={{
@@ -353,8 +351,8 @@ describe("planning grid assignment states", () => {
     };
 
     const html = renderToStaticMarkup(
-      <PlanningGridTable
-        weekDays={getWeekDays(0)}
+      <PlanningGrid
+        weekOffset={0}
         projectState={{ ...defaultState }}
         employeeState={{ ...defaultEmployeeState, employees: [employee] }}
         assignmentState={{
@@ -383,8 +381,8 @@ describe("planning grid assignment states", () => {
     };
 
     const html = renderToStaticMarkup(
-      <PlanningGridTable
-        weekDays={getWeekDays(0)}
+      <PlanningGrid
+        weekOffset={0}
         projectState={{ ...defaultState }}
         employeeState={{ ...defaultEmployeeState, employees: [employee] }}
         assignmentState={{ ...defaultAssignmentState, eventsByEmployee: {} }}
@@ -399,8 +397,8 @@ describe("planning grid assignment states", () => {
 
   it("renders dates from the next week when weekOffset is 1", () => {
     const html = renderToStaticMarkup(
-      <PlanningGridTable
-        weekDays={getWeekDays(1)}
+      <PlanningGrid
+        weekOffset={1}
         projectState={{ ...defaultState }}
         employeeState={{ ...defaultEmployeeState }}
         assignmentState={{ ...defaultAssignmentState }}
@@ -421,8 +419,8 @@ describe("planning grid assignment states", () => {
     };
 
     const html = renderToStaticMarkup(
-      <PlanningGridTable
-        weekDays={getWeekDays(0)}
+      <PlanningGrid
+        weekOffset={0}
         projectState={{ ...defaultState }}
         employeeState={{ ...defaultEmployeeState, employees: [employee] }}
         assignmentState={{
@@ -486,8 +484,9 @@ describe("planning grid weekend visibility", () => {
     // System time is 2026-01-28 (Wed); getWeekDays(0, true) spans Mon 2026-01-26
     // to Sun 2026-02-01, so 2026-01-31 is the Saturday column.
     const html = renderToStaticMarkup(
-      <PlanningGridTable
-        weekDays={getWeekDays(0, true)}
+      <PlanningGrid
+        weekOffset={0}
+        showWeekend
         projectState={{ ...defaultState }}
         employeeState={{ ...defaultEmployeeState }}
         assignmentState={{ ...defaultAssignmentState }}

@@ -12,57 +12,34 @@ import { usePlanningEmployees } from "./hooks/use-planning-employees";
 import { usePlanningProjects } from "./hooks/use-planning-projects";
 import { getWeekDays, toLocalISODate } from "./util";
 
+// The optional state props are a test seam: production callers pass only
+// weekOffset and assignmentState, tests inject prepared states.
 export function PlanningGrid({
   weekOffset,
   showWeekend = false,
   projectState,
   employeeState,
   assignmentState,
-  employeeSettings,
+  employeeSettings = [],
   hideNonPlannableEmployees = true,
-  onOpenIcalDialog,
+  holidaysState,
+  onOpenIcalDialog = () => {},
 }: Props) {
   const weekDays = getWeekDays(weekOffset, showWeekend);
   const weekStart = toLocalISODate(weekDays[0]);
 
-  const planningProjectsState = usePlanningProjects();
-  const planningEmployeesState = usePlanningEmployees();
-  const holidaysState = useHolidays(weekStart);
+  const fallbackProjectsState = usePlanningProjects();
+  const fallbackEmployeesState = usePlanningEmployees();
+  const fallbackHolidaysState = useHolidays(weekStart);
 
-  const resolvedProjectState = projectState ?? planningProjectsState;
-  const resolvedEmployeeState = employeeState ?? planningEmployeesState;
-
-  return (
-    <PlanningGridTable
-      weekDays={weekDays}
-      projectState={resolvedProjectState}
-      employeeState={resolvedEmployeeState}
-      assignmentState={assignmentState}
-      employeeSettings={employeeSettings ?? []}
-      hideNonPlannableEmployees={hideNonPlannableEmployees}
-      holidaysState={holidaysState}
-      onOpenIcalDialog={onOpenIcalDialog ?? (() => {})}
-    />
-  );
-}
-
-export function PlanningGridTable({
-  weekDays,
-  projectState,
-  employeeState,
-  assignmentState,
-  employeeSettings,
-  hideNonPlannableEmployees,
-  holidaysState,
-  onOpenIcalDialog,
-}: PlanningGridTableProps) {
-  const { projects, isLoading, errorMessage, reloadProjects } = projectState;
+  const { projects, isLoading, errorMessage, reloadProjects } =
+    projectState ?? fallbackProjectsState;
   const {
     employees,
     isLoading: isEmployeeLoading,
     errorMessage: employeeErrorMessage,
     reloadEmployees,
-  } = employeeState;
+  } = employeeState ?? fallbackEmployeesState;
   const {
     eventsByEmployee,
     errorsByEmployee,
@@ -74,7 +51,7 @@ export function PlanningGridTable({
     holidays,
     errorMessage: holidayErrorMessage,
     reloadHolidays,
-  } = holidaysState;
+  } = holidaysState ?? fallbackHolidaysState;
   const holidayByDate = new Map(holidays.map((h) => [h.date, h.name]));
   const holidayDates = new Set(holidays.map((h) => h.date));
   const visibleEmployees = filterVisibleEmployees(
@@ -153,14 +130,12 @@ export function PlanningGridTable({
               employee={employee}
               calendarEvents={eventsByEmployee[employee.self] ?? []}
               calendarError={errorsByEmployee[employee.self] ?? null}
-              weekDays={weekDays}
+              week={{ days: weekDays, holidayDates }}
               employeeSetting={
                 employeeSettings.find(
                   (s) => s.dayliteContactReference === employee.self,
                 ) ?? null
               }
-              holidayDates={holidayDates}
-              onRetry={reloadAssignments}
               onOpenIcalDialog={onOpenIcalDialog}
               onReloadAssignments={reloadAssignments}
             />
@@ -221,18 +196,8 @@ interface Props {
   assignmentState: PlanningGridAssignmentState;
   employeeSettings?: EmployeeSetting[];
   hideNonPlannableEmployees?: boolean;
+  holidaysState?: HolidaysState;
   onOpenIcalDialog?: (employee: PlanningContactRecord) => void;
-}
-
-export interface PlanningGridTableProps {
-  weekDays: Date[];
-  projectState: PlanningGridProjectsState;
-  employeeState: PlanningGridEmployeesState;
-  assignmentState: PlanningGridAssignmentState;
-  employeeSettings: EmployeeSetting[];
-  hideNonPlannableEmployees: boolean;
-  holidaysState: HolidaysState;
-  onOpenIcalDialog: (employee: PlanningContactRecord) => void;
 }
 
 export interface PlanningGridProjectsState {
