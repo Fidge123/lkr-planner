@@ -1,5 +1,5 @@
 import { commands, type DayliteProjectSummary } from "../generated/tauri";
-import { readDayliteApiErrorMessage } from "./daylite-service-helpers";
+import { unwrapCommandResult } from "./daylite-service-helpers";
 
 // Number of matches shown to the user.
 const DISPLAY_LIMIT = 5;
@@ -16,26 +16,20 @@ const CANDIDATE_LIMIT = 50;
 export async function searchProjectsForAssignmentPicker(
   searchTerm: string,
 ): Promise<DayliteProjectSummary[]> {
-  const result = await commands.dayliteSearchProjects({
-    searchTerm,
-    limit: CANDIDATE_LIMIT,
-    statuses: ["new_status", "in_progress"],
-    fullRecords: null,
-    start: null,
-    sort: "name",
-  });
-
-  if (result.status === "error") {
-    throw new Error(
-      readDayliteApiErrorMessage(
-        result.error,
-        "Projekte konnten nicht geladen werden.",
-      ),
-    );
-  }
+  const result = unwrapCommandResult(
+    await commands.dayliteSearchProjects({
+      searchTerm,
+      limit: CANDIDATE_LIMIT,
+      statuses: ["new_status", "in_progress"],
+      fullRecords: null,
+      start: null,
+      sort: "name",
+    }),
+    "Projekte konnten nicht geladen werden.",
+  );
 
   // Daylite omits `results` when a search has no matches; the Rust side
   // defaults it to an empty list, but that makes the generated binding
   // optional too.
-  return (result.data.results ?? []).slice(0, DISPLAY_LIMIT);
+  return (result.results ?? []).slice(0, DISPLAY_LIMIT);
 }

@@ -1,7 +1,7 @@
 import { commands, type DayliteRefreshTokenRequest } from "../generated/tauri";
 import {
   normalizeOptionalString,
-  readDayliteApiErrorMessage,
+  unwrapCommandResult,
 } from "./daylite-service-helpers";
 
 export const DAYLITE_PERSONAL_TOKEN_URL =
@@ -37,19 +37,13 @@ export async function updateDayliteRefreshToken(
     throw new Error("Bitte ein Refresh-Token eingeben.");
   }
 
-  const result = await commands.dayliteConnectRefreshToken({
-    baseUrl: normalizedBaseUrl,
-    refreshToken: normalizedRefreshToken,
-  });
-
-  if (result.status === "error") {
-    throw new Error(
-      readDayliteApiErrorMessage(
-        result.error,
-        "Das Daylite-Refresh-Token konnte nicht gespeichert werden.",
-      ),
-    );
-  }
+  unwrapCommandResult(
+    await commands.dayliteConnectRefreshToken({
+      baseUrl: normalizedBaseUrl,
+      refreshToken: normalizedRefreshToken,
+    }),
+    "Das Daylite-Refresh-Token konnte nicht gespeichert werden.",
+  );
 }
 
 function normalizeBaseUrl(baseUrl: string | null | undefined): string {

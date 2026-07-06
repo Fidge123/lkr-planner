@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import {
   normalizeOptionalString,
-  readDayliteApiErrorMessage,
+  unwrapCommandResult,
 } from "./daylite-service-helpers";
 
 describe("daylite service helpers", () => {
@@ -17,25 +17,49 @@ describe("daylite service helpers", () => {
     });
   });
 
-  describe("readDayliteApiErrorMessage", () => {
-    it("returns plain string errors unchanged", () => {
-      const message = readDayliteApiErrorMessage("actual error", "fallback");
-
-      expect(message).toBe("actual error");
-    });
-
-    it("returns userMessage from api errors when available", () => {
-      const message = readDayliteApiErrorMessage(
-        {
-          userMessage: "user error",
-          code: "UNAUTHORIZED",
-          httpStatus: 401,
-          technicalMessage: "tech msg",
-        },
+  describe("unwrapCommandResult", () => {
+    it("returns the data on ok results", () => {
+      const value = unwrapCommandResult(
+        { status: "ok", data: "wert" },
         "fallback",
       );
 
-      expect(message).toBe("user error");
+      expect(value).toBe("wert");
+    });
+
+    it("throws plain string errors unchanged", () => {
+      expect(() =>
+        unwrapCommandResult(
+          { status: "error", error: "actual error" },
+          "fallback",
+        ),
+      ).toThrow("actual error");
+    });
+
+    it("throws the userMessage from api error objects when available", () => {
+      expect(() =>
+        unwrapCommandResult(
+          {
+            status: "error",
+            error: {
+              userMessage: "user error",
+              code: "UNAUTHORIZED",
+              httpStatus: 401,
+              technicalMessage: "tech msg",
+            },
+          },
+          "fallback",
+        ),
+      ).toThrow("user error");
+    });
+
+    it("throws the fallback message when the error has no userMessage", () => {
+      expect(() =>
+        unwrapCommandResult(
+          { status: "error", error: { code: "UNAUTHORIZED" } },
+          "fallback",
+        ),
+      ).toThrow("fallback");
     });
   });
 });

@@ -5,7 +5,7 @@ import {
 } from "../generated/tauri";
 import {
   normalizeOptionalString,
-  readDayliteApiErrorMessage,
+  unwrapCommandResult,
 } from "./daylite-service-helpers";
 
 export const DEFAULT_DAYLITE_CONTACT_CACHE_TTL_MS = 30_000;
@@ -99,32 +99,19 @@ export async function loadCachedDayliteContacts(): Promise<
 export async function updateDayliteContactIcalUrls(
   input: DayliteUpdateContactIcalUrlsInput,
 ): Promise<PlanningContactRecord> {
-  const result = await commands.dayliteUpdateContactIcalUrls(input);
-  if (result.status === "error") {
-    throw new Error(
-      readDayliteApiErrorMessage(
-        result.error,
-        "Die Daten konnten nicht von Daylite geladen werden.",
-      ),
-    );
-  }
-
-  updateInMemoryContactCache(result.data);
-  return result.data;
+  const contact = unwrapCommandResult(
+    await commands.dayliteUpdateContactIcalUrls(input),
+    "Die Daten konnten nicht von Daylite geladen werden.",
+  );
+  updateInMemoryContactCache(contact);
+  return contact;
 }
 
 async function fetchContacts(): Promise<PlanningContactRecord[]> {
-  const result = await commands.dayliteListContacts();
-  if (result.status === "error") {
-    throw new Error(
-      readDayliteApiErrorMessage(
-        result.error,
-        "Die Daten konnten nicht von Daylite geladen werden.",
-      ),
-    );
-  }
-
-  return result.data;
+  return unwrapCommandResult(
+    await commands.dayliteListContacts(),
+    "Die Daten konnten nicht von Daylite geladen werden.",
+  );
 }
 
 function updateInMemoryContactCache(

@@ -6,30 +6,13 @@ import {
   type ZepCredentialsInfo,
   type ZepCredentialTestResult,
 } from "../generated/tauri";
-
-function readZepErrorMessage(error: unknown, fallback: string): string {
-  if (
-    error &&
-    typeof error === "object" &&
-    "userMessage" in error &&
-    typeof (error as { userMessage: unknown }).userMessage === "string"
-  ) {
-    return (error as { userMessage: string }).userMessage;
-  }
-  return fallback;
-}
+import { unwrapCommandResult } from "./daylite-service-helpers";
 
 export async function loadZepCredentials(): Promise<ZepCredentialsInfo | null> {
-  const result = await commands.zepLoadCredentials();
-  if (result.status === "error") {
-    throw new Error(
-      readZepErrorMessage(
-        result.error,
-        "Die ZEP-Zugangsdaten konnten nicht geladen werden.",
-      ),
-    );
-  }
-  return result.data;
+  return unwrapCommandResult(
+    await commands.zepLoadCredentials(),
+    "Die ZEP-Zugangsdaten konnten nicht geladen werden.",
+  );
 }
 
 export async function testZepCredentials(
@@ -37,16 +20,10 @@ export async function testZepCredentials(
   username: string,
   password: string,
 ): Promise<ZepCredentialTestResult> {
-  const result = await commands.zepTestCredentials(rootUrl, username, password);
-  if (result.status === "error") {
-    throw new Error(
-      readZepErrorMessage(
-        result.error,
-        "Die ZEP-Verbindung konnte nicht getestet werden.",
-      ),
-    );
-  }
-  return result.data;
+  return unwrapCommandResult(
+    await commands.zepTestCredentials(rootUrl, username, password),
+    "Die ZEP-Verbindung konnte nicht getestet werden.",
+  );
 }
 
 export async function saveZepCredentials(
@@ -54,28 +31,17 @@ export async function saveZepCredentials(
   username: string,
   password: string,
 ): Promise<void> {
-  const result = await commands.zepSaveCredentials(rootUrl, username, password);
-  if (result.status === "error") {
-    throw new Error(
-      readZepErrorMessage(
-        result.error,
-        "Die ZEP-Zugangsdaten konnten nicht gespeichert werden.",
-      ),
-    );
-  }
+  unwrapCommandResult(
+    await commands.zepSaveCredentials(rootUrl, username, password),
+    "Die ZEP-Zugangsdaten konnten nicht gespeichert werden.",
+  );
 }
 
 export async function discoverZepCalendars(): Promise<ZepCalendar[]> {
-  const result = await commands.zepDiscoverCalendars();
-  if (result.status === "error") {
-    throw new Error(
-      readZepErrorMessage(
-        result.error,
-        "Die ZEP-Kalender konnten nicht abgerufen werden.",
-      ),
-    );
-  }
-  return result.data;
+  return unwrapCommandResult(
+    await commands.zepDiscoverCalendars(),
+    "Die ZEP-Kalender konnten nicht abgerufen werden.",
+  );
 }
 
 export async function saveAndTestCalendar(
@@ -83,15 +49,12 @@ export async function saveAndTestCalendar(
   source: IcalSource,
   calendarUrl: string | null,
 ): Promise<ZepCalendarTestResult> {
-  const result = await commands.zepSaveAndTestCalendar(
-    dayliteContactReference,
-    source,
-    calendarUrl,
+  return unwrapCommandResult(
+    await commands.zepSaveAndTestCalendar(
+      dayliteContactReference,
+      source,
+      calendarUrl,
+    ),
+    "Speichern und Testen fehlgeschlagen.",
   );
-  if (result.status === "error") {
-    throw new Error(
-      readZepErrorMessage(result.error, "Speichern und Testen fehlgeschlagen."),
-    );
-  }
-  return result.data;
 }
