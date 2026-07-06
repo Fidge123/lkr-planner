@@ -1,15 +1,13 @@
 use chrono::NaiveDate;
-use tauri_plugin_http::reqwest;
 use tauri_plugin_http::reqwest::Method;
 
 use super::super::ical::parse_ical_events;
 use super::super::types::RawVEvent;
+use super::write::CaldavSession;
 
 pub(crate) async fn fetch_calendar_events(
-    client: &reqwest::Client,
+    session: &CaldavSession,
     calendar_url: &str,
-    username: &str,
-    password: &str,
     week_start: NaiveDate,
 ) -> Result<Vec<RawVEvent>, String> {
     let week_end = week_start + chrono::Duration::days(7);
@@ -18,12 +16,13 @@ pub(crate) async fn fetch_calendar_events(
 
     let body = build_report_body(&start_str, &end_str);
 
-    let response = client
+    let response = session
+        .client
         .request(
             Method::from_bytes(b"REPORT").expect("REPORT is a valid HTTP method"),
             calendar_url,
         )
-        .basic_auth(username, Some(password))
+        .basic_auth(&session.username, Some(&session.password))
         .header("Depth", "1")
         .header("Content-Type", "application/xml; charset=utf-8")
         .body(body)

@@ -116,12 +116,49 @@ pub async fn zep_save_and_test_calendar(
         .filter(|s| !s.is_empty())
         .map(ToString::to_string);
 
-    // Load local store once — all in-memory mutations use this copy.
+    // Load local store once: all in-memory mutations use this copy.
     let mut store = crate::integrations::local_store::load_local_store(app.clone())?;
 
-    // An empty URL string removes the entry in Daylite via normalize_non_empty.
-    let current_setting =
-        find_or_default_setting(&store.employee_settings, &daylite_contact_reference);
+    sync_calendar_to_daylite(
+        &mut store,
+        &daylite_contact_reference,
+        &source,
+        &calendar_url,
+    )
+    .await?;
+    store_calendar_url(
+        &mut store,
+        &daylite_contact_reference,
+        &source,
+        &calendar_url,
+    );
+    crate::integrations::local_store::save_local_store(app.clone(), store.clone())?;
+
+    // Clearing a calendar reports success without a connection test.
+    let Some(ref cal_url) = calendar_url else {
+        return Ok(ZepCalendarTestResult {
+            success: true,
+            timestamp: current_timestamp(),
+            error_message: None,
+        });
+    };
+
+    let result = run_calendar_test(cal_url).await?;
+    store_test_result(&mut store, &daylite_contact_reference, &source, &result);
+    crate::integrations::local_store::save_local_store(app, store)?;
+
+    Ok(result)
+}
+
+/// Mirrors the calendar URL pair to the Daylite contact. An empty URL string
+/// removes the entry in Daylite via `normalize_non_empty`.
+async fn sync_calendar_to_daylite(
+    store: &mut crate::integrations::local_store::LocalStore,
+    contact_reference: &str,
+    source: &IcalSource,
+    calendar_url: &Option<String>,
+) -> Result<(), ZepError> {
+    let current_setting = find_or_default_setting(&store.employee_settings, contact_reference);
     let (primary_url, absence_url) = match source {
         IcalSource::Primary => (
             calendar_url.clone().unwrap_or_default(),
@@ -140,9 +177,9 @@ pub async fn zep_save_and_test_calendar(
     };
 
     sync_contact_ical_urls(
-        &mut store,
+        store,
         DayliteUpdateContactIcalUrlsInput {
-            contact_reference: daylite_contact_reference.clone(),
+            contact_reference: contact_reference.to_string(),
             primary_ical_url: primary_url,
             absence_ical_url: absence_url,
         },
@@ -154,12 +191,20 @@ pub async fn zep_save_and_test_calendar(
             format!("Daylite-Synchronisation fehlgeschlagen: {}", e.user_message),
             e.technical_message,
         )
-    })?;
+    })
+}
 
-    // A changed URL invalidates the previous test result.
+/// Stores the calendar URL for the source. A changed URL invalidates the
+/// previous test result.
+fn store_calendar_url(
+    store: &mut crate::integrations::local_store::LocalStore,
+    contact_reference: &str,
+    source: &IcalSource,
+    calendar_url: &Option<String>,
+) {
     update_setting(
         &mut store.employee_settings,
-        &daylite_contact_reference,
+        contact_reference,
         |s| match source {
             IcalSource::Primary => {
                 s.zep_primary_calendar = calendar_url.clone();
@@ -173,46 +218,42 @@ pub async fn zep_save_and_test_calendar(
             }
         },
     );
+}
 
-    crate::integrations::local_store::save_local_store(app.clone(), store.clone())?;
-
-    // When clearing, skip the connection test.
-    let Some(ref cal_url) = calendar_url else {
-        return Ok(ZepCalendarTestResult {
-            success: true,
-            timestamp: current_timestamp(),
-            error_message: None,
-        });
-    };
-
+async fn run_calendar_test(calendar_url: &str) -> Result<ZepCalendarTestResult, ZepError> {
     let creds = load_zep_credentials_from_keychain()?;
     let timestamp = current_timestamp();
-    let test_result = probe_calendar(cal_url, &creds.username, &creds.password).await;
-    let (success, error_message) = match &test_result {
-        Ok(()) => (true, None),
-        Err(e) => (false, Some(e.user_message.clone())),
-    };
-
-    update_setting(
-        &mut store.employee_settings,
-        &daylite_contact_reference,
-        |s| match source {
-            IcalSource::Primary => {
-                s.primary_ical_last_tested_at = Some(timestamp.clone());
-                s.primary_ical_last_test_passed = Some(success);
-            }
-            IcalSource::Absence => {
-                s.absence_ical_last_tested_at = Some(timestamp.clone());
-                s.absence_ical_last_test_passed = Some(success);
-            }
-        },
-    );
-
-    crate::integrations::local_store::save_local_store(app, store)?;
+    let (success, error_message) =
+        match probe_calendar(calendar_url, &creds.username, &creds.password).await {
+            Ok(()) => (true, None),
+            Err(e) => (false, Some(e.user_message.clone())),
+        };
 
     Ok(ZepCalendarTestResult {
         success,
         timestamp,
         error_message,
     })
+}
+
+fn store_test_result(
+    store: &mut crate::integrations::local_store::LocalStore,
+    contact_reference: &str,
+    source: &IcalSource,
+    result: &ZepCalendarTestResult,
+) {
+    update_setting(
+        &mut store.employee_settings,
+        contact_reference,
+        |s| match source {
+            IcalSource::Primary => {
+                s.primary_ical_last_tested_at = Some(result.timestamp.clone());
+                s.primary_ical_last_test_passed = Some(result.success);
+            }
+            IcalSource::Absence => {
+                s.absence_ical_last_tested_at = Some(result.timestamp.clone());
+                s.absence_ical_last_test_passed = Some(result.success);
+            }
+        },
+    );
 }

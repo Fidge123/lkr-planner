@@ -45,19 +45,10 @@ pub async fn load_week_events(
         }
     };
 
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(30))
-        .build()
-        .map_err(|e| format!("HTTP-Client konnte nicht erstellt werden: {e}"))?;
+    let session = build_caldav_session(&store, credentials)?;
 
-    let (fetches, error_results) = fetch_week_for_employees(
-        &store,
-        &client,
-        &credentials.username,
-        &credentials.password,
-        week_start_date,
-    )
-    .await;
+    let (fetches, error_results) =
+        fetch_week_for_employees(&store, &session, week_start_date).await;
 
     let api_results = fetch_uncached_projects(app, &store, &fetches).await;
 
@@ -101,9 +92,7 @@ fn employees_with_error(store: &LocalStore, message: &str) -> Vec<EmployeeWeekEv
 /// ready-made error entries instead.
 async fn fetch_week_for_employees(
     store: &LocalStore,
-    client: &reqwest::Client,
-    username: &str,
-    password: &str,
+    session: &CaldavSession,
     week_start: NaiveDate,
 ) -> (Vec<EmployeeFetch>, Vec<EmployeeWeekEvents>) {
     let employee_futures: Vec<_> = store
@@ -123,20 +112,15 @@ async fn fetch_week_for_employees(
                 .map(str::to_string);
 
             let employee_ref = setting.daylite_contact_reference.clone();
-            let client = client.clone();
-            let username = username.to_string();
-            let password = password.to_string();
 
             Some(async move {
                 let (primary_result, absence_result) = tokio::join!(
-                    fetch_calendar_events(&client, &calendar_url, &username, &password, week_start),
+                    fetch_calendar_events(session, &calendar_url, week_start),
                     async {
                         match absence_url {
-                            Some(ref url) => fetch_calendar_events(
-                                &client, url, &username, &password, week_start,
-                            )
-                            .await
-                            .ok(),
+                            Some(ref url) => {
+                                fetch_calendar_events(session, url, week_start).await.ok()
+                            }
                             None => None,
                         }
                     }
@@ -300,7 +284,13 @@ fn load_caldav_session(
 ) -> Result<CaldavSession, String> {
     let credentials = crate::integrations::zep::load_zep_credentials_from_keychain()
         .map_err(|e| e.user_message)?;
+    build_caldav_session(store, credentials)
+}
 
+fn build_caldav_session(
+    store: &crate::integrations::local_store::LocalStore,
+    credentials: crate::integrations::zep::ZepStoredCredentials,
+) -> Result<CaldavSession, String> {
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(30))
         .build()
