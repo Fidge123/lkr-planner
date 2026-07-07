@@ -1,8 +1,6 @@
 import { commands, type DayliteRefreshTokenRequest } from "../generated/tauri";
-import {
-  normalizeOptionalString,
-  unwrapCommandResult,
-} from "./daylite-service-helpers";
+import { unwrapCommandResult } from "./command-result";
+import { normalizeOptionalString } from "./daylite-service-helpers";
 
 export const DAYLITE_PERSONAL_TOKEN_URL =
   "https://www.marketcircle.com/account/oauth/authorize?client_id=com.marketcircle.sample&redirect_uri=https://api.marketcircle.net/v1/personal_token/auth_code&response_type=code";

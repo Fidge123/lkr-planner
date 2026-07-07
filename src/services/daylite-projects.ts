@@ -1,5 +1,5 @@
 import { commands, type PlanningProjectRecord } from "../generated/tauri";
-import { unwrapCommandResult } from "./daylite-service-helpers";
+import { unwrapCommandResult } from "./command-result";
 
 export const DEFAULT_DAYLITE_PROJECT_CACHE_TTL_MS = 30_000;
 

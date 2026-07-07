@@ -6,7 +6,7 @@ import {
   type ZepCredentialsInfo,
   type ZepCredentialTestResult,
 } from "../generated/tauri";
-import { unwrapCommandResult } from "./daylite-service-helpers";
+import { unwrapCommandResult } from "./command-result";
 
 export async function loadZepCredentials(): Promise<ZepCredentialsInfo | null> {
   return unwrapCommandResult(

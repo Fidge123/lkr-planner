@@ -3,10 +3,8 @@ import {
   type DayliteUpdateContactIcalUrlsInput,
   type PlanningContactRecord,
 } from "../generated/tauri";
-import {
-  normalizeOptionalString,
-  unwrapCommandResult,
-} from "./daylite-service-helpers";
+import { unwrapCommandResult } from "./command-result";
+import { normalizeOptionalString } from "./daylite-service-helpers";
 
 export const DEFAULT_DAYLITE_CONTACT_CACHE_TTL_MS = 30_000;
 

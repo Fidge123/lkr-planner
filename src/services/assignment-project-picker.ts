@@ -1,5 +1,5 @@
 import { commands, type DayliteProjectSummary } from "../generated/tauri";
-import { unwrapCommandResult } from "./daylite-service-helpers";
+import { unwrapCommandResult } from "./command-result";
 
 const DISPLAY_LIMIT = 5;
 // Candidate pool fetched from Daylite before the name sort. Daylite applies its

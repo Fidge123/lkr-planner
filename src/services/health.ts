@@ -1,5 +1,5 @@
 import { commands, type HealthStatus } from "../generated/tauri";
-import { unwrapCommandResult } from "./daylite-service-helpers";
+import { unwrapCommandResult } from "./command-result";
 
 export async function checkHealth(): Promise<HealthStatus> {
   try {
