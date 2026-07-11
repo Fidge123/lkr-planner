@@ -145,11 +145,6 @@ export type DayliteUpdateContactIcalUrlsInput = {
 
 export type DisplaySettings = {
 	hideNonPlannableEmployees: boolean,
-	/**
-	 *  `#[serde(default)]` keeps a `DisplaySettings` persisted before this field
-	 *  existed deserializable; the struct-level `Default` does not fill in
-	 *  individual missing fields.
-	 */
 	showWeekend?: boolean,
 };
 
