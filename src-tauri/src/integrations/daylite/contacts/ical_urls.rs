@@ -36,13 +36,9 @@ pub(super) fn merge_contact_ical_urls(
     merged_urls
 }
 
-/// Daylite is the source of truth for an employee's calendar configuration.
-/// Whenever fresh contacts are fetched from Daylite, this mirrors the managed
-/// "Einsatz iCal" / "Abwesenheit iCal" URLs from each contact into the local
-/// employee settings, so a calendar configured on one device is picked up on
-/// every other device. When a calendar URL changes (including being removed in
-/// Daylite), the corresponding connection-test result is cleared because it no
-/// longer describes the current URL.
+/// A changed or removed calendar URL clears the stored connection-test result,
+/// because it no longer describes the current URL (see docs/adr/0011 for the
+/// Daylite-as-source-of-truth reconciliation).
 pub(super) fn reconcile_employee_calendars_from_contacts(
     settings: &mut Vec<EmployeeSetting>,
     contacts: &[PlanningContactRecord],
@@ -176,8 +172,6 @@ mod tests {
 
     #[test]
     fn reconcile_populates_calendars_from_daylite_for_new_device() {
-        // Simulates a fresh device: no local employee settings exist yet, but the
-        // contact fetched from Daylite carries the managed iCal URLs.
         let mut settings: Vec<EmployeeSetting> = vec![];
         let contacts = vec![PlanningContactRecord {
             reference: "/v1/contacts/100".to_string(),
@@ -241,7 +235,6 @@ mod tests {
             settings[0].zep_primary_calendar,
             Some("https://example.com/new-primary.ics".to_string())
         );
-        // The recorded test no longer describes the new URL, so it is cleared.
         assert_eq!(settings[0].primary_ical_last_tested_at, None);
         assert_eq!(settings[0].primary_ical_last_test_passed, None);
     }
@@ -297,7 +290,6 @@ mod tests {
 
         reconcile_employee_calendars_from_contacts(&mut settings, &contacts);
 
-        // Unchanged URL must preserve the existing connection-test result.
         assert_eq!(
             settings[0].primary_ical_last_tested_at,
             Some("2026-01-01T00:00:00Z".to_string())

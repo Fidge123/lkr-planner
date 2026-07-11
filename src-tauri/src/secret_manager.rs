@@ -27,6 +27,10 @@ use specta::Type;
 pub fn init() -> Result<(), SecretError> {
     #[cfg(target_os = "macos")]
     let store = apple_native_keyring_store::keychain::Store::new().map_err(map_keyring_error)?;
+    #[cfg(target_os = "windows")]
+    let store = windows_native_keyring_store::Store::new().map_err(map_keyring_error)?;
+    #[cfg(target_os = "linux")]
+    let store = linux_keyutils_keyring_store::Store::new().map_err(map_keyring_error)?;
 
     keyring_core::set_default_store(store);
     Ok(())

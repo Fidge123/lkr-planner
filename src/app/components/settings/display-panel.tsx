@@ -21,9 +21,7 @@ export function DisplaySettingsPanel({ onClose, onChanged }: Props) {
           setShowWeekend(settings.showWeekend);
         }
       })
-      .catch(() => {
-        // The initial state already matches the backend defaults.
-      });
+      .catch(() => {});
     return () => {
       isActive = false;
     };

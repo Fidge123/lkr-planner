@@ -2,9 +2,6 @@ use chrono::NaiveDate;
 
 use super::super::types::{CalendarCellEvent, CalendarEventKind, RawVEvent};
 
-/// Maps raw absence calendar events to `CalendarCellEvent`s for the given week.
-/// All-day events with a `dtend` are expanded into one event per day in
-/// `[dtstart, dtend)` clamped to `[week_start, week_start + 7)`.
 pub(crate) fn map_absence_raw_events_for_week(
     raw_events: Vec<RawVEvent>,
     week_start: NaiveDate,
@@ -118,8 +115,6 @@ mod tests {
 
     #[test]
     fn absence_fetch_failure_produces_no_absence_events() {
-        // Simulates the silent-failure path: when fetch_calendar_events returns Err,
-        // the caller passes an empty vec to the mapping function.
         let raw: Vec<RawVEvent> = Vec::new();
         let week_start = NaiveDate::from_ymd_opt(2026, 4, 27).unwrap();
 
@@ -130,7 +125,6 @@ mod tests {
 
     #[test]
     fn multi_day_absence_expands_into_one_event_per_day_in_week() {
-        // Mon-Fri absence (DTEND is exclusive: Sat = last day not covered).
         let raw = vec![RawVEvent {
             uid: "abs-1".to_string(),
             summary: "Urlaub".to_string(),
@@ -151,8 +145,6 @@ mod tests {
 
     #[test]
     fn multi_day_absence_starting_before_week_only_covers_days_in_week() {
-        // Absence starts last week (Mon Apr 20), ends Wed Apr 29 (exclusive), so only
-        // Mon Apr 27 and Tue Apr 28 fall in this week.
         let raw = vec![RawVEvent {
             uid: "abs-2".to_string(),
             summary: "Krankenstand".to_string(),
@@ -169,9 +161,6 @@ mod tests {
         assert_eq!(events[1].date, "2026-04-28");
     }
 
-    // A DATE-TIME DTSTART with no DATE DTEND stays a single-day event on purpose:
-    // expansion only applies when the iCal source uses VALUE=DATE for DTEND, as ZEP
-    // does for all-day absences.
     #[test]
     fn absence_with_timed_dtstart_and_no_dtend_produces_single_event() {
         let raw = vec![RawVEvent {

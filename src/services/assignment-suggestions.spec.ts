@@ -82,7 +82,6 @@ describe("combineSuggestions", () => {
     expect(suggestions[0].self).toBe("/v1/projects/11");
     const occurrences = suggestions.filter((p) => p.self === "/v1/projects/11");
     expect(occurrences).toHaveLength(1);
-    // Dedup happens before the cap, so a 5th distinct project fills the list.
     expect(suggestions.map((p) => p.self)).toContain("/v1/projects/14");
   });
 

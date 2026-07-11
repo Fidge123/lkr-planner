@@ -75,7 +75,6 @@ describe("createTrailingSearch", () => {
     search.setFilter("neu");
     await wait(10);
 
-    // The newer request resolves first, then the stale one resolves late.
     resolvers.get("neu")?.([project("neu")]);
     await wait(0);
     resolvers.get("alt")?.([project("alt")]);
@@ -106,7 +105,6 @@ describe("createTrailingSearch", () => {
     search.setFilter("ab");
     await wait(0);
 
-    // The earlier request resolves late, but it has been invalidated.
     resolvers.get("abc")?.([project("abc")]);
     await wait(0);
 

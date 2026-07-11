@@ -54,8 +54,8 @@ pub(in crate::integrations::daylite) async fn update_contact_ical_urls_core(
         &input.primary_ical_url,
         &input.absence_ical_url,
     );
-    // PATCH the contact URLs. Daylite may return 204 No Content (empty body),
-    // so we only verify the status and construct the result from the GET data + merged URLs.
+    // Daylite may answer the PATCH with 204 No Content, so only the status is
+    // checked and the result is built from the GET data plus merged URLs.
     let token_state = send_authenticated_request(
         client,
         token_state,
@@ -103,10 +103,8 @@ pub(in crate::integrations::daylite) async fn list_contacts_core(
             token_state,
             DayliteHttpRequest {
                 query: vec![("full-records".to_string(), "true".to_string())],
-                // A top-level array of clauses is matched with OR semantics, so this
-                // fetches both planning categories: "Monteur" and "Test". The "Test"
-                // employees are filtered out in the view unless the user disables the
-                // "hide non-plannable employees" toggle.
+                // A top-level array of clauses is matched with OR semantics; both
+                // planning categories are fetched in one call.
                 body: Some(json!([
                     { "category": { "equal": "Monteur" } },
                     { "category": { "equal": "Test" } },

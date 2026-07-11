@@ -78,8 +78,6 @@ pub struct DayliteRefreshTokenRequest {
     pub refresh_token: String,
 }
 
-/// Result ordering for `search_projects_core`. Numeric ID is the default so the
-/// BL-022 contract stays unchanged; callers opt in to name sort explicitly.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Type, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum DayliteSearchSort {
@@ -95,13 +93,10 @@ pub struct DayliteSearchInput {
     pub limit: Option<u16>,
     #[serde(default)]
     pub statuses: Option<Vec<String>>,
-    /// Include full record data in the response (`?full-records=true`).
     #[serde(default)]
     pub full_records: Option<bool>,
-    /// Pagination cursor: object ID of the first result to return (`?start=<id>`).
     #[serde(default)]
     pub start: Option<String>,
-    /// Result ordering. Defaults to numeric ID; `name` opts into name sort.
     #[serde(default)]
     pub sort: Option<DayliteSearchSort>,
 }
@@ -186,9 +181,6 @@ fn token_refresh_lock() -> &'static tokio::sync::Mutex<()> {
     LOCK.get_or_init(|| tokio::sync::Mutex::new(()))
 }
 
-/// Runs a token-using operation under [`token_refresh_lock`]: loads the stored tokens,
-/// hands them to `operation`, and persists the (possibly refreshed) tokens it returns.
-/// Tokens are stored only on success, matching the previous per-command behavior.
 pub(super) async fn with_token_refresh_lock<T, Fut>(
     operation: impl FnOnce(DayliteTokenState) -> Fut,
 ) -> Result<T, DayliteApiError>
@@ -202,9 +194,8 @@ where
     Ok(value)
 }
 
-/// Runs a read-only Daylite command body: builds the API client from the stored
-/// base URL and executes `operation` under the token refresh lock. Commands that
-/// mutate the local store manage it themselves instead.
+/// For read-only command bodies only: commands that mutate the local store
+/// manage the store themselves.
 pub(super) async fn run_daylite_command<T, F, Fut>(
     app: tauri::AppHandle,
     operation: F,

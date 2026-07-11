@@ -48,8 +48,6 @@ pub(crate) async fn fetch_calendar_events(
 }
 
 fn build_report_body(start: &str, end: &str) -> String {
-    // Timestamps must be in the form YYYYMMDDTHHMMSSz (e.g. "20260428T000000Z").
-    // They come from chrono::format so this invariant holds unless the format string changes.
     debug_assert!(
         start.len() == 16 && end.len() == 16,
         "CalDAV timestamp must be 16 chars: got start={start:?} end={end:?}"
@@ -72,9 +70,6 @@ fn build_report_body(start: &str, end: &str) -> String {
     )
 }
 
-/// Parses a CalDAV REPORT XML response and extracts VEVENT entries from each calendar-data element.
-/// Populates `href` on each `RawVEvent` by walking up to the enclosing `d:response` ancestor
-/// and reading its `d:href` child element.
 fn parse_caldav_report(xml_text: &str) -> Result<Vec<RawVEvent>, String> {
     let doc = roxmltree::Document::parse(xml_text)
         .map_err(|e| format!("XML konnte nicht geparst werden: {e}"))?;

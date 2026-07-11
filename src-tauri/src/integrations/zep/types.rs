@@ -24,8 +24,6 @@ impl ZepError {
     }
 }
 
-// Local-store failures during ZEP commands always surface as a configuration error,
-// so `?` can convert them directly instead of repeating the mapping at every call site.
 impl From<StoreError> for ZepError {
     fn from(error: StoreError) -> Self {
         ZepError::new(

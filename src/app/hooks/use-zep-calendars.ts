@@ -3,8 +3,6 @@ import type { ZepCalendar } from "../../generated/tauri";
 import { discoverZepCalendars } from "../../services/zep";
 
 export interface ZepCalendarsState {
-  // Session cache, not persisted across restarts: null means "not yet
-  // fetched", [] means "fetched but empty".
   calendars: ZepCalendar[] | null;
   isLoading: boolean;
   errorMessage: string | null;

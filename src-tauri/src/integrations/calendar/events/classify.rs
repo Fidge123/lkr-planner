@@ -2,7 +2,6 @@ use super::super::types::{PendingEvent, RawVEvent};
 
 const DAYLITE_DESCRIPTION_PREFIX: &str = "daylite:";
 
-/// Classifies a raw VEVENT as a lkr-planner assignment or a bare calendar event.
 pub(crate) fn classify_event(event: RawVEvent) -> PendingEvent {
     let date = event.dtstart;
 

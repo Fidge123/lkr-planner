@@ -11,8 +11,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use specta::Type;
 
-// Raw project record as returned by the Daylite API. Only `self` needs a serde
-// rename (Rust keyword); the other snake_case field names match Daylite directly.
 #[derive(Debug, Clone, Deserialize)]
 struct DayliteProjectSummaryDto {
     #[serde(rename = "self")]
@@ -108,7 +106,7 @@ pub async fn daylite_list_projects(
 const OVERDUE_CATEGORY: &str = "Überfällig";
 // The Daylite API has no multi-value operator for scalar fields, so the overdue
 // query pairs the category filter with each status as OR clauses to stay a
-// single call. The statuses match the assignment picker's search filter.
+// single call.
 const OVERDUE_STATUSES: [&str; 2] = ["new_status", "in_progress"];
 const OVERDUE_DISPLAY_LIMIT: usize = 5;
 // Daylite applies its own ordering when truncating server-side, so a wider
@@ -271,8 +269,6 @@ pub(super) async fn search_projects_core(
     ))
 }
 
-/// Extracts the trailing integer from a Daylite reference path like `/v1/projects/3001`.
-/// Returns `u64::MAX` for references that don't end with a numeric ID so they sort last.
 fn extract_numeric_id(reference: &str) -> u64 {
     reference
         .rsplit('/')
@@ -389,9 +385,6 @@ fn map_project_status(status: Option<String>) -> PlanningProjectStatus {
     PlanningProjectStatus::NewStatus
 }
 
-/// Fetches a single project by its Daylite reference (e.g. "/v1/projects/3001") and returns
-/// `(name, status_string)`. Returns `None` on any error so callers can show a placeholder instead.
-/// Intended for use as a cache fallback in other integrations.
 pub(crate) async fn fetch_project_by_reference(
     app: tauri::AppHandle,
     project_ref: &str,
@@ -573,7 +566,6 @@ mod tests {
     #[test]
     fn search_results_are_sorted_by_numeric_id_ascending() {
         tauri::async_runtime::block_on(async {
-            // A string sort would order these 100 < 20 < 3, so the fixture can tell the sorts apart.
             let transport = MockTransport::new(vec![Ok(mock_response(
                 200,
                 r#"{"results":[
@@ -621,7 +613,6 @@ mod tests {
     #[test]
     fn search_sorts_by_name_when_sort_is_name() {
         tauri::async_runtime::block_on(async {
-            // IDs ascend but names do not, so an ID sort and a name sort diverge.
             let transport = MockTransport::new(vec![Ok(mock_response(
                 200,
                 r#"{"results":[

@@ -3,9 +3,6 @@ use uuid::Uuid;
 
 use super::super::ical::build_ical_payload;
 
-/// Connection details shared by every CalDAV write: the HTTP client, the
-/// credentials, the server root for href resolution, and the absence calendar
-/// URLs guarding against misdirected writes.
 pub(crate) struct CaldavSession {
     pub(crate) client: reqwest::Client,
     pub(crate) username: String,
@@ -136,13 +133,9 @@ pub(crate) async fn delete_assignment_core(
     Ok(())
 }
 
-/// Resolves a CalDAV `d:href` (which is a URI reference per RFC 4918 / RFC 3986) against the
-/// server origin extracted from `base_url`.
-///
-/// CalDAV servers return root-absolute paths like `/caldav/admin/emp/uid.ics` in REPORT responses.
-/// Concatenating those onto a `base_url` that already contains a path (e.g.
-/// `https://app.zep.de/caldav/admin`) would duplicate the path segment and produce a 404.
-/// Instead we extract just the scheme+host from `base_url` and join the href against that.
+/// CalDAV servers return root-absolute hrefs; joining one onto a `base_url` that
+/// already contains a path would duplicate the path segment and produce a 404,
+/// so the href is resolved against the scheme+host origin only.
 fn resolve_href(href: &str, base_url: &str) -> Result<String, String> {
     if href.starts_with("http://") || href.starts_with("https://") {
         return Ok(href.to_string());
@@ -155,10 +148,8 @@ fn resolve_href(href: &str, base_url: &str) -> Result<String, String> {
     Ok(resolved.to_string())
 }
 
-/// Returns true if `target_url` points at (or inside) any of the configured absence calendars.
-/// Used as a safety guard so assignment writes never land in an employee's absence calendar,
-/// even if the local store is misconfigured (primary == absence) or an href is corrupted.
-/// Trailing slashes are ignored; a collection URL matches itself and any resource beneath it.
+/// Safety guard: assignment writes must never land in an absence calendar, even
+/// if the store is misconfigured (primary == absence) or an href is corrupted.
 fn targets_absence_calendar(target_url: &str, absence_urls: &[String]) -> bool {
     let target = target_url.trim_end_matches('/');
     absence_urls.iter().any(|raw| {
@@ -174,7 +165,6 @@ mod tests {
 
     #[test]
     fn resolve_href_joins_root_absolute_path_against_server_origin() {
-        // base_url carries a path prefix; href must NOT be appended onto it
         let result = resolve_href(
             "/caldav/admin/emp-1/uid-1.ics",
             "https://app.zep.de/caldav/admin",
@@ -289,17 +279,14 @@ mod tests {
     fn targets_absence_calendar_matches_collection_and_resources_beneath_it() {
         let absence = vec!["https://app.zep.de/caldav/admin/emp/absence".to_string()];
 
-        // The collection URL itself (e.g. create target) matches.
         assert!(targets_absence_calendar(
             "https://app.zep.de/caldav/admin/emp/absence",
             &absence,
         ));
-        // A trailing slash does not change the verdict.
         assert!(targets_absence_calendar(
             "https://app.zep.de/caldav/admin/emp/absence/",
             &absence,
         ));
-        // A resource inside the collection (e.g. update/delete target) matches.
         assert!(targets_absence_calendar(
             "https://app.zep.de/caldav/admin/emp/absence/uid-1.ics",
             &absence,
@@ -314,7 +301,6 @@ mod tests {
             "https://app.zep.de/caldav/admin/emp/primary/uid-1.ics",
             &absence,
         ));
-        // Empty absence list never blocks a write.
         assert!(!targets_absence_calendar(
             "https://app.zep.de/caldav/admin/emp/primary",
             &[],

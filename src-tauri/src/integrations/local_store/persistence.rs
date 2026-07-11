@@ -33,7 +33,6 @@ pub(crate) fn save_store_internal(
     app: &tauri::AppHandle,
     mut store: LocalStore,
 ) -> Result<(), StoreError> {
-    // Cleans up expired holiday cache entries as a side-effect of every save.
     let store_path = get_store_path(app)?;
     store.cleanup_holiday_cache(chrono::Utc::now().date_naive());
     save_store_to_path(&store_path, &store)
@@ -293,7 +292,6 @@ mod tests {
 
         let loaded = load_store_from_path(&test_path).expect("should load without holidayCache");
         assert!(loaded.holiday_cache.is_empty());
-        // displaySettings absent in the file must default to hiding non-plannable employees.
         assert!(loaded.display_settings.hide_non_plannable_employees);
     }
 
@@ -329,7 +327,6 @@ mod tests {
         );
 
         let loaded = load_store_from_path(&test_path).expect("should load without showWeekend");
-        // showWeekend absent in a previously stored displaySettings must default to off.
         assert!(!loaded.display_settings.show_weekend);
         assert!(loaded.display_settings.hide_non_plannable_employees);
     }

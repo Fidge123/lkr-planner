@@ -8,12 +8,6 @@ export const commands = {
 	checkHealth: () => typedError<HealthStatus, string>(__TAURI_INVOKE("check_health")),
 	loadLocalStore: () => typedError<LocalStore, StoreError>(__TAURI_INVOKE("load_local_store")),
 	saveLocalStore: (store: LocalStore) => typedError<null, StoreError>(__TAURI_INVOKE("save_local_store", { store })),
-	/**
-	 *  Loads all calendar events for every configured employee for the given week.
-	 *  Returns one entry per employee that has a primary calendar configured.
-	 *  Per-employee CalDAV failures are returned inline in `error`; only total failures
-	 *  (store unavailable, bad date) return an `Err`.
-	 */
 	loadWeekEvents: (weekStart: string) => typedError<EmployeeWeekEvents[], string>(__TAURI_INVOKE("load_week_events", { weekStart })),
 	getHolidaysForWeek: (weekStart: string) => typedError<Holiday[], string>(__TAURI_INVOKE("get_holidays_for_week", { weekStart })),
 	dayliteConnectRefreshToken: (request: DayliteRefreshTokenRequest) => typedError<DayliteTokenSyncStatus, DayliteApiError>(__TAURI_INVOKE("daylite_connect_refresh_token", { request })),
@@ -23,14 +17,8 @@ export const commands = {
 	dayliteListContacts: () => typedError<PlanningContactRecord[], DayliteApiError>(__TAURI_INVOKE("daylite_list_contacts")),
 	dayliteListCachedContacts: () => typedError<PlanningContactRecord[], DayliteApiError>(__TAURI_INVOKE("daylite_list_cached_contacts")),
 	dayliteUpdateContactIcalUrls: (input: DayliteUpdateContactIcalUrlsInput) => typedError<PlanningContactRecord, DayliteApiError>(__TAURI_INVOKE("daylite_update_contact_ical_urls", { input })),
-	/**
-	 *  Creates a new assignment event on the employee's primary CalDAV calendar.
-	 *  Returns the CalDAV resource href (e.g. `{calendar_url}/{uid}.ics`) of the new event.
-	 */
 	createAssignment: (input: CreateAssignmentInput) => typedError<string, string>(__TAURI_INVOKE("create_assignment", { input })),
-	/**  Updates an existing assignment event in place using the stored CalDAV href. */
 	updateAssignment: (input: UpdateAssignmentInput) => typedError<null, string>(__TAURI_INVOKE("update_assignment", { input })),
-	/**  Deletes an assignment event using the stored CalDAV href. */
 	deleteAssignment: (href: string) => typedError<null, string>(__TAURI_INVOKE("delete_assignment", { href })),
 	zepSaveCredentials: (rootUrl: string, username: string, password: string) => typedError<null, ZepError>(__TAURI_INVOKE("zep_save_credentials", { rootUrl, username, password })),
 	zepLoadCredentials: () => typedError<{
@@ -39,7 +27,6 @@ export const commands = {
 } | null, ZepError>(__TAURI_INVOKE("zep_load_credentials")),
 	zepTestCredentials: (rootUrl: string, username: string, password: string) => typedError<ZepCredentialTestResult, ZepError>(__TAURI_INVOKE("zep_test_credentials", { rootUrl, username, password })),
 	zepDiscoverCalendars: () => typedError<ZepCalendar[], ZepError>(__TAURI_INVOKE("zep_discover_calendars")),
-	/**  Save a ZEP calendar URL for one source (Primary or Absence) and test the connection. */
 	zepSaveAndTestCalendar: (dayliteContactReference: string, source: IcalSource, calendarUrl: string | null) => typedError<ZepCalendarTestResult, ZepError>(__TAURI_INVOKE("zep_save_and_test_calendar", { dayliteContactReference, source, calendarUrl })),
 };
 
@@ -59,27 +46,15 @@ export type CalendarCellEvent = {
 	uid: string,
 	kind: CalendarEventKind,
 	title: string,
-	/**  Daylite project status string if resolved (e.g. "in_progress"). None for bare or unresolved. */
 	projectStatus: string | null,
-	/**  ISO date in the form yyyy-MM-dd. */
 	date: string,
-	/**  Start time in HH:MM format. None for all-day events. */
 	startTime: string | null,
-	/**  End time in HH:MM format. None for all-day events. */
 	endTime: string | null,
-	/**  CalDAV resource URL (d:href from REPORT) needed for PUT/DELETE. None if unknown. */
 	href: string | null,
-	/**  Daylite project reference (e.g. "/v1/projects/42") stored in DESCRIPTION. None for bare events. */
 	projectRef: string | null,
 };
 
-export type CalendarEventKind = 
-/**  A lkr-planner assignment linked to a Daylite project via DESCRIPTION. */
-"assignment" | 
-/**  A bare calendar event with no Daylite project link (legacy, blocker, appointment). */
-"bare" | 
-/**  An all-day absence from the employee's dedicated ZEP absence calendar. */
-"absence";
+export type CalendarEventKind = "assignment" | "bare" | "absence";
 
 export type CreateAssignmentInput = {
 	employeeReference: string,
@@ -111,10 +86,6 @@ export type DayliteContactCacheEntry = {
 	urls: DayliteContactUrl[],
 };
 
-/**
- *  A single labelled URL on a Daylite contact. Shared by the wire, domain, and on-disk
- *  cache representations of a contact (they had identical shapes).
- */
 export type DayliteContactUrl = {
 	label?: string | null,
 	url?: string | null,
@@ -149,11 +120,8 @@ export type DayliteSearchInput = {
 	searchTerm: string,
 	limit: number | null,
 	statuses?: string[] | null,
-	/**  Include full record data in the response (`?full-records=true`). */
 	fullRecords?: boolean | null,
-	/**  Pagination cursor: object ID of the first result to return (`?start=<id>`). */
 	start?: string | null,
-	/**  Result ordering. Defaults to numeric ID; `name` opts into name sort. */
 	sort?: DayliteSearchSort | null,
 };
 
@@ -162,10 +130,6 @@ export type DayliteSearchResult<T> = {
 	next?: string | null,
 };
 
-/**
- *  Result ordering for `search_projects_core`. Numeric ID is the default so the
- *  BL-022 contract stays unchanged; callers opt in to name sort explicitly.
- */
 export type DayliteSearchSort = "id" | "name";
 
 export type DayliteTokenSyncStatus = {
@@ -180,63 +144,29 @@ export type DayliteUpdateContactIcalUrlsInput = {
 };
 
 export type DisplaySettings = {
-	/**
-	 *  When true, the planning view only shows employees that are plannable, i.e.
-	 *  category "Monteur" with a configured primary calendar. Employees without a
-	 *  primary calendar and those with the Daylite category "Test" are hidden.
-	 *  Defaults to true so the planning view is uncluttered out of the box.
-	 */
 	hideNonPlannableEmployees: boolean,
 	/**
-	 *  When true, the planning view shows Saturday and Sunday in addition to the
-	 *  work week (Monday to Friday). Defaults to false so the view stays focused
-	 *  on the work week out of the box.
-	 * 
-	 *  Carries `#[serde(default)]` so a `DisplaySettings` object persisted before
-	 *  this field existed still deserializes (resolving to false); the struct-level
-	 *  `Default` does not fill in individual missing fields.
+	 *  `#[serde(default)]` keeps a `DisplaySettings` persisted before this field
+	 *  existed deserializable; the struct-level `Default` does not fill in
+	 *  individual missing fields.
 	 */
 	showWeekend?: boolean,
 };
 
 export type EmployeeSetting = {
 	dayliteContactReference: string,
-	/**
-	 *  Full CalDAV URL of the primary (Einsatz) calendar, discovered via PROPFIND.
-	 *  None = no calendar assigned. Old `primaryIcalUrl` values are not migrated automatically.
-	 */
+	/**  Old `primaryIcalUrl` values are not migrated automatically. */
 	zepPrimaryCalendar?: string | null,
-	/**
-	 *  Full CalDAV URL of the absence (Abwesenheit) calendar, discovered via PROPFIND.
-	 *  None = no absence calendar (intentional, not an error).
-	 */
 	zepAbsenceCalendar?: string | null,
-	/**
-	 *  ISO 8601 timestamp of the last connection test for the primary calendar.
-	 *  None = never tested (or URL changed since last test).
-	 */
 	primaryIcalLastTestedAt?: string | null,
-	/**
-	 *  Whether the last connection test for the primary calendar succeeded.
-	 *  None if never tested or URL changed since last test.
-	 */
 	primaryIcalLastTestPassed?: boolean | null,
-	/**
-	 *  ISO 8601 timestamp of the last connection test for the absence calendar.
-	 *  None = never tested (or URL changed since last test).
-	 */
 	absenceIcalLastTestedAt?: string | null,
-	/**
-	 *  Whether the last connection test for the absence calendar succeeded.
-	 *  None if never tested or URL changed since last test.
-	 */
 	absenceIcalLastTestPassed?: boolean | null,
 };
 
 export type EmployeeWeekEvents = {
 	employeeReference: string,
 	events: CalendarCellEvent[],
-	/**  Set when the CalDAV fetch for this employee fails entirely. */
 	error: string | null,
 };
 

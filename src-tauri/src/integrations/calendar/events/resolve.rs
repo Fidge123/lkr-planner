@@ -3,9 +3,6 @@ use std::collections::HashMap;
 use super::super::types::{CalendarCellEvent, CalendarEventKind, PendingEvent};
 use crate::integrations::local_store::DayliteCache;
 
-/// Resolves a pending event into a `CalendarCellEvent` using the Daylite cache and
-/// pre-fetched API results. Falls back to a German placeholder if the project cannot
-/// be resolved.
 pub(crate) fn resolve_event(
     pending: PendingEvent,
     cache: &DayliteCache,

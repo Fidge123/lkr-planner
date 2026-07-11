@@ -101,7 +101,6 @@ pub async fn zep_discover_calendars(app: tauri::AppHandle) -> Result<Vec<ZepCale
     Ok(calendars)
 }
 
-/// Save a ZEP calendar URL for one source (Primary or Absence) and test the connection.
 #[tauri::command]
 #[specta::specta]
 pub async fn zep_save_and_test_calendar(
@@ -150,8 +149,7 @@ pub async fn zep_save_and_test_calendar(
     Ok(result)
 }
 
-/// Mirrors the calendar URL pair to the Daylite contact. An empty URL string
-/// removes the entry in Daylite via `normalize_non_empty`.
+/// An empty URL string removes the entry in Daylite via `normalize_non_empty`.
 async fn sync_calendar_to_daylite(
     store: &mut crate::integrations::local_store::LocalStore,
     contact_reference: &str,
@@ -194,8 +192,7 @@ async fn sync_calendar_to_daylite(
     })
 }
 
-/// Stores the calendar URL for the source. A changed URL invalidates the
-/// previous test result.
+/// A changed URL invalidates the previous test result.
 fn store_calendar_url(
     store: &mut crate::integrations::local_store::LocalStore,
     contact_reference: &str,

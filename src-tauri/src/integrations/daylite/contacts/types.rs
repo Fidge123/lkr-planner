@@ -2,9 +2,6 @@ use crate::integrations::local_store::DayliteContactUrl;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
-// Raw contact record as returned by the Daylite API. Only `self` needs a serde
-// rename (Rust keyword). Ingestion-only: never serialized to the frontend
-// (commands return `PlanningContactRecord`) or persisted.
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
 pub struct DayliteContactSummary {
     #[serde(rename = "self")]

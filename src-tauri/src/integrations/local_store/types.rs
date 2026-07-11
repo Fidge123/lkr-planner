@@ -40,28 +40,17 @@ pub struct ApiEndpoints {
 #[serde(rename_all = "camelCase")]
 pub struct EmployeeSetting {
     pub daylite_contact_reference: String,
-    /// Full CalDAV URL of the primary (Einsatz) calendar, discovered via PROPFIND.
-    /// None = no calendar assigned. Old `primaryIcalUrl` values are not migrated automatically.
+    /// Old `primaryIcalUrl` values are not migrated automatically.
     #[serde(default)]
     pub zep_primary_calendar: Option<String>,
-    /// Full CalDAV URL of the absence (Abwesenheit) calendar, discovered via PROPFIND.
-    /// None = no absence calendar (intentional, not an error).
     #[serde(default)]
     pub zep_absence_calendar: Option<String>,
-    /// ISO 8601 timestamp of the last connection test for the primary calendar.
-    /// None = never tested (or URL changed since last test).
     #[serde(default)]
     pub primary_ical_last_tested_at: Option<String>,
-    /// Whether the last connection test for the primary calendar succeeded.
-    /// None if never tested or URL changed since last test.
     #[serde(default)]
     pub primary_ical_last_test_passed: Option<bool>,
-    /// ISO 8601 timestamp of the last connection test for the absence calendar.
-    /// None = never tested (or URL changed since last test).
     #[serde(default)]
     pub absence_ical_last_tested_at: Option<String>,
-    /// Whether the last connection test for the absence calendar succeeded.
-    /// None if never tested or URL changed since last test.
     #[serde(default)]
     pub absence_ical_last_test_passed: Option<bool>,
 }
@@ -69,18 +58,10 @@ pub struct EmployeeSetting {
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct DisplaySettings {
-    /// When true, the planning view only shows employees that are plannable, i.e.
-    /// category "Monteur" with a configured primary calendar. Employees without a
-    /// primary calendar and those with the Daylite category "Test" are hidden.
-    /// Defaults to true so the planning view is uncluttered out of the box.
     pub hide_non_plannable_employees: bool,
-    /// When true, the planning view shows Saturday and Sunday in addition to the
-    /// work week (Monday to Friday). Defaults to false so the view stays focused
-    /// on the work week out of the box.
-    ///
-    /// Carries `#[serde(default)]` so a `DisplaySettings` object persisted before
-    /// this field existed still deserializes (resolving to false); the struct-level
-    /// `Default` does not fill in individual missing fields.
+    /// `#[serde(default)]` keeps a `DisplaySettings` persisted before this field
+    /// existed deserializable; the struct-level `Default` does not fill in
+    /// individual missing fields.
     #[serde(default)]
     pub show_weekend: bool,
 }
@@ -120,8 +101,6 @@ pub struct DayliteContactCacheEntry {
     pub urls: Vec<DayliteContactUrl>,
 }
 
-/// A single labelled URL on a Daylite contact. Shared by the wire, domain, and on-disk
-/// cache representations of a contact (they had identical shapes).
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct DayliteContactUrl {
@@ -141,8 +120,8 @@ pub struct HolidayCacheEntry {
     pub holidays: Vec<CachedHoliday>,
 }
 
-// On-disk storage format; kept separate from holidays::Holiday (the command response type)
-// so the cache schema and the API surface can evolve independently.
+// Kept separate from holidays::Holiday so the on-disk cache schema and the API
+// surface can evolve independently.
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct CachedHoliday {

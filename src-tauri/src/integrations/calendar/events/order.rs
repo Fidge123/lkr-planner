@@ -1,7 +1,5 @@
 use super::super::types::{CalendarCellEvent, CalendarEventKind};
 
-/// Sorts a mixed list of calendar events so that `Absence` events always appear
-/// first within each day. Within the same kind, original relative order is preserved.
 pub(crate) fn sort_events_absences_first(events: &mut [CalendarCellEvent]) {
     events.sort_by(|a, b| {
         let kind_order = |e: &CalendarCellEvent| {

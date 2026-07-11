@@ -291,7 +291,6 @@ mod tests {
 
     #[test]
     fn week_filter_includes_holidays_on_weekend_days() {
-        // Week starting Monday 2026-01-26; the window must reach Sunday 2026-02-01.
         let start = NaiveDate::from_ymd_opt(2026, 1, 26).unwrap();
         let end = start + chrono::Duration::days(6);
         assert_eq!(end, NaiveDate::from_ymd_opt(2026, 2, 1).unwrap());

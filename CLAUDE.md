@@ -28,6 +28,7 @@ This is a desktop application which provides a planning view and integrates with
 - Display user-friendly error messages in German
 - Use red/green TDD
 - YAGNI (You Ain't Gonna Need It): Avoid code that is not required for the current scope
+- Comments are a code smell: only write a comment when it prevents future errors from something a skilled developer cannot see in the code (external API quirks, cross-file invariants, concurrency hazards); never narrate, restate, or reference history
 - Naming:
   - **Files**: kebab-case
   - **Components**: PascalCase function components
