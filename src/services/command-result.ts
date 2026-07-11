@@ -1,6 +1,3 @@
-// Every generated Tauri command resolves to this shape. Commands either
-// return a structured error object with a `userMessage`, or (e.g. checkHealth)
-// a plain string.
 type CommandResult<T, E> =
   | { status: "ok"; data: T }
   | { status: "error"; error: E };

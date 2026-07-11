@@ -34,7 +34,6 @@ export function EmployeeIcalDialog({
   const [isPrimarySubmitting, setIsPrimarySubmitting] = useState(false);
   const [isAbsenceSubmitting, setIsAbsenceSubmitting] = useState(false);
 
-  // Reset section state when dialog opens for a new employee
   useEffect(() => {
     if (!isOpen) {
       return;

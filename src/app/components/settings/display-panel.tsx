@@ -41,7 +41,6 @@ export function DisplaySettingsPanel({ onClose, onChanged }: Props) {
         await saveDisplaySettings({ [key]: nextValue });
         onChanged?.();
       } catch (error) {
-        // Revert the optimistic change so the UI matches the persisted state.
         applyValue(!nextValue);
         setStatus({
           type: "error",

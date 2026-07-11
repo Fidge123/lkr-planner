@@ -13,8 +13,6 @@ import { usePlanningEmployees } from "./hooks/use-planning-employees";
 import { usePlanningProjects } from "./hooks/use-planning-projects";
 import { getWeekDays, toLocalISODate } from "./util";
 
-// The optional state props are a test seam: production callers pass only
-// weekOffset and assignmentState, tests inject prepared states.
 export function PlanningGrid({
   weekOffset,
   showWeekend = false,

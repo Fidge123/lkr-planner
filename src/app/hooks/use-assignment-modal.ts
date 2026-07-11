@@ -15,8 +15,6 @@ import type { ModalSaveAction } from "../next-day-quick-add";
 import { useAssignmentDefaultSuggestions } from "./use-assignment-default-suggestions";
 import { useAssignmentProjectSearch } from "./use-assignment-project-search";
 
-// Holds every piece of assignment modal state and the handlers operating on
-// it; the component renders from this and stays plain JSX.
 export function useAssignmentModal({
   isOpen,
   assignment,
@@ -103,13 +101,11 @@ export function useAssignmentModal({
     setSelectedProjectRef(project.self);
     setSelectedProjectName(project.name);
     setIsDirty(true);
-    // Selecting returns the list to its empty default state.
     setFilter("");
     setHighlightedIndex(-1);
   };
 
   const changeFilter = (value: string) => {
-    // Typing changes the result set, so the previous highlight is stale.
     setFilter(value);
     setHighlightedIndex(-1);
   };

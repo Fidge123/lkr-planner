@@ -31,10 +31,7 @@ const EMPLOYEE: PlanningContactRecord = {
   urls: [],
 };
 
-// CalendarSection is tested in isolation so that submitting/idle states can be
-// controlled directly via props, proving the two sections are fully independent.
-
-describe("CalendarSection (10.8 – independent state)", () => {
+describe("CalendarSection (10.8 - independent state)", () => {
   it("primary submitting does not affect the absence section", () => {
     const primaryHtml = renderToStaticMarkup(
       <CalendarSection
@@ -72,7 +69,7 @@ describe("CalendarSection (10.8 – independent state)", () => {
   });
 });
 
-describe("CalendarSection – clear calendar", () => {
+describe("CalendarSection - clear calendar", () => {
   it("shows 'Entfernen' button when no URL is selected but one was previously stored", () => {
     const html = renderToStaticMarkup(
       <CalendarSection
@@ -114,7 +111,7 @@ describe("CalendarSection – clear calendar", () => {
   });
 });
 
-describe("CalendarSection (10.9 – in-flight state)", () => {
+describe("CalendarSection (10.9 - in-flight state)", () => {
   it("shows 'Teste...' and disables the button while isSubmitting=true", () => {
     const html = renderToStaticMarkup(
       <CalendarSection
@@ -133,7 +130,6 @@ describe("CalendarSection (10.9 – in-flight state)", () => {
 
     expect(html).toContain("Teste...");
     expect(html).not.toContain("Speichern");
-    // The submit button must carry the disabled attribute
     expect(html).toMatch(/disabled/);
   });
 
@@ -155,12 +151,11 @@ describe("CalendarSection (10.9 – in-flight state)", () => {
 
     expect(html).toContain("Speichern");
     expect(html).not.toContain("Teste...");
-    // No disabled attribute on the submit button (selectedUrl is set, isDisabled=false)
     expect(html).not.toMatch(/disabled/);
   });
 });
 
-describe("EmployeeIcalDialog (10.10 – discovery failure)", () => {
+describe("EmployeeIcalDialog (10.10 - discovery failure)", () => {
   it("shows error banner with reload button when calendar discovery failed", () => {
     const errorMessage = "Verbindung zum ZEP-Server fehlgeschlagen.";
     const html = renderToStaticMarkup(
@@ -190,7 +185,6 @@ describe("EmployeeIcalDialog (10.10 – discovery failure)", () => {
       />,
     );
 
-    // Both selects must be disabled (isDisabled = zepCalendars === null)
     const selectMatches = [...html.matchAll(/<select[^>]*disabled[^>]*>/g)];
     expect(selectMatches.length).toBe(2);
   });

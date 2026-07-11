@@ -40,8 +40,6 @@ const defaultHolidaysState: HolidaysState = {
 
 const defaultIcalProps = {
   employeeSettings: [] as import("../generated/tauri").EmployeeSetting[],
-  // Tests assert on the full employee list; filtering is covered separately in
-  // employee-visibility.spec.ts and the dedicated test below.
   hideNonPlannableEmployees: false,
   holidaysState: defaultHolidaysState,
   onOpenIcalDialog: () => {},
@@ -368,8 +366,6 @@ describe("planning grid assignment states", () => {
     expect(html).toContain("Auto Werkstatt");
     expect(html).toContain("bg-base-200");
     expect(html).not.toContain("bg-secondary");
-    // Note: bg-primary legitimately appears in the TimetableHeader for today's column;
-    // the bare event cell itself does not use any bg-primary class.
   });
 
   it("renders empty cells when no events exist for the week", () => {
@@ -390,7 +386,6 @@ describe("planning grid assignment states", () => {
       />,
     );
 
-    // Employee row exists but no project events in it
     expect(html).toContain("Monteur Aus Daylite");
     expect(html).not.toContain("bg-secondary");
   });
@@ -406,7 +401,6 @@ describe("planning grid assignment states", () => {
       />,
     );
 
-    // System time is 2026-01-28; weekOffset=1 starts on 2026-02-02
     expect(html).toContain("02.02");
   });
 
@@ -445,8 +439,6 @@ describe("planning grid weekend visibility", () => {
     setSystemTime(new Date(2026, 0, 28, 9, 0, 0));
   });
 
-  // Each day column renders exactly one <time> header cell; with no employees or
-  // events the only <time> elements are the day headers.
   const countDayColumns = (html: string) => (html.match(/<time/g) ?? []).length;
 
   it("renders 5 day columns by default (weekend hidden)", () => {
@@ -481,8 +473,6 @@ describe("planning grid weekend visibility", () => {
   });
 
   it("displays a holiday that falls on a weekend day when showWeekend is on", () => {
-    // System time is 2026-01-28 (Wed); getWeekDays(0, true) spans Mon 2026-01-26
-    // to Sun 2026-02-01, so 2026-01-31 is the Saturday column.
     const html = renderToStaticMarkup(
       <PlanningGrid
         weekOffset={0}

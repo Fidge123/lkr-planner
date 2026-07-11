@@ -14,9 +14,6 @@ export interface AssignmentProjectSearchState {
   errorMessage: string | null;
 }
 
-// React adapter over `createTrailingSearch`: feeds the filter into the trailing
-// debounced search and exposes its results. Querying, debouncing and stale
-// response dropping live in the controller; this hook only bridges to state.
 export function useAssignmentProjectSearch(
   filter: string,
 ): AssignmentProjectSearchState {

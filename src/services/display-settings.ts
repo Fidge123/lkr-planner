@@ -1,7 +1,6 @@
 import { commands, type DisplaySettings } from "../generated/tauri";
 import { unwrapCommandResult } from "./command-result";
 
-// Mirrors DisplaySettings::default() in the Rust backend.
 const defaultDisplaySettings: Required<DisplaySettings> = {
   hideNonPlannableEmployees: true,
   showWeekend: false,

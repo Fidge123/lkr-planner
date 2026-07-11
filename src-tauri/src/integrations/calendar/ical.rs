@@ -2,8 +2,6 @@ use icalendar::{Calendar, CalendarComponent, CalendarDateTime, Component, DatePe
 
 use super::types::RawVEvent;
 
-/// Builds an RFC 5545 VCALENDAR payload for a lkr-planner assignment.
-/// Uses a fixed floating 08:00–16:00 time window (local time, no timezone).
 pub(crate) fn build_ical_payload(
     uid: &str,
     date: &str,
@@ -21,11 +19,6 @@ pub(crate) fn build_ical_payload(
     )
 }
 
-/// Escapes a string for use as an RFC 5545 TEXT value (e.g. SUMMARY, DESCRIPTION).
-/// Per RFC 5545 §3.3.11, backslash, semicolon, comma, and newlines must be escaped.
-/// Backslash is escaped first so the escape characters added afterwards are not doubled.
-/// Line folding (lines > 75 octets) is not implemented; CalDAV servers accept unfolded
-/// lines and assignment summaries are short in practice.
 fn escape_ical_text(value: &str) -> String {
     value
         .replace('\\', "\\\\")
@@ -35,9 +28,6 @@ fn escape_ical_text(value: &str) -> String {
         .replace(['\n', '\r'], "\\n")
 }
 
-/// Parses iCal text and returns all VEVENT entries found, or an error if the text is not
-/// valid iCal. Uses the `icalendar` crate for RFC 5545-compliant parsing (line unfolding,
-/// text unescaping, typed DTSTART). `RawVEvent.dtstart` is already in `yyyy-MM-dd` format.
 pub(super) fn parse_ical_events(ical_text: &str) -> Result<Vec<RawVEvent>, String> {
     let calendar: Calendar = ical_text
         .parse()
@@ -90,8 +80,6 @@ pub(super) fn parse_ical_events(ical_text: &str) -> Result<Vec<RawVEvent>, Strin
     Ok(events)
 }
 
-/// Extracts the time component from a `DatePerhapsTime` as an `HH:MM` string.
-/// Returns `None` for all-day (date-only) values.
 fn ical_time(dt: &DatePerhapsTime) -> Option<String> {
     match dt {
         DatePerhapsTime::Date(_) => None,

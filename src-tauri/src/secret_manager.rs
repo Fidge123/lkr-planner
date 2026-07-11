@@ -24,17 +24,9 @@ use keyring_core::Error as KeyringError;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
-/// Register the platform-native credential store as the keyring-core default.
-///
-/// keyring-core does not pick a backend automatically, so this must be called
-/// once at application startup before any token is read or written.
 pub fn init() -> Result<(), SecretError> {
     #[cfg(target_os = "macos")]
     let store = apple_native_keyring_store::keychain::Store::new().map_err(map_keyring_error)?;
-    #[cfg(target_os = "windows")]
-    let store = windows_native_keyring_store::Store::new().map_err(map_keyring_error)?;
-    #[cfg(target_os = "linux")]
-    let store = linux_keyutils_keyring_store::Store::new().map_err(map_keyring_error)?;
 
     keyring_core::set_default_store(store);
     Ok(())
@@ -45,7 +37,7 @@ fn map_keyring_error(err: KeyringError) -> SecretError {
         KeyringError::NoEntry => SecretError::NotFound,
         KeyringError::PlatformFailure(ref e) => {
             let error_msg = e.to_string().to_lowercase();
-            // A simple heuristic for mapping common OS access denied messages
+
             if error_msg.contains("access denied")
                 || error_msg.contains("authentication")
                 || error_msg.contains("not permitted")
@@ -117,9 +109,6 @@ mod tests {
         assert_eq!(err, SecretError::NotFound);
     }
 
-    /// Verify that set + get on the same Entry object works with the mock backend.
-    /// Note: keyring-core's mock store keeps a shared map keyed by service/user,
-    /// so separate Entry::new calls for the same pair share state within one store.
     #[test]
     fn set_and_get_on_same_entry_with_mock() {
         with_mock_keyring(|| {

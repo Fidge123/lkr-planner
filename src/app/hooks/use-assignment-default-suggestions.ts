@@ -7,9 +7,6 @@ export interface AssignmentDefaultSuggestionsState {
   suggestionsLoaded: boolean;
 }
 
-// Loads the default suggestions each time the modal opens. `suggestionsLoaded`
-// gates the empty-state message so it does not flash while the overdue query
-// is still in flight.
 export function useAssignmentDefaultSuggestions(
   isOpen: boolean,
 ): AssignmentDefaultSuggestionsState {

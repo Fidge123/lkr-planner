@@ -177,8 +177,6 @@ describe("ProjectResultList", () => {
 
     expect(html).toContain('aria-current="true"');
     expect(html).toContain('aria-current="false"');
-    // The highlight uses explicit utility classes so it stays visible
-    // independent of DaisyUI's menu-active styling.
     expect(html).toContain("bg-primary");
   });
 });
@@ -280,7 +278,6 @@ describe("resolveDisplayedProjects", () => {
     expect(resolveDisplayedProjects("Nord", suggestions, results)).toBe(
       results,
     );
-    // Escape or manual clearing empties the filter (see resolveEscapeAction).
     expect(resolveDisplayedProjects("", suggestions, results)).toBe(
       suggestions,
     );

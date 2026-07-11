@@ -31,8 +31,6 @@ export function TimetableRow({
   const weekStart = isoWeekDays[0] ?? "";
   const [ghostWeekStart, setGhostWeekStart] = useState(weekStart);
 
-  // A ghost only makes sense within the week it was created for; adjust state
-  // during render rather than in an effect to avoid a stale-ghost flash.
   if (weekStart !== ghostWeekStart) {
     setGhostWeekStart(weekStart);
     setGhost(null);

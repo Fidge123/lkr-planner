@@ -1,8 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { DayliteProjectSummary } from "../../generated/tauri";
 
-// Renders the currently displayed result list. Returns nothing when empty, so
-// an empty filter keeps the list in its empty default state.
 export function ProjectResultList({
   projects,
   highlightedIndex,
@@ -10,7 +8,6 @@ export function ProjectResultList({
 }: ProjectResultListProps) {
   const activeRef = useRef<HTMLButtonElement>(null);
 
-  // Keep the highlighted item visible while navigating with the keyboard.
   useEffect(() => {
     if (highlightedIndex < 0) return;
     activeRef.current?.scrollIntoView({ block: "nearest" });
@@ -51,9 +48,6 @@ interface ProjectResultListProps {
   onSelect: (project: DayliteProjectSummary) => void;
 }
 
-// German empty-state message when neither a recent nor overdue projects exist.
-// Only shown for the empty filter (the suggestion state) and once loading has
-// finished, so it does not flash while the overdue query is in flight.
 export function SuggestionEmptyState({
   filter,
   suggestionsLoaded,

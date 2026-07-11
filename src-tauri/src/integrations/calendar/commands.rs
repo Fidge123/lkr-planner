@@ -15,10 +15,6 @@ use super::events::{
 use super::types::{CalendarCellEvent, EmployeeWeekEvents, PendingEvent};
 use crate::integrations::local_store::{DayliteCache, LocalStore};
 
-/// Loads all calendar events for every configured employee for the given week.
-/// Returns one entry per employee that has a primary calendar configured.
-/// Per-employee CalDAV failures are returned inline in `error`; only total failures
-/// (store unavailable, bad date) return an `Err`.
 #[tauri::command]
 #[specta::specta]
 pub async fn load_week_events(
@@ -66,8 +62,6 @@ struct EmployeeFetch {
     absences: Vec<CalendarCellEvent>,
 }
 
-/// Error entries for every employee with a primary calendar, used when the whole
-/// load cannot proceed (e.g. missing ZEP credentials).
 fn employees_with_error(store: &LocalStore, message: &str) -> Vec<EmployeeWeekEvents> {
     store
         .employee_settings
@@ -86,10 +80,6 @@ fn employees_with_error(store: &LocalStore, message: &str) -> Vec<EmployeeWeekEv
         .collect()
 }
 
-/// Fetches the week's CalDAV events for all employees concurrently (primary and
-/// absence calendar per employee are also concurrent via `tokio::join!`) and
-/// classifies the results. Employees whose primary fetch failed are returned as
-/// ready-made error entries instead.
 async fn fetch_week_for_employees(
     store: &LocalStore,
     session: &CaldavSession,
@@ -159,8 +149,6 @@ async fn fetch_week_for_employees(
     (fetches, error_results)
 }
 
-/// Fetches every project referenced by an event but missing from the local Daylite
-/// cache (sequential, typically few).
 async fn fetch_uncached_projects(
     app: tauri::AppHandle,
     store: &LocalStore,
@@ -242,8 +230,6 @@ pub struct UpdateAssignmentInput {
     pub project_name: String,
 }
 
-/// Creates a new assignment event on the employee's primary CalDAV calendar.
-/// Returns the CalDAV resource href (e.g. `{calendar_url}/{uid}.ics`) of the new event.
 #[tauri::command]
 #[specta::specta]
 pub async fn create_assignment(
@@ -276,9 +262,6 @@ pub async fn create_assignment(
     .await
 }
 
-/// Builds the CalDAV session for a write command from the stored ZEP endpoint,
-/// the keychain credentials, and every configured absence calendar URL (the
-/// guard against assignment writes landing in an absence calendar).
 fn load_caldav_session(
     store: &crate::integrations::local_store::LocalStore,
 ) -> Result<CaldavSession, String> {
@@ -310,7 +293,6 @@ fn build_caldav_session(
     })
 }
 
-/// Updates an existing assignment event in place using the stored CalDAV href.
 #[tauri::command]
 #[specta::specta]
 pub async fn update_assignment(
@@ -334,7 +316,6 @@ pub async fn update_assignment(
     .await
 }
 
-/// Deletes an assignment event using the stored CalDAV href.
 #[tauri::command]
 #[specta::specta]
 pub async fn delete_assignment(app: tauri::AppHandle, href: String) -> Result<(), String> {
