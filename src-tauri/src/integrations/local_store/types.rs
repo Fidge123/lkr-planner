@@ -59,9 +59,6 @@ pub struct EmployeeSetting {
 #[serde(rename_all = "camelCase")]
 pub struct DisplaySettings {
     pub hide_non_plannable_employees: bool,
-    /// `#[serde(default)]` keeps a `DisplaySettings` persisted before this field
-    /// existed deserializable; the struct-level `Default` does not fill in
-    /// individual missing fields.
     #[serde(default)]
     pub show_weekend: bool,
 }

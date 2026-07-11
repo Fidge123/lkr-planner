@@ -40,6 +40,9 @@ All markdown files and pull request descriptions should have one sentence per li
 Don't break sentences across multiple lines in markdown.
 Avoid `---` between headers and avoid em dashes.
 
+Code comments are considered a code smell and should be avoided.
+Only comment thing that are not obvious to a skilled developer after reading the code.
+
 ### Frontend
 
 - Avoid nested `div` and `span` elements
@@ -47,7 +50,7 @@ Avoid `---` between headers and avoid em dashes.
 
 ```tsx
 export function ComponentName({ prop1, prop2 }: Props) {
-  // Component logic
+
 }
 
 interface Props {

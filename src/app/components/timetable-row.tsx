@@ -152,7 +152,6 @@ export function TimetableRow({
   );
 }
 
-/** Returns true when the primary iCal source needs attention (no calendar, untested, or last test failed). */
 function needsAttention(setting: EmployeeSetting | null | undefined): boolean {
   if (!setting) {
     return true;

@@ -258,8 +258,6 @@ mod tests {
 
     #[test]
     fn parse_propfind_accepts_207_multistatus_body() {
-        // CalDAV PROPFIND normatively returns 207 Multi-Status.
-        // The HTTP status check (200..=299) covers 207.
         let body = r#"<?xml version="1.0" encoding="utf-8"?>
 <d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
   <d:response>

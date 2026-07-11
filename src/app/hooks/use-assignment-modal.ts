@@ -136,7 +136,6 @@ export function useAssignmentModal({
       return;
     }
     if (event.key === "Escape" && resolveEscapeAction(filter) === "clear") {
-      // Intercept before the native <dialog> cancel: clear instead of close.
       event.preventDefault();
       changeFilter("");
     }

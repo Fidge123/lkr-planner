@@ -31,7 +31,6 @@ pub async fn sync_contact_ical_urls(
         .await?;
 
     store.daylite_cache.last_synced_at = Some(current_timestamp_iso8601());
-    // Caller is responsible for saving the store.
     Ok(())
 }
 
@@ -54,8 +53,6 @@ pub(in crate::integrations::daylite) async fn update_contact_ical_urls_core(
         &input.primary_ical_url,
         &input.absence_ical_url,
     );
-    // Daylite may answer the PATCH with 204 No Content, so only the status is
-    // checked and the result is built from the GET data plus merged URLs.
     let token_state = send_authenticated_request(
         client,
         token_state,
