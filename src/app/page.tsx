@@ -159,15 +159,19 @@ export function PlanningGridTable({
         </p>
       ) : null}
       {drag.errorMessage ? (
-        <section className="alert alert-error m-4">
-          <span>{drag.errorMessage}</span>
-          <button
-            type="button"
-            className="btn btn-sm"
-            onClick={drag.clearError}
-          >
-            Schließen
-          </button>
+        // Fixed-position toast so the message is visible no matter where the
+        // grid is scrolled when the drop fails.
+        <section className="toast toast-top toast-center z-50">
+          <section className="alert alert-error">
+            <span>{drag.errorMessage}</span>
+            <button
+              type="button"
+              className="btn btn-sm"
+              onClick={drag.clearError}
+            >
+              Schließen
+            </button>
+          </section>
         </section>
       ) : null}
       <DndContext
@@ -222,6 +226,8 @@ export function PlanningGridTable({
             ) : null}
           </tbody>
         </table>
+        {/* The document guard is not about Tauri: bun tests render this grid
+            through react-dom/server, where portals and `document` do not exist. */}
         {typeof document === "undefined"
           ? null
           : createPortal(

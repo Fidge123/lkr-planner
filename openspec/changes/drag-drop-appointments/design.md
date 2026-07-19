@@ -25,6 +25,7 @@ Within-cell positioning (drop before/after a specific card) and intra-day reorde
 - Positioning a card before/after existing cards within a cell, or reordering within a day (handled by `appointment-reordering`).
 - Multi-select or dragging more than one card at once.
 - Reordering cards within a single cell.
+- Keyboard-driven dragging (no dnd-kit KeyboardSensor); dragging is pointer-only, keyboard users reschedule via the edit modal.
 
 ## Decisions
 

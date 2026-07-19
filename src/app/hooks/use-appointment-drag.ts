@@ -80,7 +80,12 @@ interface DropDeps {
   >;
 }
 
-/** Persists a drop: reschedule on the same calendar or move across calendars. */
+/**
+ * Persists a drop: reschedule on the same calendar or move across calendars.
+ * Both paths rebuild the VEVENT from the payload (fixed time window, single
+ * daylite: description line); properties added in other calendar clients are
+ * not preserved — lkr-planner owns its assignment events.
+ */
 export async function performDrop(
   source: AppointmentDragPayload,
   target: DropCellTarget,
@@ -223,6 +228,10 @@ export function useAppointmentDrag({
 }: UseAppointmentDragArgs): AppointmentDragState {
   const [activePayload, setActivePayload] =
     useState<AppointmentDragPayload | null>(null);
+  // Source of truth for the drop: dnd-kit's `active.data` is a mutable ref tied to the
+  // registered draggable, which unmounts when edge-hover navigation swaps the week, so
+  // the payload captured at drag start must be used instead of re-reading it on drop.
+  const activePayloadRef = useRef<AppointmentDragPayload | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [reconciliation, setReconciliation] =
     useState<MoveReconciliation | null>(null);
@@ -251,6 +260,7 @@ export function useAppointmentDrag({
     const payload = event.active.data.current as
       | AppointmentDragPayload
       | undefined;
+    activePayloadRef.current = payload ?? null;
     setActivePayload(payload ?? null);
     setErrorMessage(null);
   }, []);
@@ -268,9 +278,8 @@ export function useAppointmentDrag({
     navigatorRef.current?.stop();
     setActivePayload(null);
 
-    const source = event.active.data.current as
-      | AppointmentDragPayload
-      | undefined;
+    const source = activePayloadRef.current;
+    activePayloadRef.current = null;
     const target = event.over?.data.current as DropCellTarget | undefined;
     if (!source || !target) return;
 
@@ -299,6 +308,7 @@ export function useAppointmentDrag({
 
   const onDragCancel = useCallback(() => {
     navigatorRef.current?.stop();
+    activePayloadRef.current = null;
     setActivePayload(null);
   }, []);
 
