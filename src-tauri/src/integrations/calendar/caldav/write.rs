@@ -20,8 +20,6 @@ pub(crate) struct AssignmentWrite {
     pub(crate) project_name: String,
 }
 
-/// Returns the parent collection URL of a CalDAV resource URL (strips the last path segment).
-/// Used to derive the calendar URL for day re-allocation from an event's resource URL.
 fn parent_collection_url(resource_url: &str) -> &str {
     resource_url
         .rsplit_once('/')
@@ -64,7 +62,7 @@ async fn fetch_event_date(
 /// and PUTs every event whose slot changed. Bare, absence, and holiday events are
 /// never touched (see `plan_slot_updates`). Each PUT is guarded with If-Match on the
 /// ETag from the day REPORT so a concurrent edit is never clobbered; on a 412 the day
-/// is re-fetched and re-planned, up to `MAX_REALLOCATE_ATTEMPTS` times.
+/// is re-fetched and re-planned.
 async fn reallocate_day(
     session: &CaldavSession,
     calendar_url: &str,
@@ -168,8 +166,6 @@ pub(crate) async fn create_assignment_core(
     }
 
     let uid = Uuid::new_v4().to_string();
-    // Allocate against the day's existing assignments first so the new event is
-    // written once, directly in its slot, instead of full-window-then-rewrite.
     let (slot_start, slot_end) =
         slot_for_pending_write(session, calendar_url, &write.date, &uid).await;
     let payload = build_ical_payload(
@@ -225,7 +221,6 @@ pub(crate) async fn update_assignment_core(
 
     // Read the event's current day before overwriting it: when the update moves the
     // assignment to another day, the source day must be re-allocated as well.
-    // A failed read only skips the source-day re-allocation, it never blocks the update.
     let previous_date = match fetch_event_date(session, &resource_url).await {
         Ok(d) => d,
         Err(e) => {
@@ -236,9 +231,6 @@ pub(crate) async fn update_assignment_core(
         }
     };
 
-    // Allocate the target day including this event's UID so the rewrite lands
-    // directly in its slot; a same-day update is not double-counted because
-    // `plan_slot_updates` treats the extra UID and the stored copy as one event.
     let calendar_url = parent_collection_url(&resource_url);
     let (slot_start, slot_end) =
         slot_for_pending_write(session, calendar_url, &write.date, uid).await;
@@ -294,7 +286,7 @@ pub(crate) async fn delete_assignment_core(
     }
 
     // Read the event's day before deleting so the remaining same-day assignments
-    // can be re-allocated afterwards. A failed read only skips the re-allocation.
+    // can be re-allocated afterwards.
     let event_date = match fetch_event_date(session, &resource_url).await {
         Ok(d) => d,
         Err(e) => {

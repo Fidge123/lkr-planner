@@ -5,9 +5,6 @@ use super::events::classify_event;
 use super::ical::build_ical_payload;
 use super::types::RawVEvent;
 
-// ── Deterministic slot allocation ─────────────────────────────────────────────
-
-/// Fixed working window: 08:00-16:00 floating local time, 480 minutes.
 const WINDOW_START_MINUTE: u32 = 8 * 60;
 const WINDOW_LENGTH_MINUTES: u32 = 8 * 60;
 
@@ -46,8 +43,6 @@ fn minute_of_day(minute: u32) -> NaiveTime {
     NaiveTime::from_num_seconds_from_midnight_opt(minute * 60, 0)
         .expect("minute within the 08:00-16:00 window is a valid time of day")
 }
-
-// ── Re-allocation planning ────────────────────────────────────────────────────
 
 /// A CalDAV PUT needed to move an assignment event into its allocated slot.
 /// `payload` is the ready-to-send body; `etag` guards the PUT via If-Match.
@@ -113,8 +108,6 @@ pub(super) fn plan_slot_updates(
             {
                 return None;
             }
-            // Patch the stored resource so user-added properties survive the rewrite;
-            // rebuilding from parsed fields is only a fallback for events without raw text.
             let payload = if event.raw_ical.is_empty() {
                 build_ical_payload(
                     &pending.uid,
@@ -191,8 +184,6 @@ mod tests {
         values.iter().map(|s| s.to_string()).collect()
     }
 
-    // ── allocate_slots: window splitting ──
-
     #[test]
     fn single_assignment_receives_full_window() {
         let slots = allocate_slots(&uids(&["a"]));
@@ -227,8 +218,6 @@ mod tests {
         );
     }
 
-    // ── allocate_slots: determinism ──
-
     #[test]
     fn reordered_input_produces_identical_output() {
         let forward = allocate_slots(&uids(&["a", "b", "c"]));
@@ -236,8 +225,6 @@ mod tests {
 
         assert_eq!(forward, reversed);
     }
-
-    // ── allocate_slots: boundaries and edge cases ──
 
     #[test]
     fn slots_are_contiguous_and_span_exactly_the_window() {
@@ -273,8 +260,6 @@ mod tests {
     fn empty_input_returns_empty_allocation() {
         assert!(allocate_slots(&[]).is_empty());
     }
-
-    // ── plan_slot_updates: write scenarios ──
 
     fn assignment_event(uid: &str, date: &str, start: &str, end: &str) -> RawVEvent {
         let compact = date.replace('-', "");
@@ -385,8 +370,6 @@ mod tests {
         assert_eq!(updates[0].etag, "\"etag-uid-a\"");
     }
 
-    // ── plan_slot_updates: extra_uid (create/update in flight) ──
-
     #[test]
     fn extra_uid_gets_a_slot_without_an_update_of_its_own() {
         // One existing assignment; a create in flight for uid-b: uid-b sorts after
@@ -423,8 +406,6 @@ mod tests {
         assert_eq!(plan.extra_slot, Some((time(12, 0), time(16, 0))));
         assert!(plan.updates.is_empty(), "uid-a already sits in its slot");
     }
-
-    // ── plan_slot_updates: exclusion of non-assignment events ──
 
     #[test]
     fn bare_absence_and_holiday_events_are_never_reslotted() {
@@ -489,8 +470,6 @@ mod tests {
             "the only addressable assignment already owns the full window"
         );
     }
-
-    // ── patch_event_slot: round-trip preservation ──
 
     #[test]
     fn patching_preserves_user_added_properties_and_alarms() {
