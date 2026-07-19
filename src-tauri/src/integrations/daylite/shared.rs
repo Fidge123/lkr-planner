@@ -170,6 +170,9 @@ pub(super) fn store_daylite_tokens(token_state: &DayliteTokenState) -> Result<()
 }
 
 /// Process-wide lock that serializes the Daylite token lifecycle (load → refresh → store).
+/// Daylite rotates the refresh token on every use, so two concurrent refreshes would race
+/// and the loser would invalidate the winner's token, signing the user out; the whole
+/// cycle must stay under one lock rather than just the network call.
 fn token_refresh_lock() -> &'static tokio::sync::Mutex<()> {
     static LOCK: std::sync::OnceLock<tokio::sync::Mutex<()>> = std::sync::OnceLock::new();
     LOCK.get_or_init(|| tokio::sync::Mutex::new(()))

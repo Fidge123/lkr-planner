@@ -17,7 +17,6 @@ pub struct CalendarCellEvent {
     pub kind: CalendarEventKind,
     pub title: String,
     pub project_status: Option<String>,
-    // ISO date in the form yyyy-MM-dd.
     pub date: String,
     // Start time in HH:MM format. None for all-day events.
     pub start_time: Option<String>,
