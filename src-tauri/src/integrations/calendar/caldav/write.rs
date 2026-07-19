@@ -143,11 +143,9 @@ async fn slot_for_pending_write(
         return full_window();
     };
     match fetch_events_in_range(session, calendar_url, day, day + chrono::Duration::days(1)).await {
-        Ok(events) => {
-            plan_slot_updates(&events, date, Some(uid))
-                .extra_slot
-                .unwrap_or_else(full_window)
-        }
+        Ok(events) => plan_slot_updates(&events, date, Some(uid))
+            .extra_slot
+            .unwrap_or_else(full_window),
         Err(e) => {
             eprintln!("calendar: day fetch before write failed, using full window: {e}");
             full_window()
@@ -172,7 +170,8 @@ pub(crate) async fn create_assignment_core(
     let uid = Uuid::new_v4().to_string();
     // Allocate against the day's existing assignments first so the new event is
     // written once, directly in its slot, instead of full-window-then-rewrite.
-    let (slot_start, slot_end) = slot_for_pending_write(session, calendar_url, &write.date, &uid).await;
+    let (slot_start, slot_end) =
+        slot_for_pending_write(session, calendar_url, &write.date, &uid).await;
     let payload = build_ical_payload(
         &uid,
         &write.date,
@@ -241,7 +240,8 @@ pub(crate) async fn update_assignment_core(
     // directly in its slot; a same-day update is not double-counted because
     // `plan_slot_updates` treats the extra UID and the stored copy as one event.
     let calendar_url = parent_collection_url(&resource_url);
-    let (slot_start, slot_end) = slot_for_pending_write(session, calendar_url, &write.date, uid).await;
+    let (slot_start, slot_end) =
+        slot_for_pending_write(session, calendar_url, &write.date, uid).await;
     let payload = build_ical_payload(
         uid,
         &write.date,

@@ -352,7 +352,9 @@ mod tests {
             assignment_event("uid-b", "2026-05-06", "12:00", "16:00"),
         ];
 
-        assert!(plan_slot_updates(&events, "2026-05-06", None).updates.is_empty());
+        assert!(plan_slot_updates(&events, "2026-05-06", None)
+            .updates
+            .is_empty());
     }
 
     #[test]
@@ -515,7 +517,10 @@ mod tests {
 
         assert!(patched.contains("DTSTART:20260506T120000"));
         assert!(patched.contains("DTEND:20260506T160000"));
-        assert!(!patched.contains("TZID"), "old timed properties must be gone");
+        assert!(
+            !patched.contains("TZID"),
+            "old timed properties must be gone"
+        );
     }
 
     #[test]
