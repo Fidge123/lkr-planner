@@ -89,9 +89,10 @@ fn parse_caldav_report(xml_text: &str) -> Result<Vec<RawVEvent>, String> {
         let is_bare = !is_caldav && node.tag_name().name() == "calendar-data";
         if is_caldav || is_bare {
             if let Some(text) = node.text() {
-                let href = node
+                let response_node = node
                     .ancestors()
-                    .find(|a| a.has_tag_name(("DAV:", "response")))
+                    .find(|a| a.has_tag_name(("DAV:", "response")));
+                let href = response_node
                     .and_then(|response| {
                         response
                             .children()
@@ -100,10 +101,24 @@ fn parse_caldav_report(xml_text: &str) -> Result<Vec<RawVEvent>, String> {
                     })
                     .unwrap_or("")
                     .to_string();
+                let etag = response_node
+                    .and_then(|response| {
+                        response
+                            .descendants()
+                            .find(|d| {
+                                d.has_tag_name(("DAV:", "getetag"))
+                                    || d.tag_name().name() == "getetag"
+                            })
+                            .and_then(|e| e.text())
+                    })
+                    .unwrap_or("")
+                    .to_string();
 
                 let mut parsed = parse_ical_events(text)?;
                 for event in &mut parsed {
                     event.href = href.clone();
+                    event.etag = etag.clone();
+                    event.raw_ical = text.to_string();
                 }
                 events.extend(parsed);
             }
@@ -143,6 +158,40 @@ END:VCALENDAR
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].uid, "test-uid-1");
         assert_eq!(events[0].href, "/calendars/user/calendar/event1.ics");
+    }
+
+    #[test]
+    fn parse_caldav_report_captures_etag_and_raw_ical_per_event() {
+        let xml = r#"<?xml version="1.0" encoding="utf-8"?>
+<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
+  <d:response>
+    <d:href>/calendars/user/calendar/event1.ics</d:href>
+    <d:propstat>
+      <d:prop>
+        <d:getetag>"etag-123"</d:getetag>
+        <c:calendar-data>BEGIN:VCALENDAR
+BEGIN:VEVENT
+UID:test-uid-1
+SUMMARY:Projekt Nord
+LOCATION:Baustelle Nord
+DTSTART:20260505T080000
+DTEND:20260505T160000
+END:VEVENT
+END:VCALENDAR
+</c:calendar-data>
+      </d:prop>
+    </d:propstat>
+  </d:response>
+</d:multistatus>"#;
+
+        let events = parse_caldav_report(xml).unwrap();
+
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].etag, "\"etag-123\"");
+        assert!(
+            events[0].raw_ical.contains("LOCATION:Baustelle Nord"),
+            "raw_ical must keep properties the parser does not model"
+        );
     }
 
     #[test]

@@ -75,7 +75,10 @@ pub(super) fn parse_ical_events(ical_text: &str) -> Result<Vec<RawVEvent>, Strin
                 dtend,
                 start_time,
                 end_time,
-                href: String::new(), // populated by parse_caldav_report from d:href
+                // href, etag, and raw_ical are populated by parse_caldav_report.
+                href: String::new(),
+                etag: String::new(),
+                raw_ical: String::new(),
             })
         })
         .collect();

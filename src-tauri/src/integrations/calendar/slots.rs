@@ -2,6 +2,7 @@ use chrono::NaiveTime;
 use std::collections::HashMap;
 
 use super::events::classify_event;
+use super::ical::build_ical_payload;
 use super::types::RawVEvent;
 
 // ── Deterministic slot allocation ─────────────────────────────────────────────
@@ -49,37 +50,61 @@ fn minute_of_day(minute: u32) -> NaiveTime {
 // ── Re-allocation planning ────────────────────────────────────────────────────
 
 /// A CalDAV PUT needed to move an assignment event into its allocated slot.
+/// `payload` is the ready-to-send body; `etag` guards the PUT via If-Match.
 #[derive(Debug, PartialEq, Eq)]
 pub(super) struct SlotUpdate {
     pub(super) href: String,
     pub(super) uid: String,
-    pub(super) summary: String,
-    pub(super) project_ref: String,
-    pub(super) start: NaiveTime,
-    pub(super) end: NaiveTime,
+    pub(super) etag: String,
+    pub(super) payload: String,
+}
+
+/// The result of planning a day: the slot reserved for `extra_uid` (if one was given)
+/// and the PUTs that move the day's other assignments into their slots.
+pub(super) struct DayPlan {
+    pub(super) extra_slot: Option<(NaiveTime, NaiveTime)>,
+    pub(super) updates: Vec<SlotUpdate>,
 }
 
 /// Plans the PUTs that move a day's lkr-planner assignments into their allocated slots.
 /// Only events on `date` whose DESCRIPTION first line is a `daylite:` reference take part;
 /// bare, absence, and holiday events are never re-slotted. Events already sitting in
 /// their slot are skipped so repeated runs converge without extra writes.
-pub(super) fn plan_slot_updates(events: &[RawVEvent], date: &str) -> Vec<SlotUpdate> {
+///
+/// `extra_uid` names an event the caller writes itself (a create or update in flight):
+/// it participates in the allocation and gets its slot back via `extra_slot`, but no
+/// update is planned for it, so each event is written exactly once per operation.
+pub(super) fn plan_slot_updates(
+    events: &[RawVEvent],
+    date: &str,
+    extra_uid: Option<&str>,
+) -> DayPlan {
     let assignments: Vec<_> = events
         .iter()
-        .cloned()
-        .map(classify_event)
-        .filter(|p| p.date == date && p.project_ref.is_some() && !p.href.is_empty())
+        .map(|event| (classify_event(event.clone()), event))
+        .filter(|(pending, _)| {
+            pending.date == date
+                && pending.project_ref.is_some()
+                && !pending.href.is_empty()
+                && Some(pending.uid.as_str()) != extra_uid
+        })
         .collect();
 
-    let uids: Vec<String> = assignments.iter().map(|p| p.uid.clone()).collect();
+    let mut uids: Vec<String> = assignments
+        .iter()
+        .map(|(pending, _)| pending.uid.clone())
+        .collect();
+    if let Some(extra) = extra_uid {
+        uids.push(extra.to_string());
+    }
     let slots: HashMap<String, (NaiveTime, NaiveTime)> = allocate_slots(&uids)
         .into_iter()
         .map(|(uid, start, end)| (uid, (start, end)))
         .collect();
 
-    assignments
+    let updates = assignments
         .into_iter()
-        .filter_map(|pending| {
+        .filter_map(|(pending, event)| {
             let (start, end) = *slots.get(&pending.uid)?;
             let start_str = start.format("%H:%M").to_string();
             let end_str = end.format("%H:%M").to_string();
@@ -88,18 +113,70 @@ pub(super) fn plan_slot_updates(events: &[RawVEvent], date: &str) -> Vec<SlotUpd
             {
                 return None;
             }
+            // Patch the stored resource so user-added properties survive the rewrite;
+            // rebuilding from parsed fields is only a fallback for events without raw text.
+            let payload = if event.raw_ical.is_empty() {
+                build_ical_payload(
+                    &pending.uid,
+                    date,
+                    &pending.summary,
+                    pending.project_ref.as_deref().unwrap_or(""),
+                    start,
+                    end,
+                )
+            } else {
+                patch_event_slot(&event.raw_ical, date, start, end)
+            };
             Some(SlotUpdate {
                 href: pending.href,
                 uid: pending.uid,
-                summary: pending.summary,
-                project_ref: pending
-                    .project_ref
-                    .expect("filtered to assignments with a project_ref"),
-                start,
-                end,
+                etag: event.etag.clone(),
+                payload,
             })
         })
-        .collect()
+        .collect();
+
+    DayPlan {
+        extra_slot: extra_uid.and_then(|uid| slots.get(uid).copied()),
+        updates,
+    }
+}
+
+/// Rewrites the VEVENT's DTSTART and DTEND to the allocated slot while leaving every
+/// other line untouched, so user-added content (extra DESCRIPTION lines, LOCATION,
+/// alarms) survives re-slotting. Only lines inside BEGIN:VEVENT..END:VEVENT are
+/// replaced; a VTIMEZONE's DTSTART lines are left alone. A missing DTEND is inserted
+/// before END:VEVENT.
+fn patch_event_slot(raw_ical: &str, date: &str, start: NaiveTime, end: NaiveTime) -> String {
+    let compact = date.replace('-', "");
+    let dtstart = format!("DTSTART:{compact}T{}", start.format("%H%M%S"));
+    let dtend = format!("DTEND:{compact}T{}", end.format("%H%M%S"));
+
+    let mut out: Vec<&str> = Vec::new();
+    let mut in_vevent = false;
+    let mut wrote_dtend = false;
+    for line in raw_ical.lines() {
+        if line == "BEGIN:VEVENT" {
+            in_vevent = true;
+        } else if line == "END:VEVENT" {
+            if in_vevent && !wrote_dtend {
+                out.push(&dtend);
+            }
+            in_vevent = false;
+        } else if in_vevent {
+            if line.starts_with("DTSTART:") || line.starts_with("DTSTART;") {
+                out.push(&dtstart);
+                continue;
+            }
+            if line.starts_with("DTEND:") || line.starts_with("DTEND;") {
+                out.push(&dtend);
+                wrote_dtend = true;
+                continue;
+            }
+        }
+        out.push(line);
+    }
+    out.join("\r\n") + "\r\n"
 }
 
 #[cfg(test)]
@@ -200,6 +277,12 @@ mod tests {
     // ── plan_slot_updates: write scenarios ──
 
     fn assignment_event(uid: &str, date: &str, start: &str, end: &str) -> RawVEvent {
+        let compact = date.replace('-', "");
+        let start_compact = start.replace(':', "");
+        let end_compact = end.replace(':', "");
+        let raw_ical = format!(
+            "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:{uid}\r\nDTSTART:{compact}T{start_compact}00\r\nDTEND:{compact}T{end_compact}00\r\nSUMMARY:Projekt {uid}\r\nDESCRIPTION:daylite:/v1/projects/{uid}\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"
+        );
         RawVEvent {
             uid: uid.to_string(),
             summary: format!("Projekt {uid}"),
@@ -208,6 +291,8 @@ mod tests {
             start_time: Some(start.to_string()),
             end_time: Some(end.to_string()),
             href: format!("/cal/emp/{uid}.ics"),
+            etag: format!("\"etag-{uid}\""),
+            raw_ical,
             ..Default::default()
         }
     }
@@ -220,19 +305,15 @@ mod tests {
             assignment_event("uid-b", "2026-05-06", "08:00", "16:00"),
         ];
 
-        let updates = plan_slot_updates(&events, "2026-05-06");
+        let updates = plan_slot_updates(&events, "2026-05-06", None).updates;
 
         assert_eq!(updates.len(), 2);
         assert_eq!(updates[0].uid, "uid-a");
-        assert_eq!(
-            (updates[0].start, updates[0].end),
-            (time(8, 0), time(12, 0))
-        );
+        assert!(updates[0].payload.contains("DTSTART:20260506T080000"));
+        assert!(updates[0].payload.contains("DTEND:20260506T120000"));
         assert_eq!(updates[1].uid, "uid-b");
-        assert_eq!(
-            (updates[1].start, updates[1].end),
-            (time(12, 0), time(16, 0))
-        );
+        assert!(updates[1].payload.contains("DTSTART:20260506T120000"));
+        assert!(updates[1].payload.contains("DTEND:20260506T160000"));
     }
 
     #[test]
@@ -243,17 +324,13 @@ mod tests {
             assignment_event("uid-c", "2026-05-06", "13:20", "16:00"),
         ];
 
-        let updates = plan_slot_updates(&events, "2026-05-06");
+        let updates = plan_slot_updates(&events, "2026-05-06", None).updates;
 
         assert_eq!(updates.len(), 2);
-        assert_eq!(
-            (updates[0].start, updates[0].end),
-            (time(8, 0), time(12, 0))
-        );
-        assert_eq!(
-            (updates[1].start, updates[1].end),
-            (time(12, 0), time(16, 0))
-        );
+        assert!(updates[0].payload.contains("DTSTART:20260506T080000"));
+        assert!(updates[0].payload.contains("DTEND:20260506T120000"));
+        assert!(updates[1].payload.contains("DTSTART:20260506T120000"));
+        assert!(updates[1].payload.contains("DTEND:20260506T160000"));
     }
 
     #[test]
@@ -261,13 +338,11 @@ mod tests {
         // Source day after the moved event left: one half-window assignment remains.
         let events = vec![assignment_event("uid-a", "2026-05-06", "08:00", "12:00")];
 
-        let updates = plan_slot_updates(&events, "2026-05-06");
+        let updates = plan_slot_updates(&events, "2026-05-06", None).updates;
 
         assert_eq!(updates.len(), 1);
-        assert_eq!(
-            (updates[0].start, updates[0].end),
-            (time(8, 0), time(16, 0))
-        );
+        assert!(updates[0].payload.contains("DTSTART:20260506T080000"));
+        assert!(updates[0].payload.contains("DTEND:20260506T160000"));
     }
 
     #[test]
@@ -277,7 +352,7 @@ mod tests {
             assignment_event("uid-b", "2026-05-06", "12:00", "16:00"),
         ];
 
-        assert!(plan_slot_updates(&events, "2026-05-06").is_empty());
+        assert!(plan_slot_updates(&events, "2026-05-06", None).updates.is_empty());
     }
 
     #[test]
@@ -287,7 +362,7 @@ mod tests {
             assignment_event("uid-b", "2026-05-07", "08:00", "16:00"),
         ];
 
-        let updates = plan_slot_updates(&events, "2026-05-06");
+        let updates = plan_slot_updates(&events, "2026-05-06", None).updates;
 
         assert!(
             updates.is_empty(),
@@ -296,17 +371,55 @@ mod tests {
     }
 
     #[test]
-    fn slot_update_carries_summary_and_project_ref_for_the_rewrite() {
+    fn slot_update_carries_href_and_etag_for_the_guarded_put() {
         let events = vec![
             assignment_event("uid-a", "2026-05-06", "08:00", "16:00"),
             assignment_event("uid-b", "2026-05-06", "08:00", "16:00"),
         ];
 
-        let updates = plan_slot_updates(&events, "2026-05-06");
+        let updates = plan_slot_updates(&events, "2026-05-06", None).updates;
 
-        assert_eq!(updates[0].summary, "Projekt uid-a");
-        assert_eq!(updates[0].project_ref, "/v1/projects/uid-a");
         assert_eq!(updates[0].href, "/cal/emp/uid-a.ics");
+        assert_eq!(updates[0].etag, "\"etag-uid-a\"");
+    }
+
+    // ── plan_slot_updates: extra_uid (create/update in flight) ──
+
+    #[test]
+    fn extra_uid_gets_a_slot_without_an_update_of_its_own() {
+        // One existing assignment; a create in flight for uid-b: uid-b sorts after
+        // uid-a, so it receives the afternoon half while uid-a is moved to the morning.
+        let events = vec![assignment_event("uid-a", "2026-05-06", "08:00", "16:00")];
+
+        let plan = plan_slot_updates(&events, "2026-05-06", Some("uid-b"));
+
+        assert_eq!(plan.extra_slot, Some((time(12, 0), time(16, 0))));
+        assert_eq!(plan.updates.len(), 1);
+        assert_eq!(plan.updates[0].uid, "uid-a");
+        assert!(plan.updates[0].payload.contains("DTEND:20260506T120000"));
+    }
+
+    #[test]
+    fn extra_uid_alone_receives_the_full_window() {
+        let plan = plan_slot_updates(&[], "2026-05-06", Some("uid-new"));
+
+        assert_eq!(plan.extra_slot, Some((time(8, 0), time(16, 0))));
+        assert!(plan.updates.is_empty());
+    }
+
+    #[test]
+    fn same_day_update_counts_its_own_event_only_once() {
+        // The event being updated is still on the server; passing it as extra_uid must
+        // not double-count it in the allocation or plan a second PUT for it.
+        let events = vec![
+            assignment_event("uid-a", "2026-05-06", "08:00", "12:00"),
+            assignment_event("uid-b", "2026-05-06", "12:00", "16:00"),
+        ];
+
+        let plan = plan_slot_updates(&events, "2026-05-06", Some("uid-b"));
+
+        assert_eq!(plan.extra_slot, Some((time(12, 0), time(16, 0))));
+        assert!(plan.updates.is_empty(), "uid-a already sits in its slot");
     }
 
     // ── plan_slot_updates: exclusion of non-assignment events ──
@@ -347,19 +460,13 @@ mod tests {
             assignment_event("uid-b", "2026-05-06", "08:00", "16:00"),
         ];
 
-        let updates = plan_slot_updates(&events, "2026-05-06");
+        let updates = plan_slot_updates(&events, "2026-05-06", None).updates;
 
         // Only the two daylite assignments are re-slotted; they split the window in halves.
         assert_eq!(updates.len(), 2);
         assert!(updates.iter().all(|u| u.uid.starts_with("uid-")));
-        assert_eq!(
-            (updates[0].start, updates[0].end),
-            (time(8, 0), time(12, 0))
-        );
-        assert_eq!(
-            (updates[1].start, updates[1].end),
-            (time(12, 0), time(16, 0))
-        );
+        assert!(updates[0].payload.contains("DTEND:20260506T120000"));
+        assert!(updates[1].payload.contains("DTSTART:20260506T120000"));
     }
 
     #[test]
@@ -373,11 +480,65 @@ mod tests {
             assignment_event("uid-b", "2026-05-06", "08:00", "16:00"),
         ];
 
-        let updates = plan_slot_updates(&events, "2026-05-06");
+        let updates = plan_slot_updates(&events, "2026-05-06", None).updates;
 
         assert!(
             updates.is_empty(),
             "the only addressable assignment already owns the full window"
         );
+    }
+
+    // ── patch_event_slot: round-trip preservation ──
+
+    #[test]
+    fn patching_preserves_user_added_properties_and_alarms() {
+        let raw = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:uid-a\r\nDTSTART:20260506T080000\r\nDTEND:20260506T160000\r\nSUMMARY:Projekt Nord\r\nDESCRIPTION:daylite:/v1/projects/42\\nNotiz vom Nutzer\r\nLOCATION:Baustelle Nord\r\nBEGIN:VALARM\r\nTRIGGER:-PT15M\r\nACTION:DISPLAY\r\nEND:VALARM\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+
+        let patched = patch_event_slot(raw, "2026-05-06", time(8, 0), time(12, 0));
+
+        assert!(patched.contains("DTSTART:20260506T080000"));
+        assert!(patched.contains("DTEND:20260506T120000"));
+        assert!(
+            patched.contains("DESCRIPTION:daylite:/v1/projects/42\\nNotiz vom Nutzer"),
+            "user-added description lines must survive, got: {patched}"
+        );
+        assert!(patched.contains("LOCATION:Baustelle Nord"));
+        assert!(patched.contains("BEGIN:VALARM"));
+        assert!(patched.contains("TRIGGER:-PT15M"));
+    }
+
+    #[test]
+    fn patching_replaces_dtstart_with_parameters() {
+        let raw = "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:uid-a\r\nDTSTART;TZID=Europe/Vienna:20260506T090000\r\nDTEND;TZID=Europe/Vienna:20260506T170000\r\nSUMMARY:Projekt\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+
+        let patched = patch_event_slot(raw, "2026-05-06", time(12, 0), time(16, 0));
+
+        assert!(patched.contains("DTSTART:20260506T120000"));
+        assert!(patched.contains("DTEND:20260506T160000"));
+        assert!(!patched.contains("TZID"), "old timed properties must be gone");
+    }
+
+    #[test]
+    fn patching_inserts_dtend_when_missing() {
+        let raw = "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:uid-a\r\nDTSTART;VALUE=DATE:20260506\r\nSUMMARY:Projekt\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+
+        let patched = patch_event_slot(raw, "2026-05-06", time(8, 0), time(12, 0));
+
+        assert!(patched.contains("DTSTART:20260506T080000"));
+        assert!(patched.contains("DTEND:20260506T120000"));
+    }
+
+    #[test]
+    fn patching_leaves_vtimezone_dtstart_untouched() {
+        let raw = "BEGIN:VCALENDAR\r\nBEGIN:VTIMEZONE\r\nTZID:Europe/Vienna\r\nBEGIN:STANDARD\r\nDTSTART:19701025T030000\r\nEND:STANDARD\r\nEND:VTIMEZONE\r\nBEGIN:VEVENT\r\nUID:uid-a\r\nDTSTART:20260506T080000\r\nDTEND:20260506T160000\r\nSUMMARY:Projekt\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+
+        let patched = patch_event_slot(raw, "2026-05-06", time(8, 0), time(12, 0));
+
+        assert!(
+            patched.contains("DTSTART:19701025T030000"),
+            "VTIMEZONE transition rules must not be rewritten"
+        );
+        assert!(patched.contains("DTSTART:20260506T080000"));
+        assert!(patched.contains("DTEND:20260506T120000"));
     }
 }
