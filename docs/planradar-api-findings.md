@@ -28,7 +28,9 @@ The client should apply retry with backoff for transient failures and rate-limit
 ## Project creation
 
 Blank creation uses `POST /api/v1/{customer_id}/projects` with a `data.attributes` body.
-Known attributes include name, street, zipcode, city, country, description, start date and end date.
+Known attribute keys are `name`, `street`, `zipcode`, `city`, `country`, `description`, and the start/end dates.
+The Swagger documents the start and end dates under the hyphenated keys `drstart-date` and `drend-date` (the variants that carry descriptions and examples); the client sends those exact keys.
+Unknown attribute keys are silently ignored by the API (a 2xx is still returned), so a wrong key drops the value without any error, which is why the exact key spelling must be verified against a recorded create cassette.
 
 Copying a source project uses `POST /api/v1/{customer_id}/projects/{project_id}/copy_project`.
 This is the same copy feature offered in the Planradar UI.

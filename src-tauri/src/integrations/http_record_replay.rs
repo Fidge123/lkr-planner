@@ -155,3 +155,12 @@ impl Display for RecordReplayError {
         f.write_str(&self.message)
     }
 }
+
+/// Process-wide lock serializing every test that mutates the global `VCR_MODE` environment
+/// variable. All integration modules (Daylite and Planradar) share this single lock so their
+/// env-mutating tests cannot race each other across Cargo's parallel test threads (e.g. one
+/// module flipping `VCR_MODE=record` while another relies on replay mode).
+pub(crate) fn vcr_env_lock() -> &'static std::sync::Mutex<()> {
+    static VCR_ENV_LOCK: std::sync::OnceLock<std::sync::Mutex<()>> = std::sync::OnceLock::new();
+    VCR_ENV_LOCK.get_or_init(|| std::sync::Mutex::new(()))
+}

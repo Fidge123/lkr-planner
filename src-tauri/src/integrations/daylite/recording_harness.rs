@@ -7,7 +7,6 @@ use super::projects::{list_projects_core, query_overdue_projects_core, search_pr
 use super::shared::{DayliteSearchInput, DayliteSearchSort, DayliteTokenState};
 use crate::integrations::http_record_replay::VcrMode;
 use crate::integrations::local_store::LocalStore;
-use std::sync::{Mutex, OnceLock};
 
 const DAYLITE_BASE_URL_ENV: &str = "DAYLITE_BASE_URL";
 const DAYLITE_REFRESH_TOKEN_ENV: &str = "DAYLITE_REFRESH_TOKEN";
@@ -213,10 +212,13 @@ fn optional_env(key: &str) -> Result<Option<String>, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::integrations::http_record_replay::vcr_env_lock as env_lock;
 
     #[test]
     fn scope_defaults_to_read_only() {
-        let _guard = env_lock().lock().expect("env lock should not be poisoned");
+        let _guard = env_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         clear_env();
 
         assert_eq!(DayliteVcrScope::from_env(), Ok(DayliteVcrScope::ReadOnly));
@@ -224,7 +226,9 @@ mod tests {
 
     #[test]
     fn scope_parses_all() {
-        let _guard = env_lock().lock().expect("env lock should not be poisoned");
+        let _guard = env_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         clear_env();
         unsafe {
             std::env::set_var(DAYLITE_VCR_SCOPE_ENV, "all");
@@ -235,7 +239,9 @@ mod tests {
 
     #[test]
     fn config_requires_mutation_inputs_for_all_scope() {
-        let _guard = env_lock().lock().expect("env lock should not be poisoned");
+        let _guard = env_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         clear_env();
         unsafe {
             std::env::set_var("VCR_MODE", "record");
@@ -252,7 +258,9 @@ mod tests {
 
     #[test]
     fn config_allows_read_only_without_patch_inputs() {
-        let _guard = env_lock().lock().expect("env lock should not be poisoned");
+        let _guard = env_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         clear_env();
         unsafe {
             std::env::set_var("VCR_MODE", "record");
@@ -271,7 +279,9 @@ mod tests {
 
     #[test]
     fn config_requires_record_mode() {
-        let _guard = env_lock().lock().expect("env lock should not be poisoned");
+        let _guard = env_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         clear_env();
         unsafe {
             std::env::set_var(DAYLITE_BASE_URL_ENV, "https://daylite.example");
@@ -281,11 +291,6 @@ mod tests {
 
         let error = DayliteVcrConfig::from_env().expect_err("record mode should be required");
         assert_eq!(error, "Live cassette recording requires VCR_MODE=record.");
-    }
-
-    fn env_lock() -> &'static Mutex<()> {
-        static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-        ENV_LOCK.get_or_init(|| Mutex::new(()))
     }
 
     fn clear_env() {

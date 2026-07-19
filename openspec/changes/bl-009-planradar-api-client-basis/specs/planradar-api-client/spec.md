@@ -14,18 +14,20 @@ The system SHALL authenticate Planradar requests with a static, user-provided AP
 - **THEN** a normalized authentication error is returned
 - **AND** the user is prompted to provide a valid token
 
-### Requirement: Project search and list
-The system SHALL provide functionality to search and list Planradar projects.
+### Requirement: Project list
+The system SHALL provide functionality to list Planradar projects with pagination.
 
-#### Scenario: Search projects by query
-- **WHEN** user searches for projects with a query string
-- **THEN** the client returns projects matching the query
+The Planradar list endpoint (`GET .../projects`) supports `sort`, `page`, and `pagesize` query parameters but no full-text query, so listing is paginated rather than searched.
+
+#### Scenario: List a page of projects
+- **WHEN** user requests projects with optional sort, page, and pagesize parameters
+- **THEN** the client returns the requested page of accessible projects
 - **AND** results are typed as Project structs
 
-#### Scenario: List all accessible projects
-- **WHEN** user requests all projects
-- **THEN** the client returns a list of all accessible projects
-- **AND** pagination is handled automatically
+#### Scenario: Page through all projects
+- **WHEN** user needs all accessible projects
+- **THEN** the caller requests successive pages via the page and pagesize parameters
+- **AND** the client returns one page per call (pagination is caller-driven, not aggregated)
 
 ### Requirement: Project create
 The system SHALL provide functionality to create new Planradar projects, either blank or copied from a source project.

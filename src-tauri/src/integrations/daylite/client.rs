@@ -330,14 +330,16 @@ fn cassette_path_for_test(file_name: &str) -> std::path::PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::integrations::http_record_replay::vcr_env_lock as env_lock;
     use std::fs;
     use std::path::{Path, PathBuf};
-    use std::sync::{Mutex, OnceLock};
     use std::time::{Duration, Instant};
 
     #[test]
     fn records_sanitized_cassette_in_record_mode() {
-        let _guard = env_lock().lock().expect("env lock should not be poisoned");
+        let _guard = env_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let cassette_path = cassette_path("daylite-record-mode-generated.json");
         remove_cassette_if_present(&cassette_path);
         unsafe {
@@ -375,7 +377,9 @@ mod tests {
 
     #[test]
     fn replays_recorded_response_without_network_call() {
-        let _guard = env_lock().lock().expect("env lock should not be poisoned");
+        let _guard = env_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let cassette_path = cassette_path("daylite-client-replay.json");
         unsafe {
             std::env::remove_var("VCR_MODE");
@@ -406,7 +410,9 @@ mod tests {
 
     #[test]
     fn derives_vcr_mode_from_environment() {
-        let _guard = env_lock().lock().expect("env lock should not be poisoned");
+        let _guard = env_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
 
         unsafe {
             std::env::set_var("VCR_MODE", "record");
@@ -430,10 +436,5 @@ mod tests {
 
     fn remove_cassette_if_present(path: &Path) {
         let _ = fs::remove_file(path);
-    }
-
-    fn env_lock() -> &'static Mutex<()> {
-        static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-        ENV_LOCK.get_or_init(|| Mutex::new(()))
     }
 }
