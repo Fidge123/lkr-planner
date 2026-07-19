@@ -1,20 +1,20 @@
 use chrono::NaiveDate;
+use serde::{Deserialize, Serialize};
+use specta::Type;
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 use tauri_plugin_http::reqwest;
 
 use super::caldav::{
     create_assignment_core, delete_assignment_core, fetch_calendar_events, update_assignment_core,
+    AssignmentWrite, CaldavSession,
 };
 use super::events::{
     classify_event, map_absence_raw_events_for_week, resolve_event, sort_events_absences_first,
 };
 use super::types::{CalendarCellEvent, EmployeeWeekEvents, PendingEvent};
+use crate::integrations::local_store::{DayliteCache, LocalStore};
 
-/// Loads all calendar events for every configured employee for the given week.
-/// Returns one entry per employee that has a primary calendar configured.
-/// Per-employee CalDAV failures are returned inline in `error`; only total failures
-/// (store unavailable, bad date) return an `Err`.
 #[tauri::command]
 #[specta::specta]
 pub async fn load_week_events(
@@ -27,26 +27,10 @@ pub async fn load_week_events(
     let week_start_date = NaiveDate::parse_from_str(&week_start, "%Y-%m-%d")
         .map_err(|_| format!("Ungültiges Wochenstartdatum: {week_start}"))?;
 
-    let (username, password) = match crate::integrations::zep::load_zep_credentials_from_keychain()
-    {
-        Ok(c) => (c.username, c.password),
+    let credentials = match crate::integrations::zep::load_zep_credentials_from_keychain() {
+        Ok(c) => c,
         Err(e) => {
-            // No credentials: return error for every employee with a calendar URL
-            let results: Vec<EmployeeWeekEvents> = store
-                .employee_settings
-                .iter()
-                .filter(|s| {
-                    s.zep_primary_calendar
-                        .as_deref()
-                        .map(|u| !u.is_empty())
-                        .unwrap_or(false)
-                })
-                .map(|s| EmployeeWeekEvents {
-                    employee_reference: s.daylite_contact_reference.clone(),
-                    events: vec![],
-                    error: Some(e.user_message.clone()),
-                })
-                .collect();
+            let results = employees_with_error(&store, &e.user_message);
             if results.is_empty() {
                 eprintln!(
                     "load_week_events: ZEP credentials unavailable and no primary calendars configured: {}",
@@ -57,13 +41,50 @@ pub async fn load_week_events(
         }
     };
 
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(30))
-        .build()
-        .map_err(|e| format!("HTTP-Client konnte nicht erstellt werden: {e}"))?;
+    let session = build_caldav_session(&store, credentials)?;
 
-    // First pass: fetch CalDAV events for all employees concurrently (primary + absence per
-    // employee are also concurrent via tokio::join!).
+    let (fetches, error_results) =
+        fetch_week_for_employees(&store, &session, week_start_date).await;
+
+    let api_results = fetch_uncached_projects(app, &store, &fetches).await;
+
+    Ok(assemble_week_events(
+        fetches,
+        error_results,
+        &store.daylite_cache,
+        &api_results,
+    ))
+}
+
+struct EmployeeFetch {
+    employee_reference: String,
+    pending: Vec<PendingEvent>,
+    absences: Vec<CalendarCellEvent>,
+}
+
+fn employees_with_error(store: &LocalStore, message: &str) -> Vec<EmployeeWeekEvents> {
+    store
+        .employee_settings
+        .iter()
+        .filter(|s| {
+            s.zep_primary_calendar
+                .as_deref()
+                .map(|u| !u.is_empty())
+                .unwrap_or(false)
+        })
+        .map(|s| EmployeeWeekEvents {
+            employee_reference: s.daylite_contact_reference.clone(),
+            events: vec![],
+            error: Some(message.to_string()),
+        })
+        .collect()
+}
+
+async fn fetch_week_for_employees(
+    store: &LocalStore,
+    session: &CaldavSession,
+    week_start: NaiveDate,
+) -> (Vec<EmployeeFetch>, Vec<EmployeeWeekEvents>) {
     let employee_futures: Vec<_> = store
         .employee_settings
         .iter()
@@ -81,30 +102,15 @@ pub async fn load_week_events(
                 .map(str::to_string);
 
             let employee_ref = setting.daylite_contact_reference.clone();
-            let client = client.clone();
-            let username = username.clone();
-            let password = password.clone();
 
             Some(async move {
                 let (primary_result, absence_result) = tokio::join!(
-                    fetch_calendar_events(
-                        &client,
-                        &calendar_url,
-                        &username,
-                        &password,
-                        week_start_date
-                    ),
+                    fetch_calendar_events(session, &calendar_url, week_start),
                     async {
                         match absence_url {
-                            Some(ref url) => fetch_calendar_events(
-                                &client,
-                                url,
-                                &username,
-                                &password,
-                                week_start_date,
-                            )
-                            .await
-                            .ok(),
+                            Some(ref url) => {
+                                fetch_calendar_events(session, url, week_start).await.ok()
+                            }
                             None => None,
                         }
                     }
@@ -116,22 +122,23 @@ pub async fn load_week_events(
 
     let fetch_results = futures::future::join_all(employee_futures).await;
 
-    let mut pending_per_employee: Vec<(String, Vec<PendingEvent>, Vec<CalendarCellEvent>)> =
-        Vec::new();
-    let mut error_results: Vec<EmployeeWeekEvents> = Vec::new();
+    let mut fetches = Vec::new();
+    let mut error_results = Vec::new();
 
-    for (employee_ref, primary_result, absence_result) in fetch_results {
+    for (employee_reference, primary_result, absence_result) in fetch_results {
         match primary_result {
             Ok(raw_events) => {
-                let pending = raw_events.into_iter().map(classify_event).collect();
-                let absence_events = absence_result
-                    .map(|raw| map_absence_raw_events_for_week(raw, week_start_date))
-                    .unwrap_or_default();
-                pending_per_employee.push((employee_ref, pending, absence_events));
+                fetches.push(EmployeeFetch {
+                    employee_reference,
+                    pending: raw_events.into_iter().map(classify_event).collect(),
+                    absences: absence_result
+                        .map(|raw| map_absence_raw_events_for_week(raw, week_start))
+                        .unwrap_or_default(),
+                });
             }
             Err(error_msg) => {
                 error_results.push(EmployeeWeekEvents {
-                    employee_reference: employee_ref,
+                    employee_reference,
                     events: vec![],
                     error: Some(error_msg),
                 });
@@ -139,10 +146,17 @@ pub async fn load_week_events(
         }
     }
 
-    // Collect unique project refs that are not in the local Daylite cache.
+    (fetches, error_results)
+}
+
+async fn fetch_uncached_projects(
+    app: tauri::AppHandle,
+    store: &LocalStore,
+    fetches: &[EmployeeFetch],
+) -> HashMap<String, Option<(String, String)>> {
     let mut missing_refs: HashSet<String> = HashSet::new();
-    for (_, pending_events, _) in &pending_per_employee {
-        for event in pending_events {
+    for fetch in fetches {
+        for event in &fetch.pending {
             if let Some(ref project_ref) = event.project_ref {
                 let in_cache = store
                     .daylite_cache
@@ -156,8 +170,7 @@ pub async fn load_week_events(
         }
     }
 
-    // Second pass: fetch missing projects from the Daylite API (sequential, typically few).
-    let mut api_results: HashMap<String, Option<(String, String)>> = HashMap::new();
+    let mut api_results = HashMap::new();
     for project_ref in missing_refs {
         let result = crate::integrations::daylite::projects::fetch_project_by_reference(
             app.clone(),
@@ -167,39 +180,61 @@ pub async fn load_week_events(
         api_results.insert(project_ref, result);
     }
 
-    // Build final results combining cache and API lookups.
+    api_results
+}
+
+fn assemble_week_events(
+    fetches: Vec<EmployeeFetch>,
+    error_results: Vec<EmployeeWeekEvents>,
+    cache: &DayliteCache,
+    api_results: &HashMap<String, Option<(String, String)>>,
+) -> Vec<EmployeeWeekEvents> {
     let mut results = error_results;
-    for (employee_ref, pending_events, absence_events) in pending_per_employee {
-        let mut events: Vec<CalendarCellEvent> = pending_events
+    for fetch in fetches {
+        let mut events: Vec<CalendarCellEvent> = fetch
+            .pending
             .into_iter()
-            .map(|p| resolve_event(p, &store.daylite_cache, &api_results))
+            .map(|p| resolve_event(p, cache, api_results))
             .collect();
-        events.extend(absence_events);
+        events.extend(fetch.absences);
         // Deduplicate by UID to guard against CalDAV servers redelivering the same event.
         let mut seen_uids = HashSet::new();
         events.retain(|e| seen_uids.insert(e.uid.clone()));
-        // Absence events are shown first within each day.
         sort_events_absences_first(&mut events);
         results.push(EmployeeWeekEvents {
-            employee_reference: employee_ref,
+            employee_reference: fetch.employee_reference,
             events,
             error: None,
         });
     }
 
-    Ok(results)
+    results
 }
 
-/// Creates a new assignment event on the employee's primary CalDAV calendar.
-/// Returns the CalDAV resource href (e.g. `{calendar_url}/{uid}.ics`) of the new event.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateAssignmentInput {
+    pub employee_reference: String,
+    pub date: String,
+    pub project_ref: String,
+    pub project_name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateAssignmentInput {
+    pub href: String,
+    pub uid: String,
+    pub date: String,
+    pub project_ref: String,
+    pub project_name: String,
+}
+
 #[tauri::command]
 #[specta::specta]
 pub async fn create_assignment(
     app: tauri::AppHandle,
-    employee_reference: String,
-    date: String,
-    project_ref: String,
-    project_name: String,
+    input: CreateAssignmentInput,
 ) -> Result<String, String> {
     let store =
         crate::integrations::local_store::load_local_store(app).map_err(|e| e.user_message)?;
@@ -207,114 +242,86 @@ pub async fn create_assignment(
     let calendar_url = store
         .employee_settings
         .iter()
-        .find(|s| s.daylite_contact_reference == employee_reference)
+        .find(|s| s.daylite_contact_reference == input.employee_reference)
         .and_then(|s| s.zep_primary_calendar.as_deref())
         .filter(|u| !u.is_empty())
         .ok_or_else(|| "Kein Kalender für diesen Mitarbeiter konfiguriert.".to_string())?
         .to_string();
 
-    let absence_urls = absence_calendar_urls(&store);
+    let session = load_caldav_session(&store)?;
 
-    let (username, password) = crate::integrations::zep::load_zep_credentials_from_keychain()
-        .map(|c| (c.username, c.password))
+    create_assignment_core(
+        &session,
+        &calendar_url,
+        &AssignmentWrite {
+            date: input.date,
+            project_ref: input.project_ref,
+            project_name: input.project_name,
+        },
+    )
+    .await
+}
+
+fn load_caldav_session(
+    store: &crate::integrations::local_store::LocalStore,
+) -> Result<CaldavSession, String> {
+    let credentials = crate::integrations::zep::load_zep_credentials_from_keychain()
         .map_err(|e| e.user_message)?;
+    build_caldav_session(store, credentials)
+}
 
+fn build_caldav_session(
+    store: &crate::integrations::local_store::LocalStore,
+    credentials: crate::integrations::zep::ZepStoredCredentials,
+) -> Result<CaldavSession, String> {
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(30))
         .build()
         .map_err(|e| format!("HTTP-Client konnte nicht erstellt werden: {e}"))?;
 
-    create_assignment_core(
-        &client,
-        &calendar_url,
-        &absence_urls,
-        &username,
-        &password,
-        &date,
-        &project_ref,
-        &project_name,
-    )
-    .await
+    Ok(CaldavSession {
+        client,
+        username: credentials.username,
+        password: credentials.password,
+        base_url: store.api_endpoints.zep_caldav_root_url.clone(),
+        absence_urls: store
+            .employee_settings
+            .iter()
+            .filter_map(|s| s.zep_absence_calendar.clone())
+            .filter(|u| !u.is_empty())
+            .collect(),
+    })
 }
 
-/// Collects every configured ZEP absence calendar URL across all employees.
-/// Used to guard assignment writes against landing in an absence calendar.
-fn absence_calendar_urls(store: &crate::integrations::local_store::LocalStore) -> Vec<String> {
-    store
-        .employee_settings
-        .iter()
-        .filter_map(|s| s.zep_absence_calendar.clone())
-        .filter(|u| !u.is_empty())
-        .collect()
-}
-
-/// Updates an existing assignment event in place using the stored CalDAV href.
 #[tauri::command]
 #[specta::specta]
 pub async fn update_assignment(
     app: tauri::AppHandle,
-    href: String,
-    uid: String,
-    date: String,
-    project_ref: String,
-    project_name: String,
+    input: UpdateAssignmentInput,
 ) -> Result<(), String> {
-    let (username, password) = crate::integrations::zep::load_zep_credentials_from_keychain()
-        .map(|c| (c.username, c.password))
-        .map_err(|e| e.user_message)?;
-
     let store =
         crate::integrations::local_store::load_local_store(app).map_err(|e| e.user_message)?;
-
-    let base_url = store.api_endpoints.zep_caldav_root_url.clone();
-    let absence_urls = absence_calendar_urls(&store);
-
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(30))
-        .build()
-        .map_err(|e| format!("HTTP-Client konnte nicht erstellt werden: {e}"))?;
+    let session = load_caldav_session(&store)?;
 
     update_assignment_core(
-        &client,
-        &href,
-        &base_url,
-        &absence_urls,
-        &uid,
-        &username,
-        &password,
-        &date,
-        &project_ref,
-        &project_name,
+        &session,
+        &input.href,
+        &input.uid,
+        &AssignmentWrite {
+            date: input.date,
+            project_ref: input.project_ref,
+            project_name: input.project_name,
+        },
     )
     .await
 }
 
-/// Deletes an assignment event using the stored CalDAV href.
 #[tauri::command]
 #[specta::specta]
 pub async fn delete_assignment(app: tauri::AppHandle, href: String) -> Result<(), String> {
-    let (username, password) = crate::integrations::zep::load_zep_credentials_from_keychain()
-        .map(|c| (c.username, c.password))
-        .map_err(|e| e.user_message)?;
-
     let store =
         crate::integrations::local_store::load_local_store(app).map_err(|e| e.user_message)?;
+    let session = load_caldav_session(&store)?;
 
-    let base_url = store.api_endpoints.zep_caldav_root_url.clone();
-    let absence_urls = absence_calendar_urls(&store);
-
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(30))
-        .build()
-        .map_err(|e| format!("HTTP-Client konnte nicht erstellt werden: {e}"))?;
-
-    delete_assignment_core(
-        &client,
-        &href,
-        &base_url,
-        &absence_urls,
-        &username,
-        &password,
-    )
-    .await
+    delete_assignment_core(&session, &href).await
 }

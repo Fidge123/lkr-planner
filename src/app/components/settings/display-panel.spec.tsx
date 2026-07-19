@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
-import { DisplaySettingsPanel } from "./settings-dialog";
+import { DisplaySettingsPanel } from "./display-panel";
 
 describe("DisplaySettingsPanel", () => {
   it("renders the 'Wochenende anzeigen' toggle under Anzeige", () => {

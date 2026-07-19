@@ -1,19 +1,16 @@
 use super::auth_flow::send_authenticated_json;
 use super::client::DayliteApiClient;
 use super::client::DayliteHttpMethod;
+use super::client::DayliteHttpRequest;
 use super::shared::{
-    build_limit_query, load_store_or_error, save_store_or_error, with_token_refresh_lock,
-    DayliteApiError, DayliteSearchInput, DayliteSearchResult, DayliteSearchSort, DayliteTokenState,
+    build_limit_query, run_daylite_command, with_token_refresh_lock, DayliteApiError,
+    DayliteSearchInput, DayliteSearchResult, DayliteSearchSort, DayliteTokenState,
 };
 use chrono::{DateTime, NaiveDate, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use specta::Type;
 
-// Raw project record as returned by the Daylite API. Daylite uses snake_case
-// field names, which the Rust field names match directly, so no rename/alias is
-// needed beyond `self` (a Rust keyword). Normalized into the frontend-facing
-// `DayliteProjectSummary` / `PlanningProjectRecord`.
 #[derive(Debug, Clone, Deserialize)]
 struct DayliteProjectSummaryDto {
     #[serde(rename = "self")]
@@ -38,9 +35,6 @@ struct DayliteProjectSummaryDto {
     modify_date: Option<String>,
 }
 
-// Frontend-facing project summary returned by `daylite_search_projects`. Uses
-// camelCase to match the TypeScript bindings; built by normalizing a
-// `DayliteProjectSummaryDto`, so it carries no Daylite-ingestion aliases.
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct DayliteProjectSummary {
@@ -103,27 +97,20 @@ pub struct PlanningProjectRecord {
 pub async fn daylite_list_projects(
     app: tauri::AppHandle,
 ) -> Result<Vec<PlanningProjectRecord>, DayliteApiError> {
-    let store = load_store_or_error(app.clone())?;
-    let client = DayliteApiClient::new(&store.api_endpoints.daylite_base_url)?;
-    let projects = with_token_refresh_lock(|tokens| list_projects_core(&client, tokens)).await?;
-
-    save_store_or_error(app, store)?;
-
-    Ok(projects)
+    run_daylite_command(app, |client, tokens| async move {
+        list_projects_core(&client, tokens).await
+    })
+    .await
 }
 
-// Daylite category that marks a project as overdue.
 const OVERDUE_CATEGORY: &str = "Überfällig";
-// Only active projects qualify as overdue suggestions; matches the status
-// filter of the assignment picker search. The Daylite API has no multi-value
-// operator for scalar fields, so the query pairs the category filter with each
-// status as OR clauses to stay a single call.
+// The Daylite API has no multi-value operator for scalar fields, so the overdue
+// query pairs the category filter with each status as OR clauses to stay a
+// single call.
 const OVERDUE_STATUSES: [&str; 2] = ["new_status", "in_progress"];
-// Maximum overdue suggestions returned to the frontend.
 const OVERDUE_DISPLAY_LIMIT: usize = 5;
-// Candidate pool fetched before the numeric-ID sort. Daylite applies its own
-// ordering when truncating server-side, so a wider pool keeps the projects
-// with the lowest IDs deterministic.
+// Daylite applies its own ordering when truncating server-side, so a wider
+// candidate pool keeps the projects with the lowest IDs deterministic.
 const OVERDUE_CANDIDATE_LIMIT: u16 = 50;
 
 #[tauri::command]
@@ -131,14 +118,10 @@ const OVERDUE_CANDIDATE_LIMIT: u16 = 50;
 pub async fn daylite_query_overdue_projects(
     app: tauri::AppHandle,
 ) -> Result<Vec<DayliteProjectSummary>, DayliteApiError> {
-    let store = load_store_or_error(app.clone())?;
-    let client = DayliteApiClient::new(&store.api_endpoints.daylite_base_url)?;
-    let projects =
-        with_token_refresh_lock(|tokens| query_overdue_projects_core(&client, tokens)).await?;
-
-    save_store_or_error(app, store)?;
-
-    Ok(projects)
+    run_daylite_command(app, |client, tokens| async move {
+        query_overdue_projects_core(&client, tokens).await
+    })
+    .await
 }
 
 #[tauri::command]
@@ -147,14 +130,10 @@ pub async fn daylite_search_projects(
     app: tauri::AppHandle,
     input: DayliteSearchInput,
 ) -> Result<DayliteSearchResult<DayliteProjectSummary>, DayliteApiError> {
-    let store = load_store_or_error(app.clone())?;
-    let client = DayliteApiClient::new(&store.api_endpoints.daylite_base_url)?;
-    let search_result =
-        with_token_refresh_lock(|tokens| search_projects_core(&client, tokens, &input)).await?;
-
-    save_store_or_error(app, store)?;
-
-    Ok(search_result)
+    run_daylite_command(app, |client, tokens| async move {
+        search_projects_core(&client, tokens, &input).await
+    })
+    .await
 }
 
 pub(super) async fn list_projects_core(
@@ -165,10 +144,11 @@ pub(super) async fn list_projects_core(
         send_authenticated_json::<DayliteSearchResult<DayliteProjectSummaryDto>>(
             client,
             token_state,
-            DayliteHttpMethod::Post,
-            "/projects/_search",
-            vec![("full-records".to_string(), "true".to_string())],
-            Some(json!({})),
+            DayliteHttpRequest {
+                query: vec![("full-records".to_string(), "true".to_string())],
+                body: Some(json!({})),
+                ..DayliteHttpRequest::new(DayliteHttpMethod::Post, "/projects/_search")
+            },
         )
         .await?;
 
@@ -199,10 +179,11 @@ pub(super) async fn query_overdue_projects_core(
         send_authenticated_json::<DayliteSearchResult<DayliteProjectSummaryDto>>(
             client,
             token_state,
-            DayliteHttpMethod::Post,
-            "/projects/_search",
-            build_limit_query(Some(OVERDUE_CANDIDATE_LIMIT)),
-            Some(json!(clauses)),
+            DayliteHttpRequest {
+                query: build_limit_query(Some(OVERDUE_CANDIDATE_LIMIT)),
+                body: Some(json!(clauses)),
+                ..DayliteHttpRequest::new(DayliteHttpMethod::Post, "/projects/_search")
+            },
         )
         .await?;
 
@@ -256,10 +237,11 @@ pub(super) async fn search_projects_core(
         send_authenticated_json::<DayliteSearchResult<DayliteProjectSummaryDto>>(
             client,
             token_state,
-            DayliteHttpMethod::Post,
-            "/projects/_search",
-            query,
-            Some(body),
+            DayliteHttpRequest {
+                query,
+                body: Some(body),
+                ..DayliteHttpRequest::new(DayliteHttpMethod::Post, "/projects/_search")
+            },
         )
         .await?;
 
@@ -287,8 +269,6 @@ pub(super) async fn search_projects_core(
     ))
 }
 
-/// Extracts the trailing integer from a Daylite reference path like `/v1/projects/3001`.
-/// Returns `u64::MAX` for references that don't end with a numeric ID so they sort last.
 fn extract_numeric_id(reference: &str) -> u64 {
     reference
         .rsplit('/')
@@ -405,9 +385,6 @@ fn map_project_status(status: Option<String>) -> PlanningProjectStatus {
     PlanningProjectStatus::NewStatus
 }
 
-/// Fetches a single project by its Daylite reference (e.g. "/v1/projects/3001") and returns
-/// `(name, status_string)`. Returns `None` on any error so callers can show a placeholder instead.
-/// Intended for use as a cache fallback in other integrations.
 pub(crate) async fn fetch_project_by_reference(
     app: tauri::AppHandle,
     project_ref: &str,
@@ -422,12 +399,13 @@ pub(crate) async fn fetch_project_by_reference(
     let store = crate::integrations::local_store::load_local_store(app).ok()?;
     let client = DayliteApiClient::new(&store.api_endpoints.daylite_base_url).ok()?;
 
-    // The lock both serializes the refresh and persists the rotated token: the previous
-    // code discarded the refreshed token state, leaving the old (now invalid) token stored.
     with_token_refresh_lock(|tokens| async move {
-        let (summary, tokens): (DayliteProjectSummaryDto, _) =
-            send_authenticated_json(&client, tokens, DayliteHttpMethod::Get, path, vec![], None)
-                .await?;
+        let (summary, tokens): (DayliteProjectSummaryDto, _) = send_authenticated_json(
+            &client,
+            tokens,
+            DayliteHttpRequest::new(DayliteHttpMethod::Get, path),
+        )
+        .await?;
         let mapped = map_daylite_project_summary(summary);
         let status_str = project_status_to_string(&mapped.status);
         Ok(((mapped.name, status_str.to_string()), tokens))
@@ -454,16 +432,15 @@ mod tests {
         query_overdue_projects_core, search_projects_core, DayliteProjectSummaryDto,
         PlanningProjectStatus,
     };
-    use crate::integrations::daylite::client::{
-        BoxFuture, DayliteApiClient, DayliteHttpMethod, DayliteHttpRequest, DayliteHttpResponse,
-        DayliteHttpTransport,
-    };
+    use crate::integrations::daylite::client::DayliteApiClient;
+    use crate::integrations::daylite::client::DayliteHttpMethod;
     use crate::integrations::daylite::shared::{
         DayliteApiError, DayliteApiErrorCode, DayliteSearchInput, DayliteSearchSort,
         DayliteTokenState,
     };
-    use std::collections::VecDeque;
-    use std::sync::{Arc, Mutex};
+    use crate::integrations::daylite::test_support::{
+        mock_response, token_state, valid_token_state, MockTransport,
+    };
 
     #[test]
     fn maps_project_summary_to_planning_project_record() {
@@ -517,16 +494,9 @@ mod tests {
             ))]);
             let client = DayliteApiClient::with_transport(Box::new(transport.clone()));
 
-            let (projects, token_state) = list_projects_core(
-                &client,
-                DayliteTokenState {
-                    access_token: "at".to_string(),
-                    refresh_token: "rt".to_string(),
-                    access_token_expires_at_ms: Some(u64::MAX),
-                },
-            )
-            .await
-            .expect("list should succeed");
+            let (projects, token_state) = list_projects_core(&client, valid_token_state())
+                .await
+                .expect("list should succeed");
 
             assert_eq!(projects.len(), 2);
             assert_eq!(projects[0].name, "Projekt A");
@@ -558,18 +528,11 @@ mod tests {
 
             let (result, _) = search_projects_core(
                 &client,
-                DayliteTokenState {
-                    access_token: "at".to_string(),
-                    refresh_token: "rt".to_string(),
-                    access_token_expires_at_ms: Some(u64::MAX),
-                },
+                valid_token_state(),
                 &DayliteSearchInput {
                     search_term: "Nord".to_string(),
                     limit: Some(5),
-                    statuses: None,
-                    full_records: None,
-                    start: None,
-                    sort: None,
+                    ..Default::default()
                 },
             )
             .await
@@ -603,35 +566,20 @@ mod tests {
     #[test]
     fn search_results_are_sorted_by_numeric_id_ascending() {
         tauri::async_runtime::block_on(async {
-            // IDs: 100, 20, 3 — string sort would give 100 < 20 < 3, numeric gives 3 < 20 < 100
             let transport = MockTransport::new(vec![Ok(mock_response(
                 200,
                 r#"{"results":[
-                    {"self":"/v1/projects/100","name":"Hundert"},
-                    {"self":"/v1/projects/20","name":"Zwanzig"},
-                    {"self":"/v1/projects/3","name":"Drei"}
-                ],"next":null}"#,
+                {"self":"/v1/projects/100","name":"Hundert"},
+                {"self":"/v1/projects/20","name":"Zwanzig"},
+                {"self":"/v1/projects/3","name":"Drei"}
+            ],"next":null}"#,
             ))]);
             let client = DayliteApiClient::with_transport(Box::new(transport));
 
-            let (result, _) = search_projects_core(
-                &client,
-                DayliteTokenState {
-                    access_token: "at".to_string(),
-                    refresh_token: "rt".to_string(),
-                    access_token_expires_at_ms: Some(u64::MAX),
-                },
-                &DayliteSearchInput {
-                    search_term: "".to_string(),
-                    limit: None,
-                    statuses: None,
-                    full_records: None,
-                    start: None,
-                    sort: None,
-                },
-            )
-            .await
-            .expect("search should succeed");
+            let (result, _) =
+                search_projects_core(&client, valid_token_state(), &DayliteSearchInput::default())
+                    .await
+                    .expect("search should succeed");
 
             assert_eq!(result.results[0].reference, "/v1/projects/3");
             assert_eq!(result.results[1].reference, "/v1/projects/20");
@@ -642,24 +590,16 @@ mod tests {
     #[test]
     fn search_treats_empty_object_response_as_no_results() {
         tauri::async_runtime::block_on(async {
-            // Daylite returns a bare `{}` (HTTP 200) when nothing matches.
             let transport = MockTransport::new(vec![Ok(mock_response(200, r#"{}"#))]);
             let client = DayliteApiClient::with_transport(Box::new(transport));
 
             let (result, _) = search_projects_core(
                 &client,
-                DayliteTokenState {
-                    access_token: "at".to_string(),
-                    refresh_token: "rt".to_string(),
-                    access_token_expires_at_ms: Some(u64::MAX),
-                },
+                valid_token_state(),
                 &DayliteSearchInput {
                     search_term: "Nord".to_string(),
                     limit: Some(5),
-                    statuses: None,
-                    full_records: None,
-                    start: None,
-                    sort: None,
+                    ..Default::default()
                 },
             )
             .await
@@ -673,31 +613,22 @@ mod tests {
     #[test]
     fn search_sorts_by_name_when_sort_is_name() {
         tauri::async_runtime::block_on(async {
-            // IDs ascend but names do not, so an ID sort and a name sort diverge.
             let transport = MockTransport::new(vec![Ok(mock_response(
                 200,
                 r#"{"results":[
-                    {"self":"/v1/projects/1","name":"Zeta"},
-                    {"self":"/v1/projects/2","name":"Alpha"},
-                    {"self":"/v1/projects/3","name":"Mitte"}
-                ],"next":null}"#,
+                {"self":"/v1/projects/1","name":"Zeta"},
+                {"self":"/v1/projects/2","name":"Alpha"},
+                {"self":"/v1/projects/3","name":"Mitte"}
+            ],"next":null}"#,
             ))]);
             let client = DayliteApiClient::with_transport(Box::new(transport));
 
             let (result, _) = search_projects_core(
                 &client,
-                DayliteTokenState {
-                    access_token: "at".to_string(),
-                    refresh_token: "rt".to_string(),
-                    access_token_expires_at_ms: Some(u64::MAX),
-                },
+                valid_token_state(),
                 &DayliteSearchInput {
-                    search_term: "".to_string(),
-                    limit: None,
-                    statuses: None,
-                    full_records: None,
-                    start: None,
                     sort: Some(DayliteSearchSort::Name),
+                    ..Default::default()
                 },
             )
             .await
@@ -715,32 +646,17 @@ mod tests {
             let transport = MockTransport::new(vec![Ok(mock_response(
                 200,
                 r#"{"results":[
-                    {"self":"/v1/projects/3","name":"Alpha"},
-                    {"self":"/v1/projects/1","name":"Zeta"}
-                ],"next":null}"#,
+                {"self":"/v1/projects/3","name":"Alpha"},
+                {"self":"/v1/projects/1","name":"Zeta"}
+            ],"next":null}"#,
             ))]);
             let client = DayliteApiClient::with_transport(Box::new(transport));
 
-            let (result, _) = search_projects_core(
-                &client,
-                DayliteTokenState {
-                    access_token: "at".to_string(),
-                    refresh_token: "rt".to_string(),
-                    access_token_expires_at_ms: Some(u64::MAX),
-                },
-                &DayliteSearchInput {
-                    search_term: "".to_string(),
-                    limit: None,
-                    statuses: None,
-                    full_records: None,
-                    start: None,
-                    sort: None,
-                },
-            )
-            .await
-            .expect("search should succeed");
+            let (result, _) =
+                search_projects_core(&client, valid_token_state(), &DayliteSearchInput::default())
+                    .await
+                    .expect("search should succeed");
 
-            // ID sort wins over name order: project 1 ("Zeta") comes before 3 ("Alpha").
             assert_eq!(result.results[0].reference, "/v1/projects/1");
             assert_eq!(result.results[1].reference, "/v1/projects/3");
         });
@@ -752,34 +668,25 @@ mod tests {
             let transport = MockTransport::new(vec![Ok(mock_response(
                 200,
                 r#"{"results":[
-                    {"self":"/v1/projects/100","name":"Hundert"},
-                    {"self":"/v1/projects/20","name":"Zwanzig"},
-                    {"self":"/v1/projects/3","name":"Drei"}
-                ],"next":null}"#,
+                {"self":"/v1/projects/100","name":"Hundert"},
+                {"self":"/v1/projects/20","name":"Zwanzig"},
+                {"self":"/v1/projects/3","name":"Drei"}
+            ],"next":null}"#,
             ))]);
             let client = DayliteApiClient::with_transport(Box::new(transport));
 
             let (result, _) = search_projects_core(
                 &client,
-                DayliteTokenState {
-                    access_token: "at".to_string(),
-                    refresh_token: "rt".to_string(),
-                    access_token_expires_at_ms: Some(u64::MAX),
-                },
+                valid_token_state(),
                 &DayliteSearchInput {
-                    search_term: "".to_string(),
                     limit: Some(2),
-                    statuses: None,
-                    full_records: None,
-                    start: None,
-                    sort: None,
+                    ..Default::default()
                 },
             )
             .await
             .expect("search should succeed");
 
             assert_eq!(result.results.len(), 2);
-            // After sort: 3, 20, 100 — limit 2 keeps the two lowest IDs
             assert_eq!(result.results[0].reference, "/v1/projects/3");
             assert_eq!(result.results[1].reference, "/v1/projects/20");
         });
@@ -794,16 +701,9 @@ mod tests {
             ))]);
             let client = DayliteApiClient::with_transport(Box::new(transport.clone()));
 
-            query_overdue_projects_core(
-                &client,
-                DayliteTokenState {
-                    access_token: "at".to_string(),
-                    refresh_token: "rt".to_string(),
-                    access_token_expires_at_ms: Some(u64::MAX),
-                },
-            )
-            .await
-            .expect("overdue query should succeed");
+            query_overdue_projects_core(&client, valid_token_state())
+                .await
+                .expect("overdue query should succeed");
 
             let requests = transport.requests();
             assert_eq!(requests.len(), 1, "overdue query must be a single call");
@@ -830,30 +730,22 @@ mod tests {
     #[test]
     fn overdue_results_are_sorted_by_numeric_id_and_limited_to_five() {
         tauri::async_runtime::block_on(async {
-            // Unsorted IDs: numeric sort gives 3, 7, 9, 20, 50 and drops 100.
             let transport = MockTransport::new(vec![Ok(mock_response(
                 200,
                 r#"{"results":[
-                    {"self":"/v1/projects/100","name":"Hundert"},
-                    {"self":"/v1/projects/20","name":"Zwanzig"},
-                    {"self":"/v1/projects/3","name":"Drei"},
-                    {"self":"/v1/projects/50","name":"Fünfzig"},
-                    {"self":"/v1/projects/7","name":"Sieben"},
-                    {"self":"/v1/projects/9","name":"Neun"}
-                ],"next":null}"#,
+                {"self":"/v1/projects/100","name":"Hundert"},
+                {"self":"/v1/projects/20","name":"Zwanzig"},
+                {"self":"/v1/projects/3","name":"Drei"},
+                {"self":"/v1/projects/50","name":"Fünfzig"},
+                {"self":"/v1/projects/7","name":"Sieben"},
+                {"self":"/v1/projects/9","name":"Neun"}
+            ],"next":null}"#,
             ))]);
             let client = DayliteApiClient::with_transport(Box::new(transport));
 
-            let (results, _) = query_overdue_projects_core(
-                &client,
-                DayliteTokenState {
-                    access_token: "at".to_string(),
-                    refresh_token: "rt".to_string(),
-                    access_token_expires_at_ms: Some(u64::MAX),
-                },
-            )
-            .await
-            .expect("overdue query should succeed");
+            let (results, _) = query_overdue_projects_core(&client, valid_token_state())
+                .await
+                .expect("overdue query should succeed");
 
             assert_eq!(results.len(), 5);
             let references: Vec<&str> = results
@@ -876,20 +768,12 @@ mod tests {
     #[test]
     fn overdue_query_treats_empty_object_response_as_no_results() {
         tauri::async_runtime::block_on(async {
-            // Daylite returns a bare `{}` (HTTP 200) when no project is overdue.
             let transport = MockTransport::new(vec![Ok(mock_response(200, r#"{}"#))]);
             let client = DayliteApiClient::with_transport(Box::new(transport));
 
-            let (results, _) = query_overdue_projects_core(
-                &client,
-                DayliteTokenState {
-                    access_token: "at".to_string(),
-                    refresh_token: "rt".to_string(),
-                    access_token_expires_at_ms: Some(u64::MAX),
-                },
-            )
-            .await
-            .expect("empty object response should be treated as no results");
+            let (results, _) = query_overdue_projects_core(&client, valid_token_state())
+                .await
+                .expect("empty object response should be treated as no results");
 
             assert!(results.is_empty());
         });
@@ -915,11 +799,7 @@ mod tests {
 
             let (results, token_state) = query_overdue_projects_core(
                 &client,
-                DayliteTokenState {
-                    access_token: "replay-access-token".to_string(),
-                    refresh_token: "replay-refresh-token".to_string(),
-                    access_token_expires_at_ms: Some(u64::MAX),
-                },
+                token_state("replay-access-token", "replay-refresh-token"),
             )
             .await
             .expect("overdue query should replay from cassette");
@@ -985,11 +865,7 @@ mod tests {
 
             let (projects, token_state) = list_projects_core(
                 &client,
-                DayliteTokenState {
-                    access_token: "replay-access-token".to_string(),
-                    refresh_token: "replay-refresh-token".to_string(),
-                    access_token_expires_at_ms: Some(u64::MAX),
-                },
+                token_state("replay-access-token", "replay-refresh-token"),
             )
             .await
             .expect("list should replay from cassette");
@@ -1013,18 +889,11 @@ mod tests {
 
             let (search_result, token_state) = search_projects_core(
                 &client,
-                DayliteTokenState {
-                    access_token: "replay-access-token".to_string(),
-                    refresh_token: "replay-refresh-token".to_string(),
-                    access_token_expires_at_ms: Some(u64::MAX),
-                },
+                token_state("replay-access-token", "replay-refresh-token"),
                 &DayliteSearchInput {
                     search_term: "Nord".to_string(),
                     limit: Some(5),
-                    statuses: None,
-                    full_records: None,
-                    start: None,
-                    sort: None,
+                    ..Default::default()
                 },
             )
             .await
@@ -1055,18 +924,13 @@ mod tests {
 
             let (search_result, token_state) = search_projects_core(
                 &client,
-                DayliteTokenState {
-                    access_token: "test-token".to_string(),
-                    refresh_token: "test-refresh".to_string(),
-                    access_token_expires_at_ms: Some(u64::MAX),
-                },
+                token_state("test-token", "test-refresh"),
                 &DayliteSearchInput {
                     search_term: "Nord".to_string(),
                     limit: Some(5),
                     full_records: Some(true),
                     statuses: Some(vec!["new_status".to_string(), "in_progress".to_string()]),
-                    start: None,
-                    sort: None,
+                    ..Default::default()
                 },
             )
             .await
@@ -1078,7 +942,6 @@ mod tests {
             );
             assert_eq!(token_state.access_token, "test-token");
 
-            // All returned projects must be in the requested statuses
             for project in &search_result.results {
                 assert!(
                     project.status.as_deref() == Some("new")
@@ -1098,70 +961,21 @@ mod tests {
 
             let (search_result, token_state) = search_projects_core(
                 &client,
-                DayliteTokenState {
-                    access_token: "test-token".to_string(),
-                    refresh_token: "test-refresh".to_string(),
-                    access_token_expires_at_ms: Some(u64::MAX),
-                },
+                token_state("test-token", "test-refresh"),
                 &DayliteSearchInput {
                     search_term: "XXXXX".to_string(),
                     limit: Some(50),
-                    full_records: None,
                     statuses: Some(vec!["new_status".to_string(), "in_progress".to_string()]),
-                    start: None,
                     sort: Some(DayliteSearchSort::Name),
+                    ..Default::default()
                 },
             )
             .await
             .expect("no-match search should replay from cassette");
 
-            // Daylite returns a bare `{}` for a search with no matches; confirms
-            // the empty-response fix against a real recorded interaction.
             assert!(search_result.results.is_empty());
             assert_eq!(token_state.access_token, "test-token");
         });
-    }
-
-    #[derive(Clone)]
-    struct MockTransport {
-        responses: Arc<Mutex<VecDeque<Result<DayliteHttpResponse, DayliteApiError>>>>,
-        requests: Arc<Mutex<Vec<DayliteHttpRequest>>>,
-    }
-
-    impl MockTransport {
-        fn new(responses: Vec<Result<DayliteHttpResponse, DayliteApiError>>) -> Self {
-            Self {
-                responses: Arc::new(Mutex::new(VecDeque::from(responses))),
-                requests: Arc::new(Mutex::new(Vec::new())),
-            }
-        }
-
-        fn requests(&self) -> Vec<DayliteHttpRequest> {
-            self.requests
-                .lock()
-                .expect("request lock should succeed")
-                .clone()
-        }
-    }
-
-    impl DayliteHttpTransport for MockTransport {
-        fn send<'a>(
-            &'a self,
-            request: DayliteHttpRequest,
-        ) -> BoxFuture<'a, Result<DayliteHttpResponse, DayliteApiError>> {
-            Box::pin(async move {
-                self.requests
-                    .lock()
-                    .expect("request lock should succeed")
-                    .push(request);
-
-                self.responses
-                    .lock()
-                    .expect("response lock should succeed")
-                    .pop_front()
-                    .expect("mock should contain enough responses")
-            })
-        }
     }
 
     #[test]
@@ -1175,18 +989,12 @@ mod tests {
 
             search_projects_core(
                 &client,
-                DayliteTokenState {
-                    access_token: "at".to_string(),
-                    refresh_token: "rt".to_string(),
-                    access_token_expires_at_ms: Some(u64::MAX),
-                },
+                valid_token_state(),
                 &DayliteSearchInput {
                     search_term: "Nord".to_string(),
                     limit: Some(5),
                     statuses: Some(vec!["new_status".to_string(), "in_progress".to_string()]),
-                    full_records: None,
-                    start: None,
-                    sort: None,
+                    ..Default::default()
                 },
             )
             .await
@@ -1216,18 +1024,11 @@ mod tests {
 
             search_projects_core(
                 &client,
-                DayliteTokenState {
-                    access_token: "at".to_string(),
-                    refresh_token: "rt".to_string(),
-                    access_token_expires_at_ms: Some(u64::MAX),
-                },
+                valid_token_state(),
                 &DayliteSearchInput {
                     search_term: "Nord".to_string(),
                     limit: Some(5),
-                    statuses: None,
-                    full_records: None,
-                    start: None,
-                    sort: None,
+                    ..Default::default()
                 },
             )
             .await
@@ -1259,18 +1060,12 @@ mod tests {
 
             search_projects_core(
                 &client,
-                DayliteTokenState {
-                    access_token: "at".to_string(),
-                    refresh_token: "rt".to_string(),
-                    access_token_expires_at_ms: Some(u64::MAX),
-                },
+                valid_token_state(),
                 &DayliteSearchInput {
                     search_term: "Nord".to_string(),
                     limit: Some(5),
-                    statuses: None,
                     full_records: Some(true),
-                    start: None,
-                    sort: None,
+                    ..Default::default()
                 },
             )
             .await
@@ -1298,18 +1093,10 @@ mod tests {
 
             search_projects_core(
                 &client,
-                DayliteTokenState {
-                    access_token: "at".to_string(),
-                    refresh_token: "rt".to_string(),
-                    access_token_expires_at_ms: Some(u64::MAX),
-                },
+                valid_token_state(),
                 &DayliteSearchInput {
                     search_term: "Nord".to_string(),
-                    limit: None,
-                    statuses: None,
-                    full_records: None,
-                    start: None,
-                    sort: None,
+                    ..Default::default()
                 },
             )
             .await
@@ -1335,18 +1122,11 @@ mod tests {
 
             search_projects_core(
                 &client,
-                DayliteTokenState {
-                    access_token: "at".to_string(),
-                    refresh_token: "rt".to_string(),
-                    access_token_expires_at_ms: Some(u64::MAX),
-                },
+                valid_token_state(),
                 &DayliteSearchInput {
                     search_term: "Nord".to_string(),
-                    limit: None,
-                    statuses: None,
-                    full_records: None,
                     start: Some("3001".to_string()),
-                    sort: None,
+                    ..Default::default()
                 },
             )
             .await
@@ -1371,18 +1151,10 @@ mod tests {
 
             let result = search_projects_core(
                 &client,
-                DayliteTokenState {
-                    access_token: "at".to_string(),
-                    refresh_token: "rt".to_string(),
-                    access_token_expires_at_ms: Some(u64::MAX),
-                },
+                valid_token_state(),
                 &DayliteSearchInput {
                     search_term: "Nord".to_string(),
-                    limit: None,
-                    statuses: None,
-                    full_records: None,
-                    start: None,
-                    sort: None,
+                    ..Default::default()
                 },
             )
             .await;
@@ -1410,18 +1182,10 @@ mod tests {
 
             let result = search_projects_core(
                 &client,
-                DayliteTokenState {
-                    access_token: "at".to_string(),
-                    refresh_token: "rt".to_string(),
-                    access_token_expires_at_ms: Some(u64::MAX),
-                },
+                valid_token_state(),
                 &DayliteSearchInput {
                     search_term: "Nord".to_string(),
-                    limit: None,
-                    statuses: None,
-                    full_records: None,
-                    start: None,
-                    sort: None,
+                    ..Default::default()
                 },
             )
             .await;
@@ -1433,12 +1197,5 @@ mod tests {
                 "Zeitüberschreitung bei der Daylite-Anfrage."
             );
         });
-    }
-
-    fn mock_response(status: u16, body: &str) -> DayliteHttpResponse {
-        DayliteHttpResponse {
-            status,
-            body: body.to_string(),
-        }
     }
 }

@@ -1,10 +1,8 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
 import { checkHealth } from "./health";
 
-// Mock generated command bindings
 const mockCheckHealthCommand = mock(() => Promise.resolve({} as unknown));
 
-// Mock generated bindings module
 mock.module("../generated/tauri", () => ({
   commands: {
     checkHealth: mockCheckHealthCommand,

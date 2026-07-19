@@ -7,9 +7,7 @@ import {
   type PlanningGridAssignmentState,
   type PlanningGridEmployeesState,
   type PlanningGridProjectsState,
-  PlanningGridTable,
 } from "./page";
-import { getWeekDays } from "./util";
 
 const defaultState: PlanningGridProjectsState = {
   projects: [],
@@ -42,8 +40,6 @@ const defaultHolidaysState: HolidaysState = {
 
 const defaultIcalProps = {
   employeeSettings: [] as import("../generated/tauri").EmployeeSetting[],
-  // Tests assert on the full employee list; filtering is covered separately in
-  // employee-visibility.spec.ts and the dedicated test below.
   hideNonPlannableEmployees: false,
   holidaysState: defaultHolidaysState,
   onOpenIcalDialog: () => {},
@@ -56,8 +52,8 @@ describe("planning grid project loading states", () => {
 
   it("shows initial german loading state when projects are loading", () => {
     const html = renderToStaticMarkup(
-      <PlanningGridTable
-        weekDays={getWeekDays(0)}
+      <PlanningGrid
+        weekOffset={0}
         projectState={{ ...defaultState, isLoading: true }}
         employeeState={{ ...defaultEmployeeState }}
         assignmentState={{ ...defaultAssignmentState }}
@@ -71,8 +67,8 @@ describe("planning grid project loading states", () => {
 
   it("shows german error banner with retry action", () => {
     const html = renderToStaticMarkup(
-      <PlanningGridTable
-        weekDays={getWeekDays(0)}
+      <PlanningGrid
+        weekOffset={0}
         projectState={{
           ...defaultState,
           errorMessage: "Die Daten konnten nicht von Daylite geladen werden.",
@@ -91,8 +87,8 @@ describe("planning grid project loading states", () => {
 
   it("renders daylite-backed project names instead of dummy projects", () => {
     const html = renderToStaticMarkup(
-      <PlanningGridTable
-        weekDays={getWeekDays(0)}
+      <PlanningGrid
+        weekOffset={0}
         projectState={{
           ...defaultState,
           projects: [
@@ -116,8 +112,8 @@ describe("planning grid project loading states", () => {
 
   it("shows empty state when no projects are loaded", () => {
     const html = renderToStaticMarkup(
-      <PlanningGridTable
-        weekDays={getWeekDays(0)}
+      <PlanningGrid
+        weekOffset={0}
         projectState={{ ...defaultState }}
         employeeState={{ ...defaultEmployeeState }}
         assignmentState={{ ...defaultAssignmentState }}
@@ -136,8 +132,8 @@ describe("planning grid project loading states", () => {
 
   it("renders project status and due date in loaded projects section", () => {
     const html = renderToStaticMarkup(
-      <PlanningGridTable
-        weekDays={getWeekDays(0)}
+      <PlanningGrid
+        weekOffset={0}
         projectState={{
           ...defaultState,
           projects: [
@@ -162,8 +158,8 @@ describe("planning grid project loading states", () => {
 
   it("does not crash when a project record is missing self", () => {
     const html = renderToStaticMarkup(
-      <PlanningGridTable
-        weekDays={getWeekDays(0)}
+      <PlanningGrid
+        weekOffset={0}
         projectState={{
           ...defaultState,
           projects: [
@@ -185,8 +181,8 @@ describe("planning grid project loading states", () => {
 
   it("renders daylite-backed employee names instead of dummy employee names", () => {
     const html = renderToStaticMarkup(
-      <PlanningGridTable
-        weekDays={getWeekDays(0)}
+      <PlanningGrid
+        weekOffset={0}
         projectState={{ ...defaultState }}
         employeeState={{
           ...defaultEmployeeState,
@@ -210,8 +206,8 @@ describe("planning grid project loading states", () => {
 
   it("hides employees without a calendar and test employees when the toggle is enabled", () => {
     const html = renderToStaticMarkup(
-      <PlanningGridTable
-        weekDays={getWeekDays(0)}
+      <PlanningGrid
+        weekOffset={0}
         projectState={{ ...defaultState }}
         employeeState={{
           ...defaultEmployeeState,
@@ -265,8 +261,8 @@ describe("planning grid assignment states", () => {
 
   it("shows german loading state when assignments are loading", () => {
     const html = renderToStaticMarkup(
-      <PlanningGridTable
-        weekDays={getWeekDays(0)}
+      <PlanningGrid
+        weekOffset={0}
         projectState={{ ...defaultState }}
         employeeState={{ ...defaultEmployeeState }}
         assignmentState={{ ...defaultAssignmentState, isLoading: true }}
@@ -279,8 +275,8 @@ describe("planning grid assignment states", () => {
 
   it("shows german error banner with retry when assignment fetch fails", () => {
     const html = renderToStaticMarkup(
-      <PlanningGridTable
-        weekDays={getWeekDays(0)}
+      <PlanningGrid
+        weekOffset={0}
         projectState={{ ...defaultState }}
         employeeState={{ ...defaultEmployeeState }}
         assignmentState={{
@@ -315,8 +311,8 @@ describe("planning grid assignment states", () => {
     };
 
     const html = renderToStaticMarkup(
-      <PlanningGridTable
-        weekDays={getWeekDays(0)}
+      <PlanningGrid
+        weekOffset={0}
         projectState={{ ...defaultState }}
         employeeState={{ ...defaultEmployeeState, employees: [employee] }}
         assignmentState={{
@@ -353,8 +349,8 @@ describe("planning grid assignment states", () => {
     };
 
     const html = renderToStaticMarkup(
-      <PlanningGridTable
-        weekDays={getWeekDays(0)}
+      <PlanningGrid
+        weekOffset={0}
         projectState={{ ...defaultState }}
         employeeState={{ ...defaultEmployeeState, employees: [employee] }}
         assignmentState={{
@@ -370,8 +366,6 @@ describe("planning grid assignment states", () => {
     expect(html).toContain("Auto Werkstatt");
     expect(html).toContain("bg-base-200");
     expect(html).not.toContain("bg-secondary");
-    // Note: bg-primary legitimately appears in the TimetableHeader for today's column;
-    // the bare event cell itself does not use any bg-primary class.
   });
 
   it("renders empty cells when no events exist for the week", () => {
@@ -383,8 +377,8 @@ describe("planning grid assignment states", () => {
     };
 
     const html = renderToStaticMarkup(
-      <PlanningGridTable
-        weekDays={getWeekDays(0)}
+      <PlanningGrid
+        weekOffset={0}
         projectState={{ ...defaultState }}
         employeeState={{ ...defaultEmployeeState, employees: [employee] }}
         assignmentState={{ ...defaultAssignmentState, eventsByEmployee: {} }}
@@ -392,15 +386,14 @@ describe("planning grid assignment states", () => {
       />,
     );
 
-    // Employee row exists but no project events in it
     expect(html).toContain("Monteur Aus Daylite");
     expect(html).not.toContain("bg-secondary");
   });
 
   it("renders dates from the next week when weekOffset is 1", () => {
     const html = renderToStaticMarkup(
-      <PlanningGridTable
-        weekDays={getWeekDays(1)}
+      <PlanningGrid
+        weekOffset={1}
         projectState={{ ...defaultState }}
         employeeState={{ ...defaultEmployeeState }}
         assignmentState={{ ...defaultAssignmentState }}
@@ -408,7 +401,6 @@ describe("planning grid assignment states", () => {
       />,
     );
 
-    // System time is 2026-01-28; weekOffset=1 starts on 2026-02-02
     expect(html).toContain("02.02");
   });
 
@@ -421,8 +413,8 @@ describe("planning grid assignment states", () => {
     };
 
     const html = renderToStaticMarkup(
-      <PlanningGridTable
-        weekDays={getWeekDays(0)}
+      <PlanningGrid
+        weekOffset={0}
         projectState={{ ...defaultState }}
         employeeState={{ ...defaultEmployeeState, employees: [employee] }}
         assignmentState={{
@@ -447,8 +439,6 @@ describe("planning grid weekend visibility", () => {
     setSystemTime(new Date(2026, 0, 28, 9, 0, 0));
   });
 
-  // Each day column renders exactly one <time> header cell; with no employees or
-  // events the only <time> elements are the day headers.
   const countDayColumns = (html: string) => (html.match(/<time/g) ?? []).length;
 
   it("renders 5 day columns by default (weekend hidden)", () => {
@@ -483,11 +473,10 @@ describe("planning grid weekend visibility", () => {
   });
 
   it("displays a holiday that falls on a weekend day when showWeekend is on", () => {
-    // System time is 2026-01-28 (Wed); getWeekDays(0, true) spans Mon 2026-01-26
-    // to Sun 2026-02-01, so 2026-01-31 is the Saturday column.
     const html = renderToStaticMarkup(
-      <PlanningGridTable
-        weekDays={getWeekDays(0, true)}
+      <PlanningGrid
+        weekOffset={0}
+        showWeekend
         projectState={{ ...defaultState }}
         employeeState={{ ...defaultEmployeeState }}
         assignmentState={{ ...defaultAssignmentState }}

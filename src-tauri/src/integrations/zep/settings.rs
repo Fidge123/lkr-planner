@@ -7,12 +7,9 @@ pub(super) fn current_timestamp() -> String {
     Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true)
 }
 
-/// Tests every calendar URL in `settings` that has no recorded test result yet
-/// (i.e. `last_tested_at` is `None`). Silently does nothing if ZEP credentials
-/// are not configured. Intended to be called after Daylite reconciliation so that
-/// newly-discovered calendar URLs are validated immediately without a manual save.
+/// Silently does nothing if ZEP credentials are not configured: this runs on
+/// startup paths that must not error.
 pub(crate) async fn test_untested_calendar_urls(settings: &mut [EmployeeSetting]) {
-    // Collect (contact_reference, url, is_primary) triples that need testing.
     let to_test: Vec<(String, String, bool)> = settings
         .iter()
         .flat_map(|s| {
@@ -113,7 +110,6 @@ mod tests {
 
             test_untested_calendar_urls(&mut settings).await;
 
-            // Timestamps must not change because both are already tested.
             assert_eq!(
                 settings[0].primary_ical_last_tested_at,
                 Some("2026-01-01T12:00:00.000Z".to_string())
@@ -145,7 +141,6 @@ mod tests {
 
             test_untested_calendar_urls(&mut settings).await;
 
-            // No credentials → timestamps stay None; no panic.
             assert_eq!(settings[0].primary_ical_last_tested_at, None);
             assert_eq!(settings[0].primary_ical_last_test_passed, None);
         });

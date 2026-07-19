@@ -36,10 +36,6 @@ pub(super) fn map_planning_contact_to_cache_entry(
     }
 }
 
-/// Keeps only contacts relevant to the planning view. This covers both planning
-/// categories — "Monteur" and "Test" — because "Test" employees are fetched too
-/// and only hidden in the frontend when the "hide non-plannable employees"
-/// toggle is enabled.
 pub(super) fn filter_planning_contacts(
     contacts: Vec<PlanningContactRecord>,
 ) -> Vec<PlanningContactRecord> {
@@ -241,7 +237,6 @@ mod tests {
 
         let mapped = sort_contacts(filter_planning_contacts(contacts));
 
-        // Vertrieb is dropped; Monteur and Test are kept and sorted by display name.
         assert_eq!(mapped.len(), 3);
         assert_eq!(mapped[0].reference, "/v1/contacts/3004"); // Bea Test
         assert_eq!(mapped[1].reference, "/v1/contacts/3003"); // Maks

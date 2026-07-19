@@ -1,8 +1,6 @@
 import { commands, type DayliteRefreshTokenRequest } from "../generated/tauri";
-import {
-  normalizeOptionalString,
-  readDayliteApiErrorMessage,
-} from "./daylite-service-helpers";
+import { unwrapCommandResult } from "./command-result";
+import { normalizeOptionalString } from "./daylite-service-helpers";
 
 export const DAYLITE_PERSONAL_TOKEN_URL =
   "https://www.marketcircle.com/account/oauth/authorize?client_id=com.marketcircle.sample&redirect_uri=https://api.marketcircle.net/v1/personal_token/auth_code&response_type=code";
@@ -37,19 +35,13 @@ export async function updateDayliteRefreshToken(
     throw new Error("Bitte ein Refresh-Token eingeben.");
   }
 
-  const result = await commands.dayliteConnectRefreshToken({
-    baseUrl: normalizedBaseUrl,
-    refreshToken: normalizedRefreshToken,
-  });
-
-  if (result.status === "error") {
-    throw new Error(
-      readDayliteApiErrorMessage(
-        result.error,
-        "Das Daylite-Refresh-Token konnte nicht gespeichert werden.",
-      ),
-    );
-  }
+  unwrapCommandResult(
+    await commands.dayliteConnectRefreshToken({
+      baseUrl: normalizedBaseUrl,
+      refreshToken: normalizedRefreshToken,
+    }),
+    "Das Daylite-Refresh-Token konnte nicht gespeichert werden.",
+  );
 }
 
 function normalizeBaseUrl(baseUrl: string | null | undefined): string {

@@ -28,6 +28,7 @@ This is a desktop application which provides a planning view and integrates with
 - Display user-friendly error messages in German
 - Use red/green TDD
 - YAGNI (You Ain't Gonna Need It): Avoid code that is not required for the current scope
+- Comments are a code smell: only write a comment when it prevents future errors from something a skilled developer cannot see in the code (external API quirks, cross-file invariants, concurrency hazards); never narrate, restate, or reference history
 - Naming:
   - **Files**: kebab-case
   - **Components**: PascalCase function components
@@ -39,6 +40,9 @@ All markdown files and pull request descriptions should have one sentence per li
 Don't break sentences across multiple lines in markdown.
 Avoid `---` between headers and avoid em dashes.
 
+Code comments are considered a code smell and should be avoided.
+Only comment thing that are not obvious to a skilled developer after reading the code.
+
 ### Frontend
 
 - Avoid nested `div` and `span` elements
@@ -46,7 +50,7 @@ Avoid `---` between headers and avoid em dashes.
 
 ```tsx
 export function ComponentName({ prop1, prop2 }: Props) {
-  // Component logic
+
 }
 
 interface Props {

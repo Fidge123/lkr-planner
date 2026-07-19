@@ -2,10 +2,6 @@ use crate::integrations::local_store::DayliteContactUrl;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
-// Raw contact record as returned by the Daylite API. Daylite uses snake_case
-// field names, which the Rust field names match directly, so no rename/alias is
-// needed beyond `self` (a Rust keyword). Ingestion-only: never serialized to the
-// frontend (commands return `PlanningContactRecord`) or persisted.
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
 pub struct DayliteContactSummary {
     #[serde(rename = "self")]

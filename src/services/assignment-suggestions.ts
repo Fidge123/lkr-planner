@@ -1,10 +1,7 @@
 import { commands, type DayliteProjectSummary } from "../generated/tauri";
 
-// Total suggestions shown when the assignment modal opens.
 const SUGGESTION_LIMIT = 5;
 
-// Last project assigned during this session. In-memory by design: it resets on
-// app restart, so a fresh session shows overdue-only suggestions.
 let lastAssignedProject: DayliteProjectSummary | null = null;
 
 export function recordLastAssignedProject(
@@ -17,14 +14,10 @@ export function getLastAssignedProject(): DayliteProjectSummary | null {
   return lastAssignedProject;
 }
 
-// The cache is module state, so tests reset it between cases.
 export function resetLastAssignedProject(): void {
   lastAssignedProject = null;
 }
 
-// Recent project first, then the overdue projects without the recent
-// duplicate. Dedup runs before the cap, so the list holds 5 distinct projects
-// when that many exist.
 export function combineSuggestions(
   recent: DayliteProjectSummary | null,
   overdue: DayliteProjectSummary[],
@@ -35,9 +28,6 @@ export function combineSuggestions(
   return suggestions.slice(0, SUGGESTION_LIMIT);
 }
 
-// Default suggestions for the assignment modal: the cached recent project plus
-// overdue projects. A failing overdue query degrades to the cached project (or
-// the empty state) instead of blocking the modal.
 export async function loadDefaultSuggestions(): Promise<
   DayliteProjectSummary[]
 > {

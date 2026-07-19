@@ -48,21 +48,9 @@ impl DayliteApiClient {
 
     pub(super) async fn send_request(
         &self,
-        method: DayliteHttpMethod,
-        path: &str,
-        query: Vec<(String, String)>,
-        body: Option<Value>,
-        access_token: Option<String>,
+        request: DayliteHttpRequest,
     ) -> Result<DayliteHttpResponse, DayliteApiError> {
-        self.transport
-            .send(DayliteHttpRequest {
-                method,
-                path: path.to_string(),
-                query,
-                body,
-                access_token,
-            })
-            .await
+        self.transport.send(request).await
     }
 
     #[cfg(test)]
@@ -105,6 +93,18 @@ pub(super) struct DayliteHttpRequest {
     pub query: Vec<(String, String)>,
     pub body: Option<Value>,
     pub access_token: Option<String>,
+}
+
+impl DayliteHttpRequest {
+    pub(super) fn new(method: DayliteHttpMethod, path: impl Into<String>) -> Self {
+        Self {
+            method,
+            path: path.into(),
+            query: Vec::new(),
+            body: None,
+            access_token: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -57,12 +57,9 @@ describe("util", () => {
     });
   });
 
-  // Anchoring only differs on weekends, so these blocks pin the system clock to
-  // a Saturday and a Sunday respectively.
   describe("getWeekDays weekend-aware anchoring", () => {
     describe("when today is a Saturday", () => {
       beforeAll(() => {
-        // 2026-01-03 is a Saturday.
         setSystemTime(new Date(2026, 0, 3, 12, 0, 0));
       });
       afterAll(() => {
@@ -87,7 +84,6 @@ describe("util", () => {
 
     describe("when today is a Sunday", () => {
       beforeAll(() => {
-        // 2026-01-04 is a Sunday.
         setSystemTime(new Date(2026, 0, 4, 12, 0, 0));
       });
       afterAll(() => {
@@ -113,7 +109,6 @@ describe("util", () => {
 
   describe("toLocalISODate", () => {
     it("formats a date as yyyy-MM-dd using local time", () => {
-      // new Date(year, month, date) constructs local midnight
       expect(toLocalISODate(new Date(2026, 0, 1))).toBe("2026-01-01");
       expect(toLocalISODate(new Date(2026, 11, 31))).toBe("2026-12-31");
       expect(toLocalISODate(new Date(2026, 3, 7))).toBe("2026-04-07");

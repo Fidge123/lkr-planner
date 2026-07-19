@@ -34,7 +34,6 @@ export function usePlanningAssignments(
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Loads a week and updates visible state. Pass invalidate=true to bypass cache.
   const loadActiveWeek = useCallback(async (ws: string, invalidate = false) => {
     if (invalidate) {
       delete cache.current[ws];
@@ -89,12 +88,9 @@ export function usePlanningAssignments(
       if (result.status === "ok") {
         cache.current[ws] = groupResults(result.data);
       }
-    } catch {
-      // Silently ignore prefetch failures
-    }
+    } catch {}
   }, []);
 
-  // Debounced: load active week and prefetch adjacent weeks after navigation settles
   useEffect(() => {
     void loadActiveWeek(debouncedWeekStart);
     void prefetchWeek(adjacentWeek(debouncedWeekStart, -7));

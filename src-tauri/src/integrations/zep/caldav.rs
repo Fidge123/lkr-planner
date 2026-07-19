@@ -258,9 +258,6 @@ mod tests {
 
     #[test]
     fn parse_propfind_accepts_207_multistatus_body() {
-        // CalDAV PROPFIND normatively returns 207 Multi-Status.
-        // The HTTP status check (200..=299) covers 207.
-        // This test verifies the XML body of a 207 response is parsed correctly.
         let body = r#"<?xml version="1.0" encoding="utf-8"?>
 <d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
   <d:response>
@@ -302,8 +299,6 @@ mod tests {
         let calendars = parse_propfind_calendars(body, "https://app.zep.de/caldav/admin");
         assert!(calendars.is_empty());
     }
-
-    // ── VCR tests (recorded PROPFIND response bodies) ─────────────────────────
 
     #[test]
     fn vcr_typical_multi_employee_response_extracts_all_calendars() {

@@ -1,13 +1,12 @@
 import { commands, type HealthStatus } from "../generated/tauri";
+import { unwrapCommandResult } from "./command-result";
 
 export async function checkHealth(): Promise<HealthStatus> {
   try {
-    const result = await commands.checkHealth();
-    if (result.status === "ok") {
-      return result.data;
-    }
-
-    throw new Error(result.error);
+    return unwrapCommandResult(
+      await commands.checkHealth(),
+      "Health check fehlgeschlagen: unbekannter Fehler",
+    );
   } catch (error) {
     throw new Error(
       `Health check fehlgeschlagen: ${error instanceof Error ? error.message : String(error)}`,

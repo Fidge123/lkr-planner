@@ -5,15 +5,14 @@ import type {
   DayliteProjectSummary,
 } from "../../generated/tauri";
 import { combineSuggestions } from "../../services/assignment-suggestions";
+import { AssignmentModal } from "./assignment-modal";
 import {
-  AssignmentModal,
   nextHighlightIndex,
-  ProjectResultList,
   resolveDisplayedProjects,
   resolveEscapeAction,
   resolveSaveAction,
-  SuggestionEmptyState,
-} from "./assignment-modal";
+} from "./assignment-modal-logic";
+import { ProjectResultList, SuggestionEmptyState } from "./project-result-list";
 
 mock.module("../../generated/tauri", () => ({
   commands: {
@@ -133,7 +132,6 @@ describe("AssignmentModal", () => {
   });
 });
 
-// ── 6.1 – result list display vs empty default state ──────────────────────────
 describe("ProjectResultList", () => {
   it("renders the filtered projects as selectable options", () => {
     const html = renderToStaticMarkup(
@@ -165,7 +163,6 @@ describe("ProjectResultList", () => {
     expect(html).toBe("");
   });
 
-  // ── 6.3 – keyboard selection highlight ──────────────────────────────────────
   it("marks the highlighted option as selected", () => {
     const html = renderToStaticMarkup(
       <ProjectResultList
@@ -180,13 +177,10 @@ describe("ProjectResultList", () => {
 
     expect(html).toContain('aria-current="true"');
     expect(html).toContain('aria-current="false"');
-    // The highlight uses explicit utility classes so it stays visible
-    // independent of DaisyUI's menu-active styling.
     expect(html).toContain("bg-primary");
   });
 });
 
-// ── 6.3 – arrow key navigation over the displayed list ────────────────────────
 describe("nextHighlightIndex", () => {
   it("moves down from the unhighlighted state to the first item", () => {
     expect(nextHighlightIndex(-1, 3, 1)).toBe(0);
@@ -207,7 +201,6 @@ describe("nextHighlightIndex", () => {
   });
 });
 
-// ── BL-031 5.1 / 5.2 / 5.3 – default suggestions in the result list ───────────
 describe("default suggestions rendering", () => {
   const overdue = [
     project("Projekt 10", "/v1/projects/10"),
@@ -265,7 +258,6 @@ describe("default suggestions rendering", () => {
   });
 });
 
-// ── BL-031 5.7 – clearing the filter restores the default suggestions ─────────
 describe("resolveDisplayedProjects", () => {
   const suggestions = [project("Projekt Zuletzt", "/v1/projects/99")];
   const results = [project("Projekt Nord", "/v1/projects/10")];
@@ -286,14 +278,12 @@ describe("resolveDisplayedProjects", () => {
     expect(resolveDisplayedProjects("Nord", suggestions, results)).toBe(
       results,
     );
-    // Escape or manual clearing empties the filter (see resolveEscapeAction).
     expect(resolveDisplayedProjects("", suggestions, results)).toBe(
       suggestions,
     );
   });
 });
 
-// ── BL-031 5.6 – empty state message display ──────────────────────────────────
 describe("SuggestionEmptyState", () => {
   it("shows the German message when no suggestions are available", () => {
     const html = renderToStaticMarkup(
@@ -336,7 +326,6 @@ describe("SuggestionEmptyState", () => {
   });
 });
 
-// ── 6.5 – Escape precedence (clear vs close) ──────────────────────────────────
 describe("resolveEscapeAction", () => {
   it("clears a non-empty filter instead of closing", () => {
     expect(resolveEscapeAction("Nord")).toBe("clear");
@@ -347,7 +336,6 @@ describe("resolveEscapeAction", () => {
   });
 });
 
-// ── bl-033 1.1 / 1.3 – only a create carries a next-day ghost payload ─────────
 describe("resolveSaveAction", () => {
   it("builds a create action carrying the saved project", () => {
     expect(

@@ -2,23 +2,17 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import "./app.css";
 import { ChevronLeft, ChevronRight, Settings } from "lucide-react";
 import { EmployeeIcalDialog } from "./app/components/employee-ical-dialog";
-import { SettingsDialog } from "./app/components/settings-dialog";
+import { SettingsDialog } from "./app/components/settings/settings-dialog";
 import { usePlanningAssignments } from "./app/hooks/use-planning-assignments";
+import { useZepCalendars } from "./app/hooks/use-zep-calendars";
 import { PlanningGrid } from "./app/page";
 import { getWeekDays } from "./app/util";
-import type {
-  EmployeeSetting,
-  PlanningContactRecord,
-  ZepCalendar,
-} from "./generated/tauri";
+import type { EmployeeSetting, PlanningContactRecord } from "./generated/tauri";
 import { commands } from "./generated/tauri";
 import { loadDayliteContacts } from "./services/daylite-contacts";
-import { discoverZepCalendars } from "./services/zep";
 
 function App() {
   const [weekOffset, setWeekOffset] = useState(0);
-  // Display preference: show Saturday and Sunday in the planning view.
-  // Defaults to false (matches the backend DisplaySettings default).
   const [showWeekend, setShowWeekend] = useState(false);
   const weekStart = getWeekDays(weekOffset, showWeekend)[0]
     .toISOString()
@@ -34,15 +28,9 @@ function App() {
   const [employeeSettingsError, setEmployeeSettingsError] = useState<
     string | null
   >(null);
-  // Display preference: hide employees without a calendar or with category "Test".
-  // Defaults to true (matches the backend DisplaySettings default).
   const [hideNonPlannableEmployees, setHideNonPlannableEmployees] =
     useState(true);
-  // Session cache for discovered ZEP calendars (task 2.4). Not persisted across restarts;
-  // null means "not yet fetched", [] means "fetched but empty".
-  const [zepCalendars, setZepCalendars] = useState<ZepCalendar[] | null>(null);
-  const [isLoadingCalendars, setIsLoadingCalendars] = useState(false);
-  const [calendarsError, setCalendarsError] = useState<string | null>(null);
+  const zepCalendarsState = useZepCalendars();
 
   const loadEmployeeSettings = useCallback(async () => {
     const result = await commands.loadLocalStore();
@@ -58,27 +46,17 @@ function App() {
     }
   }, []);
 
-  // reloadAssignments depends on the visible week, but startup initialization must
-  // run only once. A ref lets the effect call the latest version without re-running.
   const reloadAssignmentsRef = useRef(
     planningAssignmentsState.reloadAssignments,
   );
   reloadAssignmentsRef.current = planningAssignmentsState.reloadAssignments;
 
-  // Daylite is the source of truth for an employee's calendar configuration.
-  // On startup we sync contacts from Daylite first — this lets the backend
-  // reconcile each employee's calendar URLs from Daylite into the local store —
-  // and only then read the (now reconciled) settings. This is what makes a
-  // calendar configured on one device show up on every other device. Assignments
-  // are reloaded afterwards so events appear without a manual refresh.
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       try {
         await loadDayliteContacts();
-      } catch {
-        // Daylite unreachable: fall back to whatever the local store already holds.
-      }
+      } catch {}
       if (cancelled) return;
       await loadEmployeeSettings();
       if (cancelled) return;
@@ -89,31 +67,12 @@ function App() {
     };
   }, [loadEmployeeSettings]);
 
-  const loadZepCalendars = useCallback(async () => {
-    setIsLoadingCalendars(true);
-    setCalendarsError(null);
-    try {
-      const calendars = await discoverZepCalendars();
-      setZepCalendars(calendars);
-    } catch (error) {
-      setCalendarsError(
-        error instanceof Error
-          ? error.message
-          : "Die ZEP-Kalender konnten nicht geladen werden.",
-      );
-    } finally {
-      setIsLoadingCalendars(false);
-    }
-  }, []);
-
   const handleOpenIcalDialog = useCallback(
     (employee: PlanningContactRecord) => {
       setIcalDialogEmployee(employee);
-      if (zepCalendars === null && !isLoadingCalendars) {
-        void loadZepCalendars();
-      }
+      zepCalendarsState.ensureLoaded();
     },
-    [zepCalendars, isLoadingCalendars, loadZepCalendars],
+    [zepCalendarsState.ensureLoaded],
   );
 
   const handleIcalDialogClose = () => {
@@ -202,10 +161,7 @@ function App() {
         }
         onClose={handleIcalDialogClose}
         onSettingsSaved={handleSettingsSaved}
-        zepCalendars={zepCalendars}
-        isLoadingCalendars={isLoadingCalendars}
-        calendarsError={calendarsError}
-        onReloadCalendars={loadZepCalendars}
+        calendarState={zepCalendarsState}
       />
     </article>
   );

@@ -132,8 +132,6 @@ pub(crate) struct RecordedInteraction {
     pub response: RecordedResponse,
 }
 
-// Unknown fields (e.g. a legacy `version`) are ignored on read, so older cassettes
-// remain replayable without a schema version marker.
 #[derive(Debug, Default, Serialize, Deserialize)]
 struct CassetteFile {
     interactions: Vec<RecordedInteraction>,

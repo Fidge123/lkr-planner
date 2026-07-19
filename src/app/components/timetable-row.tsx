@@ -19,22 +19,18 @@ export function TimetableRow({
   employee,
   calendarEvents,
   calendarError,
-  weekDays,
+  week,
   employeeSetting,
-  holidayDates,
-  onRetry,
   onOpenIcalDialog,
   onReloadAssignments,
 }: Props) {
   const showWarning = needsAttention(employeeSetting);
   const [modalState, setModalState] = useState<ModalState | null>(null);
   const [ghost, setGhost] = useState<GhostSuggestion | null>(null);
-  const isoWeekDays = weekDays.map(toLocalISODate);
+  const isoWeekDays = week.days.map(toLocalISODate);
   const weekStart = isoWeekDays[0] ?? "";
   const [ghostWeekStart, setGhostWeekStart] = useState(weekStart);
 
-  // A ghost only makes sense within the week it was created for; adjust state
-  // during render rather than in an effect to avoid a stale-ghost flash.
   if (weekStart !== ghostWeekStart) {
     setGhostWeekStart(weekStart);
     setGhost(null);
@@ -55,12 +51,12 @@ export function TimetableRow({
   };
 
   const handleSuggestionClick = async (suggestion: GhostSuggestion) => {
-    const result = await commands.createAssignment(
-      employee.self,
-      suggestion.date,
-      suggestion.projectRef,
-      suggestion.projectName,
-    );
+    const result = await commands.createAssignment({
+      employeeReference: employee.self,
+      date: suggestion.date,
+      projectRef: suggestion.projectRef,
+      projectName: suggestion.projectName,
+    });
     if (result.status === "error") return;
     recordLastAssignedProject({
       self: suggestion.projectRef,
@@ -103,7 +99,7 @@ export function TimetableRow({
         </th>
 
         {calendarError ? (
-          <td colSpan={weekDays.length} className="p-4 text-sm align-middle">
+          <td colSpan={week.days.length} className="p-4 text-sm align-middle">
             <div className="flex items-center gap-3">
               <span className="text-error" title={calendarError}>
                 Kalender nicht verfügbar
@@ -111,14 +107,14 @@ export function TimetableRow({
               <button
                 type="button"
                 className="btn btn-xs btn-ghost"
-                onClick={onRetry}
+                onClick={onReloadAssignments}
               >
                 Erneut laden
               </button>
             </div>
           </td>
         ) : (
-          weekDays.map((day) => {
+          week.days.map((day) => {
             const isoDay = toLocalISODate(day);
             const rawDayEvents = calendarEvents.filter(
               (e) => e.date === isoDay,
@@ -132,7 +128,7 @@ export function TimetableRow({
               <TimetableCell
                 key={day.toISOString()}
                 highlight={isToday(day)}
-                isHoliday={holidayDates.has(isoDay)}
+                isHoliday={week.holidayDates.has(isoDay)}
                 events={dayEvents}
                 suggestion={suggestion}
                 onAddClick={() => openCreateModal(isoDay)}
@@ -156,7 +152,6 @@ export function TimetableRow({
   );
 }
 
-/** Returns true when the primary iCal source needs attention (no calendar, untested, or last test failed). */
 function needsAttention(setting: EmployeeSetting | null | undefined): boolean {
   if (!setting) {
     return true;
@@ -182,10 +177,11 @@ interface Props {
   employee: PlanningContactRecord;
   calendarEvents: CalendarCellEvent[];
   calendarError: string | null;
-  weekDays: Date[];
+  week: {
+    days: Date[];
+    holidayDates: Set<string>;
+  };
   employeeSetting: EmployeeSetting | null;
-  holidayDates: Set<string>;
-  onRetry: () => void;
   onOpenIcalDialog: (employee: PlanningContactRecord) => void;
   onReloadAssignments: () => void;
 }

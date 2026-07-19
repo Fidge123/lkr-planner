@@ -19,8 +19,15 @@ concurrency:
 jobs:
   update-bindings:
     runs-on: macos-latest
+    env:
+      BRANCH: ${{ github.head_ref || github.ref_name }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          # pull_request events check out a detached merge commit by default;
+          # pushing the regenerated bindings needs the real head branch.
+          ref: ${{ github.head_ref || github.ref_name }}
+          fetch-depth: 0
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -29,14 +36,24 @@ jobs:
         run: cargo test --manifest-path src-tauri/Cargo.toml regenerate_generated_bindings
 
       - name: Commit and push bindings if changed
+        env:
+          IS_FORK: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
         run: |
           if git diff --quiet -- src/generated; then
             echo "Bindings are up to date."
             exit 0
           fi
 
+          if [ "$IS_FORK" = "true" ]; then
+            echo "Bindings are outdated, but GITHUB_TOKEN cannot push to a fork."
+            echo "Run 'cargo test regenerate_generated_bindings' locally and commit src/generated:"
+            git diff -- src/generated
+            exit 1
+          fi
+
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add src/generated
           git commit -m "chore: update generated Tauri bindings"
-          git push
+          git pull --rebase origin "$BRANCH"
+          git push origin "HEAD:$BRANCH"

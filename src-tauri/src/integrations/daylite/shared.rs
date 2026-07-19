@@ -1,4 +1,5 @@
 use super::super::local_store::{self, LocalStore};
+use super::client::DayliteApiClient;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use specta::Type;
@@ -77,8 +78,6 @@ pub struct DayliteRefreshTokenRequest {
     pub refresh_token: String,
 }
 
-/// Result ordering for `search_projects_core`. Numeric ID is the default so the
-/// BL-022 contract stays unchanged; callers opt in to name sort explicitly.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Type, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum DayliteSearchSort {
@@ -87,20 +86,17 @@ pub enum DayliteSearchSort {
     Name,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct DayliteSearchInput {
     pub search_term: String,
     pub limit: Option<u16>,
     #[serde(default)]
     pub statuses: Option<Vec<String>>,
-    /// Include full record data in the response (`?full-records=true`).
     #[serde(default)]
     pub full_records: Option<bool>,
-    /// Pagination cursor: object ID of the first result to return (`?start=<id>`).
     #[serde(default)]
     pub start: Option<String>,
-    /// Result ordering. Defaults to numeric ID; `name` opts into name sort.
     #[serde(default)]
     pub sort: Option<DayliteSearchSort>,
 }
@@ -174,20 +170,14 @@ pub(super) fn store_daylite_tokens(token_state: &DayliteTokenState) -> Result<()
 }
 
 /// Process-wide lock that serializes the Daylite token lifecycle (load → refresh → store).
-///
-/// Daylite rotates the refresh token on every refresh, so two commands running
-/// concurrently could both read the same stale token and both try to refresh it; the
-/// second refresh would fail and effectively sign the user out. Serializing the whole
-/// cycle keeps refreshes single-flight. Daylite requests are infrequent in this desktop
-/// app, so the reduced concurrency is an acceptable trade for correctness.
+/// Daylite rotates the refresh token on every use, so two concurrent refreshes would race
+/// and the loser would invalidate the winner's token, signing the user out; the whole
+/// cycle must stay under one lock rather than just the network call.
 fn token_refresh_lock() -> &'static tokio::sync::Mutex<()> {
     static LOCK: std::sync::OnceLock<tokio::sync::Mutex<()>> = std::sync::OnceLock::new();
     LOCK.get_or_init(|| tokio::sync::Mutex::new(()))
 }
 
-/// Runs a token-using operation under [`token_refresh_lock`]: loads the stored tokens,
-/// hands them to `operation`, and persists the (possibly refreshed) tokens it returns.
-/// Tokens are stored only on success, matching the previous per-command behavior.
 pub(super) async fn with_token_refresh_lock<T, Fut>(
     operation: impl FnOnce(DayliteTokenState) -> Fut,
 ) -> Result<T, DayliteApiError>
@@ -199,6 +189,20 @@ where
     let (value, updated_tokens) = operation(tokens).await?;
     store_daylite_tokens(&updated_tokens)?;
     Ok(value)
+}
+
+/// For read-only command bodies only: commands that mutate the local store manage the store themselves.
+pub(super) async fn run_daylite_command<T, F, Fut>(
+    app: tauri::AppHandle,
+    operation: F,
+) -> Result<T, DayliteApiError>
+where
+    F: FnOnce(DayliteApiClient, DayliteTokenState) -> Fut,
+    Fut: std::future::Future<Output = Result<(T, DayliteTokenState), DayliteApiError>>,
+{
+    let store = load_store_or_error(app)?;
+    let client = DayliteApiClient::new(&store.api_endpoints.daylite_base_url)?;
+    with_token_refresh_lock(move |tokens| operation(client, tokens)).await
 }
 
 pub(super) fn load_store_or_error(app: tauri::AppHandle) -> Result<LocalStore, DayliteApiError> {

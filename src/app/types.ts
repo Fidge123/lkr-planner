@@ -1,21 +1,17 @@
 import type { CalendarCellEvent } from "../generated/tauri";
 
-/** A resolved event ready for rendering in a timetable cell. */
 export interface CellEvent {
   uid: string;
   kind: "assignment" | "bare" | "absence";
   title: string;
-  /** Tailwind CSS background class derived from Daylite project status. */
   color: string;
   /** Start time in HH:MM format. Null for all-day events. */
   startTime: string | null;
   /** End time in HH:MM format. Null for all-day events. */
   endTime: string | null;
-  /** CalDAV resource URL needed for PUT/DELETE. Null for non-assignment events. */
   href: string | null;
 }
 
-/** Maps a Daylite project status string to a Tailwind background class. */
 function projectStatusToColor(status: string | null | undefined): string {
   switch (status) {
     case "in_progress":
@@ -35,7 +31,6 @@ function projectStatusToColor(status: string | null | undefined): string {
   }
 }
 
-/** Converts a `CalendarCellEvent` to a `CellEvent` ready for rendering. */
 export function toCellEvent(event: CalendarCellEvent): CellEvent {
   const color =
     event.kind === "absence"

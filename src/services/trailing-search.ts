@@ -13,11 +13,6 @@ export interface TrailingSearch {
   dispose: () => void;
 }
 
-// Trailing-edge debounced search with a monotonic request guard for
-// search-as-you-type. Each filter change restarts the debounce timer, so only
-// the settled term is queried; a request id ensures a slow earlier response
-// cannot overwrite a newer one. Below `minLength` the result list is cleared
-// and any in-flight query is invalidated, returning to the empty default state.
 export function createTrailingSearch(
   options: TrailingSearchOptions,
 ): TrailingSearch {
