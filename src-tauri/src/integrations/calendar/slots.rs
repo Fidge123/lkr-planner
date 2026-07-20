@@ -64,9 +64,8 @@ pub(super) struct DayPlan {
 /// Only events on `date` whose DESCRIPTION first line is a `daylite:` reference take part;
 /// bare, absence, and holiday events are never re-slotted. Events already sitting in
 /// their slot are skipped so repeated runs converge without extra writes. Events that
-/// `patch_event_slot` cannot safely rewrite (DURATION-based, multiple VEVENTs in one
-/// resource, or a folded DTSTART/DTEND) are excluded entirely rather than risk
-/// producing invalid iCal — see `uses_duration`, `has_multiple_vevents`, `has_folded_line`.
+/// `patch_event_slot` cannot safely rewrite are excluded entirely rather than risk
+/// producing invalid iCal — see `can_patch_slot`.
 ///
 /// `extra_uid` names an event the caller writes itself (a create or update in flight):
 /// it participates in the allocation and gets its slot back via `extra_slot`, but no
@@ -84,9 +83,7 @@ pub(super) fn plan_slot_updates(
                 && pending.project_ref.is_some()
                 && !pending.href.is_empty()
                 && Some(pending.uid.as_str()) != extra_uid
-                && !uses_duration(&event.raw_ical)
-                && !has_multiple_vevents(&event.raw_ical)
-                && !has_folded_line(&event.raw_ical)
+                && can_patch_slot(&event.raw_ical)
         })
         .collect();
 
@@ -166,44 +163,31 @@ fn patch_event_slot(raw_ical: &str, date: &str, start: NaiveTime, end: NaiveTime
     out.join("\r\n") + "\r\n"
 }
 
-/// True if the VEVENT expresses its end via DURATION instead of DTEND. RFC 5545 §3.6.1
-/// forbids DTEND and DURATION on the same component, so `patch_event_slot` (which only
-/// ever inserts/replaces DTEND) would produce an invalid VEVENT for these; such events
-/// are excluded from re-allocation entirely rather than patched.
-fn uses_duration(raw_ical: &str) -> bool {
+/// True if `patch_event_slot` can safely rewrite this resource's DTSTART/DTEND. It cannot,
+/// and the event is therefore excluded from re-allocation rather than risk invalid iCal, when:
+/// - a line is an RFC 5545 folded continuation (patch works on physical lines and would
+///   orphan it),
+/// - the resource holds more than one VEVENT (patch shares its DTEND-insertion state, so a
+///   recurrence override would be squashed onto the first component's slot), or
+/// - the VEVENT expresses its end via DURATION (patch adds a DTEND, which RFC 5545 §3.6.1
+///   forbids alongside DURATION).
+fn can_patch_slot(raw_ical: &str) -> bool {
     let mut in_vevent = false;
+    let mut vevent_count = 0u32;
     for line in raw_ical.lines() {
+        if line.starts_with(' ') || line.starts_with('\t') {
+            return false;
+        }
         if line == "BEGIN:VEVENT" {
             in_vevent = true;
+            vevent_count += 1;
         } else if line == "END:VEVENT" {
             in_vevent = false;
         } else if in_vevent && (line.starts_with("DURATION:") || line.starts_with("DURATION;")) {
-            return true;
+            return false;
         }
     }
-    false
-}
-
-/// True if the resource holds more than one VEVENT (e.g. a recurrence master plus a
-/// RECURRENCE-ID override). `patch_event_slot` shares its DTEND-insertion state across
-/// the whole resource, so a second VEVENT would be squashed onto the first one's slot;
-/// such resources are excluded from re-allocation rather than risk that.
-fn has_multiple_vevents(raw_ical: &str) -> bool {
-    raw_ical
-        .lines()
-        .filter(|line| *line == "BEGIN:VEVENT")
-        .count()
-        > 1
-}
-
-/// True if any line is an RFC 5545 folded continuation (starts with a space or tab).
-/// `patch_event_slot` operates on unfolded physical lines, so a folded DTSTART/DTEND
-/// would have its continuation line orphaned; such resources are excluded from
-/// re-allocation rather than risk producing malformed iCal.
-fn has_folded_line(raw_ical: &str) -> bool {
-    raw_ical
-        .lines()
-        .any(|line| line.starts_with(' ') || line.starts_with('\t'))
+    vevent_count <= 1
 }
 
 #[cfg(test)]
@@ -505,18 +489,41 @@ mod tests {
         );
     }
 
-    // ── DURATION-based events ──
+    // ── Unsafe-to-patch event shapes ──
 
     #[test]
-    fn uses_duration_detects_duration_property_inside_vevent_only() {
-        let with_duration = "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:x\r\nDTSTART:20260506T080000\r\nDURATION:PT4H\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
-        let without = "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:x\r\nDTSTART:20260506T080000\r\nDTEND:20260506T120000\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
-        // A DURATION line outside BEGIN:VEVENT..END:VEVENT (e.g. on a VALARM) must not count.
-        let outside_vevent = "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:x\r\nDTSTART:20260506T080000\r\nDTEND:20260506T120000\r\nEND:VEVENT\r\nDURATION:PT4H\r\nEND:VCALENDAR\r\n";
+    fn can_patch_slot_rejects_unsafe_shapes() {
+        let cases: &[(&str, bool, &str)] = &[
+            (
+                "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:x\r\nDTSTART:20260506T080000\r\nDTEND:20260506T120000\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+                true,
+                "plain DTSTART/DTEND event",
+            ),
+            (
+                "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:x\r\nDTSTART:20260506T080000\r\nDURATION:PT4H\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+                false,
+                "DURATION-based end",
+            ),
+            (
+                "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:x\r\nDTSTART:20260506T080000\r\nDTEND:20260506T120000\r\nEND:VEVENT\r\nDURATION:PT4H\r\nEND:VCALENDAR\r\n",
+                true,
+                "DURATION outside any VEVENT must not count",
+            ),
+            (
+                "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:x\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:x\r\nRECURRENCE-ID:20260506T080000\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+                false,
+                "recurrence override (multiple VEVENTs)",
+            ),
+            (
+                "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nDTSTART;TZID=Europe/Vienna_long_zone_name_that_wraps:\r\n 20260506T080000\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+                false,
+                "folded continuation line",
+            ),
+        ];
 
-        assert!(uses_duration(with_duration));
-        assert!(!uses_duration(without));
-        assert!(!uses_duration(outside_vevent));
+        for (raw_ical, expected, label) in cases {
+            assert_eq!(can_patch_slot(raw_ical), *expected, "case: {label}");
+        }
     }
 
     #[test]
@@ -549,17 +556,6 @@ mod tests {
         assert!(updates[1].payload.contains("DTSTART:20260506T120000"));
     }
 
-    // ── Multi-VEVENT resources ──
-
-    #[test]
-    fn has_multiple_vevents_counts_begin_vevent_occurrences() {
-        let single = "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:x\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
-        let recurrence_override = "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:x\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:x\r\nRECURRENCE-ID:20260506T080000\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
-
-        assert!(!has_multiple_vevents(single));
-        assert!(has_multiple_vevents(recurrence_override));
-    }
-
     #[test]
     fn multi_vevent_resource_is_excluded_from_reallocation() {
         // Simulates a recurrence override added in an external calendar client:
@@ -584,17 +580,6 @@ mod tests {
             updates.is_empty(),
             "uid-b is the only re-slottable assignment and already owns the full window"
         );
-    }
-
-    // ── Folded lines ──
-
-    #[test]
-    fn has_folded_line_detects_continuation_lines() {
-        let unfolded = "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nDTSTART:20260506T080000\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
-        let folded = "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nDTSTART;TZID=Europe/Vienna_long_zone_name_that_wraps:\r\n 20260506T080000\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
-
-        assert!(!has_folded_line(unfolded));
-        assert!(has_folded_line(folded));
     }
 
     #[test]
