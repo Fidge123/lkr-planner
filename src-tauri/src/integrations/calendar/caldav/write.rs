@@ -90,7 +90,7 @@ async fn reallocate_day(
                 .basic_auth(&session.username, Some(&session.password))
                 .header("Content-Type", "text/calendar; charset=utf-8");
             if !update.etag.is_empty() {
-                request = request.header("If-Match", update.etag.clone());
+                request = request.header("If-Match", update.etag);
             }
             let response = request.body(update.payload).send().await.map_err(|e| {
                 format!("Zeitfenster für {date} konnten nicht aktualisiert werden: {e}")

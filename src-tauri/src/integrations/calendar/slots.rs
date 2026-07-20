@@ -2,7 +2,6 @@ use chrono::NaiveTime;
 use std::collections::HashMap;
 
 use super::events::classify_event;
-use super::ical::build_ical_payload;
 use super::types::RawVEvent;
 
 const WINDOW_START_MINUTE: u32 = 8 * 60;
@@ -64,7 +63,8 @@ pub(super) struct DayPlan {
 /// Plans the PUTs that move a day's lkr-planner assignments into their allocated slots.
 /// Only events on `date` whose DESCRIPTION first line is a `daylite:` reference take part;
 /// bare, absence, and holiday events are never re-slotted. Events already sitting in
-/// their slot are skipped so repeated runs converge without extra writes.
+/// their slot are skipped so repeated runs converge without extra writes. Events whose
+/// end is expressed via DURATION are excluded entirely (see `uses_duration`).
 ///
 /// `extra_uid` names an event the caller writes itself (a create or update in flight):
 /// it participates in the allocation and gets its slot back via `extra_slot`, but no
@@ -77,11 +77,12 @@ pub(super) fn plan_slot_updates(
     let assignments: Vec<_> = events
         .iter()
         .map(|event| (classify_event(event.clone()), event))
-        .filter(|(pending, _)| {
+        .filter(|(pending, event)| {
             pending.date == date
                 && pending.project_ref.is_some()
                 && !pending.href.is_empty()
                 && Some(pending.uid.as_str()) != extra_uid
+                && !uses_duration(&event.raw_ical)
         })
         .collect();
 
@@ -108,18 +109,7 @@ pub(super) fn plan_slot_updates(
             {
                 return None;
             }
-            let payload = if event.raw_ical.is_empty() {
-                build_ical_payload(
-                    &pending.uid,
-                    date,
-                    &pending.summary,
-                    pending.project_ref.as_deref().unwrap_or(""),
-                    start,
-                    end,
-                )
-            } else {
-                patch_event_slot(&event.raw_ical, date, start, end)
-            };
+            let payload = patch_event_slot(&event.raw_ical, date, start, end);
             Some(SlotUpdate {
                 href: pending.href,
                 uid: pending.uid,
@@ -170,6 +160,24 @@ fn patch_event_slot(raw_ical: &str, date: &str, start: NaiveTime, end: NaiveTime
         out.push(line);
     }
     out.join("\r\n") + "\r\n"
+}
+
+/// True if the VEVENT expresses its end via DURATION instead of DTEND. RFC 5545 §3.6.1
+/// forbids DTEND and DURATION on the same component, so `patch_event_slot` (which only
+/// ever inserts/replaces DTEND) would produce an invalid VEVENT for these; such events
+/// are excluded from re-allocation entirely rather than patched.
+fn uses_duration(raw_ical: &str) -> bool {
+    let mut in_vevent = false;
+    for line in raw_ical.lines() {
+        if line == "BEGIN:VEVENT" {
+            in_vevent = true;
+        } else if line == "END:VEVENT" {
+            in_vevent = false;
+        } else if in_vevent && (line.starts_with("DURATION:") || line.starts_with("DURATION;")) {
+            return true;
+        }
+    }
+    false
 }
 
 #[cfg(test)]
@@ -469,6 +477,50 @@ mod tests {
             updates.is_empty(),
             "the only addressable assignment already owns the full window"
         );
+    }
+
+    // ── DURATION-based events ──
+
+    #[test]
+    fn uses_duration_detects_duration_property_inside_vevent_only() {
+        let with_duration = "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:x\r\nDTSTART:20260506T080000\r\nDURATION:PT4H\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+        let without = "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:x\r\nDTSTART:20260506T080000\r\nDTEND:20260506T120000\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+        // A DURATION line outside BEGIN:VEVENT..END:VEVENT (e.g. on a VALARM) must not count.
+        let outside_vevent = "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:x\r\nDTSTART:20260506T080000\r\nDTEND:20260506T120000\r\nEND:VEVENT\r\nDURATION:PT4H\r\nEND:VCALENDAR\r\n";
+
+        assert!(uses_duration(with_duration));
+        assert!(!uses_duration(without));
+        assert!(!uses_duration(outside_vevent));
+    }
+
+    #[test]
+    fn duration_based_assignment_is_excluded_from_reallocation() {
+        // Simulates an event whose end was edited to DURATION in an external calendar
+        // client. Patching it would insert a DTEND alongside the existing DURATION,
+        // producing an invalid VEVENT (RFC 5545 §3.6.1), so it must be skipped entirely.
+        let mut duration_event = assignment_event("uid-a", "2026-05-06", "08:00", "16:00");
+        duration_event.raw_ical = duration_event
+            .raw_ical
+            .replace("DTEND:20260506T160000\r\n", "DURATION:PT8H\r\n");
+        let events = vec![
+            duration_event,
+            assignment_event("uid-b", "2026-05-06", "08:00", "16:00"),
+            assignment_event("uid-c", "2026-05-06", "08:00", "16:00"),
+        ];
+
+        let updates = plan_slot_updates(&events, "2026-05-06", None).updates;
+
+        assert!(
+            updates.iter().all(|u| u.uid != "uid-a"),
+            "a DURATION-based event must never be re-slotted"
+        );
+        assert_eq!(
+            updates.len(),
+            2,
+            "only uid-b and uid-c participate in the split, so they get halves instead of thirds"
+        );
+        assert!(updates[0].payload.contains("DTEND:20260506T120000"));
+        assert!(updates[1].payload.contains("DTSTART:20260506T120000"));
     }
 
     #[test]
