@@ -63,8 +63,10 @@ pub(super) struct DayPlan {
 /// Plans the PUTs that move a day's lkr-planner assignments into their allocated slots.
 /// Only events on `date` whose DESCRIPTION first line is a `daylite:` reference take part;
 /// bare, absence, and holiday events are never re-slotted. Events already sitting in
-/// their slot are skipped so repeated runs converge without extra writes. Events whose
-/// end is expressed via DURATION are excluded entirely (see `uses_duration`).
+/// their slot are skipped so repeated runs converge without extra writes. Events that
+/// `patch_event_slot` cannot safely rewrite (DURATION-based, multiple VEVENTs in one
+/// resource, or a folded DTSTART/DTEND) are excluded entirely rather than risk
+/// producing invalid iCal — see `uses_duration`, `has_multiple_vevents`, `has_folded_line`.
 ///
 /// `extra_uid` names an event the caller writes itself (a create or update in flight):
 /// it participates in the allocation and gets its slot back via `extra_slot`, but no
@@ -83,6 +85,8 @@ pub(super) fn plan_slot_updates(
                 && !pending.href.is_empty()
                 && Some(pending.uid.as_str()) != extra_uid
                 && !uses_duration(&event.raw_ical)
+                && !has_multiple_vevents(&event.raw_ical)
+                && !has_folded_line(&event.raw_ical)
         })
         .collect();
 
@@ -178,6 +182,28 @@ fn uses_duration(raw_ical: &str) -> bool {
         }
     }
     false
+}
+
+/// True if the resource holds more than one VEVENT (e.g. a recurrence master plus a
+/// RECURRENCE-ID override). `patch_event_slot` shares its DTEND-insertion state across
+/// the whole resource, so a second VEVENT would be squashed onto the first one's slot;
+/// such resources are excluded from re-allocation rather than risk that.
+fn has_multiple_vevents(raw_ical: &str) -> bool {
+    raw_ical
+        .lines()
+        .filter(|line| *line == "BEGIN:VEVENT")
+        .count()
+        > 1
+}
+
+/// True if any line is an RFC 5545 folded continuation (starts with a space or tab).
+/// `patch_event_slot` operates on unfolded physical lines, so a folded DTSTART/DTEND
+/// would have its continuation line orphaned; such resources are excluded from
+/// re-allocation rather than risk producing malformed iCal.
+fn has_folded_line(raw_ical: &str) -> bool {
+    raw_ical
+        .lines()
+        .any(|line| line.starts_with(' ') || line.starts_with('\t'))
 }
 
 #[cfg(test)]
@@ -521,6 +547,79 @@ mod tests {
         );
         assert!(updates[0].payload.contains("DTEND:20260506T120000"));
         assert!(updates[1].payload.contains("DTSTART:20260506T120000"));
+    }
+
+    // ── Multi-VEVENT resources ──
+
+    #[test]
+    fn has_multiple_vevents_counts_begin_vevent_occurrences() {
+        let single = "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:x\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+        let recurrence_override = "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:x\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:x\r\nRECURRENCE-ID:20260506T080000\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+
+        assert!(!has_multiple_vevents(single));
+        assert!(has_multiple_vevents(recurrence_override));
+    }
+
+    #[test]
+    fn multi_vevent_resource_is_excluded_from_reallocation() {
+        // Simulates a recurrence override added in an external calendar client:
+        // patching it would squash both VEVENTs onto the same slot.
+        let mut recurring = assignment_event("uid-a", "2026-05-06", "08:00", "16:00");
+        recurring.raw_ical = recurring.raw_ical.replace(
+            "END:VEVENT\r\nEND:VCALENDAR\r\n",
+            "END:VEVENT\r\nBEGIN:VEVENT\r\nUID:uid-a\r\nRECURRENCE-ID:20260506T080000\r\nDTSTART:20260513T080000\r\nDTEND:20260513T160000\r\nSUMMARY:Projekt uid-a\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+        );
+        let events = vec![
+            recurring,
+            assignment_event("uid-b", "2026-05-06", "08:00", "16:00"),
+        ];
+
+        let updates = plan_slot_updates(&events, "2026-05-06", None).updates;
+
+        assert!(
+            updates.iter().all(|u| u.uid != "uid-a"),
+            "a multi-VEVENT resource must never be re-slotted"
+        );
+        assert!(
+            updates.is_empty(),
+            "uid-b is the only re-slottable assignment and already owns the full window"
+        );
+    }
+
+    // ── Folded lines ──
+
+    #[test]
+    fn has_folded_line_detects_continuation_lines() {
+        let unfolded = "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nDTSTART:20260506T080000\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+        let folded = "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nDTSTART;TZID=Europe/Vienna_long_zone_name_that_wraps:\r\n 20260506T080000\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+
+        assert!(!has_folded_line(unfolded));
+        assert!(has_folded_line(folded));
+    }
+
+    #[test]
+    fn folded_dtstart_resource_is_excluded_from_reallocation() {
+        // Simulates a long TZID parameter folded onto a continuation line.
+        let mut folded = assignment_event("uid-a", "2026-05-06", "08:00", "16:00");
+        folded.raw_ical = folded.raw_ical.replace(
+            "DTSTART:20260506T080000\r\n",
+            "DTSTART;TZID=Europe/Very_Long_Timezone_Identifier_That_Wraps:\r\n 20260506T080000\r\n",
+        );
+        let events = vec![
+            folded,
+            assignment_event("uid-b", "2026-05-06", "08:00", "16:00"),
+        ];
+
+        let updates = plan_slot_updates(&events, "2026-05-06", None).updates;
+
+        assert!(
+            updates.iter().all(|u| u.uid != "uid-a"),
+            "a resource with a folded line must never be re-slotted"
+        );
+        assert!(
+            updates.is_empty(),
+            "uid-b is the only re-slottable assignment and already owns the full window"
+        );
     }
 
     #[test]

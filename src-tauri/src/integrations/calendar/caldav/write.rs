@@ -61,8 +61,8 @@ async fn fetch_event_date(
 /// Re-allocates the 08:00-16:00 window across all lkr-planner assignments on `date`
 /// and PUTs every event whose slot changed. Bare, absence, and holiday events are
 /// never touched (see `plan_slot_updates`). Each PUT is guarded with If-Match on the
-/// ETag from the day REPORT so a concurrent edit is never clobbered; on a 412 the day
-/// is re-fetched and re-planned.
+/// ETag from the day REPORT, when the server provided one, so a concurrent edit is
+/// never clobbered in that case; on a 412 the day is re-fetched and re-planned.
 async fn reallocate_day(
     session: &CaldavSession,
     calendar_url: &str,
