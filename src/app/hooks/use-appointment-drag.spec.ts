@@ -14,13 +14,10 @@ const payload: AppointmentDragPayload = {
   uid: "uid-1",
   href: "/calendars/emp-a/uid-1.ics",
   projectRef: "/v1/projects/42",
-  projectName: "Projekt Nord",
   employeeRef: "/v1/contacts/1",
   date: "2026-07-06",
   title: "Projekt Nord",
   color: "bg-primary",
-  startTime: "08:00",
-  endTime: "16:00",
 };
 
 type CommandResult<T> =
@@ -31,7 +28,6 @@ type MoveData =
   | { kind: "sourceDeleteFailed"; newHref: string; sourceHref: string };
 
 const okDeps = () => ({
-  hasCalendar: mock((_employeeRef: string) => true),
   updateAssignment: mock(
     async (): Promise<CommandResult<null>> => ({ status: "ok", data: null }),
   ),
@@ -49,7 +45,7 @@ describe("decideDropAction", () => {
       employeeRef: payload.employeeRef,
       date: payload.date,
     };
-    expect(decideDropAction(payload, target)).toEqual({ kind: "none" });
+    expect(decideDropAction(payload, target)).toBe("none");
   });
 
   it("reschedules on the same employee for a different date", () => {
@@ -57,7 +53,7 @@ describe("decideDropAction", () => {
       employeeRef: payload.employeeRef,
       date: "2026-07-08",
     };
-    expect(decideDropAction(payload, target)).toEqual({ kind: "reschedule" });
+    expect(decideDropAction(payload, target)).toBe("reschedule");
   });
 
   it("moves when the target belongs to a different employee", () => {
@@ -65,7 +61,7 @@ describe("decideDropAction", () => {
       employeeRef: "/v1/contacts/2",
       date: payload.date,
     };
-    expect(decideDropAction(payload, target)).toEqual({ kind: "move" });
+    expect(decideDropAction(payload, target)).toBe("move");
   });
 });
 
@@ -97,7 +93,7 @@ describe("performDrop", () => {
       payload.uid,
       "2026-07-08",
       payload.projectRef,
-      payload.projectName,
+      payload.title,
     );
     expect(deps.moveAssignment).not.toHaveBeenCalled();
   });
@@ -116,13 +112,21 @@ describe("performDrop", () => {
       "/v1/contacts/2",
       "2026-07-08",
       payload.projectRef,
-      payload.projectName,
+      payload.title,
     );
     expect(deps.updateAssignment).not.toHaveBeenCalled();
   });
 
-  it("rejects a move to an employee without a configured calendar", async () => {
-    const deps = { ...okDeps(), hasCalendar: mock((_ref: string) => false) };
+  it("surfaces the backend error when the target employee has no calendar", async () => {
+    const deps = {
+      ...okDeps(),
+      moveAssignment: mock(
+        async (): Promise<CommandResult<MoveData>> => ({
+          status: "error",
+          error: "Kein Kalender für diesen Mitarbeiter konfiguriert.",
+        }),
+      ),
+    };
     const outcome = await performDrop(
       payload,
       { employeeRef: "/v1/contacts/2", date: "2026-07-08" },
@@ -133,7 +137,6 @@ describe("performDrop", () => {
       kind: "error",
       message: "Kein Kalender für diesen Mitarbeiter konfiguriert.",
     });
-    expect(deps.moveAssignment).not.toHaveBeenCalled();
   });
 
   it("surfaces a partial move so the caller can reconcile", async () => {

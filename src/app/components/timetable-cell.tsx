@@ -112,19 +112,19 @@ function DraggableAssignmentCard({
     uid: event.uid,
     href: event.href ?? "",
     projectRef: event.projectRef ?? "",
-    projectName: event.title,
     employeeRef,
     date,
     title: event.title,
     color: event.color,
-    startTime: event.startTime,
-    endTime: event.endTime,
   };
+  // An unresolved project renders a German error placeholder as the title;
+  // dropping such a card would persist that placeholder as the event summary.
+  const unresolved = event.projectRef !== null && !event.projectStatus;
+  const canDrag = Boolean(event.href) && !unresolved;
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `assignment-${employeeRef}-${event.uid}`,
     data: payload,
-    // Without an href the event cannot be rescheduled or moved on the server.
-    disabled: !event.href,
+    disabled: !canDrag,
   });
 
   return (
@@ -133,8 +133,7 @@ function DraggableAssignmentCard({
       type="button"
       className={`btn btn-block h-auto justify-start gap-4 text-base-100 p-2 rounded-lg transition-all hover:brightness-90 active:brightness-75 ${event.color} ${isDragging ? "opacity-40" : ""}`}
       onClick={() => onEventClick(event)}
-      {...listeners}
-      {...attributes}
+      {...(canDrag ? { ...listeners, ...attributes } : {})}
     >
       <EventTime startTime={event.startTime} endTime={event.endTime} />
       <h4 className="flex-1 min-w-0 font-medium">{event.title}</h4>

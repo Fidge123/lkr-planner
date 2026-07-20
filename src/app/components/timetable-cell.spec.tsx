@@ -31,6 +31,7 @@ describe("TimetableCell", () => {
       endTime: "16:00",
       href: "/calendars/user/uid-1.ics",
       projectRef: "/v1/projects/1",
+      projectStatus: "in_progress",
     };
 
     const html = renderToStaticMarkup(
@@ -97,6 +98,7 @@ describe("TimetableCell", () => {
     endTime: "16:00",
     href: "/calendars/user/uid-drag.ics",
     projectRef: "/v1/projects/7",
+    projectStatus: "in_progress",
   };
 
   it("marks assignment cards as draggable", () => {
@@ -136,6 +138,7 @@ describe("TimetableCell", () => {
       endTime: null,
       href: null,
       projectRef: null,
+      projectStatus: null,
     };
     const absence: CellEvent = {
       uid: "uid-abs",
@@ -146,6 +149,7 @@ describe("TimetableCell", () => {
       endTime: null,
       href: null,
       projectRef: null,
+      projectStatus: null,
     };
 
     const html = renderToStaticMarkup(
@@ -158,5 +162,26 @@ describe("TimetableCell", () => {
     );
 
     expect(html).not.toContain('aria-roledescription="draggable"');
+  });
+
+  it("does not make an assignment with an unresolved project draggable", () => {
+    const unresolved: CellEvent = {
+      ...draggableAssignment,
+      uid: "uid-unresolved",
+      title: "Beschreibung für Projekt Süd konnte nicht abgerufen werden",
+      projectStatus: null,
+    };
+
+    const html = renderToStaticMarkup(
+      <TimetableCell
+        highlight={false}
+        events={[unresolved]}
+        onAddClick={() => {}}
+        onEventClick={() => {}}
+      />,
+    );
+
+    expect(html).not.toContain('aria-roledescription="draggable"');
+    expect(html).toContain("<button");
   });
 });

@@ -21,7 +21,7 @@ Within-cell positioning (drop before/after a specific card) and intra-day reorde
 - Keep bare and absence events non-draggable and non-editable.
 
 **Non-Goals:**
-- Changing an assignment's time-of-day via drag (start/end time are preserved; only date and calendar change).
+- Changing an assignment's time-of-day via drag; every write path normalizes to the standard 08:00 to 16:00 assignment window, so only date and calendar change.
 - Positioning a card before/after existing cards within a cell, or reordering within a day (handled by `appointment-reordering`).
 - Multi-select or dragging more than one card at once.
 - Reordering cards within a single cell.
@@ -52,7 +52,7 @@ On drop the handler compares source vs. target droppable:
 - Same employee, different date: call `update_assignment(href, uid, targetDate, projectRef, projectName)` — reuses the existing in-place PUT.
 - Different employee: call the new `move_assignment(href, targetEmployeeReference, targetDate, projectRef, projectName)`.
 After success, call `reloadAssignments()` to refresh the affected weeks.
-The dragged card keeps its time-of-day; the move never rewrites DTSTART/DTEND time component.
+The write rebuilds the VEVENT with the standard assignment time window, exactly like the modal edit path.
 
 ### Backend `move_assignment` = create-then-delete, target first, structured result
 CalDAV has no portable atomic cross-collection move, so `move_assignment_core` creates the VEVENT on the target calendar first, and only then deletes the source.

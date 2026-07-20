@@ -13,7 +13,7 @@
 - [x] 2.1 Add `@dnd-kit/core` (and `@dnd-kit/utilities` if needed) via Bun and wrap the grid in a `DndContext` with a pointer sensor and an activation constraint that preserves click-to-edit
 - [x] 2.2 Write failing tests for `use-appointment-drag` (start exposes payload, end clears it, edge dwell triggers navigation once and repeats on continued dwell)
 - [x] 2.3 Implement `use-appointment-drag` wrapping the dnd-kit context and owning the edge-hover dwell timer
-- [x] 2.4 Implement the drop dispatch: no-op on same employee+date, `updateAssignment` on same employee different date, `moveAssignment` on different employee, preserving time-of-day
+- [x] 2.4 Implement the drop dispatch: no-op on same employee+date, `updateAssignment` on same employee different date, `moveAssignment` on different employee, writing the standard assignment time window
 - [x] 2.5 Show a German error and leave the card in place when the target employee has no configured calendar
 
 ## 3. Frontend: grid wiring and affordances

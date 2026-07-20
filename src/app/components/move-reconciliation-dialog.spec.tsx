@@ -63,8 +63,4 @@ describe("hrefToDelete", () => {
       reconciliation.newHref,
     );
   });
-
-  it("returns null for keepBoth", () => {
-    expect(hrefToDelete("keepBoth", reconciliation)).toBeNull();
-  });
 });

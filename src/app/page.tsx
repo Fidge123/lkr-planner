@@ -101,12 +101,6 @@ export function PlanningGridTable({
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
   );
   const drag = useAppointmentDrag({
-    hasCalendar: (employeeRef) =>
-      employeeSettings.some(
-        (s) =>
-          s.dayliteContactReference === employeeRef &&
-          (s.zepPrimaryCalendar ?? "") !== "",
-      ),
     onNavigateWeek: onNavigateWeek ?? (() => {}),
     reloadAssignments,
   });

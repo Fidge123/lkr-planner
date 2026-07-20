@@ -5,7 +5,7 @@ The system SHALL move an assignment from one employee's CalDAV calendar to anoth
 
 #### Scenario: Move to another employee's calendar
 - **WHEN** a move is requested with the source assignment href and a target employee reference and date
-- **THEN** a new VEVENT carrying the same project reference, project name, and time-of-day is created on the target employee's primary calendar at the target date
+- **THEN** a new VEVENT carrying the same project reference and project name is created on the target employee's primary calendar at the target date with the standard assignment time window
 - **AND** the original VEVENT is deleted from the source calendar
 - **AND** a result indicating a full move with the new CalDAV href is returned
 

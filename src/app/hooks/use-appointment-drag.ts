@@ -12,13 +12,11 @@ export interface AppointmentDragPayload {
   uid: string;
   href: string;
   projectRef: string;
-  projectName: string;
   employeeRef: string;
   date: string;
+  /** Project name; doubles as the persisted event summary on drop. */
   title: string;
   color: string;
-  startTime: string | null;
-  endTime: string | null;
 }
 
 /** The day cell a card is dropped on. */
@@ -27,10 +25,7 @@ export interface DropCellTarget {
   date: string;
 }
 
-export type DropAction =
-  | { kind: "none" }
-  | { kind: "reschedule" }
-  | { kind: "move" };
+export type DropAction = "none" | "reschedule" | "move";
 
 export type DropOutcome =
   | { kind: "none" }
@@ -49,16 +44,15 @@ export function decideDropAction(
   target: DropCellTarget,
 ): DropAction {
   if (source.employeeRef !== target.employeeRef) {
-    return { kind: "move" };
+    return "move";
   }
   if (source.date !== target.date) {
-    return { kind: "reschedule" };
+    return "reschedule";
   }
-  return { kind: "none" };
+  return "none";
 }
 
 interface DropDeps {
-  hasCalendar: (employeeRef: string) => boolean;
   updateAssignment: (
     href: string,
     uid: string,
@@ -93,17 +87,17 @@ export async function performDrop(
 ): Promise<DropOutcome> {
   const action = decideDropAction(source, target);
 
-  if (action.kind === "none") {
+  if (action === "none") {
     return { kind: "none" };
   }
 
-  if (action.kind === "reschedule") {
+  if (action === "reschedule") {
     const result = await deps.updateAssignment(
       source.href,
       source.uid,
       target.date,
       source.projectRef,
-      source.projectName,
+      source.title,
     );
     if (result.status === "error") {
       return { kind: "error", message: result.error };
@@ -111,19 +105,12 @@ export async function performDrop(
     return { kind: "done" };
   }
 
-  if (!deps.hasCalendar(target.employeeRef)) {
-    return {
-      kind: "error",
-      message: "Kein Kalender für diesen Mitarbeiter konfiguriert.",
-    };
-  }
-
   const result = await deps.moveAssignment(
     source.href,
     target.employeeRef,
     target.date,
     source.projectRef,
-    source.projectName,
+    source.title,
   );
   if (result.status === "error") {
     return { kind: "error", message: result.error };
@@ -211,7 +198,6 @@ export interface AppointmentDragState {
 }
 
 interface UseAppointmentDragArgs {
-  hasCalendar: (employeeRef: string) => boolean;
   onNavigateWeek: (direction: -1 | 1) => void;
   reloadAssignments: () => void;
 }
@@ -222,7 +208,6 @@ interface UseAppointmentDragArgs {
  * reconciliation state for a partial cross-employee move.
  */
 export function useAppointmentDrag({
-  hasCalendar,
   onNavigateWeek,
   reloadAssignments,
 }: UseAppointmentDragArgs): AppointmentDragState {
@@ -237,8 +222,6 @@ export function useAppointmentDrag({
     useState<MoveReconciliation | null>(null);
 
   // Latest-callback refs so drag handlers and the dwell timer never go stale.
-  const hasCalendarRef = useRef(hasCalendar);
-  hasCalendarRef.current = hasCalendar;
   const onNavigateWeekRef = useRef(onNavigateWeek);
   onNavigateWeekRef.current = onNavigateWeek;
   const reloadAssignmentsRef = useRef(reloadAssignments);
@@ -284,26 +267,31 @@ export function useAppointmentDrag({
     if (!source || !target) return;
 
     void performDrop(source, target, {
-      hasCalendar: (employeeRef) => hasCalendarRef.current(employeeRef),
       updateAssignment: (href, uid, date, projectRef, projectName) =>
         commands.updateAssignment({ href, uid, date, projectRef, projectName }),
       moveAssignment: commands.moveAssignment,
-    }).then((outcome) => {
-      if (outcome.kind === "done") {
-        reloadAssignmentsRef.current();
-        return;
-      }
-      if (outcome.kind === "partialMove") {
-        setReconciliation({
-          newHref: outcome.newHref,
-          sourceHref: outcome.sourceHref,
-        });
-        return;
-      }
-      if (outcome.kind === "error") {
-        setErrorMessage(outcome.message);
-      }
-    });
+    })
+      .then((outcome) => {
+        if (outcome.kind === "done") {
+          reloadAssignmentsRef.current();
+          return;
+        }
+        if (outcome.kind === "partialMove") {
+          setReconciliation({
+            newHref: outcome.newHref,
+            sourceHref: outcome.sourceHref,
+          });
+          return;
+        }
+        if (outcome.kind === "error") {
+          setErrorMessage(outcome.message);
+        }
+      })
+      // The generated bindings re-throw Error-typed rejections (IPC failures)
+      // instead of returning a status object; without this the drop fails silently.
+      .catch(() =>
+        setErrorMessage("Der Einsatz konnte nicht verschoben werden."),
+      );
   }, []);
 
   const onDragCancel = useCallback(() => {

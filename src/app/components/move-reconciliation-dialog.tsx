@@ -18,23 +18,27 @@ export function MoveReconciliationDialog({
       return;
     }
 
-    const href = hrefToDelete(choice, reconciliation);
-    if (!href) {
-      onResolved();
-      return;
-    }
-
     setIsSaving(true);
     setPendingChoice(choice);
     setErrorMessage(null);
-    const result = await commands.deleteAssignment(href);
-    if (result.status === "error") {
-      setErrorMessage(result.error);
+    try {
+      const result = await commands.deleteAssignment(
+        hrefToDelete(choice, reconciliation),
+      );
+      if (result.status === "error") {
+        setErrorMessage(result.error);
+        setIsSaving(false);
+        setPendingChoice(null);
+        return;
+      }
+      onResolved();
+    } catch {
+      // The generated bindings re-throw Error-typed rejections (IPC failures);
+      // without this the dialog would stay disabled forever.
+      setErrorMessage("Der Einsatz konnte nicht gelöscht werden.");
       setIsSaving(false);
       setPendingChoice(null);
-      return;
     }
-    onResolved();
   };
 
   return (
@@ -104,18 +108,13 @@ export type ReconciliationChoice =
   | "keepOldDeleteNew"
   | "keepBoth";
 
-// Maps a reconciliation choice to the href that must be deleted, so the
-// component and its tests share a single source of truth for this mapping.
+// Maps a deleting choice to the href that must be deleted, so the component
+// and its tests share a single source of truth for this mapping.
 export function hrefToDelete(
-  choice: ReconciliationChoice,
+  choice: Exclude<ReconciliationChoice, "keepBoth">,
   reconciliation: MoveReconciliation,
-): string | null {
-  switch (choice) {
-    case "retryDeleteSource":
-      return reconciliation.sourceHref;
-    case "keepOldDeleteNew":
-      return reconciliation.newHref;
-    case "keepBoth":
-      return null;
-  }
+): string {
+  return choice === "retryDeleteSource"
+    ? reconciliation.sourceHref
+    : reconciliation.newHref;
 }
