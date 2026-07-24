@@ -68,5 +68,11 @@ jobs:
         env:
           RUSTFLAGS: -D warnings
 
+      - name: Install Radicale (disposable CalDAV server for integration tests)
+        run: |
+          python3 -m venv "$RUNNER_TEMP/radicale-venv"
+          "$RUNNER_TEMP/radicale-venv/bin/pip" install radicale
+          echo "$RUNNER_TEMP/radicale-venv/bin" >> "$GITHUB_PATH"
+
       - name: Run rust tests
         run: cargo test --manifest-path src-tauri/Cargo.toml

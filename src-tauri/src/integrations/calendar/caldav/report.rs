@@ -1,4 +1,5 @@
 use chrono::NaiveDate;
+use tauri_plugin_http::reqwest::Method;
 
 use super::super::ical::parse_ical_events;
 use super::super::types::RawVEvent;
@@ -24,19 +25,21 @@ pub(super) async fn fetch_events_in_range(
 
     let body = build_report_body(&start_str, &end_str);
 
-    let (status, xml_text) = session
-        .send(
-            "REPORT",
+    let response = session
+        .client
+        .request(
+            Method::from_bytes(b"REPORT").expect("REPORT is a valid HTTP method"),
             calendar_url,
-            &[
-                ("Depth", "1"),
-                ("Content-Type", "application/xml; charset=utf-8"),
-            ],
-            Some(body.as_str()),
         )
+        .basic_auth(&session.username, Some(&session.password))
+        .header("Depth", "1")
+        .header("Content-Type", "application/xml; charset=utf-8")
+        .body(body)
+        .send()
         .await
         .map_err(|e| format!("Kalender konnte nicht abgerufen werden: {e}"))?;
 
+    let status = response.status().as_u16();
     if status == 401 {
         return Err("Authentifizierung fehlgeschlagen. ZEP-Zugangsdaten prüfen.".to_string());
     }
@@ -44,11 +47,16 @@ pub(super) async fn fetch_events_in_range(
         return Err(format!("CalDAV-Server antwortete mit HTTP {status}"));
     }
 
+    let xml_text = response
+        .text()
+        .await
+        .map_err(|e| format!("Kalenderantwort konnte nicht gelesen werden: {e}"))?;
+
     parse_caldav_report(&xml_text)
         .map_err(|e| format!("Kalenderantwort konnte nicht verarbeitet werden: {e}"))
 }
 
-pub(super) fn build_report_body(start: &str, end: &str) -> String {
+fn build_report_body(start: &str, end: &str) -> String {
     debug_assert!(
         start.len() == 16 && end.len() == 16,
         "CalDAV timestamp must be 16 chars: got start={start:?} end={end:?}"
@@ -121,39 +129,45 @@ fn parse_caldav_report(xml_text: &str) -> Result<Vec<RawVEvent>, String> {
 }
 
 /// Discovers a calendar collection URL by its display name via a PROPFIND on the CalDAV
-/// home-set root. Needed because the configured root lists many calendars, and a REPORT
-/// or PUT against the root (rather than a specific calendar collection) is rejected with
-/// HTTP 405. Test-only: production reads the calendar URL straight from the local store.
-#[cfg(test)]
-pub(super) const PROPFIND_BODY: &str = concat!(
-    "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n",
-    "<d:propfind xmlns:d=\"DAV:\">\n",
-    "  <d:prop><d:displayname/><d:resourcetype/></d:prop>\n",
-    "</d:propfind>"
-);
-
+/// home-set root. Needed because the configured root lists many calendars, and a REPORT or
+/// PUT against the root (rather than a specific calendar collection) is rejected with HTTP
+/// 405. Test-only: production reads the calendar URL straight from the local store.
 #[cfg(test)]
 pub(super) async fn discover_calendar_by_name(
     session: &CaldavSession,
     home_set_url: &str,
     display_name: &str,
 ) -> Result<String, String> {
-    let (status, xml_text) = session
-        .send(
-            "PROPFIND",
+    let body = concat!(
+        "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n",
+        "<d:propfind xmlns:d=\"DAV:\">\n",
+        "  <d:prop><d:displayname/><d:resourcetype/></d:prop>\n",
+        "</d:propfind>"
+    );
+
+    let response = session
+        .client
+        .request(
+            Method::from_bytes(b"PROPFIND").expect("PROPFIND is a valid HTTP method"),
             home_set_url,
-            &[
-                ("Depth", "1"),
-                ("Content-Type", "application/xml; charset=utf-8"),
-            ],
-            Some(PROPFIND_BODY),
         )
+        .basic_auth(&session.username, Some(&session.password))
+        .header("Depth", "1")
+        .header("Content-Type", "application/xml; charset=utf-8")
+        .body(body)
+        .send()
         .await
         .map_err(|e| format!("Kalenderliste konnte nicht abgerufen werden: {e}"))?;
 
+    let status = response.status().as_u16();
     if !(200..300).contains(&status) {
         return Err(format!("CalDAV-Server antwortete mit HTTP {status}"));
     }
+
+    let xml_text = response
+        .text()
+        .await
+        .map_err(|e| format!("Kalenderliste konnte nicht gelesen werden: {e}"))?;
 
     let href = parse_calendar_href_by_name(&xml_text, display_name)
         .ok_or_else(|| format!("Kein Kalender mit dem Namen '{display_name}' gefunden."))?;

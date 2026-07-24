@@ -5,10 +5,6 @@ use uuid::Uuid;
 use super::super::ical::{build_ical_payload, parse_ical_events};
 use super::super::slots::{full_window, plan_slot_updates};
 use super::report::fetch_events_in_range;
-#[cfg(test)]
-use crate::integrations::http_record_replay::{
-    RecordReplayConfig, RecordedInteraction, RecordedRequest, RecordedResponse, VcrMode,
-};
 
 pub(crate) struct CaldavSession {
     pub(crate) client: reqwest::Client,
@@ -16,116 +12,6 @@ pub(crate) struct CaldavSession {
     pub(crate) password: String,
     pub(crate) base_url: String,
     pub(crate) absence_urls: Vec<String>,
-    /// Record/replay hooks for the CalDAV write-path cassette test. `None` in production
-    /// (and in unit tests that never hit the network); `Some` only in the VCR harness.
-    #[cfg(test)]
-    pub(crate) test_hooks: Option<TestHooks>,
-}
-
-#[cfg(test)]
-pub(crate) struct TestHooks {
-    pub(crate) record_replay: RecordReplayConfig,
-    /// Pins the UID that `create_assignment_core` would otherwise randomise, so a recorded
-    /// create request (whose resource path and body embed the UID) matches on replay.
-    pub(crate) fixed_uid: String,
-}
-
-impl CaldavSession {
-    /// Single seam for every CalDAV HTTP call: applies basic auth and, under `#[cfg(test)]`,
-    /// records or replays the interaction via the cassette. Returns `(status, body)` for any
-    /// HTTP response; `Err` only on a transport or cassette failure. Callers keep their own
-    /// status handling and wrap the error with a caller-specific German message.
-    pub(super) async fn send(
-        &self,
-        method: &str,
-        url: &str,
-        headers: &[(&str, &str)],
-        body: Option<&str>,
-    ) -> Result<(u16, String), String> {
-        #[cfg(test)]
-        if let Some(hooks) = &self.test_hooks {
-            if hooks.record_replay.mode() == VcrMode::Replay {
-                let recorded = to_recorded_request(method, url, body);
-                let response = hooks
-                    .record_replay
-                    .replay(&recorded)
-                    .map_err(|e| format!("Kassette konnte nicht gelesen werden: {e}"))?
-                    .ok_or_else(|| {
-                        format!("Keine Kassetten-Interaktion für {method} {}", recorded.path)
-                    })?;
-                return Ok((response.status, response.body));
-            }
-        }
-
-        let reqwest_method = reqwest::Method::from_bytes(method.as_bytes())
-            .map_err(|e| format!("Ungültige HTTP-Methode {method}: {e}"))?;
-        let mut request = self
-            .client
-            .request(reqwest_method, url)
-            .basic_auth(&self.username, Some(&self.password));
-        for (name, value) in headers {
-            request = request.header(*name, *value);
-        }
-        if let Some(body) = body {
-            request = request.body(body.to_string());
-        }
-
-        let response = request.send().await.map_err(|e| e.to_string())?;
-        let status = response.status().as_u16();
-        let text = response.text().await.map_err(|e| e.to_string())?;
-
-        #[cfg(test)]
-        if let Some(hooks) = &self.test_hooks {
-            if hooks.record_replay.mode() == VcrMode::Record {
-                hooks
-                    .record_replay
-                    .record(RecordedInteraction {
-                        request: to_recorded_request(method, url, body),
-                        response: RecordedResponse {
-                            status,
-                            body: text.clone(),
-                        },
-                    })
-                    .map_err(|e| format!("Kassette konnte nicht gespeichert werden: {e}"))?;
-            }
-        }
-
-        Ok((status, text))
-    }
-
-    /// The UID a create should use: pinned in the VCR harness, random otherwise.
-    fn next_uid(&self) -> String {
-        #[cfg(test)]
-        if let Some(hooks) = &self.test_hooks {
-            return hooks.fixed_uid.clone();
-        }
-        Uuid::new_v4().to_string()
-    }
-}
-
-/// Builds the cassette match key for a CalDAV request. The path is stored host-agnostically
-/// (origin stripped) so cassettes never leak the server, and `DTSTAMP` lines are dropped
-/// from iCal bodies because they carry the wall-clock time of the write and would otherwise
-/// differ between record and replay.
-#[cfg(test)]
-fn to_recorded_request(method: &str, url: &str, body: Option<&str>) -> RecordedRequest {
-    let path = reqwest::Url::parse(url)
-        .map(|parsed| parsed.path().to_string())
-        .unwrap_or_else(|_| url.to_string());
-    RecordedRequest {
-        method: method.to_string(),
-        path,
-        query: Vec::new(),
-        body: body.map(|b| serde_json::Value::String(normalize_body(b))),
-    }
-}
-
-#[cfg(test)]
-fn normalize_body(body: &str) -> String {
-    body.lines()
-        .filter(|line| !line.starts_with("DTSTAMP:"))
-        .collect::<Vec<_>>()
-        .join("\n")
 }
 
 pub(crate) struct AssignmentWrite {
@@ -148,11 +34,15 @@ async fn fetch_event_date(
     session: &CaldavSession,
     resource_url: &str,
 ) -> Result<Option<String>, String> {
-    let (status, ical_text) = session
-        .send("GET", resource_url, &[], None)
+    let response = session
+        .client
+        .get(resource_url)
+        .basic_auth(&session.username, Some(&session.password))
+        .send()
         .await
         .map_err(|e| format!("Einsatz konnte nicht abgerufen werden: {e}"))?;
 
+    let status = response.status().as_u16();
     if status == 404 {
         return Ok(None);
     }
@@ -160,6 +50,10 @@ async fn fetch_event_date(
         return Err(format!("Kalenderserver antwortete mit HTTP {status}"));
     }
 
+    let ical_text = response
+        .text()
+        .await
+        .map_err(|e| format!("Einsatz konnte nicht gelesen werden: {e}"))?;
     let events = parse_ical_events(&ical_text)?;
     Ok(events.into_iter().next().map(|event| event.dtstart))
 }
@@ -190,23 +84,19 @@ async fn reallocate_day(
 
             eprintln!("calendar: reallocate_day PUT {resource_url}");
 
-            let mut headers: Vec<(&str, &str)> =
-                vec![("Content-Type", "text/calendar; charset=utf-8")];
+            let mut request = session
+                .client
+                .put(&resource_url)
+                .basic_auth(&session.username, Some(&session.password))
+                .header("Content-Type", "text/calendar; charset=utf-8");
             if !update.etag.is_empty() {
-                headers.push(("If-Match", update.etag.as_str()));
+                request = request.header("If-Match", update.etag);
             }
-            let (status, _) = session
-                .send(
-                    "PUT",
-                    &resource_url,
-                    &headers,
-                    Some(update.payload.as_str()),
-                )
-                .await
-                .map_err(|e| {
-                    format!("Zeitfenster für {date} konnten nicht aktualisiert werden: {e}")
-                })?;
+            let response = request.body(update.payload).send().await.map_err(|e| {
+                format!("Zeitfenster für {date} konnten nicht aktualisiert werden: {e}")
+            })?;
 
+            let status = response.status().as_u16();
             if status == 412 {
                 // The event changed between REPORT and PUT: re-fetch and re-plan the day.
                 conflicted = true;
@@ -275,7 +165,7 @@ pub(crate) async fn create_assignment_core(
         );
     }
 
-    let uid = session.next_uid();
+    let uid = Uuid::new_v4().to_string();
     let (slot_start, slot_end) =
         slot_for_pending_write(session, calendar_url, &write.date, &uid).await;
     let payload = build_ical_payload(
@@ -292,16 +182,17 @@ pub(crate) async fn create_assignment_core(
 
     eprintln!("calendar: create_assignment PUT {resource_url}");
 
-    let (status, _) = session
-        .send(
-            "PUT",
-            &resource_url,
-            &[("Content-Type", "text/calendar; charset=utf-8")],
-            Some(payload.as_str()),
-        )
+    let response = session
+        .client
+        .put(&resource_url)
+        .basic_auth(&session.username, Some(&session.password))
+        .header("Content-Type", "text/calendar; charset=utf-8")
+        .body(payload)
+        .send()
         .await
         .map_err(|e| format!("Einsatz konnte nicht gespeichert werden: {e}"))?;
 
+    let status = response.status().as_u16();
     if !(200..300).contains(&status) {
         return Err(format!("Kalenderserver antwortete mit HTTP {status}"));
     }
@@ -354,16 +245,17 @@ pub(crate) async fn update_assignment_core(
 
     eprintln!("calendar: update_assignment PUT {resource_url}");
 
-    let (status, _) = session
-        .send(
-            "PUT",
-            &resource_url,
-            &[("Content-Type", "text/calendar; charset=utf-8")],
-            Some(payload.as_str()),
-        )
+    let response = session
+        .client
+        .put(&resource_url)
+        .basic_auth(&session.username, Some(&session.password))
+        .header("Content-Type", "text/calendar; charset=utf-8")
+        .body(payload)
+        .send()
         .await
         .map_err(|e| format!("Einsatz konnte nicht aktualisiert werden: {e}"))?;
 
+    let status = response.status().as_u16();
     if !(200..300).contains(&status) {
         return Err(format!("Kalenderserver antwortete mit HTTP {status}"));
     }
@@ -405,11 +297,15 @@ pub(crate) async fn delete_assignment_core(
 
     eprintln!("calendar: delete_assignment DELETE {resource_url}");
 
-    let (status, _) = session
-        .send("DELETE", &resource_url, &[], None)
+    let response = session
+        .client
+        .delete(&resource_url)
+        .basic_auth(&session.username, Some(&session.password))
+        .send()
         .await
         .map_err(|e| format!("Einsatz konnte nicht gelöscht werden: {e}"))?;
 
+    let status = response.status().as_u16();
     // Treat a missing event as success: delete is idempotent (no error if already absent).
     if status == 404 {
         return Ok(());
@@ -483,66 +379,18 @@ mod tests {
         );
     }
 
-    // ── CalDAV write-path VCR harness ──
+    // ── Disposable Radicale server integration test ──
     //
-    // The full write path (discover a calendar, create an assignment, update it, delete it)
-    // is exercised end-to-end over the transport seam against a recorded cassette. The
-    // committed cassette uses host-agnostic example paths and is produced deterministically
-    // by `generate_caldav_write_path_cassette`. `record_caldav_write_path_cassette` runs the
-    // same flow against a live server for verification and cleans up after itself.
+    // Runs the full write path over real HTTP against a throwaway Radicale CalDAV server,
+    // with no production credentials. Skipped when Radicale is not installed; CI installs it
+    // (see the README). Validates real CalDAV request/response handling end-to-end.
 
-    use super::super::report::{build_report_body, discover_calendar_by_name, PROPFIND_BODY};
-    use crate::integrations::http_record_replay::{
-        RecordReplayConfig, RecordedInteraction, RecordedResponse, VcrMode,
-    };
+    use super::super::report::discover_calendar_by_name;
 
-    const CASSETTE_FILE: &str = "caldav-write-path.json";
-    /// Display name baked into the committed cassette's PROPFIND response; the replay test
-    /// discovers by this name. The live recording test reads the real name from
-    /// `CALDAV_CALENDAR_NAME` instead.
-    const CALENDAR_NAME: &str = "Testkalender";
-    const FIXED_UID: &str = "vcr-fixed-uid-0001";
     const TEST_DATE: &str = "2026-05-06";
-    const BASE_URL: &str = "https://caldav.example";
-    const HOME_SET_URL: &str = "https://caldav.example/dav/";
-    const CALENDAR_URL: &str = "https://caldav.example/dav/testkalender/";
-    const CALENDAR_URL_NO_SLASH: &str = "https://caldav.example/dav/testkalender";
-    const RESOURCE_URL: &str = "https://caldav.example/dav/testkalender/vcr-fixed-uid-0001.ics";
 
-    fn cassette_path_for_calendar_test(file_name: &str) -> std::path::PathBuf {
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../tests/cassettes")
-            .join(file_name)
-    }
-
-    fn vcr_session(
-        base_url: &str,
-        username: &str,
-        password: &str,
-        cassette_file: &str,
-        mode: VcrMode,
-    ) -> CaldavSession {
-        CaldavSession {
-            client: reqwest::Client::builder()
-                .timeout(Duration::from_secs(30))
-                .build()
-                .unwrap(),
-            username: username.to_string(),
-            password: password.to_string(),
-            base_url: base_url.to_string(),
-            absence_urls: vec![],
-            test_hooks: Some(TestHooks {
-                record_replay: RecordReplayConfig::new(
-                    cassette_path_for_calendar_test(cassette_file),
-                    mode,
-                ),
-                fixed_uid: FIXED_UID.to_string(),
-            }),
-        }
-    }
-
-    /// Drives discover -> create -> update -> delete over the seam. The delete cleans up the
-    /// event the create made, so a live recording run leaves the server as it found it.
+    /// Drives discover -> create -> update -> delete. The delete cleans up the event the
+    /// create made, so the flow leaves the server as it found it.
     async fn run_write_path_flow(
         session: &CaldavSession,
         home_set_url: &str,
@@ -564,10 +412,17 @@ mod tests {
             return Err(format!("unexpected resource href: {href}"));
         }
 
+        let uid = href
+            .rsplit('/')
+            .next()
+            .and_then(|segment| segment.strip_suffix(".ics"))
+            .ok_or_else(|| format!("cannot derive uid from href: {href}"))?
+            .to_string();
+
         update_assignment_core(
             session,
             &href,
-            FIXED_UID,
+            &uid,
             &AssignmentWrite {
                 date: TEST_DATE.to_string(),
                 project_ref: "/v1/projects/43".to_string(),
@@ -580,155 +435,136 @@ mod tests {
         Ok(())
     }
 
-    #[tokio::test]
-    async fn caldav_write_path_replays_cassette() {
-        let session = vcr_session(
-            BASE_URL,
-            "vcr-user",
-            "vcr-pass",
-            CASSETTE_FILE,
-            VcrMode::Replay,
-        );
-        run_write_path_flow(&session, HOME_SET_URL, CALENDAR_NAME)
-            .await
-            .expect("cassette replay of the CalDAV write path should succeed");
+    struct RadicaleServer {
+        child: std::process::Child,
+        dir: std::path::PathBuf,
+        port: u16,
     }
 
-    // Regenerates the committed cassette from the exact requests the flow issues (built via the
-    // real body builders, so the match keys can never drift) paired with representative CalDAV
-    // responses. Run with `--ignored` after changing the flow or the builders.
-    #[test]
-    #[ignore = "regenerates the committed cassette fixture"]
-    fn generate_caldav_write_path_cassette() {
-        let (window_start, window_end) = full_window();
-        let report_body = build_report_body("20260506T000000Z", "20260507T000000Z");
-        let create_payload = build_ical_payload(
-            FIXED_UID,
-            TEST_DATE,
-            "Testprojekt",
-            "/v1/projects/42",
-            window_start,
-            window_end,
-        );
-        let update_payload = build_ical_payload(
-            FIXED_UID,
-            TEST_DATE,
-            "Aktualisiertes Projekt",
-            "/v1/projects/43",
-            window_start,
-            window_end,
-        );
+    impl RadicaleServer {
+        /// Returns `None` when Radicale is not importable, so the test can skip cleanly.
+        fn start() -> Option<Self> {
+            let available = std::process::Command::new("python3")
+                .args(["-c", "import radicale"])
+                .status()
+                .map(|s| s.success())
+                .unwrap_or(false);
+            if !available {
+                return None;
+            }
 
-        let interactions = vec![
-            (
-                "PROPFIND",
-                HOME_SET_URL,
-                Some(PROPFIND_BODY),
-                207,
-                PROPFIND_RESPONSE,
-            ),
-            (
-                "REPORT",
-                CALENDAR_URL,
-                Some(report_body.as_str()),
-                207,
-                REPORT_ONE_EVENT_RESPONSE,
-            ),
-            ("PUT", RESOURCE_URL, Some(create_payload.as_str()), 201, ""),
-            ("GET", RESOURCE_URL, None, 200, GET_EVENT_RESPONSE),
-            (
-                "REPORT",
-                CALENDAR_URL_NO_SLASH,
-                Some(report_body.as_str()),
-                207,
-                REPORT_ONE_EVENT_RESPONSE,
-            ),
-            ("PUT", RESOURCE_URL, Some(update_payload.as_str()), 204, ""),
-            ("DELETE", RESOURCE_URL, None, 204, ""),
-        ];
+            let port = free_tcp_port();
+            let dir =
+                std::env::temp_dir().join(format!("radicale-it-{}-{port}", std::process::id()));
+            std::fs::create_dir_all(dir.join("collections")).unwrap();
+            std::fs::write(dir.join("htpasswd"), "testuser:testpass\n").unwrap();
+            std::fs::write(
+                dir.join("config"),
+                format!(
+                    "[server]\nhosts = 127.0.0.1:{port}\n[auth]\ntype = htpasswd\nhtpasswd_filename = {htpasswd}\nhtpasswd_encryption = plain\n[storage]\nfilesystem_folder = {storage}\n[rights]\ntype = owner_only\n[logging]\nlevel = warning\n",
+                    htpasswd = dir.join("htpasswd").display(),
+                    storage = dir.join("collections").display(),
+                ),
+            )
+            .unwrap();
 
-        let config = RecordReplayConfig::new(
-            cassette_path_for_calendar_test(CASSETTE_FILE),
-            VcrMode::Record,
-        );
-        // Start from an empty cassette so removed interactions do not linger.
-        let _ = std::fs::remove_file(cassette_path_for_calendar_test(CASSETTE_FILE));
-        for (method, url, body, status, response_body) in interactions {
-            config
-                .record(RecordedInteraction {
-                    request: to_recorded_request(method, url, body),
-                    response: RecordedResponse {
-                        status,
-                        body: response_body.to_string(),
-                    },
-                })
-                .expect("recording a cassette interaction should succeed");
+            let child = std::process::Command::new("python3")
+                .args(["-m", "radicale", "--config"])
+                .arg(dir.join("config"))
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .spawn()
+                .expect("radicale should spawn");
+
+            let server = RadicaleServer { child, dir, port };
+            for _ in 0..100 {
+                if std::net::TcpStream::connect(("127.0.0.1", server.port)).is_ok() {
+                    return Some(server);
+                }
+                std::thread::sleep(Duration::from_millis(100));
+            }
+            panic!("radicale did not become ready on port {port}");
+        }
+
+        fn base_url(&self) -> String {
+            format!("http://127.0.0.1:{}", self.port)
+        }
+
+        fn home_set_url(&self) -> String {
+            format!("http://127.0.0.1:{}/testuser/", self.port)
         }
     }
 
-    // Live verification against a real server. Discovery matches a calendar by its display
-    // name, read from CALDAV_CALENDAR_NAME (falling back to the fixture name). Writes a
-    // local, git-ignored cassette and cleans up the event it creates.
-    #[tokio::test]
-    #[ignore = "VCR: set CALDAV_URL (home set) + CALDAV_USER + CALDAV_PASS + CALDAV_CALENDAR_NAME"]
-    async fn record_caldav_write_path_cassette() {
-        let home_set_url = std::env::var("CALDAV_URL").expect("CALDAV_URL");
-        let username = std::env::var("CALDAV_USER").expect("CALDAV_USER");
-        let password = std::env::var("CALDAV_PASS").expect("CALDAV_PASS");
-        let calendar_name =
-            std::env::var("CALDAV_CALENDAR_NAME").unwrap_or_else(|_| CALENDAR_NAME.to_string());
-
-        let session = vcr_session(
-            &home_set_url,
-            &username,
-            &password,
-            "caldav-write-path.local.json",
-            VcrMode::Record,
-        );
-        run_write_path_flow(&session, &home_set_url, &calendar_name)
-            .await
-            .expect("live recording of the CalDAV write path should succeed");
+    impl Drop for RadicaleServer {
+        fn drop(&mut self) {
+            let _ = self.child.kill();
+            let _ = self.child.wait();
+            let _ = std::fs::remove_dir_all(&self.dir);
+        }
     }
 
-    const PROPFIND_RESPONSE: &str = r#"<?xml version="1.0" encoding="utf-8"?>
-<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
-  <d:response>
-    <d:href>/dav/</d:href>
-    <d:propstat><d:prop>
-      <d:displayname>Home</d:displayname>
-      <d:resourcetype><d:collection/></d:resourcetype>
-    </d:prop></d:propstat>
-  </d:response>
-  <d:response>
-    <d:href>/dav/testkalender/</d:href>
-    <d:propstat><d:prop>
-      <d:displayname>Testkalender</d:displayname>
-      <d:resourcetype><d:collection/><c:calendar/></d:resourcetype>
-    </d:prop></d:propstat>
-  </d:response>
-</d:multistatus>"#;
+    fn free_tcp_port() -> u16 {
+        std::net::TcpListener::bind("127.0.0.1:0")
+            .unwrap()
+            .local_addr()
+            .unwrap()
+            .port()
+    }
 
-    const REPORT_ONE_EVENT_RESPONSE: &str = r#"<?xml version="1.0" encoding="utf-8"?>
-<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
-  <d:response>
-    <d:href>/dav/testkalender/vcr-fixed-uid-0001.ics</d:href>
-    <d:propstat><d:prop>
-      <d:getetag>"etag-vcr-1"</d:getetag>
-      <c:calendar-data>BEGIN:VCALENDAR
-BEGIN:VEVENT
-UID:vcr-fixed-uid-0001
-DTSTART:20260506T080000
-DTEND:20260506T160000
-SUMMARY:Testprojekt
-DESCRIPTION:daylite:/v1/projects/42
-END:VEVENT
-END:VCALENDAR
-</c:calendar-data>
-    </d:prop></d:propstat>
-  </d:response>
-</d:multistatus>"#;
+    /// A client that bypasses any ambient HTTP(S) proxy so it can reach 127.0.0.1 directly.
+    fn direct_client() -> reqwest::Client {
+        reqwest::Client::builder()
+            .no_proxy()
+            .timeout(Duration::from_secs(30))
+            .build()
+            .unwrap()
+    }
 
-    const GET_EVENT_RESPONSE: &str = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:vcr-fixed-uid-0001\r\nDTSTART:20260506T080000\r\nDTEND:20260506T160000\r\nSUMMARY:Testprojekt\r\nDESCRIPTION:daylite:/v1/projects/42\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+    /// Creates a calendar collection with a display name. The production client never issues
+    /// MKCALENDAR, so the test seeds the calendar directly, then discovery finds it by name.
+    async fn seed_radicale_calendar(server: &RadicaleServer, calid: &str, display_name: &str) {
+        let url = format!("{}/testuser/{calid}/", server.base_url());
+        let body = format!(
+            "<C:mkcalendar xmlns:D=\"DAV:\" xmlns:C=\"urn:ietf:params:xml:ns:caldav\"><D:set><D:prop><D:displayname>{display_name}</D:displayname></D:prop></D:set></C:mkcalendar>"
+        );
+        let status = direct_client()
+            .request(reqwest::Method::from_bytes(b"MKCALENDAR").unwrap(), &url)
+            .basic_auth("testuser", Some("testpass"))
+            .header("Content-Type", "application/xml")
+            .body(body)
+            .send()
+            .await
+            .expect("MKCALENDAR should reach radicale")
+            .status()
+            .as_u16();
+        assert!(
+            (200..300).contains(&status),
+            "MKCALENDAR failed: HTTP {status}"
+        );
+    }
+
+    #[tokio::test]
+    async fn caldav_write_path_against_disposable_radicale() {
+        let Some(server) = RadicaleServer::start() else {
+            eprintln!(
+                "skipping caldav_write_path_against_disposable_radicale: radicale not installed"
+            );
+            return;
+        };
+        seed_radicale_calendar(&server, "neuburg", "neuburg-termine").await;
+
+        let session = CaldavSession {
+            client: direct_client(),
+            username: "testuser".to_string(),
+            password: "testpass".to_string(),
+            base_url: server.base_url(),
+            absence_urls: vec![],
+        };
+
+        run_write_path_flow(&session, &server.home_set_url(), "neuburg-termine")
+            .await
+            .expect("write path against disposable radicale should succeed");
+    }
 
     #[test]
     fn targets_absence_calendar_matches_collection_and_resources_beneath_it() {
