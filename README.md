@@ -205,6 +205,32 @@ cargo test --manifest-path src-tauri/Cargo.toml
 git-crypt status -e tests/cassettes
 ```
 
+#### CalDAV Write-Path Cassette
+
+The CalDAV assignment write path (discover a calendar, create, update, delete) is covered by the committed cassette `tests/cassettes/caldav-write-path.json`.
+The replay test `caldav_write_path_replays_cassette` drives the full flow offline and runs in CI without a server or credentials.
+
+The committed cassette is generated deterministically, not recorded from a live server.
+Regenerate it after changing the write flow or its request builders:
+
+```bash
+cargo test --manifest-path src-tauri/Cargo.toml \
+  generate_caldav_write_path_cassette -- --ignored
+```
+
+To verify the flow against a real server, run the live recording test.
+Discovery matches a calendar by display name, so point `CALDAV_URL` at the CalDAV home-set root (not a single calendar) and name the calendar in `CALDAV_CALENDAR_NAME`.
+The test creates an assignment and deletes it again, so it cleans up after itself, and it writes a local, git-ignored cassette (`tests/cassettes/caldav-write-path.local.json`) rather than the committed fixture.
+
+```bash
+CALDAV_URL="https://<zep-host>/<caldav-home-set-path>" \
+CALDAV_USER="..." \
+CALDAV_PASS="..." \
+CALDAV_CALENDAR_NAME="neuburg-termine" \
+cargo test --manifest-path src-tauri/Cargo.toml \
+  record_caldav_write_path_cassette -- --ignored --nocapture
+```
+
 #### Create the CI Secret
 
 Create a symmetric git-crypt key, base64-encode it, and store the encoded value as the GitHub Actions repository secret `GIT_CRYPT_KEY_B64`:

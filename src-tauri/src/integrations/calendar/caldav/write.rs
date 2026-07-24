@@ -497,6 +497,9 @@ mod tests {
     };
 
     const CASSETTE_FILE: &str = "caldav-write-path.json";
+    /// Display name baked into the committed cassette's PROPFIND response; the replay test
+    /// discovers by this name. The live recording test reads the real name from
+    /// `CALDAV_CALENDAR_NAME` instead.
     const CALENDAR_NAME: &str = "Testkalender";
     const FIXED_UID: &str = "vcr-fixed-uid-0001";
     const TEST_DATE: &str = "2026-05-06";
@@ -543,8 +546,9 @@ mod tests {
     async fn run_write_path_flow(
         session: &CaldavSession,
         home_set_url: &str,
+        calendar_name: &str,
     ) -> Result<(), String> {
-        let calendar_url = discover_calendar_by_name(session, home_set_url, CALENDAR_NAME).await?;
+        let calendar_url = discover_calendar_by_name(session, home_set_url, calendar_name).await?;
 
         let href = create_assignment_core(
             session,
@@ -585,7 +589,7 @@ mod tests {
             CASSETTE_FILE,
             VcrMode::Replay,
         );
-        run_write_path_flow(&session, HOME_SET_URL)
+        run_write_path_flow(&session, HOME_SET_URL, CALENDAR_NAME)
             .await
             .expect("cassette replay of the CalDAV write path should succeed");
     }
@@ -662,15 +666,17 @@ mod tests {
         }
     }
 
-    // Live verification against a real server. Requires a disposable calendar named
-    // "Testkalender" (discovery matches by display name). Writes a local, git-ignored
-    // cassette and cleans up the event it creates.
+    // Live verification against a real server. Discovery matches a calendar by its display
+    // name, read from CALDAV_CALENDAR_NAME (falling back to the fixture name). Writes a
+    // local, git-ignored cassette and cleans up the event it creates.
     #[tokio::test]
-    #[ignore = "VCR: set CALDAV_URL (home set) + CALDAV_USER + CALDAV_PASS and a calendar named Testkalender"]
+    #[ignore = "VCR: set CALDAV_URL (home set) + CALDAV_USER + CALDAV_PASS + CALDAV_CALENDAR_NAME"]
     async fn record_caldav_write_path_cassette() {
         let home_set_url = std::env::var("CALDAV_URL").expect("CALDAV_URL");
         let username = std::env::var("CALDAV_USER").expect("CALDAV_USER");
         let password = std::env::var("CALDAV_PASS").expect("CALDAV_PASS");
+        let calendar_name =
+            std::env::var("CALDAV_CALENDAR_NAME").unwrap_or_else(|_| CALENDAR_NAME.to_string());
 
         let session = vcr_session(
             &home_set_url,
@@ -679,7 +685,7 @@ mod tests {
             "caldav-write-path.local.json",
             VcrMode::Record,
         );
-        run_write_path_flow(&session, &home_set_url)
+        run_write_path_flow(&session, &home_set_url, &calendar_name)
             .await
             .expect("live recording of the CalDAV write path should succeed");
     }
