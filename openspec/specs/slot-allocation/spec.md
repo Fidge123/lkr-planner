@@ -32,7 +32,9 @@ The system SHALL allocate time slots for same-day assignments in a deterministic
 - **THEN** both produce identical slot assignments
 
 ### Requirement: Non-overlapping slots
-The system SHALL ensure allocated slots do not overlap.
+The system SHALL ensure allocated slots do not overlap each other.
+This covers the assignments that take part in an allocation.
+Events excluded from the allocation keep their existing times and are not reserved a share of the window, so they may overlap allocated slots.
 
 #### Scenario: No slot overlap
 - **GIVEN** n assignments for a day
@@ -74,3 +76,20 @@ The system SHALL re-allocate same-day slots whenever an assignment is created, u
 - **WHEN** slots are re-allocated
 - **THEN** only lkr-planner assignment events have their times changed
 - **AND** bare, absence, and holiday events are left untouched
+
+### Requirement: Exclude assignments that cannot be rewritten safely
+The system SHALL leave an assignment untouched when rewriting its times could produce invalid iCal.
+This applies to an event whose end is expressed via DURATION, a resource holding more than one VEVENT, a folded DTSTART or DTEND, and an event without a CalDAV resource URL.
+Such an event takes no share of the window, so the remaining assignments are still spread across the full window and may overlap it.
+
+#### Scenario: Excluded assignment keeps its times
+- **GIVEN** a day contains an assignment whose end is expressed via DURATION
+- **WHEN** slots are re-allocated
+- **THEN** that assignment's times are not changed
+- **AND** no invalid iCal is written for it
+
+#### Scenario: Remaining assignments still use the full window
+- **GIVEN** a day contains one excluded assignment and two ordinary assignments
+- **WHEN** slots are re-allocated
+- **THEN** the two ordinary assignments receive 08:00-12:00 and 12:00-16:00
+- **AND** they may overlap the excluded assignment's existing times

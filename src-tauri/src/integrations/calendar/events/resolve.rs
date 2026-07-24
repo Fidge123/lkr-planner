@@ -202,7 +202,7 @@ mod tests {
             contacts: vec![],
         };
 
-        let pending = classify_event(event);
+        let pending = classify_event(&event);
         let cell_event = resolve_event(pending, &cache, &HashMap::new());
 
         assert_eq!(

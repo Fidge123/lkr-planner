@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   type CalendarCellEvent,
   commands,
@@ -10,10 +10,16 @@ import {
   resolveDisplayedProjects,
   resolveEscapeAction,
   resolveSaveAction,
+  resolveWriteIntent,
 } from "../components/assignment-modal-logic";
 import type { ModalSaveAction } from "../next-day-quick-add";
 import { useAssignmentDefaultSuggestions } from "./use-assignment-default-suggestions";
 import { useAssignmentProjectSearch } from "./use-assignment-project-search";
+
+// Shown when a stored assignment has no CalDAV resource URL, so it can neither be
+// updated nor deleted. Reloading re-reads the href from the calendar.
+const missingHrefMessage =
+  "Dieser Einsatz kann nicht bearbeitet werden, da er keine Kalender-Adresse hat. Bitte die Ansicht neu laden.";
 
 export function useAssignmentModal({
   isOpen,
@@ -44,7 +50,6 @@ export function useAssignmentModal({
     initialShowUnsavedConfirm,
   );
   const [isDirty, setIsDirty] = useState(false);
-  const dialogRef = useRef<HTMLDialogElement>(null);
   const filterInputRef = useRef<HTMLInputElement>(null);
 
   const { results, errorMessage: searchError } =
@@ -77,16 +82,21 @@ export function useAssignmentModal({
     assignment?.title,
   ]);
 
-  useEffect(() => {
-    const dialog = dialogRef.current;
+  // A callback ref attaches the listener exactly once per mounted dialog element, instead
+  // of on every render. The element is remounted when the modal swaps to the delete or
+  // unsaved-changes dialog and back, and the ref runs again for each, so the listener
+  // always follows the live element. requestClose is read through a ref because the
+  // listener outlives the render that attached it.
+  const requestCloseRef = useRef<() => void>(() => {});
+  const dialogRef = useCallback((dialog: HTMLDialogElement | null) => {
     if (!dialog) return;
-    const handleCancel = (e: Event) => {
-      e.preventDefault();
-      requestClose();
+    const handleCancel = (event: Event) => {
+      event.preventDefault();
+      requestCloseRef.current();
     };
     dialog.addEventListener("cancel", handleCancel);
     return () => dialog.removeEventListener("cancel", handleCancel);
-  });
+  }, []);
 
   const requestClose = () => {
     if (isSaving) return;
@@ -96,6 +106,7 @@ export function useAssignmentModal({
     }
     onClose();
   };
+  requestCloseRef.current = requestClose;
 
   const selectProject = (project: DayliteProjectSummary) => {
     setSelectedProjectRef(project.self);
@@ -142,28 +153,30 @@ export function useAssignmentModal({
   };
 
   const handleSave = async () => {
+    if (resolveWriteIntent(isEditMode, assignment?.href) === "missing-href") {
+      setErrorMessage(missingHrefMessage);
+      return;
+    }
+
     setIsSaving(true);
     setErrorMessage(null);
 
     const projectName = selectedProjectName || assignment?.title || "";
 
-    let result: { status: string; error?: string };
-    if (isEditMode && assignment.href) {
-      result = await commands.updateAssignment({
-        href: assignment.href,
-        uid: assignment.uid,
-        date,
-        projectRef: selectedProjectRef,
-        projectName,
-      });
-    } else {
-      result = await commands.createAssignment({
-        employeeReference,
-        date,
-        projectRef: selectedProjectRef,
-        projectName,
-      });
-    }
+    const result: { status: string; error?: string } = assignment?.href
+      ? await commands.updateAssignment({
+          href: assignment.href,
+          uid: assignment.uid,
+          date,
+          projectRef: selectedProjectRef,
+          projectName,
+        })
+      : await commands.createAssignment({
+          employeeReference,
+          date,
+          projectRef: selectedProjectRef,
+          projectName,
+        });
 
     if (result.status === "error") {
       setErrorMessage((result as { status: "error"; error: string }).error);
@@ -182,7 +195,10 @@ export function useAssignmentModal({
   };
 
   const handleDelete = async () => {
-    if (!assignment?.href) return;
+    if (!assignment?.href) {
+      setErrorMessage(missingHrefMessage);
+      return;
+    }
     setIsSaving(true);
     setErrorMessage(null);
     const result = await commands.deleteAssignment(assignment.href);

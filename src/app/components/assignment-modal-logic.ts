@@ -25,6 +25,19 @@ export function resolveEscapeAction(filter: string): "clear" | "close" {
   return filter.length > 0 ? "clear" : "close";
 }
 
+export type AssignmentWriteIntent = "create" | "update" | "missing-href";
+
+// An edit can only be written back through the assignment's CalDAV resource URL.
+// Without one the write must fail visibly: treating it as a create would duplicate the
+// assignment and leave the original untouched.
+export function resolveWriteIntent(
+  isEditMode: boolean,
+  href: string | null | undefined,
+): AssignmentWriteIntent {
+  if (!isEditMode) return "create";
+  return href ? "update" : "missing-href";
+}
+
 export function resolveSaveAction(
   isEditMode: boolean,
   date: string,

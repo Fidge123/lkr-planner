@@ -67,6 +67,11 @@ pub(super) struct DayPlan {
 /// `patch_event_slot` cannot safely rewrite are excluded entirely rather than risk
 /// producing invalid iCal — see `can_patch_slot`.
 ///
+/// Excluded events keep whatever times they already have and take no share of the window,
+/// so the participating assignments are spread across the full 08:00-16:00 window and may
+/// overlap an excluded event. That is intended: the alternative would be to silently shrink
+/// everyone else's slot on the guess that the untouched event still occupies its old times.
+///
 /// `extra_uid` names an event the caller writes itself (a create or update in flight):
 /// it participates in the allocation and gets its slot back via `extra_slot`, but no
 /// update is planned for it, so each event is written exactly once per operation.
@@ -77,7 +82,7 @@ pub(super) fn plan_slot_updates(
 ) -> DayPlan {
     let assignments: Vec<_> = events
         .iter()
-        .map(|event| (classify_event(event.clone()), event))
+        .map(|event| (classify_event(event), event))
         .filter(|(pending, event)| {
             pending.date == date
                 && pending.project_ref.is_some()
@@ -165,8 +170,9 @@ fn patch_event_slot(raw_ical: &str, date: &str, start: NaiveTime, end: NaiveTime
 
 /// True if `patch_event_slot` can safely rewrite this resource's DTSTART/DTEND. It cannot,
 /// and the event is therefore excluded from re-allocation rather than risk invalid iCal, when:
-/// - a line is an RFC 5545 folded continuation (patch works on physical lines and would
-///   orphan it),
+/// - a DTSTART/DTEND inside the VEVENT is folded across physical lines (patch replaces only
+///   the first line and would orphan the continuation). Folds elsewhere are harmless because
+///   patch copies every other line through untouched, so they are deliberately allowed,
 /// - the resource holds more than one VEVENT (patch shares its DTEND-insertion state, so a
 ///   recurrence override would be squashed onto the first component's slot), or
 /// - the VEVENT expresses its end via DURATION (patch adds a DTEND, which RFC 5545 §3.6.1
@@ -174,17 +180,28 @@ fn patch_event_slot(raw_ical: &str, date: &str, start: NaiveTime, end: NaiveTime
 fn can_patch_slot(raw_ical: &str) -> bool {
     let mut in_vevent = false;
     let mut vevent_count = 0u32;
+    let mut after_rewritten_property = false;
     for line in raw_ical.lines() {
         if line.starts_with(' ') || line.starts_with('\t') {
-            return false;
+            if after_rewritten_property {
+                return false;
+            }
+            continue;
         }
+        after_rewritten_property = false;
         if line == "BEGIN:VEVENT" {
             in_vevent = true;
             vevent_count += 1;
         } else if line == "END:VEVENT" {
             in_vevent = false;
-        } else if in_vevent && (line.starts_with("DURATION:") || line.starts_with("DURATION;")) {
-            return false;
+        } else if in_vevent {
+            if line.starts_with("DURATION:") || line.starts_with("DURATION;") {
+                return false;
+            }
+            after_rewritten_property = line.starts_with("DTSTART:")
+                || line.starts_with("DTSTART;")
+                || line.starts_with("DTEND:")
+                || line.starts_with("DTEND;");
         }
     }
     vevent_count <= 1
@@ -517,7 +534,17 @@ mod tests {
             (
                 "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nDTSTART;TZID=Europe/Vienna_long_zone_name_that_wraps:\r\n 20260506T080000\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
                 false,
-                "folded continuation line",
+                "folded DTSTART would orphan its continuation",
+            ),
+            (
+                "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:x\r\nDTSTART:20260506T080000\r\nDTEND:20260506T120000\r\nDESCRIPTION:ein sehr langer Text\r\n der umbrochen wurde\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+                true,
+                "folded DESCRIPTION inside the VEVENT is copied through untouched",
+            ),
+            (
+                "BEGIN:VCALENDAR\r\nBEGIN:VTIMEZONE\r\nTZID:Europe/Vienna\r\nX-LIC-LOCATION:Europe/Vienna\r\n continued\r\nEND:VTIMEZONE\r\nBEGIN:VEVENT\r\nUID:x\r\nDTSTART:20260506T080000\r\nDTEND:20260506T120000\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+                true,
+                "fold outside the VEVENT is copied through untouched",
             ),
         ];
 
@@ -547,6 +574,8 @@ mod tests {
             updates.iter().all(|u| u.uid != "uid-a"),
             "a DURATION-based event must never be re-slotted"
         );
+        // Intended: the excluded event keeps its 08:00-16:00 times and takes no share of the
+        // window, so the two remaining assignments split the full window and overlap it.
         assert_eq!(
             updates.len(),
             2,

@@ -6,15 +6,15 @@ import {
   resolveDayliteBaseUrl,
   updateDayliteRefreshToken,
 } from "../../../services/daylite-auth";
-import { type PanelStatus, StatusAlert } from "./panel-status";
+import { usePanelSubmit } from "../../hooks/use-panel-submit";
+import { StatusAlert } from "./panel-status";
 
 export function DayliteSettingsPanel({ onClose }: Props) {
   const [dayliteBaseUrlInput, setDayliteBaseUrlInput] = useState(
     DEFAULT_DAYLITE_BASE_URL,
   );
   const [refreshTokenInput, setRefreshTokenInput] = useState("");
-  const [isSaving, setIsSaving] = useState(false);
-  const [status, setStatus] = useState<PanelStatus | null>(null);
+  const { isSaving, status, setStatus, run } = usePanelSubmit();
 
   useEffect(() => {
     setStatus(null);
@@ -29,34 +29,21 @@ export function DayliteSettingsPanel({ onClose }: Props) {
     return () => {
       isActive = false;
     };
-  }, []);
+  }, [setStatus]);
 
   const onSubmit = async (event: ChangeEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setIsSaving(true);
-    setStatus(null);
-
-    try {
+    await run(async () => {
       await updateDayliteRefreshToken({
         baseUrl: dayliteBaseUrlInput,
         refreshToken: refreshTokenInput,
       });
-      setStatus({
+      setRefreshTokenInput("");
+      return {
         type: "success",
         message: "Daylite-Konfiguration wurde aktualisiert.",
-      });
-      setRefreshTokenInput("");
-    } catch (error) {
-      setStatus({
-        type: "error",
-        message:
-          error instanceof Error
-            ? error.message
-            : "Das Daylite-Refresh-Token konnte nicht gespeichert werden.",
-      });
-    } finally {
-      setIsSaving(false);
-    }
+      };
+    }, "Das Daylite-Refresh-Token konnte nicht gespeichert werden.");
   };
 
   return (

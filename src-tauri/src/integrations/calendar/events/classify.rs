@@ -2,8 +2,11 @@ use super::super::types::{PendingEvent, RawVEvent};
 
 const DAYLITE_DESCRIPTION_PREFIX: &str = "daylite:";
 
-pub(crate) fn classify_event(event: RawVEvent) -> PendingEvent {
-    let date = event.dtstart;
+/// Takes the event by reference and clones only the fields it carries over, so callers
+/// that still need the original (for `raw_ical`/`etag`) do not have to clone the whole
+/// resource text just to classify it.
+pub(crate) fn classify_event(event: &RawVEvent) -> PendingEvent {
+    let date = event.dtstart.clone();
 
     let uid = if event.uid.is_empty() {
         // Synthesise a stable-ish UID from event content. Summary is sanitized to alphanumeric
@@ -16,7 +19,7 @@ pub(crate) fn classify_event(event: RawVEvent) -> PendingEvent {
             .collect();
         format!("synthetic-{date}-{safe}")
     } else {
-        event.uid
+        event.uid.clone()
     };
 
     // Strip ASCII whitespace, BOM (U+FEFF), and zero-width space (U+200B) that some
@@ -42,11 +45,11 @@ pub(crate) fn classify_event(event: RawVEvent) -> PendingEvent {
     PendingEvent {
         uid,
         date,
-        summary: event.summary,
+        summary: event.summary.clone(),
         project_ref,
-        start_time: event.start_time,
-        end_time: event.end_time,
-        href: event.href,
+        start_time: event.start_time.clone(),
+        end_time: event.end_time.clone(),
+        href: event.href.clone(),
     }
 }
 
@@ -64,7 +67,7 @@ mod tests {
             ..Default::default()
         };
 
-        let pending = classify_event(event);
+        let pending = classify_event(&event);
 
         assert_eq!(pending.project_ref, Some("/v1/projects/3001".to_string()));
         assert_eq!(pending.date, "2026-01-26");
@@ -81,7 +84,7 @@ mod tests {
             ..Default::default()
         };
 
-        let pending = classify_event(event);
+        let pending = classify_event(&event);
 
         assert_eq!(pending.project_ref, None);
         assert_eq!(pending.summary, "Auto Werkstatt");
@@ -97,7 +100,7 @@ mod tests {
             ..Default::default()
         };
 
-        let pending = classify_event(event);
+        let pending = classify_event(&event);
 
         assert_eq!(pending.project_ref, None);
     }
@@ -112,7 +115,7 @@ mod tests {
             ..Default::default()
         };
 
-        let pending = classify_event(event);
+        let pending = classify_event(&event);
 
         assert_eq!(pending.project_ref, Some("/v1/projects/4001".to_string()));
     }
@@ -127,7 +130,7 @@ mod tests {
             ..Default::default()
         };
 
-        let pending = classify_event(event);
+        let pending = classify_event(&event);
 
         assert!(!pending.uid.is_empty());
         assert!(pending.uid.starts_with("synthetic-"));
@@ -143,7 +146,7 @@ mod tests {
             ..Default::default()
         };
 
-        let pending = classify_event(event);
+        let pending = classify_event(&event);
 
         assert_eq!(pending.project_ref, Some("/v1/projects/5001".to_string()));
     }
@@ -158,7 +161,7 @@ mod tests {
             ..Default::default()
         };
 
-        let pending = classify_event(event);
+        let pending = classify_event(&event);
 
         assert!(!pending.uid.contains('\n'), "UID must not contain newline");
         assert!(!pending.uid.contains('/'), "UID must not contain slash");

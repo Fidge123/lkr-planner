@@ -11,6 +11,7 @@ import {
   resolveDisplayedProjects,
   resolveEscapeAction,
   resolveSaveAction,
+  resolveWriteIntent,
 } from "./assignment-modal-logic";
 import { ProjectResultList, SuggestionEmptyState } from "./project-result-list";
 
@@ -352,5 +353,22 @@ describe("resolveSaveAction", () => {
     expect(
       resolveSaveAction(true, "2026-05-06", "/v1/projects/1", "Projekt Nord"),
     ).toEqual({ kind: "edit" });
+  });
+});
+
+describe("resolveWriteIntent", () => {
+  it("creates when not editing", () => {
+    expect(resolveWriteIntent(false, null)).toBe("create");
+    expect(resolveWriteIntent(false, "/cal/uid-1.ics")).toBe("create");
+  });
+
+  it("updates an edited assignment that has a resource URL", () => {
+    expect(resolveWriteIntent(true, "/cal/uid-1.ics")).toBe("update");
+  });
+
+  it("refuses an edit without a resource URL instead of falling back to create", () => {
+    expect(resolveWriteIntent(true, null)).toBe("missing-href");
+    expect(resolveWriteIntent(true, undefined)).toBe("missing-href");
+    expect(resolveWriteIntent(true, "")).toBe("missing-href");
   });
 });

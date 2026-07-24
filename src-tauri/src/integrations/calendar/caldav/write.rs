@@ -3,7 +3,7 @@ use tauri_plugin_http::reqwest;
 use uuid::Uuid;
 
 use super::super::ical::{build_ical_payload, parse_ical_events};
-use super::super::slots::{full_window, plan_slot_updates};
+use super::super::slots::{full_window, plan_slot_updates, DayPlan, SlotUpdate};
 use super::report::fetch_events_in_range;
 
 pub(crate) struct CaldavSession {
@@ -55,7 +55,13 @@ async fn fetch_event_date(
         .await
         .map_err(|e| format!("Einsatz konnte nicht gelesen werden: {e}"))?;
     let events = parse_ical_events(&ical_text)?;
-    Ok(events.into_iter().next().map(|event| event.dtstart))
+    let Some(event) = events.into_iter().next() else {
+        // Distinct from a 404: the resource exists but held no usable VEVENT, which would
+        // otherwise silently skip re-allocation with no trace of why.
+        eprintln!("calendar: {resource_url} contained no readable VEVENT");
+        return Ok(None);
+    };
+    Ok(Some(event.dtstart))
 }
 
 /// Re-allocates the 08:00-16:00 window across all lkr-planner assignments on `date`
@@ -78,37 +84,13 @@ async fn reallocate_day(
             fetch_events_in_range(session, calendar_url, day, day + chrono::Duration::days(1))
                 .await?;
 
-        let mut conflicted = false;
-        for update in plan_slot_updates(&events, date, None).updates {
-            let resource_url = resolve_href(&update.href, calendar_url)?;
-
-            eprintln!("calendar: reallocate_day PUT {resource_url}");
-
-            let mut request = session
-                .client
-                .put(&resource_url)
-                .basic_auth(&session.username, Some(&session.password))
-                .header("Content-Type", "text/calendar; charset=utf-8");
-            if !update.etag.is_empty() {
-                request = request.header("If-Match", update.etag);
-            }
-            let response = request.body(update.payload).send().await.map_err(|e| {
-                format!("Zeitfenster für {date} konnten nicht aktualisiert werden: {e}")
-            })?;
-
-            let status = response.status().as_u16();
-            if status == 412 {
-                // The event changed between REPORT and PUT: re-fetch and re-plan the day.
-                conflicted = true;
-                break;
-            }
-            if !(200..300).contains(&status) {
-                return Err(format!(
-                    "Zeitfenster für {date} konnten nicht aktualisiert werden: HTTP {status}"
-                ));
-            }
-        }
-        if !conflicted {
+        if !put_slot_updates(
+            session,
+            date,
+            plan_slot_updates(&events, date, None).updates,
+        )
+        .await?
+        {
             return Ok(());
         }
     }
@@ -116,6 +98,49 @@ async fn reallocate_day(
     Err(format!(
         "Zeitfenster für {date} konnten wegen gleichzeitiger Änderungen nicht aktualisiert werden."
     ))
+}
+
+/// Sends one planned batch of re-slot PUTs. The updates target distinct resources and do
+/// not depend on each other, so they go out concurrently. Returns `true` when at least one
+/// was rejected with 412, meaning the day changed under the plan and needs re-planning.
+async fn put_slot_updates(
+    session: &CaldavSession,
+    date: &str,
+    updates: Vec<SlotUpdate>,
+) -> Result<bool, String> {
+    let requests = updates.into_iter().map(|update| async move {
+        let resource_url = resolve_href(&update.href, &session.base_url)?;
+
+        eprintln!("calendar: slot re-allocation PUT {resource_url}");
+
+        let mut request = session
+            .client
+            .put(&resource_url)
+            .basic_auth(&session.username, Some(&session.password))
+            .header("Content-Type", "text/calendar; charset=utf-8");
+        if !update.etag.is_empty() {
+            request = request.header("If-Match", update.etag);
+        }
+        let response = request.body(update.payload).send().await.map_err(|e| {
+            format!("Zeitfenster für {date} konnten nicht aktualisiert werden: {e}")
+        })?;
+        Ok::<u16, String>(response.status().as_u16())
+    });
+
+    let mut conflicted = false;
+    for result in futures::future::join_all(requests).await {
+        let status = result?;
+        if status == 412 {
+            conflicted = true;
+            continue;
+        }
+        if !(200..300).contains(&status) {
+            return Err(format!(
+                "Zeitfenster für {date} konnten nicht aktualisiert werden: HTTP {status}"
+            ));
+        }
+    }
+    Ok(conflicted)
 }
 
 /// Runs day re-allocation after the primary write already succeeded.
@@ -128,25 +153,43 @@ async fn reallocate_day_best_effort(session: &CaldavSession, calendar_url: &str,
     }
 }
 
-/// Fetches the day's events and returns the slot the event `uid` will occupy once
-/// written, so create/update can write the event once, directly in its final slot.
-/// Falls back to the full window when the fetch fails; re-allocation converges later.
-async fn slot_for_pending_write(
+/// Plans the day around an event the caller is about to write, so create/update can place
+/// the new event directly in its final slot *and* reuse the same plan to move its neighbours
+/// afterwards, instead of fetching and re-planning the day a second time.
+/// Returns `None` when the day could not be planned; the caller then falls back to a full
+/// re-allocation, which fetches again and converges.
+async fn plan_day_for_pending_write(
     session: &CaldavSession,
     calendar_url: &str,
     date: &str,
     uid: &str,
-) -> (chrono::NaiveTime, chrono::NaiveTime) {
-    let Ok(day) = NaiveDate::parse_from_str(date, "%Y-%m-%d") else {
-        return full_window();
-    };
+) -> Option<DayPlan> {
+    let day = NaiveDate::parse_from_str(date, "%Y-%m-%d").ok()?;
     match fetch_events_in_range(session, calendar_url, day, day + chrono::Duration::days(1)).await {
-        Ok(events) => plan_slot_updates(&events, date, Some(uid))
-            .extra_slot
-            .unwrap_or_else(full_window),
+        Ok(events) => Some(plan_slot_updates(&events, date, Some(uid))),
         Err(e) => {
             eprintln!("calendar: day fetch before write failed, using full window: {e}");
-            full_window()
+            None
+        }
+    }
+}
+
+/// Applies the neighbour PUTs planned before the primary write. A 412 means the plan raced a
+/// concurrent edit, so the day is re-fetched and re-planned; other failures only log, since
+/// the primary write already succeeded and the next write on this day converges.
+async fn apply_planned_updates_best_effort(
+    session: &CaldavSession,
+    calendar_url: &str,
+    date: &str,
+    updates: Vec<SlotUpdate>,
+) {
+    match put_slot_updates(session, date, updates).await {
+        Ok(false) => {}
+        Ok(true) => reallocate_day_best_effort(session, calendar_url, date).await,
+        Err(e) => {
+            eprintln!(
+                "calendar: re-allocation for {date} failed (converges on the next write): {e}"
+            )
         }
     }
 }
@@ -166,8 +209,11 @@ pub(crate) async fn create_assignment_core(
     }
 
     let uid = Uuid::new_v4().to_string();
-    let (slot_start, slot_end) =
-        slot_for_pending_write(session, calendar_url, &write.date, &uid).await;
+    let plan = plan_day_for_pending_write(session, calendar_url, &write.date, &uid).await;
+    let (slot_start, slot_end) = plan
+        .as_ref()
+        .and_then(|plan| plan.extra_slot)
+        .unwrap_or_else(full_window);
     let payload = build_ical_payload(
         &uid,
         &write.date,
@@ -197,7 +243,13 @@ pub(crate) async fn create_assignment_core(
         return Err(format!("Kalenderserver antwortete mit HTTP {status}"));
     }
 
-    reallocate_day_best_effort(session, calendar_url, &write.date).await;
+    match plan {
+        Some(plan) => {
+            apply_planned_updates_best_effort(session, calendar_url, &write.date, plan.updates)
+                .await
+        }
+        None => reallocate_day_best_effort(session, calendar_url, &write.date).await,
+    }
 
     Ok(resource_url)
 }
@@ -219,9 +271,15 @@ pub(crate) async fn update_assignment_core(
         );
     }
 
+    let calendar_url = parent_collection_url(&resource_url);
     // Read the event's current day before overwriting it: when the update moves the
-    // assignment to another day, the source day must be re-allocated as well.
-    let previous_date = match fetch_event_date(session, &resource_url).await {
+    // assignment to another day, the source day must be re-allocated as well. This does not
+    // depend on the target day's plan, so both reads go out together.
+    let (previous_date, plan) = tokio::join!(
+        fetch_event_date(session, &resource_url),
+        plan_day_for_pending_write(session, calendar_url, &write.date, uid),
+    );
+    let previous_date = match previous_date {
         Ok(d) => d,
         Err(e) => {
             eprintln!(
@@ -231,9 +289,10 @@ pub(crate) async fn update_assignment_core(
         }
     };
 
-    let calendar_url = parent_collection_url(&resource_url);
-    let (slot_start, slot_end) =
-        slot_for_pending_write(session, calendar_url, &write.date, uid).await;
+    let (slot_start, slot_end) = plan
+        .as_ref()
+        .and_then(|plan| plan.extra_slot)
+        .unwrap_or_else(full_window);
     let payload = build_ical_payload(
         uid,
         &write.date,
@@ -260,7 +319,13 @@ pub(crate) async fn update_assignment_core(
         return Err(format!("Kalenderserver antwortete mit HTTP {status}"));
     }
 
-    reallocate_day_best_effort(session, calendar_url, &write.date).await;
+    match plan {
+        Some(plan) => {
+            apply_planned_updates_best_effort(session, calendar_url, &write.date, plan.updates)
+                .await
+        }
+        None => reallocate_day_best_effort(session, calendar_url, &write.date).await,
+    }
     if let Some(previous) = previous_date {
         if previous != write.date {
             reallocate_day_best_effort(session, calendar_url, &previous).await;
