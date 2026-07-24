@@ -10,6 +10,10 @@ export interface CellEvent {
   /** End time in HH:MM format. Null for all-day events. */
   endTime: string | null;
   href: string | null;
+  /** Daylite project reference (e.g. "/v1/projects/42"). Null for non-assignment events. */
+  projectRef: string | null;
+  /** Daylite project status. Null for non-assignment events and for assignments whose project could not be resolved. */
+  projectStatus: string | null;
 }
 
 function projectStatusToColor(status: string | null | undefined): string {
@@ -46,5 +50,7 @@ export function toCellEvent(event: CalendarCellEvent): CellEvent {
     startTime: event.startTime,
     endTime: event.endTime,
     href: event.href,
+    projectRef: event.projectRef,
+    projectStatus: event.projectStatus,
   };
 }
