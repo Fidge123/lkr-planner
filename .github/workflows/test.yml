@@ -68,5 +68,8 @@ jobs:
         env:
           RUSTFLAGS: -D warnings
 
+      - name: Install uv (runs the disposable Radicale CalDAV server for integration tests)
+        uses: astral-sh/setup-uv@v4
+
       - name: Run rust tests
         run: cargo test --manifest-path src-tauri/Cargo.toml

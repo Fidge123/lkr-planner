@@ -47,6 +47,11 @@ pub(super) struct RawVEvent {
     pub(super) start_time: Option<String>,
     pub(super) end_time: Option<String>,
     pub(super) href: String,
+    // ETag from d:getetag in the REPORT response; sent as If-Match on re-slot PUTs. Empty if absent.
+    pub(super) etag: String,
+    // Full calendar-data text of the resource, used to patch slot times without dropping
+    // user-added properties. Empty when the event was not parsed from a REPORT.
+    pub(super) raw_ical: String,
 }
 
 pub(super) struct PendingEvent {
