@@ -207,19 +207,22 @@ git-crypt status -e tests/cassettes
 
 ### CalDAV Integration Test (disposable Radicale server)
 
-The CalDAV assignment write path (discover a calendar, create, update, delete) is covered end-to-end by `caldav_write_path_against_disposable_radicale`.
+The CalDAV assignment write path (create, update, delete) is covered end-to-end by `caldav_write_path_against_disposable_radicale`.
 It runs over real HTTP against a throwaway [Radicale](https://radicale.org/) server, with no production credentials.
 The test spawns Radicale on a random port, seeds a calendar, discovers it by display name, runs create -> update -> delete, and tears everything down.
 
-Discovery is why the test points at the CalDAV home-set root rather than a single calendar: production configures the multi-calendar root, and a REPORT or PUT against that root is rejected with HTTP 405, so the calendar collection is discovered by its display name first.
+Calendar discovery (a PROPFIND that finds a collection by its display name) exists only inside this test, so it can find the calendar it just seeded on a throwaway server.
+It is test-only infrastructure and does not change how the running app resolves a calendar URL, which is still read from configuration.
 
-The test skips itself when Radicale is not installed, so it is a no-op unless you install it:
+This test is mandatory, not skippable: it uses [`uv`](https://docs.astral.sh/uv/) to fetch and run Radicale on demand via `uvx radicale`, so no manual install step is needed, but it fails loudly if `uv`/`uvx` is missing, the on-demand install fails, or the server never becomes ready.
+
+Install `uv` once to run it locally:
 
 ```bash
-pip install radicale
+curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-CI installs Radicale into a virtualenv and runs the test automatically.
+CI installs `uv` via `astral-sh/setup-uv` and runs the test automatically; `uvx` caches Radicale after the first run, so later runs start instantly.
 
 #### Create the CI Secret
 

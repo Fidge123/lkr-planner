@@ -382,8 +382,10 @@ mod tests {
     // ── Disposable Radicale server integration test ──
     //
     // Runs the full write path over real HTTP against a throwaway Radicale CalDAV server,
-    // with no production credentials. Skipped when Radicale is not installed; CI installs it
-    // (see the README). Validates real CalDAV request/response handling end-to-end.
+    // with no production credentials. Mandatory: `uvx` fetches and runs Radicale on demand
+    // (see the README), and the test fails loudly if `uv`/`uvx` is missing, the on-demand
+    // install fails, or the server never becomes ready. Validates real CalDAV
+    // request/response handling end-to-end.
 
     use super::super::report::discover_calendar_by_name;
 
@@ -442,22 +444,19 @@ mod tests {
     }
 
     impl RadicaleServer {
-        /// Returns `None` when Radicale is not importable, so the test can skip cleanly.
-        fn start() -> Option<Self> {
-            let available = std::process::Command::new("python3")
-                .args(["-c", "import radicale"])
-                .status()
-                .map(|s| s.success())
-                .unwrap_or(false);
-            if !available {
-                return None;
-            }
-
+        /// Spawns a disposable Radicale server via `uvx`, which fetches Radicale into a
+        /// cached, ephemeral environment on first use (no manual `pip install` needed).
+        /// This test is mandatory: any failure here panics rather than skipping, so a
+        /// missing `uv`/`uvx`, a failed on-demand install, or a server that never becomes
+        /// ready fails the test loudly instead of passing silently.
+        fn start() -> Self {
             let port = free_tcp_port();
             let dir =
                 std::env::temp_dir().join(format!("radicale-it-{}-{port}", std::process::id()));
-            std::fs::create_dir_all(dir.join("collections")).unwrap();
-            std::fs::write(dir.join("htpasswd"), "testuser:testpass\n").unwrap();
+            std::fs::create_dir_all(dir.join("collections"))
+                .expect("temp dir for radicale should be creatable");
+            std::fs::write(dir.join("htpasswd"), "testuser:testpass\n")
+                .expect("htpasswd file should be writable");
             std::fs::write(
                 dir.join("config"),
                 format!(
@@ -466,24 +465,65 @@ mod tests {
                     storage = dir.join("collections").display(),
                 ),
             )
-            .unwrap();
+            .expect("radicale config should be writable");
 
-            let child = std::process::Command::new("python3")
-                .args(["-m", "radicale", "--config"])
+            // Redirected to files (not piped) so a chatty server can never block on a full
+            // pipe buffer; read back into the panic message if startup fails.
+            let stdout = std::fs::File::create(dir.join("stdout.log"))
+                .expect("stdout log file should be creatable");
+            let stderr = std::fs::File::create(dir.join("stderr.log"))
+                .expect("stderr log file should be creatable");
+
+            let mut command = std::process::Command::new("uvx");
+            command
+                .args(["radicale", "--config"])
                 .arg(dir.join("config"))
-                .stdout(std::process::Stdio::null())
-                .stderr(std::process::Stdio::null())
-                .spawn()
-                .expect("radicale should spawn");
+                .stdout(stdout)
+                .stderr(stderr);
+            #[cfg(unix)]
+            {
+                use std::os::unix::process::CommandExt;
+                // `uvx` forks the real Radicale interpreter rather than exec-replacing
+                // itself, so it becomes a separate process; making it its own process
+                // group leader lets Drop kill the whole group instead of orphaning it.
+                command.process_group(0);
+            }
 
-            let server = RadicaleServer { child, dir, port };
+            let child = command.spawn().unwrap_or_else(|e| {
+                panic!(
+                    "failed to spawn `uvx radicale`: {e}\n\
+                     Install uv (https://docs.astral.sh/uv/getting-started/installation/) \
+                     so `uvx` is on PATH; it fetches Radicale on demand."
+                )
+            });
+
+            let mut server = RadicaleServer { child, dir, port };
             for _ in 0..100 {
+                if let Some(status) = server
+                    .child
+                    .try_wait()
+                    .expect("polling the radicale process should not fail")
+                {
+                    panic!(
+                        "`uvx radicale` exited early with {status} before becoming ready:\n{}",
+                        server.read_logs()
+                    );
+                }
                 if std::net::TcpStream::connect(("127.0.0.1", server.port)).is_ok() {
-                    return Some(server);
+                    return server;
                 }
                 std::thread::sleep(Duration::from_millis(100));
             }
-            panic!("radicale did not become ready on port {port}");
+            panic!(
+                "radicale did not become ready on port {port} within 10s:\n{}",
+                server.read_logs()
+            );
+        }
+
+        fn read_logs(&self) -> String {
+            let stdout = std::fs::read_to_string(self.dir.join("stdout.log")).unwrap_or_default();
+            let stderr = std::fs::read_to_string(self.dir.join("stderr.log")).unwrap_or_default();
+            format!("--- stdout ---\n{stdout}\n--- stderr ---\n{stderr}")
         }
 
         fn base_url(&self) -> String {
@@ -497,7 +537,20 @@ mod tests {
 
     impl Drop for RadicaleServer {
         fn drop(&mut self) {
-            let _ = self.child.kill();
+            // Kill the whole process group `uvx` and the Radicale it forked belong to;
+            // `child.kill()` alone only reaches the immediate `uvx` process and leaves
+            // Radicale running, reparented to init.
+            #[cfg(unix)]
+            {
+                let pgid = self.child.id();
+                let _ = std::process::Command::new("kill")
+                    .args(["-9", "--", &format!("-{pgid}")])
+                    .status();
+            }
+            #[cfg(not(unix))]
+            {
+                let _ = self.child.kill();
+            }
             let _ = self.child.wait();
             let _ = std::fs::remove_dir_all(&self.dir);
         }
@@ -545,12 +598,7 @@ mod tests {
 
     #[tokio::test]
     async fn caldav_write_path_against_disposable_radicale() {
-        let Some(server) = RadicaleServer::start() else {
-            eprintln!(
-                "skipping caldav_write_path_against_disposable_radicale: radicale not installed"
-            );
-            return;
-        };
+        let server = RadicaleServer::start();
         seed_radicale_calendar(&server, "neuburg", "neuburg-termine").await;
 
         let session = CaldavSession {
