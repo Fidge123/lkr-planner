@@ -201,23 +201,23 @@ describe("computeEdgeZone", () => {
 });
 
 describe("EdgeHoverNavigator", () => {
-  it("navigates once after the dwell time in an edge zone", async () => {
+  it("navigates once after the dwell time, then stays quiet during the cooldown", async () => {
     const onNavigate = mock((_direction: -1 | 1) => {});
-    const navigator = new EdgeHoverNavigator(onNavigate, 20);
+    const navigator = new EdgeHoverNavigator(onNavigate, 20, 20);
 
     navigator.setZone("right");
-    await Bun.sleep(30);
+    await Bun.sleep(35); // past the 20ms dwell, still within the 20ms cooldown
     navigator.stop();
 
     expect(onNavigate.mock.calls).toEqual([[1]]);
   });
 
-  it("repeats navigation while the pointer stays in the zone", async () => {
+  it("repeats navigation after the cooldown while the pointer stays in the zone", async () => {
     const onNavigate = mock((_direction: -1 | 1) => {});
-    const navigator = new EdgeHoverNavigator(onNavigate, 20);
+    const navigator = new EdgeHoverNavigator(onNavigate, 20, 20);
 
     navigator.setZone("left");
-    await Bun.sleep(50);
+    await Bun.sleep(90); // dwell(20) + cooldown(20) + dwell(20), with margin
     navigator.stop();
 
     expect(onNavigate.mock.calls.length).toBeGreaterThanOrEqual(2);
@@ -226,7 +226,7 @@ describe("EdgeHoverNavigator", () => {
 
   it("does not navigate when the pointer leaves the zone before the dwell elapses", async () => {
     const onNavigate = mock((_direction: -1 | 1) => {});
-    const navigator = new EdgeHoverNavigator(onNavigate, 20);
+    const navigator = new EdgeHoverNavigator(onNavigate, 20, 20);
 
     navigator.setZone("right");
     navigator.setZone(null);
@@ -236,14 +236,39 @@ describe("EdgeHoverNavigator", () => {
     expect(onNavigate).not.toHaveBeenCalled();
   });
 
+  it("leaving the zone during the cooldown prevents the next navigation", async () => {
+    const onNavigate = mock((_direction: -1 | 1) => {});
+    const navigator = new EdgeHoverNavigator(onNavigate, 20, 20);
+
+    navigator.setZone("right");
+    await Bun.sleep(25); // past the dwell, now within the cooldown window
+    navigator.setZone(null);
+    await Bun.sleep(30); // past when a second fire would have landed
+    navigator.stop();
+
+    expect(onNavigate.mock.calls).toEqual([[1]]);
+  });
+
   it("stop clears a pending dwell", async () => {
     const onNavigate = mock((_direction: -1 | 1) => {});
-    const navigator = new EdgeHoverNavigator(onNavigate, 20);
+    const navigator = new EdgeHoverNavigator(onNavigate, 20, 20);
 
     navigator.setZone("right");
     navigator.stop();
     await Bun.sleep(30);
 
     expect(onNavigate).not.toHaveBeenCalled();
+  });
+
+  it("stop clears a pending cooldown", async () => {
+    const onNavigate = mock((_direction: -1 | 1) => {});
+    const navigator = new EdgeHoverNavigator(onNavigate, 20, 20);
+
+    navigator.setZone("right");
+    await Bun.sleep(25); // fires once, now within the cooldown window
+    navigator.stop();
+    await Bun.sleep(30);
+
+    expect(onNavigate.mock.calls).toEqual([[1]]);
   });
 });

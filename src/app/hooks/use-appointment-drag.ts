@@ -36,7 +36,9 @@ export type DropOutcome =
 /** Width of the edge band (px) that triggers week navigation while dragging. */
 export const edgeZoneWidth = 48;
 /** How long (ms) the pointer must dwell in an edge band before navigating. */
-export const edgeDwellMs = 800;
+export const edgeDwellMs = 1000;
+/** How long (ms) to wait after a navigation before the next dwell can start, so holding a bit too long after a jump costs at most one extra week instead of compounding immediately. */
+export const edgeCooldownMs = 1000;
 
 /** Decides between no-op, same-calendar reschedule, and cross-calendar move. */
 export function decideDropAction(
@@ -138,8 +140,9 @@ export function computeEdgeZone(
 
 /**
  * Owns the edge-hover dwell timer: entering an edge band starts the dwell, expiry
- * navigates one week and restarts the dwell (multi-week jumps), leaving the band
- * or stopping clears it.
+ * navigates one week, and after a cooldown the dwell restarts if the pointer is
+ * still in the zone (multi-week jumps); leaving the band or stopping cancels
+ * whichever phase (dwell or cooldown) is currently pending.
  */
 export class EdgeHoverNavigator {
   private zone: "left" | "right" | null = null;
@@ -148,6 +151,7 @@ export class EdgeHoverNavigator {
   constructor(
     private readonly onNavigate: (direction: -1 | 1) => void,
     private readonly dwellMs: number,
+    private readonly cooldownMs: number,
   ) {}
 
   setZone(zone: "left" | "right" | null) {
@@ -167,11 +171,17 @@ export class EdgeHoverNavigator {
   private startDwell(zone: "left" | "right") {
     this.timer = setTimeout(() => {
       this.onNavigate(zone === "left" ? -1 : 1);
+      this.startCooldown(zone);
+    }, this.dwellMs);
+  }
+
+  private startCooldown(zone: "left" | "right") {
+    this.timer = setTimeout(() => {
       // Restart while the pointer stays in the zone so one drag can cross several weeks.
       if (this.zone === zone) {
         this.startDwell(zone);
       }
-    }, this.dwellMs);
+    }, this.cooldownMs);
   }
 
   private clearTimer() {
@@ -232,6 +242,7 @@ export function useAppointmentDrag({
     navigatorRef.current = new EdgeHoverNavigator(
       (direction) => onNavigateWeekRef.current(direction),
       edgeDwellMs,
+      edgeCooldownMs,
     );
   }
 
