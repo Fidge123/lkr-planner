@@ -79,7 +79,6 @@ function App() {
     setIcalDialogEmployee(null);
   };
 
-  // Used by drag-and-drop edge-hover navigation so a card can cross week boundaries.
   const handleNavigateWeek = useCallback((direction: -1 | 1) => {
     setWeekOffset((prev) => prev + direction);
   }, []);
@@ -107,7 +106,7 @@ function App() {
           <button
             type="button"
             className="btn btn-ghost pl-2"
-            onClick={() => setWeekOffset((prev) => prev - 1)}
+            onClick={() => handleNavigateWeek(-1)}
           >
             <ChevronLeft className="" />
             Zurück
@@ -122,7 +121,7 @@ function App() {
           <button
             type="button"
             className="btn btn-ghost pr-2"
-            onClick={() => setWeekOffset((prev) => prev + 1)}
+            onClick={() => handleNavigateWeek(1)}
           >
             Weiter
             <ChevronRight />

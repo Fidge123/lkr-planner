@@ -19,11 +19,6 @@ export const commands = {
 	dayliteUpdateContactIcalUrls: (input: DayliteUpdateContactIcalUrlsInput) => typedError<PlanningContactRecord, DayliteApiError>(__TAURI_INVOKE("daylite_update_contact_ical_urls", { input })),
 	createAssignment: (input: CreateAssignmentInput) => typedError<string, string>(__TAURI_INVOKE("create_assignment", { input })),
 	updateAssignment: (input: UpdateAssignmentInput) => typedError<null, string>(__TAURI_INVOKE("update_assignment", { input })),
-	/**
-	 *  Moves an assignment to another employee's primary calendar by creating the event
-	 *  there first and then deleting the source event. Returns a structured result so the
-	 *  frontend can reconcile a partial move (target created, source delete failed).
-	 */
 	moveAssignment: (href: string, targetEmployeeReference: string, date: string, projectRef: string, projectName: string) => typedError<MoveAssignmentResult, string>(__TAURI_INVOKE("move_assignment", { href, targetEmployeeReference, date, projectRef, projectName })),
 	deleteAssignment: (href: string) => typedError<null, string>(__TAURI_INVOKE("delete_assignment", { href })),
 	zepSaveCredentials: (rootUrl: string, username: string, password: string) => typedError<null, ZepError>(__TAURI_INVOKE("zep_save_credentials", { rootUrl, username, password })),

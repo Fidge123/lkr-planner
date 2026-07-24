@@ -40,7 +40,6 @@ export const edgeDwellMs = 1000;
 /** How long (ms) to wait after a navigation before the next dwell can start, so holding a bit too long after a jump costs at most one extra week instead of compounding immediately. */
 export const edgeCooldownMs = 1000;
 
-/** Decides between no-op, same-calendar reschedule, and cross-calendar move. */
 export function decideDropAction(
   source: AppointmentDragPayload,
   target: DropCellTarget,
@@ -127,7 +126,6 @@ export async function performDrop(
   return { kind: "done" };
 }
 
-/** Returns which edge band of a container of the given width a pointer x is in. */
 export function computeEdgeZone(
   x: number,
   width: number,
@@ -210,6 +208,7 @@ export interface AppointmentDragState {
 interface UseAppointmentDragArgs {
   onNavigateWeek: (direction: -1 | 1) => void;
   reloadAssignments: () => void;
+  invalidateWeeksContaining: (uid: string) => void;
 }
 
 /**
@@ -220,6 +219,7 @@ interface UseAppointmentDragArgs {
 export function useAppointmentDrag({
   onNavigateWeek,
   reloadAssignments,
+  invalidateWeeksContaining,
 }: UseAppointmentDragArgs): AppointmentDragState {
   const [activePayload, setActivePayload] =
     useState<AppointmentDragPayload | null>(null);
@@ -236,6 +236,12 @@ export function useAppointmentDrag({
   onNavigateWeekRef.current = onNavigateWeek;
   const reloadAssignmentsRef = useRef(reloadAssignments);
   reloadAssignmentsRef.current = reloadAssignments;
+  const invalidateWeeksContainingRef = useRef(invalidateWeeksContaining);
+  invalidateWeeksContainingRef.current = invalidateWeeksContaining;
+
+  // Held for the reconciliation path, which reloads only once the user resolves
+  // the dialog, long after the drop cleared activePayloadRef.
+  const droppedUidRef = useRef<string | null>(null);
 
   const navigatorRef = useRef<EdgeHoverNavigator | null>(null);
   if (navigatorRef.current === null) {
@@ -284,10 +290,12 @@ export function useAppointmentDrag({
     })
       .then((outcome) => {
         if (outcome.kind === "done") {
+          invalidateWeeksContainingRef.current(source.uid);
           reloadAssignmentsRef.current();
           return;
         }
         if (outcome.kind === "partialMove") {
+          droppedUidRef.current = source.uid;
           setReconciliation({
             newHref: outcome.newHref,
             sourceHref: outcome.sourceHref,
@@ -315,6 +323,10 @@ export function useAppointmentDrag({
 
   const resolveReconciliation = useCallback(() => {
     setReconciliation(null);
+    if (droppedUidRef.current !== null) {
+      invalidateWeeksContainingRef.current(droppedUidRef.current);
+      droppedUidRef.current = null;
+    }
     reloadAssignmentsRef.current();
   }, []);
 

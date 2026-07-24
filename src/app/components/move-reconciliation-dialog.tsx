@@ -5,12 +5,13 @@ export function MoveReconciliationDialog({
   reconciliation,
   onResolved,
 }: Props) {
-  const [isSaving, setIsSaving] = useState(false);
   const [pendingChoice, setPendingChoice] =
     useState<ReconciliationChoice | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   if (!reconciliation) return null;
+
+  const isSaving = pendingChoice !== null;
 
   const resolve = async (choice: ReconciliationChoice) => {
     if (choice === "keepBoth") {
@@ -18,7 +19,6 @@ export function MoveReconciliationDialog({
       return;
     }
 
-    setIsSaving(true);
     setPendingChoice(choice);
     setErrorMessage(null);
     try {
@@ -27,7 +27,6 @@ export function MoveReconciliationDialog({
       );
       if (result.status === "error") {
         setErrorMessage(result.error);
-        setIsSaving(false);
         setPendingChoice(null);
         return;
       }
@@ -36,7 +35,6 @@ export function MoveReconciliationDialog({
       // The generated bindings re-throw Error-typed rejections (IPC failures);
       // without this the dialog would stay disabled forever.
       setErrorMessage("Der Einsatz konnte nicht gelöscht werden.");
-      setIsSaving(false);
       setPendingChoice(null);
     }
   };
@@ -108,8 +106,6 @@ export type ReconciliationChoice =
   | "keepOldDeleteNew"
   | "keepBoth";
 
-// Maps a deleting choice to the href that must be deleted, so the component
-// and its tests share a single source of truth for this mapping.
 export function hrefToDelete(
   choice: Exclude<ReconciliationChoice, "keepBoth">,
   reconciliation: MoveReconciliation,

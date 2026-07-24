@@ -239,14 +239,7 @@ pub async fn create_assignment(
     let store =
         crate::integrations::local_store::load_local_store(app).map_err(|e| e.user_message)?;
 
-    let calendar_url = store
-        .employee_settings
-        .iter()
-        .find(|s| s.daylite_contact_reference == input.employee_reference)
-        .and_then(|s| s.zep_primary_calendar.as_deref())
-        .filter(|u| !u.is_empty())
-        .ok_or_else(|| "Kein Kalender für diesen Mitarbeiter konfiguriert.".to_string())?
-        .to_string();
+    let calendar_url = resolve_employee_calendar_url(&store, &input.employee_reference)?;
 
     let session = load_caldav_session(&store)?;
 
@@ -260,6 +253,20 @@ pub async fn create_assignment(
         },
     )
     .await
+}
+
+fn resolve_employee_calendar_url(
+    store: &crate::integrations::local_store::LocalStore,
+    employee_reference: &str,
+) -> Result<String, String> {
+    store
+        .employee_settings
+        .iter()
+        .find(|s| s.daylite_contact_reference == employee_reference)
+        .and_then(|s| s.zep_primary_calendar.as_deref())
+        .filter(|u| !u.is_empty())
+        .map(|u| u.to_string())
+        .ok_or_else(|| "Kein Kalender für diesen Mitarbeiter konfiguriert.".to_string())
 }
 
 fn load_caldav_session(
@@ -316,9 +323,6 @@ pub async fn update_assignment(
     .await
 }
 
-/// Moves an assignment to another employee's primary calendar by creating the event
-/// there first and then deleting the source event. Returns a structured result so the
-/// frontend can reconcile a partial move (target created, source delete failed).
 #[tauri::command]
 #[specta::specta]
 pub async fn move_assignment(
@@ -332,14 +336,7 @@ pub async fn move_assignment(
     let store =
         crate::integrations::local_store::load_local_store(app).map_err(|e| e.user_message)?;
 
-    let target_calendar_url = store
-        .employee_settings
-        .iter()
-        .find(|s| s.daylite_contact_reference == target_employee_reference)
-        .and_then(|s| s.zep_primary_calendar.as_deref())
-        .filter(|u| !u.is_empty())
-        .ok_or_else(|| "Kein Kalender für diesen Mitarbeiter konfiguriert.".to_string())?
-        .to_string();
+    let target_calendar_url = resolve_employee_calendar_url(&store, &target_employee_reference)?;
 
     let session = load_caldav_session(&store)?;
 

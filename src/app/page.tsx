@@ -15,6 +15,10 @@ import type {
 } from "../generated/tauri";
 import { MoveReconciliationDialog } from "./components/move-reconciliation-dialog";
 import { ProjectTable } from "./components/project-table";
+import {
+  AssignmentCardBody,
+  assignmentCardClass,
+} from "./components/timetable-cell";
 import { TimetableHeader } from "./components/timetable-header";
 import { TimetableRow } from "./components/timetable-row";
 import { filterVisibleEmployees } from "./employee-visibility";
@@ -70,38 +74,20 @@ function useFrozenDuringDrag<T>(
   isDragActive: boolean,
   key: string,
 ): T {
-  const [tracked, setTracked] = useState({ key, armed: false, frozen: value });
-  const armTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const tracked = useRef({ key, frozen: value });
+  const [armedKey, setArmedKey] = useState<string | null>(null);
 
   useEffect(() => {
-    if (armTimer.current !== null) {
-      clearTimeout(armTimer.current);
-    }
-    armTimer.current = setTimeout(() => {
-      setTracked((current) =>
-        current.key === key ? { ...current, armed: true } : current,
-      );
-    }, freezeArmDelayMs);
-    return () => {
-      if (armTimer.current !== null) {
-        clearTimeout(armTimer.current);
-      }
-    };
+    const timer = setTimeout(() => setArmedKey(key), freezeArmDelayMs);
+    return () => clearTimeout(timer);
   }, [key]);
 
-  if (tracked.key !== key) {
-    setTracked({ key, armed: false, frozen: value });
+  if (tracked.current.key !== key || armedKey !== key || !isDragActive) {
+    tracked.current = { key, frozen: value };
     return value;
   }
 
-  if (!tracked.armed || !isDragActive) {
-    if (tracked.frozen !== value) {
-      setTracked((current) => ({ ...current, frozen: value }));
-    }
-    return value;
-  }
-
-  return tracked.frozen;
+  return tracked.current.frozen;
 }
 
 export function PlanningGrid({
@@ -156,7 +142,7 @@ export function PlanningGridTable({
     errorMessage: employeeErrorMessage,
     reloadEmployees,
   } = employeeState;
-  const { reloadAssignments } = assignmentState;
+  const { reloadAssignments, invalidateWeeksContaining } = assignmentState;
   const {
     holidays,
     errorMessage: holidayErrorMessage,
@@ -177,6 +163,7 @@ export function PlanningGridTable({
   const drag = useAppointmentDrag({
     onNavigateWeek: onNavigateWeek ?? (() => {}),
     reloadAssignments,
+    invalidateWeeksContaining,
   });
   const isDragActive = drag.activePayload !== null;
   // A background reload for the SAME week (e.g. from a drop moments earlier)
@@ -338,9 +325,13 @@ export function PlanningGridTable({
 function DragPreviewCard({ payload }: { payload: AppointmentDragPayload }) {
   return (
     <span
-      className={`flex items-center w-full gap-4 p-2 rounded-lg text-base-100 shadow-lg ${payload.color}`}
+      className={`${assignmentCardClass} text-base-100 shadow-lg ${payload.color}`}
     >
-      <h4 className="flex-1 min-w-0 font-medium">{payload.title}</h4>
+      <AssignmentCardBody
+        startTime={null}
+        endTime={null}
+        title={payload.title}
+      />
     </span>
   );
 }

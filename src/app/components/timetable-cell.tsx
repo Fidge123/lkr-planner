@@ -101,7 +101,24 @@ interface Props {
   onSuggestionClick?: (suggestion: GhostSuggestion) => void;
 }
 
-/** An assignment card that can be dragged to another day or employee cell. */
+export const assignmentCardClass =
+  "flex items-center w-full gap-4 p-2 rounded-lg";
+
+export function AssignmentCardBody({ startTime, endTime, title }: BodyProps) {
+  return (
+    <>
+      <EventTime startTime={startTime} endTime={endTime} />
+      <h4 className="flex-1 min-w-0 font-medium">{title}</h4>
+    </>
+  );
+}
+
+interface BodyProps {
+  startTime: string | null;
+  endTime: string | null;
+  title: string;
+}
+
 function DraggableAssignmentCard({
   event,
   employeeRef,
@@ -131,12 +148,15 @@ function DraggableAssignmentCard({
     <button
       ref={setNodeRef}
       type="button"
-      className={`btn btn-block h-auto justify-start gap-4 text-base-100 p-2 rounded-lg transition-all hover:brightness-90 active:brightness-75 ${event.color} ${isDragging ? "opacity-40" : ""}`}
+      className={`btn btn-block h-auto justify-start ${assignmentCardClass} text-base-100 transition-all hover:brightness-90 active:brightness-75 ${event.color} ${isDragging ? "opacity-40" : ""}`}
       onClick={() => onEventClick(event)}
       {...(canDrag ? { ...listeners, ...attributes } : {})}
     >
-      <EventTime startTime={event.startTime} endTime={event.endTime} />
-      <h4 className="flex-1 min-w-0 font-medium">{event.title}</h4>
+      <AssignmentCardBody
+        startTime={event.startTime}
+        endTime={event.endTime}
+        title={event.title}
+      />
     </button>
   );
 }

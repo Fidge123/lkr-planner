@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   CalendarCellEvent,
   EmployeeWeekEvents,
@@ -21,6 +21,7 @@ export interface PlanningAssignmentsState {
   isLoading: boolean;
   errorMessage: string | null;
   reloadAssignments: () => void;
+  invalidateWeeksContaining: (uid: string) => void;
 }
 
 export function usePlanningAssignments(
@@ -104,13 +105,39 @@ export function usePlanningAssignments(
     void loadActiveWeek(weekStart, true);
   }, [weekStart, loadActiveWeek]);
 
-  return {
-    eventsByEmployee,
-    errorsByEmployee,
-    isLoading,
-    errorMessage,
-    reloadAssignments,
-  };
+  // Edge-hover navigation lets a drag end in a different week than it started,
+  // and reloadAssignments only refreshes the week that is active on drop. The
+  // week the event came from stays cached with the event still in its old slot,
+  // so it has to be evicted by locating the entry that still holds the uid.
+  const invalidateWeeksContaining = useCallback((uid: string) => {
+    for (const [ws, data] of Object.entries(cache.current)) {
+      const holdsUid = Object.values(data.eventsByEmployee).some((events) =>
+        events.some((event) => event.uid === uid),
+      );
+      if (holdsUid) {
+        delete cache.current[ws];
+      }
+    }
+  }, []);
+
+  return useMemo(
+    () => ({
+      eventsByEmployee,
+      errorsByEmployee,
+      isLoading,
+      errorMessage,
+      reloadAssignments,
+      invalidateWeeksContaining,
+    }),
+    [
+      eventsByEmployee,
+      errorsByEmployee,
+      isLoading,
+      errorMessage,
+      reloadAssignments,
+      invalidateWeeksContaining,
+    ],
+  );
 }
 
 function groupResults(entries: EmployeeWeekEvents[]): WeekData {
