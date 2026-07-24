@@ -1,5 +1,4 @@
 use chrono::NaiveDate;
-use tauri_plugin_http::reqwest::Method;
 
 use super::super::ical::parse_ical_events;
 use super::super::types::RawVEvent;
@@ -25,21 +24,19 @@ pub(super) async fn fetch_events_in_range(
 
     let body = build_report_body(&start_str, &end_str);
 
-    let response = session
-        .client
-        .request(
-            Method::from_bytes(b"REPORT").expect("REPORT is a valid HTTP method"),
+    let (status, xml_text) = session
+        .send(
+            "REPORT",
             calendar_url,
+            &[
+                ("Depth", "1"),
+                ("Content-Type", "application/xml; charset=utf-8"),
+            ],
+            Some(body.as_str()),
         )
-        .basic_auth(&session.username, Some(&session.password))
-        .header("Depth", "1")
-        .header("Content-Type", "application/xml; charset=utf-8")
-        .body(body)
-        .send()
         .await
         .map_err(|e| format!("Kalender konnte nicht abgerufen werden: {e}"))?;
 
-    let status = response.status().as_u16();
     if status == 401 {
         return Err("Authentifizierung fehlgeschlagen. ZEP-Zugangsdaten prüfen.".to_string());
     }
@@ -47,16 +44,11 @@ pub(super) async fn fetch_events_in_range(
         return Err(format!("CalDAV-Server antwortete mit HTTP {status}"));
     }
 
-    let xml_text = response
-        .text()
-        .await
-        .map_err(|e| format!("Kalenderantwort konnte nicht gelesen werden: {e}"))?;
-
     parse_caldav_report(&xml_text)
         .map_err(|e| format!("Kalenderantwort konnte nicht verarbeitet werden: {e}"))
 }
 
-fn build_report_body(start: &str, end: &str) -> String {
+pub(super) fn build_report_body(start: &str, end: &str) -> String {
     debug_assert!(
         start.len() == 16 && end.len() == 16,
         "CalDAV timestamp must be 16 chars: got start={start:?} end={end:?}"
@@ -126,6 +118,75 @@ fn parse_caldav_report(xml_text: &str) -> Result<Vec<RawVEvent>, String> {
     }
 
     Ok(events)
+}
+
+/// Discovers a calendar collection URL by its display name via a PROPFIND on the CalDAV
+/// home-set root. Needed because the configured root lists many calendars, and a REPORT
+/// or PUT against the root (rather than a specific calendar collection) is rejected with
+/// HTTP 405. Test-only: production reads the calendar URL straight from the local store.
+#[cfg(test)]
+pub(super) const PROPFIND_BODY: &str = concat!(
+    "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n",
+    "<d:propfind xmlns:d=\"DAV:\">\n",
+    "  <d:prop><d:displayname/><d:resourcetype/></d:prop>\n",
+    "</d:propfind>"
+);
+
+#[cfg(test)]
+pub(super) async fn discover_calendar_by_name(
+    session: &CaldavSession,
+    home_set_url: &str,
+    display_name: &str,
+) -> Result<String, String> {
+    let (status, xml_text) = session
+        .send(
+            "PROPFIND",
+            home_set_url,
+            &[
+                ("Depth", "1"),
+                ("Content-Type", "application/xml; charset=utf-8"),
+            ],
+            Some(PROPFIND_BODY),
+        )
+        .await
+        .map_err(|e| format!("Kalenderliste konnte nicht abgerufen werden: {e}"))?;
+
+    if !(200..300).contains(&status) {
+        return Err(format!("CalDAV-Server antwortete mit HTTP {status}"));
+    }
+
+    let href = parse_calendar_href_by_name(&xml_text, display_name)
+        .ok_or_else(|| format!("Kein Kalender mit dem Namen '{display_name}' gefunden."))?;
+    super::write::resolve_href(&href, &session.base_url)
+}
+
+/// Extracts the `d:href` of the first calendar-collection response whose `d:displayname`
+/// equals `display_name`. A response is a calendar when its `d:resourcetype` contains the
+/// CalDAV `calendar` element.
+#[cfg(test)]
+fn parse_calendar_href_by_name(xml_text: &str, display_name: &str) -> Option<String> {
+    let doc = roxmltree::Document::parse(xml_text).ok()?;
+    for response in doc
+        .descendants()
+        .filter(|n| n.has_tag_name(("DAV:", "response")))
+    {
+        let is_calendar = response
+            .descendants()
+            .any(|n| n.has_tag_name(("urn:ietf:params:xml:ns:caldav", "calendar")));
+        let name_matches = response
+            .descendants()
+            .any(|n| n.has_tag_name(("DAV:", "displayname")) && n.text() == Some(display_name));
+        if is_calendar && name_matches {
+            if let Some(href) = response
+                .children()
+                .find(|c| c.has_tag_name(("DAV:", "href")))
+                .and_then(|h| h.text())
+            {
+                return Some(href.to_string());
+            }
+        }
+    }
+    None
 }
 
 #[cfg(test)]

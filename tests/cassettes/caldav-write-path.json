@@ -1,0 +1,88 @@
+{
+  "interactions": [
+    {
+      "request": {
+        "method": "PROPFIND",
+        "path": "/dav/",
+        "query": [],
+        "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<d:propfind xmlns:d=\"DAV:\">\n  <d:prop><d:displayname/><d:resourcetype/></d:prop>\n</d:propfind>"
+      },
+      "response": {
+        "status": 207,
+        "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<d:multistatus xmlns:d=\"DAV:\" xmlns:c=\"urn:ietf:params:xml:ns:caldav\">\n  <d:response>\n    <d:href>/dav/</d:href>\n    <d:propstat><d:prop>\n      <d:displayname>Home</d:displayname>\n      <d:resourcetype><d:collection/></d:resourcetype>\n    </d:prop></d:propstat>\n  </d:response>\n  <d:response>\n    <d:href>/dav/testkalender/</d:href>\n    <d:propstat><d:prop>\n      <d:displayname>Testkalender</d:displayname>\n      <d:resourcetype><d:collection/><c:calendar/></d:resourcetype>\n    </d:prop></d:propstat>\n  </d:response>\n</d:multistatus>"
+      }
+    },
+    {
+      "request": {
+        "method": "REPORT",
+        "path": "/dav/testkalender/",
+        "query": [],
+        "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<c:calendar-query xmlns:d=\"DAV:\" xmlns:c=\"urn:ietf:params:xml:ns:caldav\">\n  <d:prop>\n    <d:getetag/>\n    <c:calendar-data/>\n  </d:prop>\n  <c:filter>\n    <c:comp-filter name=\"VCALENDAR\">\n      <c:comp-filter name=\"VEVENT\">\n        <c:time-range start=\"20260506T000000Z\" end=\"20260507T000000Z\"/>\n      </c:comp-filter>\n    </c:comp-filter>\n  </c:filter>\n</c:calendar-query>"
+      },
+      "response": {
+        "status": 207,
+        "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<d:multistatus xmlns:d=\"DAV:\" xmlns:c=\"urn:ietf:params:xml:ns:caldav\">\n  <d:response>\n    <d:href>/dav/testkalender/vcr-fixed-uid-0001.ics</d:href>\n    <d:propstat><d:prop>\n      <d:getetag>\"etag-vcr-1\"</d:getetag>\n      <c:calendar-data>BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:vcr-fixed-uid-0001\nDTSTART:20260506T080000\nDTEND:20260506T160000\nSUMMARY:Testprojekt\nDESCRIPTION:daylite:/v1/projects/42\nEND:VEVENT\nEND:VCALENDAR\n</c:calendar-data>\n    </d:prop></d:propstat>\n  </d:response>\n</d:multistatus>"
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "path": "/dav/testkalender/vcr-fixed-uid-0001.ics",
+        "query": [],
+        "body": "BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//lkr-planner//EN\nBEGIN:VEVENT\nUID:vcr-fixed-uid-0001\nDTSTART:20260506T080000\nDTEND:20260506T160000\nSUMMARY:Testprojekt\nDESCRIPTION:daylite:/v1/projects/42\nEND:VEVENT\nEND:VCALENDAR"
+      },
+      "response": {
+        "status": 201,
+        "body": ""
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/dav/testkalender/vcr-fixed-uid-0001.ics",
+        "query": [],
+        "body": null
+      },
+      "response": {
+        "status": 200,
+        "body": "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:vcr-fixed-uid-0001\r\nDTSTART:20260506T080000\r\nDTEND:20260506T160000\r\nSUMMARY:Testprojekt\r\nDESCRIPTION:daylite:/v1/projects/42\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"
+      }
+    },
+    {
+      "request": {
+        "method": "REPORT",
+        "path": "/dav/testkalender",
+        "query": [],
+        "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<c:calendar-query xmlns:d=\"DAV:\" xmlns:c=\"urn:ietf:params:xml:ns:caldav\">\n  <d:prop>\n    <d:getetag/>\n    <c:calendar-data/>\n  </d:prop>\n  <c:filter>\n    <c:comp-filter name=\"VCALENDAR\">\n      <c:comp-filter name=\"VEVENT\">\n        <c:time-range start=\"20260506T000000Z\" end=\"20260507T000000Z\"/>\n      </c:comp-filter>\n    </c:comp-filter>\n  </c:filter>\n</c:calendar-query>"
+      },
+      "response": {
+        "status": 207,
+        "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<d:multistatus xmlns:d=\"DAV:\" xmlns:c=\"urn:ietf:params:xml:ns:caldav\">\n  <d:response>\n    <d:href>/dav/testkalender/vcr-fixed-uid-0001.ics</d:href>\n    <d:propstat><d:prop>\n      <d:getetag>\"etag-vcr-1\"</d:getetag>\n      <c:calendar-data>BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:vcr-fixed-uid-0001\nDTSTART:20260506T080000\nDTEND:20260506T160000\nSUMMARY:Testprojekt\nDESCRIPTION:daylite:/v1/projects/42\nEND:VEVENT\nEND:VCALENDAR\n</c:calendar-data>\n    </d:prop></d:propstat>\n  </d:response>\n</d:multistatus>"
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "path": "/dav/testkalender/vcr-fixed-uid-0001.ics",
+        "query": [],
+        "body": "BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//lkr-planner//EN\nBEGIN:VEVENT\nUID:vcr-fixed-uid-0001\nDTSTART:20260506T080000\nDTEND:20260506T160000\nSUMMARY:Aktualisiertes Projekt\nDESCRIPTION:daylite:/v1/projects/43\nEND:VEVENT\nEND:VCALENDAR"
+      },
+      "response": {
+        "status": 204,
+        "body": ""
+      }
+    },
+    {
+      "request": {
+        "method": "DELETE",
+        "path": "/dav/testkalender/vcr-fixed-uid-0001.ics",
+        "query": [],
+        "body": null
+      },
+      "response": {
+        "status": 204,
+        "body": ""
+      }
+    }
+  ]
+}

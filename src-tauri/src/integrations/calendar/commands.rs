@@ -290,6 +290,8 @@ fn build_caldav_session(
             .filter_map(|s| s.zep_absence_calendar.clone())
             .filter(|u| !u.is_empty())
             .collect(),
+        #[cfg(test)]
+        test_hooks: None,
     })
 }
 

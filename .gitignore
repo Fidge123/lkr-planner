@@ -26,3 +26,6 @@ dist-ssr
 
 # OpenAPI artifacts (local only, not to be committed)
 docs/*openapi*.json
+
+# Local CalDAV recording from the live VCR verification test (not committed)
+tests/cassettes/*.local.json
