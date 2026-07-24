@@ -53,15 +53,18 @@ export function usePlanningAssignments(
     setIsLoading(true);
     try {
       const result = await commands.loadWeekEvents(ws);
-      if (id !== requestIdRef.current) return;
       if (result.status === "error") {
+        if (id !== requestIdRef.current) return;
         setErrorMessage(result.error);
         setEventsByEmployee({});
         setErrorsByEmployee({});
         return;
       }
+      // Cache unconditionally, even for a superseded request: it's still valid
+      // data for that week. Only the display update below is staleness-gated.
       const data = groupResults(result.data);
       cache.current[ws] = data;
+      if (id !== requestIdRef.current) return;
       setEventsByEmployee(data.eventsByEmployee);
       setErrorsByEmployee(data.errorsByEmployee);
       setErrorMessage(null);
@@ -98,8 +101,7 @@ export function usePlanningAssignments(
   }, [debouncedWeekStart, loadActiveWeek, prefetchWeek]);
 
   const reloadAssignments = useCallback(() => {
-    cache.current = {};
-    void loadActiveWeek(weekStart);
+    void loadActiveWeek(weekStart, true);
   }, [weekStart, loadActiveWeek]);
 
   return {
