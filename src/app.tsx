@@ -6,7 +6,7 @@ import { SettingsDialog } from "./app/components/settings/settings-dialog";
 import { usePlanningAssignments } from "./app/hooks/use-planning-assignments";
 import { useZepCalendars } from "./app/hooks/use-zep-calendars";
 import { PlanningGrid } from "./app/page";
-import { getWeekDays } from "./app/util";
+import { getWeekStart } from "./app/util";
 import type { EmployeeSetting, PlanningContactRecord } from "./generated/tauri";
 import { commands } from "./generated/tauri";
 import { loadDayliteContacts } from "./services/daylite-contacts";
@@ -14,9 +14,7 @@ import { loadDayliteContacts } from "./services/daylite-contacts";
 function App() {
   const [weekOffset, setWeekOffset] = useState(0);
   const [showWeekend, setShowWeekend] = useState(false);
-  const weekStart = getWeekDays(weekOffset, showWeekend)[0]
-    .toISOString()
-    .slice(0, 10);
+  const weekStart = getWeekStart(weekOffset, showWeekend);
   const planningAssignmentsState = usePlanningAssignments(weekStart);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [icalDialogEmployee, setIcalDialogEmployee] =

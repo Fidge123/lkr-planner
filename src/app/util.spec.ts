@@ -6,7 +6,7 @@ import {
   it,
   setSystemTime,
 } from "bun:test";
-import { getWeekDays, isToday, toLocalISODate } from "./util";
+import { getWeekDays, getWeekStart, isToday, toLocalISODate } from "./util";
 
 describe("util", () => {
   beforeAll(() => {
@@ -112,6 +112,34 @@ describe("util", () => {
       expect(toLocalISODate(new Date(2026, 0, 1))).toBe("2026-01-01");
       expect(toLocalISODate(new Date(2026, 11, 31))).toBe("2026-12-31");
       expect(toLocalISODate(new Date(2026, 3, 7))).toBe("2026-04-07");
+    });
+  });
+
+  describe("getWeekStart", () => {
+    it("is the first displayed day of the week", () => {
+      for (const showWeekend of [false, true]) {
+        expect(getWeekStart(0, showWeekend)).toBe(
+          toLocalISODate(getWeekDays(0, showWeekend)[0]),
+        );
+        expect(getWeekStart(-3, showWeekend)).toBe(
+          toLocalISODate(getWeekDays(-3, showWeekend)[0]),
+        );
+      }
+    });
+
+    it("covers every displayed day in the backend's seven-day window", () => {
+      for (const showWeekend of [false, true]) {
+        for (const offset of [-1, 0, 1]) {
+          const [y, m, d] = getWeekStart(offset, showWeekend)
+            .split("-")
+            .map(Number);
+          const start = new Date(y, m - 1, d);
+          const end = new Date(y, m - 1, d + 7);
+          for (const day of getWeekDays(offset, showWeekend)) {
+            expect(day >= start && day < end).toBe(true);
+          }
+        }
+      }
     });
   });
 
