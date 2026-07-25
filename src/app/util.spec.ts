@@ -14,23 +14,26 @@ describe("util", () => {
   });
 
   describe("getWeekDays", () => {
+    // Asserted as local calendar dates, not UTC instants: getWeekDays builds
+    // local-midnight dates, so toISOString would shift them a day east of UTC
+    // and pin these tests to a UTC-only test runner.
     it("should return the correct week days", () => {
       const weekDays = getWeekDays(0);
       expect(weekDays).toHaveLength(5);
-      expect(weekDays[0].toISOString()).toBe("2025-12-29T00:00:00.000Z");
-      expect(weekDays[4].toISOString()).toBe("2026-01-02T00:00:00.000Z");
+      expect(toLocalISODate(weekDays[0])).toBe("2025-12-29");
+      expect(toLocalISODate(weekDays[4])).toBe("2026-01-02");
     });
 
     it("should return the correct week days for a week offset", () => {
       const weekDays = getWeekDays(1);
-      expect(weekDays[0].toISOString()).toBe("2026-01-05T00:00:00.000Z");
-      expect(weekDays[4].toISOString()).toBe("2026-01-09T00:00:00.000Z");
+      expect(toLocalISODate(weekDays[0])).toBe("2026-01-05");
+      expect(toLocalISODate(weekDays[4])).toBe("2026-01-09");
     });
 
     it("should return the correct week days for a negative week offset", () => {
       const weekDays = getWeekDays(-4);
-      expect(weekDays[0].toISOString()).toBe("2025-12-01T00:00:00.000Z");
-      expect(weekDays[4].toISOString()).toBe("2025-12-05T00:00:00.000Z");
+      expect(toLocalISODate(weekDays[0])).toBe("2025-12-01");
+      expect(toLocalISODate(weekDays[4])).toBe("2025-12-05");
     });
 
     it("should produce dates at local midnight (hours/minutes/seconds are zero)", () => {
