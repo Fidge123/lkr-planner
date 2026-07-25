@@ -134,10 +134,8 @@ pub(crate) async fn delete_assignment_core(
     Ok(())
 }
 
-/// Moves an assignment to another calendar: creates the VEVENT on the target calendar
-/// first, then deletes the source. A failed target create returns `Err` and leaves the
-/// source untouched; a failed source delete returns `SourceDeleteFailed` so the caller
-/// can reconcile the duplicate instead of silently keeping it.
+/// A failed target create returns `Err` and leaves the source untouched; a failed
+/// source delete returns `SourceDeleteFailed` for the caller to reconcile.
 pub(crate) async fn move_assignment_core(
     session: &CaldavSession,
     source_href: &str,
@@ -192,9 +190,8 @@ mod tests {
     use std::time::Duration;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-    /// Minimal HTTP server for exercising the CalDAV write cores without a live server.
-    /// Routes are matched by method + path prefix; every request is recorded so tests
-    /// can assert which writes happened and in which order.
+    /// Routes are matched by method + path prefix, and every request is recorded
+    /// in arrival order.
     struct TestServer {
         base_url: String,
         received: Arc<Mutex<Vec<(String, String)>>>,
@@ -249,7 +246,6 @@ mod tests {
         }
     }
 
-    /// Reads one HTTP request (head + body per Content-Length) and returns method and path.
     async fn read_request(stream: &mut tokio::net::TcpStream) -> Option<(String, String)> {
         let mut buffer = Vec::new();
         let mut chunk = [0u8; 1024];

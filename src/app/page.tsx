@@ -30,16 +30,11 @@ import { usePlanningEmployees } from "./hooks/use-planning-employees";
 import { usePlanningProjects } from "./hooks/use-planning-projects";
 import { getWeekDays, toLocalISODate } from "./util";
 
-/**
- * dnd-kit only refreshes a droppable's measured rect via a per-cell ResizeObserver
- * (fires only when that cell's own box resizes) or a periodic timer that only
- * re-schedules while the pointer is moving. Neither catches a cell shifting
- * position because an earlier row grew — e.g. another employee's assignment data
- * finishing its load mid-drag — while the pointer holds still over the target,
- * which desyncs the drop target from the cursor or makes the drop miss entirely.
- * Rendered inside DndContext; forces a plain, movement-independent re-measure for
- * as long as a drag is active.
- */
+// dnd-kit refreshes a droppable's rect from a per-cell ResizeObserver, which
+// fires only when that cell's own box resizes, and from a timer that only
+// re-schedules while the pointer moves. Neither catches a cell shifting because
+// an earlier row grew under a still pointer, which leaves the drop landing where
+// the cell used to be.
 function DropzoneMeasurementTicker() {
   const { active, measureDroppableContainers } = useDndContext();
   useEffect(() => {
@@ -50,20 +45,11 @@ function DropzoneMeasurementTicker() {
   return null;
 }
 
-/**
- * Holds `value` steady for as long as `isDragActive` is true, resuming live
- * updates the moment it goes false. A background reload landing mid-drag for
- * the SAME week (e.g. from rescheduling a different employee moments earlier)
- * would otherwise grow or shrink rows and shift every cell under the pointer,
- * so the drop can land on whatever now happens to be there instead of what the
- * user was aiming at.
- *
- * Freezing starts only once `loadedKey` reaches `key`, i.e. once `value` is
- * this week's data rather than the previous week's still on screen while the
- * fetch runs. Edge-hover navigation changes `key` mid-drag, and freezing before
- * the new week arrives would pin the empty grid in place for the rest of the
- * drag however long the fetch takes.
- */
+// A reload landing mid-drag would resize rows and shift every cell under the
+// pointer, so the drop lands on whatever moved into place. Freezing waits for
+// `loadedKey` to reach `key`, because edge-hover navigation changes `key`
+// mid-drag and freezing before the new week arrives pins the empty grid there
+// for the rest of the drag.
 function useFrozenDuringDrag<T>(
   value: T,
   isDragActive: boolean,
@@ -165,8 +151,6 @@ export function PlanningGridTable({
   });
   const isDragActive = drag.activePayload !== null;
   const weekStart = toLocalISODate(weekDays[0]);
-  // A background reload for the SAME week (e.g. from a drop moments earlier)
-  // must not resize any row while this drag is active - see useFrozenDuringDrag.
   const {
     eventsByEmployee,
     errorsByEmployee,
@@ -227,8 +211,6 @@ export function PlanningGridTable({
         </p>
       ) : null}
       {drag.errorMessage ? (
-        // Fixed-position toast so the message is visible no matter where the
-        // grid is scrolled when the drop fails.
         <section className="toast toast-top toast-center z-50">
           <section className="alert alert-error">
             <span>{drag.errorMessage}</span>
@@ -319,7 +301,6 @@ export function PlanningGridTable({
   );
 }
 
-/** Pointer-following preview of the dragged card, portal-mounted so it survives week navigation. */
 function DragPreviewCard({ payload }: { payload: AppointmentDragPayload }) {
   return (
     <span

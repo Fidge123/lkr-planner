@@ -35,10 +35,8 @@ export function usePlanningAssignments(
   const [errorsByEmployee, setErrorsByEmployee] = useState<EmployeeErrors>({});
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  // Which week the currently exposed events belong to. Set in the same batch as
-  // the events themselves, so a consumer can tell whether what it is rendering
-  // is this week's data or the previous week's, still on screen while a fetch
-  // is in flight.
+  // Set in the same batch as the events, so a consumer can tell whether it is
+  // rendering this week's data or the previous week's, still up during a fetch.
   const [loadedWeekStart, setLoadedWeekStart] = useState<string | null>(null);
 
   const loadActiveWeek = useCallback(async (ws: string, invalidate = false) => {
@@ -115,10 +113,9 @@ export function usePlanningAssignments(
     void loadActiveWeek(weekStart, true);
   }, [weekStart, loadActiveWeek]);
 
-  // Edge-hover navigation lets a drag end in a different week than it started,
-  // and reloadAssignments only refreshes the week that is active on drop. The
-  // week the event came from stays cached with the event still in its old slot,
-  // so it has to be evicted by locating the entry that still holds the uid.
+  // A drag can end in a different week than it started, and reloadAssignments
+  // only refreshes the week active on drop, leaving the source week cached with
+  // the event still in its old slot.
   const invalidateWeeksContaining = useCallback((uid: string) => {
     for (const [ws, data] of Object.entries(cache.current)) {
       const holdsUid = Object.values(data.eventsByEmployee).some((events) =>

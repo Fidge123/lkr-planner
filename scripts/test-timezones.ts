@@ -1,9 +1,7 @@
 import { spawnSync } from "node:child_process";
 
-// CI runners default to UTC, where a value built in local time and a value
-// built in UTC are indistinguishable. Every date bug that comes from mixing the
-// two is therefore invisible on a UTC-only run, so the suite runs again under
-// offsets that bracket UTC in both directions.
+// CI runners default to UTC, where a value built in local time and one built in
+// UTC are indistinguishable, so every bug from mixing the two passes unnoticed.
 const timezones = [
   "UTC",
   "Europe/Berlin", // production timezone

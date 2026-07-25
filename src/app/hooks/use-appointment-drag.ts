@@ -7,7 +7,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { commands, type MoveAssignmentResult } from "../../generated/tauri";
 import type { MoveReconciliation } from "../components/move-reconciliation-dialog";
 
-/** Identity and display data of the assignment card being dragged. */
 export interface AppointmentDragPayload {
   uid: string;
   href: string;
@@ -19,7 +18,6 @@ export interface AppointmentDragPayload {
   color: string;
 }
 
-/** The day cell a card is dropped on. */
 export interface DropCellTarget {
   employeeRef: string;
   date: string;
@@ -33,11 +31,10 @@ export type DropOutcome =
   | { kind: "partialMove"; newHref: string; sourceHref: string }
   | { kind: "error"; message: string };
 
-/** Width of the edge band (px) that triggers week navigation while dragging. */
 export const edgeZoneWidth = 48;
-/** How long (ms) the pointer must dwell in an edge band before navigating. */
 export const edgeDwellMs = 1000;
-/** How long (ms) to wait after a navigation before the next dwell can start, so holding a bit too long after a jump costs at most one extra week instead of compounding immediately. */
+// Without a cooldown the dwell restarts the instant it fires, so holding a
+// moment too long after a jump compounds into several weeks at once.
 export const edgeCooldownMs = 1000;
 
 export function decideDropAction(
@@ -75,12 +72,8 @@ interface DropDeps {
   >;
 }
 
-/**
- * Persists a drop: reschedule on the same calendar or move across calendars.
- * Both paths rebuild the VEVENT from the payload (fixed time window, single
- * daylite: description line); properties added in other calendar clients are
- * not preserved — lkr-planner owns its assignment events.
- */
+// Both paths rebuild the VEVENT from the payload, so properties added in other
+// calendar clients are not preserved.
 export async function performDrop(
   source: AppointmentDragPayload,
   target: DropCellTarget,
@@ -136,12 +129,6 @@ export function computeEdgeZone(
   return null;
 }
 
-/**
- * Owns the edge-hover dwell timer: entering an edge band starts the dwell, expiry
- * navigates one week, and after a cooldown the dwell restarts if the pointer is
- * still in the zone (multi-week jumps); leaving the band or stopping cancels
- * whichever phase (dwell or cooldown) is currently pending.
- */
 export class EdgeHoverNavigator {
   private zone: "left" | "right" | null = null;
   private timer: ReturnType<typeof setTimeout> | null = null;
@@ -191,12 +178,9 @@ export class EdgeHoverNavigator {
 }
 
 export interface AppointmentDragState {
-  /** Payload of the card currently being dragged, for the DragOverlay preview. */
   activePayload: AppointmentDragPayload | null;
-  /** German error from the last failed drop; cleared when the next drag starts. */
   errorMessage: string | null;
   clearError: () => void;
-  /** Set when a cross-employee move created the target but the source delete failed. */
   reconciliation: MoveReconciliation | null;
   resolveReconciliation: () => void;
   onDragStart: (event: DragStartEvent) => void;
@@ -211,11 +195,6 @@ interface UseAppointmentDragArgs {
   invalidateWeeksContaining: (uid: string) => void;
 }
 
-/**
- * Wraps the dnd-kit drag lifecycle for the planning grid: carries the drag payload,
- * dispatches drops to the backend, drives edge-hover week navigation, and holds the
- * reconciliation state for a partial cross-employee move.
- */
 export function useAppointmentDrag({
   onNavigateWeek,
   reloadAssignments,
@@ -231,7 +210,6 @@ export function useAppointmentDrag({
   const [reconciliation, setReconciliation] =
     useState<MoveReconciliation | null>(null);
 
-  // Latest-callback refs so drag handlers and the dwell timer never go stale.
   const onNavigateWeekRef = useRef(onNavigateWeek);
   onNavigateWeekRef.current = onNavigateWeek;
   const reloadAssignmentsRef = useRef(reloadAssignments);

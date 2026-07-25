@@ -90,9 +90,7 @@ export function TimetableCell({
 interface Props {
   highlight: boolean;
   isHoliday?: boolean;
-  /** Daylite reference of the row's employee; source/target identity for drag-and-drop. */
   employeeRef?: string;
-  /** ISO date (yyyy-MM-dd) of this day cell; source/target identity for drag-and-drop. */
   date?: string;
   events: CellEvent[];
   suggestion?: GhostSuggestion;

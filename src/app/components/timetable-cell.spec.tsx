@@ -87,8 +87,6 @@ describe("TimetableCell", () => {
     expect(html).not.toContain("border-dashed");
   });
 
-  // ── drag-and-drop affordances ──
-
   const draggableAssignment: CellEvent = {
     uid: "uid-drag",
     kind: "assignment",

@@ -196,14 +196,11 @@ export type LocalStore = {
 };
 
 /**
- *  Outcome of moving an assignment from one employee's calendar to another.
- *  CalDAV has no atomic cross-collection move, so the target copy is created first
- *  and the source deleted afterwards; a failed source delete yields a partial move.
+ *  CalDAV has no atomic cross-collection move, so the target copy is created
+ *  first and the source deleted afterwards, which can leave a partial move.
  */
-export type MoveAssignmentResult = 
-/**  Target created and source deleted. */
-{ kind: "moved"; newHref: string } | 
-/**  Target created but the source delete failed; the assignment now exists twice. */
+export type MoveAssignmentResult = { kind: "moved"; newHref: string } | 
+/**  The assignment now exists twice. */
 { kind: "sourceDeleteFailed"; newHref: string; sourceHref: string };
 
 export type PlanningContactRecord = {
