@@ -282,7 +282,7 @@ export function PlanningGridTable({
         {typeof document === "undefined"
           ? null
           : createPortal(
-              <DragOverlay>
+              <DragOverlay style={{ pointerEvents: "none" }}>
                 {drag.activePayload ? (
                   <DragPreviewCard payload={drag.activePayload} />
                 ) : null}

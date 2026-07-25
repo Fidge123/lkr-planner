@@ -87,7 +87,7 @@ function App() {
   }, [loadEmployeeSettings, planningAssignmentsState.reloadAssignments]);
 
   return (
-    <article className="min-h-screen flex flex-col">
+    <article className="h-screen flex flex-col">
       <header className="navbar p-4 shadow-sm border-b border-base-300">
         <div className="navbar-start gap-2">
           <h1 className="text-2xl font-bold">Wochenplanung</h1>
@@ -127,7 +127,7 @@ function App() {
         </nav>
       </header>
 
-      <main className="flex-1 overflow-hidden">
+      <main className="flex-1 min-h-0 overflow-hidden">
         {employeeSettingsError ? (
           <section className="alert alert-error m-4">
             <span>
