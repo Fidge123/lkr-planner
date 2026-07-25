@@ -497,6 +497,28 @@ describe("planning grid weekend visibility", () => {
 
   const countDayColumns = (html: string) => (html.match(/<time/g) ?? []).length;
 
+  it("gives each day column a machine-readable date matching its visible date", () => {
+    const html = renderToStaticMarkup(
+      <PlanningGrid
+        weekOffset={0}
+        projectState={{ ...defaultState }}
+        employeeState={{ ...defaultEmployeeState }}
+        assignmentState={{ ...defaultAssignmentState }}
+        employeeSettings={[]}
+        onOpenIcalDialog={() => {}}
+      />,
+    );
+
+    const columns = [
+      ...html.matchAll(/<time dateTime="([^"]+)"[^>]*>([^<]+)</gi),
+    ];
+    expect(columns).toHaveLength(5);
+    for (const [, machineDate, visibleText] of columns) {
+      const [, month, day] = machineDate.split("-");
+      expect(visibleText).toContain(`${day}.${month}.`);
+    }
+  });
+
   it("renders 5 day columns by default (weekend hidden)", () => {
     const html = renderToStaticMarkup(
       <PlanningGrid

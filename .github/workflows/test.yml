@@ -23,6 +23,9 @@ jobs:
       - name: Run bun tests
         run: bun test
 
+      - name: Run bun tests across timezones
+        run: bun run test:timezones
+
   rust:
     runs-on: "macos-latest"
     env:
