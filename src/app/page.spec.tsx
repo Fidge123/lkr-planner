@@ -30,6 +30,7 @@ const defaultAssignmentState: PlanningGridAssignmentState = {
   errorsByEmployee: {},
   isLoading: false,
   errorMessage: null,
+  loadedWeekStart: null,
   reloadAssignments: () => {},
   invalidateWeeksContaining: () => {},
 };

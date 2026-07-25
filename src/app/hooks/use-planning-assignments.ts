@@ -20,6 +20,7 @@ export interface PlanningAssignmentsState {
   errorsByEmployee: EmployeeErrors;
   isLoading: boolean;
   errorMessage: string | null;
+  loadedWeekStart: string | null;
   reloadAssignments: () => void;
   invalidateWeeksContaining: (uid: string) => void;
 }
@@ -34,6 +35,11 @@ export function usePlanningAssignments(
   const [errorsByEmployee, setErrorsByEmployee] = useState<EmployeeErrors>({});
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // Which week the currently exposed events belong to. Set in the same batch as
+  // the events themselves, so a consumer can tell whether what it is rendering
+  // is this week's data or the previous week's, still on screen while a fetch
+  // is in flight.
+  const [loadedWeekStart, setLoadedWeekStart] = useState<string | null>(null);
 
   const loadActiveWeek = useCallback(async (ws: string, invalidate = false) => {
     if (invalidate) {
@@ -46,6 +52,7 @@ export function usePlanningAssignments(
     if (cached) {
       setEventsByEmployee(cached.eventsByEmployee);
       setErrorsByEmployee(cached.errorsByEmployee);
+      setLoadedWeekStart(ws);
       setIsLoading(false);
       setErrorMessage(null);
       return;
@@ -59,6 +66,7 @@ export function usePlanningAssignments(
         setErrorMessage(result.error);
         setEventsByEmployee({});
         setErrorsByEmployee({});
+        setLoadedWeekStart(ws);
         return;
       }
       // Cache unconditionally, even for a superseded request: it's still valid
@@ -68,6 +76,7 @@ export function usePlanningAssignments(
       if (id !== requestIdRef.current) return;
       setEventsByEmployee(data.eventsByEmployee);
       setErrorsByEmployee(data.errorsByEmployee);
+      setLoadedWeekStart(ws);
       setErrorMessage(null);
     } catch (error) {
       if (id !== requestIdRef.current) return;
@@ -78,6 +87,7 @@ export function usePlanningAssignments(
       );
       setEventsByEmployee({});
       setErrorsByEmployee({});
+      setLoadedWeekStart(ws);
     } finally {
       if (id === requestIdRef.current) {
         setIsLoading(false);
@@ -126,6 +136,7 @@ export function usePlanningAssignments(
       errorsByEmployee,
       isLoading,
       errorMessage,
+      loadedWeekStart,
       reloadAssignments,
       invalidateWeeksContaining,
     }),
@@ -134,6 +145,7 @@ export function usePlanningAssignments(
       errorsByEmployee,
       isLoading,
       errorMessage,
+      loadedWeekStart,
       reloadAssignments,
       invalidateWeeksContaining,
     ],

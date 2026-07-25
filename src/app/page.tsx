@@ -6,7 +6,7 @@ import {
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import type {
   EmployeeSetting,
@@ -50,9 +50,6 @@ function DropzoneMeasurementTicker() {
   return null;
 }
 
-/** How long (ms) a week key must be stable before useFrozenDuringDrag starts freezing against it. */
-const freezeArmDelayMs = 350;
-
 /**
  * Holds `value` steady for as long as `isDragActive` is true, resuming live
  * updates the moment it goes false. A background reload landing mid-drag for
@@ -61,29 +58,30 @@ const freezeArmDelayMs = 350;
  * so the drop can land on whatever now happens to be there instead of what the
  * user was aiming at.
  *
- * `key` (the viewed week's start date) resets protection on every navigation:
- * `weekDays` (hence `key`) updates synchronously with the navigation, but
- * `assignmentState` only catches up on a later render via a separate effect,
- * so trusting the very first post-navigation value would freeze on a stale
- * snapshot of the PREVIOUS week and never pick up the new week's real data.
- * Freezing only re-arms `freezeArmDelayMs` after `key` last changed, by which
- * point the new week's fetch (cached or not) has had time to land.
+ * Freezing starts only once `loadedKey` reaches `key`, i.e. once `value` is
+ * this week's data rather than the previous week's still on screen while the
+ * fetch runs. Edge-hover navigation changes `key` mid-drag, and freezing before
+ * the new week arrives would pin the empty grid in place for the rest of the
+ * drag however long the fetch takes.
  */
 function useFrozenDuringDrag<T>(
   value: T,
   isDragActive: boolean,
   key: string,
+  loadedKey: string | null,
 ): T {
-  const tracked = useRef({ key, frozen: value });
-  const [armedKey, setArmedKey] = useState<string | null>(null);
+  const tracked = useRef({ key, frozen: value, isFrozen: false });
+  const shouldFreeze = isDragActive && loadedKey === key;
 
-  useEffect(() => {
-    const timer = setTimeout(() => setArmedKey(key), freezeArmDelayMs);
-    return () => clearTimeout(timer);
-  }, [key]);
-
-  if (tracked.current.key !== key || armedKey !== key || !isDragActive) {
-    tracked.current = { key, frozen: value };
+  // The render that starts freezing must still pass its own value through and
+  // keep it: it is the render the week's data arrived on, and freezing one
+  // render earlier would pin the grid to the empty state that preceded it.
+  if (
+    !shouldFreeze ||
+    !tracked.current.isFrozen ||
+    tracked.current.key !== key
+  ) {
+    tracked.current = { key, frozen: value, isFrozen: shouldFreeze };
     return value;
   }
 
@@ -166,10 +164,9 @@ export function PlanningGridTable({
     invalidateWeeksContaining,
   });
   const isDragActive = drag.activePayload !== null;
+  const weekStart = toLocalISODate(weekDays[0]);
   // A background reload for the SAME week (e.g. from a drop moments earlier)
   // must not resize any row while this drag is active - see useFrozenDuringDrag.
-  // Keyed on the viewed week so edge-hover navigation mid-drag still shows the
-  // newly-navigated week's data immediately instead of the old week's.
   const {
     eventsByEmployee,
     errorsByEmployee,
@@ -178,7 +175,8 @@ export function PlanningGridTable({
   } = useFrozenDuringDrag(
     assignmentState,
     isDragActive,
-    toLocalISODate(weekDays[0]),
+    weekStart,
+    assignmentState.loadedWeekStart,
   );
 
   return (
