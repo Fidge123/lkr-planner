@@ -8,7 +8,7 @@ Direct drag-and-drop of appointment cards across days and employees makes weekly
 - Assignment cards (`kind: "assignment"`) become draggable in the planning grid.
 - A card can be dropped onto any other day cell of the same employee to reschedule it to that date.
 - A card can be dropped onto a cell of a different employee to reassign it, optionally on a different day.
-- A move lands on the target day cell and preserves the assignment's time-of-day; positioning before or after existing cards within a cell is out of scope here and handled by the follow-up `appointment-reordering` change.
+- A move lands on the target day cell and is written with the standard assignment time window, like every other assignment write; positioning before or after existing cards within a cell is out of scope here and handled by the follow-up `appointment-reordering` change.
 - While dragging, every droppable cell shows a hover/target indicator and the source cell is visually marked.
 - Holding a dragged card over the left or right edge of the grid for a short dwell time triggers navigation to the previous/next week, so a card can be moved across week boundaries in one gesture.
 - Bare and absence events stay read-only and are never draggable or droppable as sources.

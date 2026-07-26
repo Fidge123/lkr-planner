@@ -22,6 +22,12 @@ export function isToday(day: Date) {
   return day.toDateString() === today.toDateString();
 }
 
+// Must stay local-time based: the backend fetches [weekStart, weekStart + 7d),
+// so a UTC-shifted start would drop the last displayed day east of UTC.
+export function getWeekStart(weekOffset: number, showWeekend = false): string {
+  return toLocalISODate(getWeekDays(weekOffset, showWeekend)[0]);
+}
+
 export function toLocalISODate(date: Date): string {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, "0");

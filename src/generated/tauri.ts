@@ -19,6 +19,7 @@ export const commands = {
 	dayliteUpdateContactIcalUrls: (input: DayliteUpdateContactIcalUrlsInput) => typedError<PlanningContactRecord, DayliteApiError>(__TAURI_INVOKE("daylite_update_contact_ical_urls", { input })),
 	createAssignment: (input: CreateAssignmentInput) => typedError<string, string>(__TAURI_INVOKE("create_assignment", { input })),
 	updateAssignment: (input: UpdateAssignmentInput) => typedError<null, string>(__TAURI_INVOKE("update_assignment", { input })),
+	moveAssignment: (href: string, targetEmployeeReference: string, date: string, projectRef: string, projectName: string) => typedError<MoveAssignmentResult, string>(__TAURI_INVOKE("move_assignment", { href, targetEmployeeReference, date, projectRef, projectName })),
 	deleteAssignment: (href: string) => typedError<null, string>(__TAURI_INVOKE("delete_assignment", { href })),
 	zepSaveCredentials: (rootUrl: string, username: string, password: string) => typedError<null, ZepError>(__TAURI_INVOKE("zep_save_credentials", { rootUrl, username, password })),
 	zepLoadCredentials: () => typedError<{
@@ -193,6 +194,14 @@ export type LocalStore = {
 	dayliteCache: DayliteCache,
 	holidayCache?: HolidayCacheEntry[],
 };
+
+/**
+ *  CalDAV has no atomic cross-collection move, so the target copy is created
+ *  first and the source deleted afterwards, which can leave a partial move.
+ */
+export type MoveAssignmentResult = { kind: "moved"; newHref: string } | 
+/**  The assignment now exists twice. */
+{ kind: "sourceDeleteFailed"; newHref: string; sourceHref: string };
 
 export type PlanningContactRecord = {
 	self: string,

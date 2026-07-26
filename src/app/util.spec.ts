@@ -6,7 +6,7 @@ import {
   it,
   setSystemTime,
 } from "bun:test";
-import { getWeekDays, isToday, toLocalISODate } from "./util";
+import { getWeekDays, getWeekStart, isToday, toLocalISODate } from "./util";
 
 describe("util", () => {
   beforeAll(() => {
@@ -14,23 +14,26 @@ describe("util", () => {
   });
 
   describe("getWeekDays", () => {
+    // Asserted as local calendar dates, not UTC instants: getWeekDays builds
+    // local-midnight dates, so toISOString would shift them a day east of UTC
+    // and pin these tests to a UTC-only test runner.
     it("should return the correct week days", () => {
       const weekDays = getWeekDays(0);
       expect(weekDays).toHaveLength(5);
-      expect(weekDays[0].toISOString()).toBe("2025-12-29T00:00:00.000Z");
-      expect(weekDays[4].toISOString()).toBe("2026-01-02T00:00:00.000Z");
+      expect(toLocalISODate(weekDays[0])).toBe("2025-12-29");
+      expect(toLocalISODate(weekDays[4])).toBe("2026-01-02");
     });
 
     it("should return the correct week days for a week offset", () => {
       const weekDays = getWeekDays(1);
-      expect(weekDays[0].toISOString()).toBe("2026-01-05T00:00:00.000Z");
-      expect(weekDays[4].toISOString()).toBe("2026-01-09T00:00:00.000Z");
+      expect(toLocalISODate(weekDays[0])).toBe("2026-01-05");
+      expect(toLocalISODate(weekDays[4])).toBe("2026-01-09");
     });
 
     it("should return the correct week days for a negative week offset", () => {
       const weekDays = getWeekDays(-4);
-      expect(weekDays[0].toISOString()).toBe("2025-12-01T00:00:00.000Z");
-      expect(weekDays[4].toISOString()).toBe("2025-12-05T00:00:00.000Z");
+      expect(toLocalISODate(weekDays[0])).toBe("2025-12-01");
+      expect(toLocalISODate(weekDays[4])).toBe("2025-12-05");
     });
 
     it("should produce dates at local midnight (hours/minutes/seconds are zero)", () => {
@@ -112,6 +115,34 @@ describe("util", () => {
       expect(toLocalISODate(new Date(2026, 0, 1))).toBe("2026-01-01");
       expect(toLocalISODate(new Date(2026, 11, 31))).toBe("2026-12-31");
       expect(toLocalISODate(new Date(2026, 3, 7))).toBe("2026-04-07");
+    });
+  });
+
+  describe("getWeekStart", () => {
+    it("is the first displayed day of the week", () => {
+      for (const showWeekend of [false, true]) {
+        expect(getWeekStart(0, showWeekend)).toBe(
+          toLocalISODate(getWeekDays(0, showWeekend)[0]),
+        );
+        expect(getWeekStart(-3, showWeekend)).toBe(
+          toLocalISODate(getWeekDays(-3, showWeekend)[0]),
+        );
+      }
+    });
+
+    it("covers every displayed day in the backend's seven-day window", () => {
+      for (const showWeekend of [false, true]) {
+        for (const offset of [-1, 0, 1]) {
+          const [y, m, d] = getWeekStart(offset, showWeekend)
+            .split("-")
+            .map(Number);
+          const start = new Date(y, m - 1, d);
+          const end = new Date(y, m - 1, d + 7);
+          for (const day of getWeekDays(offset, showWeekend)) {
+            expect(day >= start && day < end).toBe(true);
+          }
+        }
+      }
     });
   });
 
