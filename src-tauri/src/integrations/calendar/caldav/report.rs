@@ -128,10 +128,9 @@ fn parse_caldav_report(xml_text: &str) -> Result<Vec<RawVEvent>, String> {
     Ok(events)
 }
 
-/// Discovers a calendar collection URL by its display name via a PROPFIND on the CalDAV
-/// home-set root. Needed because the configured root lists many calendars, and a REPORT or
-/// PUT against the root (rather than a specific calendar collection) is rejected with HTTP
-/// 405. Test-only: production reads the calendar URL straight from the local store.
+/// A REPORT or PUT against the configured home-set root, rather than a specific calendar
+/// collection beneath it, is rejected with HTTP 405, so the collection has to be discovered
+/// first. Production reads the calendar URL straight from the local store instead.
 #[cfg(test)]
 pub(super) async fn discover_calendar_by_name(
     session: &CaldavSession,
@@ -174,9 +173,6 @@ pub(super) async fn discover_calendar_by_name(
     super::write::resolve_href(&href, &session.base_url)
 }
 
-/// Extracts the `d:href` of the first calendar-collection response whose `d:displayname`
-/// equals `display_name`. A response is a calendar when its `d:resourcetype` contains the
-/// CalDAV `calendar` element.
 #[cfg(test)]
 fn parse_calendar_href_by_name(xml_text: &str, display_name: &str) -> Option<String> {
     let doc = roxmltree::Document::parse(xml_text).ok()?;

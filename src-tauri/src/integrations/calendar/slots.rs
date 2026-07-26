@@ -7,7 +7,6 @@ use super::types::RawVEvent;
 const WINDOW_START_MINUTE: u32 = 8 * 60;
 const WINDOW_LENGTH_MINUTES: u32 = 8 * 60;
 
-/// Returns the full 08:00-16:00 window as (start, end).
 pub(super) fn full_window() -> (NaiveTime, NaiveTime) {
     (
         minute_of_day(WINDOW_START_MINUTE),
@@ -15,7 +14,6 @@ pub(super) fn full_window() -> (NaiveTime, NaiveTime) {
     )
 }
 
-/// Splits the fixed window into one non-overlapping [start, end) slot per UID.
 /// UIDs are sorted first so the allocation is canonical regardless of input order.
 /// Boundary i sits at start + (i * length) / n minutes, so the first slot starts at
 /// 08:00, the last ends at 16:00, and adjacent slots share a boundary without overlap.
@@ -43,8 +41,7 @@ fn minute_of_day(minute: u32) -> NaiveTime {
         .expect("minute within the 08:00-16:00 window is a valid time of day")
 }
 
-/// A CalDAV PUT needed to move an assignment event into its allocated slot.
-/// `payload` is the ready-to-send body; `etag` guards the PUT via If-Match.
+/// `etag` guards the PUT via If-Match and is empty when the server supplied none.
 #[derive(Debug, PartialEq, Eq)]
 pub(super) struct SlotUpdate {
     pub(super) href: String,
@@ -53,19 +50,14 @@ pub(super) struct SlotUpdate {
     pub(super) payload: String,
 }
 
-/// The result of planning a day: the slot reserved for `extra_uid` (if one was given)
-/// and the PUTs that move the day's other assignments into their slots.
 pub(super) struct DayPlan {
     pub(super) extra_slot: Option<(NaiveTime, NaiveTime)>,
     pub(super) updates: Vec<SlotUpdate>,
 }
 
-/// Plans the PUTs that move a day's lkr-planner assignments into their allocated slots.
-/// Only events on `date` whose DESCRIPTION first line is a `daylite:` reference take part;
-/// bare, absence, and holiday events are never re-slotted. Events already sitting in
-/// their slot are skipped so repeated runs converge without extra writes. Events that
-/// `patch_event_slot` cannot safely rewrite are excluded entirely rather than risk
-/// producing invalid iCal — see `can_patch_slot`.
+/// Only events whose DESCRIPTION first line is a `daylite:` reference take part, so bare,
+/// absence, and holiday events are never re-slotted. Events already sitting in their slot
+/// are skipped so repeated runs converge without extra writes.
 ///
 /// Excluded events keep whatever times they already have and take no share of the window,
 /// so the participating assignments are spread across the full 08:00-16:00 window and may
@@ -131,11 +123,9 @@ pub(super) fn plan_slot_updates(
     }
 }
 
-/// Rewrites the VEVENT's DTSTART and DTEND to the allocated slot while leaving every
-/// other line untouched, so user-added content (extra DESCRIPTION lines, LOCATION,
-/// alarms) survives re-slotting. Only lines inside BEGIN:VEVENT..END:VEVENT are
-/// replaced; a VTIMEZONE's DTSTART lines are left alone. A missing DTEND is inserted
-/// before END:VEVENT.
+/// Every line other than the VEVENT's own DTSTART/DTEND is copied through untouched, so
+/// user-added content (extra DESCRIPTION lines, LOCATION, alarms) survives re-slotting and
+/// a VTIMEZONE's DTSTART is left alone. A missing DTEND is inserted before END:VEVENT.
 fn patch_event_slot(raw_ical: &str, date: &str, start: NaiveTime, end: NaiveTime) -> String {
     let compact = date.replace('-', "");
     let dtstart = format!("DTSTART:{compact}T{}", start.format("%H%M%S"));
@@ -319,7 +309,6 @@ mod tests {
 
     #[test]
     fn create_redistributes_day_into_halves() {
-        // An existing full-window assignment plus a freshly created one (also full window).
         let events = vec![
             assignment_event("uid-a", "2026-05-06", "08:00", "16:00"),
             assignment_event("uid-b", "2026-05-06", "08:00", "16:00"),
@@ -338,7 +327,6 @@ mod tests {
 
     #[test]
     fn delete_redistributes_remaining_assignments_into_halves() {
-        // A day previously split into thirds after one of three assignments was deleted.
         let events = vec![
             assignment_event("uid-a", "2026-05-06", "08:00", "10:40"),
             assignment_event("uid-c", "2026-05-06", "13:20", "16:00"),
@@ -355,7 +343,6 @@ mod tests {
 
     #[test]
     fn update_moving_assignment_away_restores_full_window_on_source_day() {
-        // Source day after the moved event left: one half-window assignment remains.
         let events = vec![assignment_event("uid-a", "2026-05-06", "08:00", "12:00")];
 
         let updates = plan_slot_updates(&events, "2026-05-06", None).updates;
@@ -407,8 +394,6 @@ mod tests {
 
     #[test]
     fn extra_uid_gets_a_slot_without_an_update_of_its_own() {
-        // One existing assignment; a create in flight for uid-b: uid-b sorts after
-        // uid-a, so it receives the afternoon half while uid-a is moved to the morning.
         let events = vec![assignment_event("uid-a", "2026-05-06", "08:00", "16:00")];
 
         let plan = plan_slot_updates(&events, "2026-05-06", Some("uid-b"));
@@ -480,7 +465,6 @@ mod tests {
 
         let updates = plan_slot_updates(&events, "2026-05-06", None).updates;
 
-        // Only the two daylite assignments are re-slotted; they split the window in halves.
         assert_eq!(updates.len(), 2);
         assert!(updates.iter().all(|u| u.uid.starts_with("uid-")));
         assert!(updates[0].payload.contains("DTEND:20260506T120000"));
@@ -505,8 +489,6 @@ mod tests {
             "the only addressable assignment already owns the full window"
         );
     }
-
-    // ── Unsafe-to-patch event shapes ──
 
     #[test]
     fn can_patch_slot_rejects_unsafe_shapes() {
@@ -555,9 +537,6 @@ mod tests {
 
     #[test]
     fn duration_based_assignment_is_excluded_from_reallocation() {
-        // Simulates an event whose end was edited to DURATION in an external calendar
-        // client. Patching it would insert a DTEND alongside the existing DURATION,
-        // producing an invalid VEVENT (RFC 5545 §3.6.1), so it must be skipped entirely.
         let mut duration_event = assignment_event("uid-a", "2026-05-06", "08:00", "16:00");
         duration_event.raw_ical = duration_event
             .raw_ical
@@ -587,8 +566,6 @@ mod tests {
 
     #[test]
     fn multi_vevent_resource_is_excluded_from_reallocation() {
-        // Simulates a recurrence override added in an external calendar client:
-        // patching it would squash both VEVENTs onto the same slot.
         let mut recurring = assignment_event("uid-a", "2026-05-06", "08:00", "16:00");
         recurring.raw_ical = recurring.raw_ical.replace(
             "END:VEVENT\r\nEND:VCALENDAR\r\n",
@@ -613,7 +590,6 @@ mod tests {
 
     #[test]
     fn folded_dtstart_resource_is_excluded_from_reallocation() {
-        // Simulates a long TZID parameter folded onto a continuation line.
         let mut folded = assignment_event("uid-a", "2026-05-06", "08:00", "16:00");
         folded.raw_ical = folded.raw_ical.replace(
             "DTSTART:20260506T080000\r\n",

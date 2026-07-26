@@ -37,7 +37,6 @@ export function DisplaySettingsPanel({ onClose, onChanged }: Props) {
         try {
           await saveDisplaySettings({ [key]: nextValue });
         } catch (error) {
-          // Revert the optimistic toggle before the shared handler maps the error.
           applyValue(!nextValue);
           throw error;
         }

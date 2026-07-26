@@ -16,8 +16,6 @@ import type { ModalSaveAction } from "../next-day-quick-add";
 import { useAssignmentDefaultSuggestions } from "./use-assignment-default-suggestions";
 import { useAssignmentProjectSearch } from "./use-assignment-project-search";
 
-// Shown when a stored assignment has no CalDAV resource URL, so it can neither be
-// updated nor deleted. Reloading re-reads the href from the calendar.
 const missingHrefMessage =
   "Dieser Einsatz kann nicht bearbeitet werden, da er keine Kalender-Adresse hat. Bitte die Ansicht neu laden.";
 
@@ -82,11 +80,10 @@ export function useAssignmentModal({
     assignment?.title,
   ]);
 
-  // A callback ref attaches the listener exactly once per mounted dialog element, instead
-  // of on every render. The element is remounted when the modal swaps to the delete or
-  // unsaved-changes dialog and back, and the ref runs again for each, so the listener
-  // always follows the live element. requestClose is read through a ref because the
-  // listener outlives the render that attached it.
+  // A callback ref, not an effect: the dialog element is remounted whenever the modal
+  // swaps to the delete or unsaved-changes dialog and back, so an effect keyed on `isOpen`
+  // would leave the listener detached after the swap. requestClose is read through a ref
+  // because the listener outlives the render that attached it.
   const requestCloseRef = useRef<() => void>(() => {});
   const dialogRef = useCallback((dialog: HTMLDialogElement | null) => {
     if (!dialog) return;

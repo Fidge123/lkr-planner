@@ -2,9 +2,6 @@ use super::super::types::{PendingEvent, RawVEvent};
 
 const DAYLITE_DESCRIPTION_PREFIX: &str = "daylite:";
 
-/// Takes the event by reference and clones only the fields it carries over, so callers
-/// that still need the original (for `raw_ical`/`etag`) do not have to clone the whole
-/// resource text just to classify it.
 pub(crate) fn classify_event(event: &RawVEvent) -> PendingEvent {
     let date = event.dtstart.clone();
 

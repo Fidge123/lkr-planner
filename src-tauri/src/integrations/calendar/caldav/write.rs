@@ -28,8 +28,6 @@ fn parent_collection_url(resource_url: &str) -> &str {
         .unwrap_or(resource_url)
 }
 
-/// Fetches a single event resource and returns its DTSTART date (`yyyy-MM-dd`).
-/// Returns `Ok(None)` when the resource does not exist (404) or contains no event.
 /// lkr-planner writes one VEVENT per resource, so the first component is authoritative.
 async fn fetch_event_date(
     session: &CaldavSession,
@@ -57,19 +55,14 @@ async fn fetch_event_date(
         .map_err(|e| format!("Einsatz konnte nicht gelesen werden: {e}"))?;
     let events = parse_ical_events(&ical_text)?;
     let Some(event) = events.into_iter().next() else {
-        // Distinct from a 404: the resource exists but held no usable VEVENT, which would
-        // otherwise silently skip re-allocation with no trace of why.
         eprintln!("calendar: {resource_url} contained no readable VEVENT");
         return Ok(None);
     };
     Ok(Some(event.dtstart))
 }
 
-/// Re-allocates the 08:00-16:00 window across all lkr-planner assignments on `date`
-/// and PUTs every event whose slot changed. Bare, absence, and holiday events are
-/// never touched (see `plan_slot_updates`). Each PUT is guarded with If-Match on the
-/// ETag from the day REPORT, when the server provided one, so a concurrent edit is
-/// never clobbered in that case; on a 412 the day is re-fetched and re-planned.
+/// Each PUT carries If-Match only when the day REPORT supplied an ETag, so a server that
+/// omits one degrades to an unguarded write rather than blocking re-allocation.
 async fn reallocate_day(
     session: &CaldavSession,
     calendar_url: &str,
@@ -101,9 +94,9 @@ async fn reallocate_day(
     ))
 }
 
-/// Sends one planned batch of re-slot PUTs. The updates target distinct resources and do
-/// not depend on each other, so they go out concurrently. Returns `true` when at least one
-/// was rejected with 412, meaning the day changed under the plan and needs re-planning.
+/// The updates target distinct resources and do not depend on each other, so they go out
+/// concurrently. Returns `true` when a PUT was rejected with 412 and the day needs
+/// re-planning.
 async fn put_slot_updates(
     session: &CaldavSession,
     date: &str,
@@ -144,21 +137,18 @@ async fn put_slot_updates(
     Ok(conflicted)
 }
 
-/// Runs day re-allocation after the primary write already succeeded.
-/// Failures are logged instead of returned: failing the whole command would make the
-/// caller believe the create/update/delete itself failed (and retrying a create would
-/// duplicate the event), while the next write on this day converges anyway.
+/// Failures are logged instead of returned: the primary write already succeeded, so
+/// surfacing an error here would invite a retry that duplicates the event. The next write
+/// on this day converges anyway.
 async fn reallocate_day_best_effort(session: &CaldavSession, calendar_url: &str, date: &str) {
     if let Err(e) = reallocate_day(session, calendar_url, date).await {
         eprintln!("calendar: re-allocation for {date} failed (converges on the next write): {e}");
     }
 }
 
-/// Plans the day around an event the caller is about to write, so create/update can place
-/// the new event directly in its final slot *and* reuse the same plan to move its neighbours
-/// afterwards, instead of fetching and re-planning the day a second time.
-/// Returns `None` when the day could not be planned; the caller then falls back to a full
-/// re-allocation, which fetches again and converges.
+/// The returned plan carries both the pending event's own slot and the PUTs for its
+/// neighbours, so one fetch serves the whole write. `None` means the day could not be
+/// planned and the caller must fall back to a full re-allocation.
 async fn plan_day_for_pending_write(
     session: &CaldavSession,
     calendar_url: &str,
@@ -175,9 +165,7 @@ async fn plan_day_for_pending_write(
     }
 }
 
-/// Applies the neighbour PUTs planned before the primary write. A 412 means the plan raced a
-/// concurrent edit, so the day is re-fetched and re-planned; other failures only log, since
-/// the primary write already succeeded and the next write on this day converges.
+/// A 412 means the plan raced a concurrent edit, so the day is re-fetched and re-planned.
 async fn apply_planned_updates_best_effort(
     session: &CaldavSession,
     calendar_url: &str,
@@ -273,9 +261,8 @@ pub(crate) async fn update_assignment_core(
     }
 
     let calendar_url = parent_collection_url(&resource_url);
-    // Read the event's current day before overwriting it: when the update moves the
-    // assignment to another day, the source day must be re-allocated as well. This does not
-    // depend on the target day's plan, so both reads go out together.
+    // Read the event's current day before the PUT overwrites it: moving an assignment to
+    // another day leaves the source day needing re-allocation too.
     let (previous_date, plan) = tokio::join!(
         fetch_event_date(session, &resource_url),
         plan_day_for_pending_write(session, calendar_url, &write.date, uid),
@@ -706,20 +693,12 @@ mod tests {
         );
     }
 
-    // ── Disposable Radicale server integration test ──
-    //
-    // Runs the full write path over real HTTP against a throwaway Radicale CalDAV server,
-    // with no production credentials. Mandatory: `uvx` fetches and runs Radicale on demand
-    // (see the README), and the test fails loudly if `uv`/`uvx` is missing, the on-demand
-    // install fails, or the server never becomes ready. Validates real CalDAV
-    // request/response handling end-to-end.
-
     use super::super::report::discover_calendar_by_name;
 
     const TEST_DATE: &str = "2026-05-06";
 
-    /// Drives discover -> create -> update -> delete. The delete cleans up the event the
-    /// create made, so the flow leaves the server as it found it.
+    /// The delete cleans up the event the create made, so the flow leaves the server as it
+    /// found it.
     async fn run_write_path_flow(
         session: &CaldavSession,
         home_set_url: &str,
@@ -771,11 +750,9 @@ mod tests {
     }
 
     impl RadicaleServer {
-        /// Spawns a disposable Radicale server via `uvx`, which fetches Radicale into a
-        /// cached, ephemeral environment on first use (no manual `pip install` needed).
-        /// This test is mandatory: any failure here panics rather than skipping, so a
-        /// missing `uv`/`uvx`, a failed on-demand install, or a server that never becomes
-        /// ready fails the test loudly instead of passing silently.
+        /// Panics rather than skipping on any failure, so a missing `uv`, a failed
+        /// on-demand install, or a server that never starts fails the test instead of
+        /// silently passing without exercising the write path.
         fn start() -> Self {
             let port = free_tcp_port();
             let dir =
@@ -900,8 +877,8 @@ mod tests {
             .unwrap()
     }
 
-    /// Creates a calendar collection with a display name. The production client never issues
-    /// MKCALENDAR, so the test seeds the calendar directly, then discovery finds it by name.
+    /// The production client never issues MKCALENDAR, so the test seeds the calendar itself
+    /// and discovery then finds it by name.
     async fn seed_radicale_calendar(server: &RadicaleServer, calid: &str, display_name: &str) {
         let url = format!("{}/testuser/{calid}/", server.base_url());
         let body = format!(
