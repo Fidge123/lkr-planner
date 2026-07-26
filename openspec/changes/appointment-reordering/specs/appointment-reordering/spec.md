@@ -16,6 +16,12 @@ The system SHALL maintain a persisted order index that defines the position of e
 - **THEN** the affected day's order indices are re-sequenced to a contiguous order
 - **AND** the new order is persisted
 
+#### Scenario: Assignment excluded from re-slotting keeps its order position
+- **GIVEN** a day contains an assignment that `slot-allocation` excludes from re-slotting
+- **WHEN** the day's order indices are re-sequenced
+- **THEN** that assignment still receives an order index and renders at that position
+- **AND** its times are not rewritten, so they may disagree with its position
+
 ### Requirement: Intra-day reorder via drag
 The system SHALL let the user drag an assignment within its day cell to change its order index without changing its date or employee.
 

@@ -1,19 +1,22 @@
 ## 0. Preconditions
 
-- [ ] 0.1 Confirm `drag-drop-appointments` is implemented (coarse drag and `move_assignment`)
-- [ ] 0.2 Confirm BL-034 is implemented and archived so `slot-allocation` is a baseline spec that can be modified
+- [x] 0.1 `drag-drop-appointments` is implemented and archived (coarse drag and `move_assignment`)
+- [x] 0.2 BL-034 is implemented and archived, so `slot-allocation` is a baseline spec that can be modified
 
 ## 1. Order index model
 
 - [ ] 1.1 Write failing tests for persisting and re-sequencing the per-day order index on create, delete, reorder, and move
-- [ ] 1.2 Implement persistence of the order index per assignment and dense re-sequencing of affected day(s)
-- [ ] 1.3 Sort each cell's cards by order index in the grid render
+- [ ] 1.2 Parse the order index from the VEVENT into `RawVEvent` and carry it through `classify_event` to `PendingEvent` and `CalendarCellEvent`
+- [ ] 1.3 Write the order index as an X-property in `build_ical_payload`, and preserve it on re-slot writes (`patch_event_slot` already copies unknown lines through)
+- [ ] 1.4 Re-sequence the affected day(s) to a dense 0..n-1 ordering on every membership change and persist it
+- [ ] 1.5 Sort each cell's cards by order index in the grid render
 
-## 2. Re-key BL-034 slot allocation
+## 2. Re-key slot allocation
 
 - [ ] 2.1 Write failing tests asserting slots are assigned in order-index order and that changing the index changes the slot
-- [ ] 2.2 Change the BL-034 allocator's sort key from UID to the order index, keeping the fixed window and non-overlap guarantees
-- [ ] 2.3 Verify visual order and allocated times agree across create/delete/reorder/move
+- [ ] 2.2 Change `allocate_slots` in `src-tauri/src/integrations/calendar/slots.rs` to sort by order index with the UID as tie-breaker, and carry the index through `plan_slot_updates`
+- [ ] 2.3 Confirm the fixed window, non-overlap, "already in its slot" skip, and `extra_uid` behaviour are unchanged by the re-key
+- [ ] 2.4 Verify visual order and allocated times agree across create/delete/reorder/move
 
 ## 3. Intra-day reorder via drag
 
@@ -29,5 +32,6 @@
 ## 5. Verification
 
 - [ ] 5.1 Add a grid-level test covering reorder-within-day and precise cross-employee placement (mocked commands)
-- [ ] 5.2 Manually verify intra-day reorder, before/after landing, and that allocated times follow the visual order
-- [ ] 5.3 Run `bun lint`, `bun format`, `bun test`, and `cargo test`; fix issues until all green
+- [ ] 5.2 Cover an assignment that is excluded from re-slotting: it keeps its order position but its times are not rewritten
+- [ ] 5.3 Manually verify intra-day reorder, before/after landing, and that allocated times follow the visual order
+- [ ] 5.4 Run `bun lint`, `bun format`, `bun test`, and `cargo test`; fix issues until all green
