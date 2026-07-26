@@ -129,6 +129,8 @@ export function TimetableRow({
                 key={day.toISOString()}
                 highlight={isToday(day)}
                 isHoliday={week.holidayDates.has(isoDay)}
+                employeeRef={employee.self}
+                date={isoDay}
                 events={dayEvents}
                 suggestion={suggestion}
                 onAddClick={() => openCreateModal(isoDay)}

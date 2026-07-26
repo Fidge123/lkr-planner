@@ -1,10 +1,10 @@
-import { isToday } from "../util";
+import { isToday, toLocalISODate } from "../util";
 
 export function TimetableHeader({ day, holiday }: Props) {
   const isHoliday = Boolean(holiday);
   return (
     <th key={day.getTime()} className={headerClass(day, isHoliday)}>
-      <time dateTime={day.toISOString()}>
+      <time dateTime={toLocalISODate(day)}>
         {day.toLocaleDateString("de-DE", {
           weekday: "long",
           day: "2-digit",

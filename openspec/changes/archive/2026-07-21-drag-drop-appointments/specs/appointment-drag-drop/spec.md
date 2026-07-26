@@ -13,23 +13,28 @@ The system SHALL allow assignment cards (`kind: "assignment"`) in the planning g
 - **THEN** no drag operation starts
 - **AND** the card remains in place
 
+#### Scenario: Assignments with an unresolved project are not draggable
+- **WHEN** an assignment's Daylite project could not be resolved and its card shows the German placeholder text
+- **THEN** the card is not draggable until the project data is available
+- **AND** clicking the card still opens the edit modal
+
 #### Scenario: Click still opens the edit modal
 - **WHEN** the user clicks an assignment card without moving past the activation threshold
 - **THEN** the edit modal opens as before
 
 ### Requirement: Drop targets for rescheduling and reassignment
-The system SHALL accept a dragged assignment card on any day cell of any employee, persist the resulting move, and preserve the assignment's time-of-day.
+The system SHALL accept a dragged assignment card on any day cell of any employee and persist the resulting move with the standard assignment time window, matching how the edit modal writes events.
 
 #### Scenario: Drop on another day of the same employee
 - **WHEN** a dragged assignment is dropped on a different day cell of the same employee
 - **THEN** the assignment is rescheduled to the target date on the same calendar
-- **AND** its time-of-day is preserved
+- **AND** it is written with the standard assignment time window
 - **AND** the grid reloads to show the card in the target cell
 
 #### Scenario: Drop on a different employee
 - **WHEN** a dragged assignment is dropped on a cell belonging to a different employee
 - **THEN** the assignment is moved to the target employee's calendar on the target date
-- **AND** its time-of-day is preserved
+- **AND** it is written with the standard assignment time window
 - **AND** the grid reloads to show the card under the target employee
 
 #### Scenario: Drop lands on the day cell without within-cell positioning
