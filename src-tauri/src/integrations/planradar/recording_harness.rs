@@ -1,8 +1,7 @@
 use super::client::PlanradarApiClient;
 use super::projects::{
     copy_project_core, create_project_core, list_projects_core, reactivate_project_core,
-    read_project_status_core, PlanradarCopyProjectOptions, PlanradarCreateProjectRequest,
-    PlanradarListProjectsInput,
+    read_project_status_core, vcr_fixtures,
 };
 use crate::integrations::http_record_replay::VcrMode;
 
@@ -62,11 +61,7 @@ fn record_planradar_cassettes_from_live_api() {
             .expect("list cassette client should be created"),
             &config.api_token,
             &config.customer_id,
-            &PlanradarListProjectsInput {
-                sort: Some("name".to_string()),
-                page: Some(1),
-                pagesize: Some(10),
-            },
+            &vcr_fixtures::list_input(),
         )
         .await
         .expect("list cassette should be recorded");
@@ -79,17 +74,7 @@ fn record_planradar_cassettes_from_live_api() {
             .expect("create cassette client should be created"),
             &config.api_token,
             &config.customer_id,
-            &PlanradarCreateProjectRequest {
-                name: config.new_project_name.clone(),
-                // Send address and dates too so a recorded cassette proves Planradar accepts the
-                // exact attribute keys (notably drstart-date / drend-date) and does not silently
-                // drop them.
-                city: Some("Wien".to_string()),
-                country: Some("Österreich".to_string()),
-                start_date: Some("2026-02-23T10:02:25.000Z".to_string()),
-                end_date: Some("2026-02-26T00:00:00.000Z".to_string()),
-                ..PlanradarCreateProjectRequest::default()
-            },
+            &vcr_fixtures::create_request(),
         )
         .await
         .expect("create cassette should be recorded");
@@ -100,14 +85,7 @@ fn record_planradar_cassettes_from_live_api() {
             &config.api_token,
             &config.customer_id,
             &config.project_id,
-            &PlanradarCopyProjectOptions {
-                name: format!("{} (Kopie)", config.new_project_name),
-                details: true,
-                groups: true,
-                ticket_types: true,
-                users: false,
-                components: true,
-            },
+            &vcr_fixtures::copy_options(),
         )
         .await
         .expect("copy cassette should be recorded");

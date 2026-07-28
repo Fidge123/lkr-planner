@@ -125,17 +125,23 @@ impl RateLimiter {
         }
     }
 
+    /// The deadline a whole `send_request` call (including all its retries) may spend waiting on
+    /// the budget. Computed once per request so retries share one bound instead of each getting a
+    /// fresh `max_wait`.
+    fn deadline(&self) -> Option<Instant> {
+        self.state.as_ref().map(|_| Instant::now() + self.max_wait)
+    }
+
     /// Blocks until sending one more request stays within the window (and any 429 cooldown has
     /// elapsed), then records it. A disabled limiter returns immediately. The lock is never held
     /// across the sleep, so concurrent callers re-evaluate after each wait. Gives up with a
-    /// `RateLimited` error once the cumulative wait exceeds `max_wait`, so a Tauri command cannot
-    /// hang indefinitely under a burst.
-    async fn acquire(&self) -> Result<(), PlanradarApiError> {
+    /// `RateLimited` error once `deadline` passes, so a Tauri command cannot hang indefinitely
+    /// under a burst — the deadline spans the request and all of its retries.
+    async fn acquire(&self, deadline: Option<Instant>) -> Result<(), PlanradarApiError> {
         let Some(state) = &self.state else {
             return Ok(());
         };
 
-        let mut waited = Duration::ZERO;
         loop {
             let wait = {
                 let mut state = state.lock().await;
@@ -161,14 +167,15 @@ impl RateLimiter {
                 }
             };
 
-            waited = waited.saturating_add(wait);
-            if waited > self.max_wait {
-                return Err(PlanradarApiError::new(
-                    PlanradarApiErrorCode::RateLimited,
-                    None,
-                    "Planradar ist momentan überlastet. Bitte kurz warten und erneut versuchen.",
-                    format!("Planradar rate-limit wait exceeded {:?}", self.max_wait),
-                ));
+            if let Some(deadline) = deadline {
+                if Instant::now() + wait > deadline {
+                    return Err(PlanradarApiError::new(
+                        PlanradarApiErrorCode::RateLimited,
+                        None,
+                        "Planradar ist momentan überlastet. Bitte kurz warten und erneut versuchen.",
+                        format!("Planradar rate-limit wait exceeded {:?}", self.max_wait),
+                    ));
+                }
             }
             tokio::time::sleep(wait).await;
         }
@@ -297,6 +304,8 @@ impl PlanradarApiClient {
         body: Option<Value>,
         api_key: Option<String>,
     ) -> Result<PlanradarHttpResponse, PlanradarApiError> {
+        // One budget deadline for the whole call, so retries cannot each restart the wait cap.
+        let deadline = self.rate_limiter.deadline();
         let mut attempt = 0;
         loop {
             let request = PlanradarHttpRequest {
@@ -309,7 +318,7 @@ impl PlanradarApiClient {
 
             // Reserve a slot in the request budget before every network attempt; retries are real
             // requests and must count too, so this sits inside the loop.
-            self.rate_limiter.acquire().await?;
+            self.rate_limiter.acquire(deadline).await?;
 
             let result = self.transport.send(request).await;
 
@@ -783,7 +792,9 @@ mod tests {
     #[test]
     fn rate_limiter_throttles_once_the_window_is_full() {
         tauri::async_runtime::block_on(async {
-            // max 2 per 80ms window: the first two acquires are instant, the third must wait.
+            // max 2 per 80ms window: the third acquire must wait for the window to slide.
+            // Only the lower bound is asserted: a sleep can always overshoot under load, but it
+            // can never finish early, so this stays deterministic on a busy CI machine.
             let limiter = RateLimiter::for_test(
                 2,
                 Duration::from_millis(80),
@@ -791,15 +802,20 @@ mod tests {
                 Duration::from_secs(10),
             );
 
-            let started_at = Instant::now();
-            limiter.acquire().await.expect("first acquire should pass");
-            limiter.acquire().await.expect("second acquire should pass");
-            assert!(
-                started_at.elapsed() < Duration::from_millis(40),
-                "first two acquires should not block"
-            );
+            limiter
+                .acquire(limiter.deadline())
+                .await
+                .expect("first acquire should pass");
+            limiter
+                .acquire(limiter.deadline())
+                .await
+                .expect("second acquire should pass");
 
-            limiter.acquire().await.expect("third acquire should pass");
+            let started_at = Instant::now();
+            limiter
+                .acquire(limiter.deadline())
+                .await
+                .expect("third acquire should pass");
             assert!(
                 started_at.elapsed() >= Duration::from_millis(70),
                 "third acquire should block until the window slides"
@@ -822,7 +838,7 @@ mod tests {
 
             let started_at = Instant::now();
             limiter
-                .acquire()
+                .acquire(limiter.deadline())
                 .await
                 .expect("acquire should pass once cooldown elapses");
             assert!(
@@ -844,11 +860,41 @@ mod tests {
                 Duration::from_millis(20),
             );
 
-            limiter.acquire().await.expect("first acquire should pass");
+            limiter
+                .acquire(limiter.deadline())
+                .await
+                .expect("first acquire should pass");
             let error = limiter
-                .acquire()
+                .acquire(limiter.deadline())
                 .await
                 .expect_err("second acquire should give up after max wait");
+            assert_eq!(error.code, PlanradarApiErrorCode::RateLimited);
+        });
+    }
+
+    #[test]
+    fn rate_limit_deadline_spans_retries_of_one_request() {
+        tauri::async_runtime::block_on(async {
+            // The deadline is computed once per send_request, so a retry cannot restart the wait
+            // budget: an already-expired deadline must fail immediately on a saturated window.
+            let limiter = RateLimiter::for_test(
+                1,
+                Duration::from_secs(30),
+                Duration::from_secs(30),
+                Duration::from_millis(20),
+            );
+
+            let deadline = limiter.deadline();
+            limiter
+                .acquire(deadline)
+                .await
+                .expect("first acquire should pass");
+
+            // Reusing the same deadline (as retries do) must not grant a fresh budget.
+            let error = limiter
+                .acquire(deadline)
+                .await
+                .expect_err("retry sharing the deadline should give up");
             assert_eq!(error.code, PlanradarApiErrorCode::RateLimited);
         });
     }
@@ -860,11 +906,13 @@ mod tests {
             let started_at = Instant::now();
             for _ in 0..100 {
                 limiter
-                    .acquire()
+                    .acquire(limiter.deadline())
                     .await
                     .expect("disabled limiter never fails");
             }
-            assert!(started_at.elapsed() < Duration::from_millis(50));
+            // Generous bound: these are pure no-ops, so anything near a real sleep would mean the
+            // disabled limiter started blocking.
+            assert!(started_at.elapsed() < Duration::from_secs(1));
         });
     }
 

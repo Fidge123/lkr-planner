@@ -1,7 +1,7 @@
 use super::client::{PlanradarApiClient, PlanradarHttpMethod};
 use super::shared::{
-    load_api_token, load_config, load_store_or_error, parse_success_json_body, PlanradarApiError,
-    PlanradarApiErrorCode, PlanradarConfig,
+    load_api_token, load_config, load_store_or_error, parse_success_json_body,
+    validate_path_segment, PlanradarApiError, PlanradarApiErrorCode, PlanradarConfig,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
@@ -22,11 +22,14 @@ const PLANRADAR_STATUS_ACTIVE: i64 = 1;
 const PLANRADAR_STATUS_ARCHIVED: i64 = 9;
 
 impl PlanradarProjectStatus {
-    fn from_api_status(status: i64) -> Self {
-        if status == PLANRADAR_STATUS_ARCHIVED {
-            Self::Archived
-        } else {
-            Self::Active
+    /// Maps only the two documented status codes. An unrecognized code is rejected rather than
+    /// defaulted, because callers use this to decide whether a project needs reactivating and a
+    /// wrong "active" would silently skip that.
+    fn from_api_status(status: i64) -> Option<Self> {
+        match status {
+            PLANRADAR_STATUS_ACTIVE => Some(Self::Active),
+            PLANRADAR_STATUS_ARCHIVED => Some(Self::Archived),
+            _ => None,
         }
     }
 }
@@ -96,8 +99,16 @@ fn projects_path(customer_id: &str) -> String {
     format!("/api/v1/{customer_id}/projects")
 }
 
-fn project_path(customer_id: &str, project_id: &str) -> String {
-    format!("/api/v1/{customer_id}/projects/{project_id}")
+/// Builds a single-project path, validating `project_id` first so a crafted value cannot use
+/// dot segments to escape the configured customer scope (see [`validate_path_segment`]).
+fn project_path(customer_id: &str, project_id: &str) -> Result<String, PlanradarApiError> {
+    let project_id = validate_path_segment(
+        project_id,
+        "projectId",
+        "Die Planradar-Projekt-ID ist ungültig.",
+    )?;
+
+    Ok(format!("/api/v1/{customer_id}/projects/{project_id}"))
 }
 
 #[tauri::command]
@@ -167,7 +178,7 @@ pub(super) async fn read_project_status_core(
     customer_id: &str,
     project_id: &str,
 ) -> Result<PlanradarProject, PlanradarApiError> {
-    let path = project_path(customer_id, project_id);
+    let path = project_path(customer_id, project_id)?;
     let response = client
         .send_request(
             PlanradarHttpMethod::Get,
@@ -255,7 +266,7 @@ pub(super) async fn copy_project_core(
     project_id: &str,
     options: &PlanradarCopyProjectOptions,
 ) -> Result<String, PlanradarApiError> {
-    let path = format!("{}/copy_project", project_path(customer_id, project_id));
+    let path = format!("{}/copy_project", project_path(customer_id, project_id)?);
     let query = vec![
         ("name".to_string(), options.name.clone()),
         ("details".to_string(), options.details.to_string()),
@@ -285,7 +296,7 @@ pub(super) async fn reactivate_project_core(
     customer_id: &str,
     project_id: &str,
 ) -> Result<(), PlanradarApiError> {
-    let path = format!("{}/archive_project", project_path(customer_id, project_id));
+    let path = format!("{}/archive_project", project_path(customer_id, project_id)?);
     let body = json!({
         "data": { "attributes": { "status": PLANRADAR_STATUS_ACTIVE } }
     });
@@ -344,16 +355,22 @@ fn project_from_data(data: &Value, path: &str) -> Result<PlanradarProject, Planr
         .unwrap_or_default()
         .trim()
         .to_string();
+    // A missing or unrecognized status is a hard error: defaulting it to Active would let a
+    // caller treat an archived project as active and skip a needed reactivation.
     let status_code = attributes
         .and_then(|attributes| attributes.get("status"))
         .and_then(value_to_status_code)
-        .unwrap_or(PLANRADAR_STATUS_ACTIVE);
+        .ok_or_else(|| missing_field_error(path, "data.attributes.status"))?;
+    let status = PlanradarProjectStatus::from_api_status(status_code).ok_or_else(|| {
+        PlanradarApiError::new(
+            PlanradarApiErrorCode::InvalidResponse,
+            None,
+            "Die Antwort von Planradar konnte nicht verarbeitet werden.",
+            format!("Planradar-Antwort für {path} enthält unbekannten Status {status_code}."),
+        )
+    })?;
 
-    Ok(PlanradarProject {
-        id,
-        name,
-        status: PlanradarProjectStatus::from_api_status(status_code),
-    })
+    Ok(PlanradarProject { id, name, status })
 }
 
 fn extract_new_project_id(value: &Value, path: &str) -> Result<String, PlanradarApiError> {
@@ -361,6 +378,75 @@ fn extract_new_project_id(value: &Value, path: &str) -> Result<String, Planradar
         .get("data")
         .and_then(|data| value_to_id(data.get("id")))
         .ok_or_else(|| missing_field_error(path, "data.id"))
+}
+
+/// Request shapes shared by the live recording harness and the cassette replay tests.
+///
+/// Cassette matching is exact on method + path + query + body, so a recorded interaction only
+/// replays if the replay test sends a byte-identical request. Both sides build their requests
+/// here so the shapes cannot drift apart.
+///
+/// The values come from the same `PLANRADAR_*` environment variables the harness records with,
+/// falling back to fixed literals. That means replay tests must run with the *same* environment
+/// that was used to record the cassettes (see `docs/planradar-api-findings.md`); with the env
+/// unset they only match cassettes recorded against these defaults.
+#[cfg(test)]
+pub(super) mod vcr_fixtures {
+    use super::{
+        PlanradarCopyProjectOptions, PlanradarCreateProjectRequest, PlanradarListProjectsInput,
+    };
+
+    fn env_or(key: &str, fallback: &str) -> String {
+        std::env::var(key)
+            .ok()
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty())
+            .unwrap_or_else(|| fallback.to_string())
+    }
+
+    pub(in crate::integrations::planradar) fn customer_id() -> String {
+        env_or("PLANRADAR_CUSTOMER_ID", "1234")
+    }
+
+    pub(in crate::integrations::planradar) fn project_id() -> String {
+        env_or("PLANRADAR_VCR_PROJECT_ID", "1")
+    }
+
+    pub(in crate::integrations::planradar) fn new_project_name() -> String {
+        env_or("PLANRADAR_VCR_NEW_PROJECT_NAME", "Cassette Projekt")
+    }
+
+    pub(in crate::integrations::planradar) fn list_input() -> PlanradarListProjectsInput {
+        PlanradarListProjectsInput {
+            sort: Some("name".to_string()),
+            page: Some(1),
+            pagesize: Some(10),
+        }
+    }
+
+    pub(in crate::integrations::planradar) fn create_request() -> PlanradarCreateProjectRequest {
+        PlanradarCreateProjectRequest {
+            name: new_project_name(),
+            // Address and dates are sent so a recorded cassette proves Planradar accepts the
+            // exact attribute keys (notably drstart-date / drend-date) and does not drop them.
+            city: Some("Wien".to_string()),
+            country: Some("Österreich".to_string()),
+            start_date: Some("2026-02-23T10:02:25.000Z".to_string()),
+            end_date: Some("2026-02-26T00:00:00.000Z".to_string()),
+            ..PlanradarCreateProjectRequest::default()
+        }
+    }
+
+    pub(in crate::integrations::planradar) fn copy_options() -> PlanradarCopyProjectOptions {
+        PlanradarCopyProjectOptions {
+            name: format!("{} (Kopie)", new_project_name()),
+            details: true,
+            groups: true,
+            ticket_types: true,
+            users: false,
+            components: true,
+        }
+    }
 }
 
 /// JSON:API ids are strings by spec, but Planradar may serialize them as integers; accept both.
@@ -649,6 +735,56 @@ mod tests {
     }
 
     #[test]
+    fn missing_status_is_rejected_instead_of_defaulting_to_active() {
+        tauri::async_runtime::block_on(async {
+            let transport = MockTransport::new(vec![Ok(mock_response(
+                200,
+                r#"{"data":{"id":"1","attributes":{"name":"Ohne Status"}}}"#,
+            ))]);
+            let client = PlanradarApiClient::with_transport(Box::new(transport));
+
+            let error = read_project_status_core(&client, "t", "1234", "1")
+                .await
+                .expect_err("missing status should not silently default to Active");
+            assert_eq!(error.code, PlanradarApiErrorCode::InvalidResponse);
+        });
+    }
+
+    #[test]
+    fn unknown_status_code_is_rejected() {
+        tauri::async_runtime::block_on(async {
+            let transport = MockTransport::new(vec![Ok(mock_response(
+                200,
+                r#"{"data":{"id":"1","attributes":{"name":"Seltsam","status":4}}}"#,
+            ))]);
+            let client = PlanradarApiClient::with_transport(Box::new(transport));
+
+            let error = read_project_status_core(&client, "t", "1234", "1")
+                .await
+                .expect_err("unknown status code should be rejected");
+            assert_eq!(error.code, PlanradarApiErrorCode::InvalidResponse);
+            assert!(error.technical_message.contains('4'));
+        });
+    }
+
+    #[test]
+    fn rejects_project_id_that_escapes_the_customer_scope() {
+        tauri::async_runtime::block_on(async {
+            let transport = MockTransport::new(vec![]);
+            let client = PlanradarApiClient::with_transport(Box::new(transport.clone()));
+
+            let error = read_project_status_core(&client, "t", "1234", "../../9999/projects/5")
+                .await
+                .expect_err("path-traversing project id should be rejected");
+            assert_eq!(error.code, PlanradarApiErrorCode::InvalidConfiguration);
+            assert!(
+                transport.requests().is_empty(),
+                "no request should be sent for an invalid project id"
+            );
+        });
+    }
+
+    #[test]
     fn maps_auth_failure_to_unauthorized_error() {
         tauri::async_runtime::block_on(async {
             let transport =
@@ -710,11 +846,16 @@ mod tests {
             let client = PlanradarApiClient::with_replay_cassette("planradar-get-project.json")
                 .expect("replay client should be created");
 
-            let project = read_project_status_core(&client, "replay-token", "1234", "1")
-                .await
-                .expect("status read should replay from cassette");
+            let project = read_project_status_core(
+                &client,
+                "replay-token",
+                &vcr_fixtures::customer_id(),
+                &vcr_fixtures::project_id(),
+            )
+            .await
+            .expect("status read should replay from cassette");
 
-            assert_eq!(project.id, "1");
+            assert_eq!(project.id, vcr_fixtures::project_id());
             assert!(!project.name.is_empty());
         });
     }
@@ -729,12 +870,8 @@ mod tests {
             let projects = list_projects_core(
                 &client,
                 "replay-token",
-                "1234",
-                &PlanradarListProjectsInput {
-                    sort: Some("name".to_string()),
-                    page: Some(1),
-                    pagesize: Some(10),
-                },
+                &vcr_fixtures::customer_id(),
+                &vcr_fixtures::list_input(),
             )
             .await
             .expect("list should replay from cassette");
@@ -754,11 +891,8 @@ mod tests {
             let new_id = create_project_core(
                 &client,
                 "replay-token",
-                "1234",
-                &PlanradarCreateProjectRequest {
-                    name: "Cassette Projekt".to_string(),
-                    ..PlanradarCreateProjectRequest::default()
-                },
+                &vcr_fixtures::customer_id(),
+                &vcr_fixtures::create_request(),
             )
             .await
             .expect("create should replay from cassette");
@@ -777,16 +911,9 @@ mod tests {
             let new_id = copy_project_core(
                 &client,
                 "replay-token",
-                "1234",
-                "1",
-                &PlanradarCopyProjectOptions {
-                    name: "Cassette Projekt (Kopie)".to_string(),
-                    details: true,
-                    groups: true,
-                    ticket_types: true,
-                    users: false,
-                    components: true,
-                },
+                &vcr_fixtures::customer_id(),
+                &vcr_fixtures::project_id(),
+                &vcr_fixtures::copy_options(),
             )
             .await
             .expect("copy should replay from cassette");
@@ -803,9 +930,14 @@ mod tests {
                 PlanradarApiClient::with_replay_cassette("planradar-reactivate-project.json")
                     .expect("replay client should be created");
 
-            reactivate_project_core(&client, "replay-token", "1234", "1")
-                .await
-                .expect("reactivate should replay from cassette");
+            reactivate_project_core(
+                &client,
+                "replay-token",
+                &vcr_fixtures::customer_id(),
+                &vcr_fixtures::project_id(),
+            )
+            .await
+            .expect("reactivate should replay from cassette");
         });
     }
 }

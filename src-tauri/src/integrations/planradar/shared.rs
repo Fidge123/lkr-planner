@@ -74,6 +74,35 @@ pub(super) fn normalize_base_url(base_url: &str) -> Result<String, PlanradarApiE
     Ok(trimmed.to_string())
 }
 
+/// Validates a value that is interpolated into a request path (Customer ID, project ID).
+///
+/// Path segments are concatenated into the URL before parsing, and `Url::parse` resolves dot
+/// segments, so an unchecked value such as `../../9999/projects/5` would escape the configured
+/// customer scope while still carrying the account token. Planradar identifiers are numeric (or
+/// at most alphanumeric with dashes), so anything outside that set is rejected outright rather
+/// than escaped.
+pub(super) fn validate_path_segment(
+    value: &str,
+    label: &str,
+    user_message: &str,
+) -> Result<String, PlanradarApiError> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() || !trimmed.chars().all(is_safe_path_segment_char) {
+        return Err(PlanradarApiError::new(
+            PlanradarApiErrorCode::InvalidConfiguration,
+            None,
+            user_message,
+            format!("Ungültiger Wert für {label}: {trimmed:?}"),
+        ));
+    }
+
+    Ok(trimmed.to_string())
+}
+
+fn is_safe_path_segment_char(candidate: char) -> bool {
+    candidate.is_ascii_alphanumeric() || candidate == '-' || candidate == '_'
+}
+
 /// Reads the configured Planradar base URL and Customer ID from the local store, validating
 /// that both are present so callers fail fast with a German message instead of building an
 /// invalid request path.
@@ -88,6 +117,12 @@ pub(super) fn load_config(store: &LocalStore) -> Result<PlanradarConfig, Planrad
             "Leere planradarCustomerId-Konfiguration",
         ));
     }
+
+    let customer_id = validate_path_segment(
+        &customer_id,
+        "planradarCustomerId",
+        "Die Planradar Customer ID ist ungültig. Bitte in den Einstellungen korrigieren.",
+    )?;
 
     Ok(PlanradarConfig {
         base_url,
@@ -125,13 +160,29 @@ pub(super) fn store_api_token(token: &str) -> Result<(), PlanradarApiError> {
     })
 }
 
+/// Snapshot of the token stored before a `planradar_connect` overwrites it, used to roll back if
+/// the connect later fails. A read error is kept distinct from "definitely nothing stored": only
+/// the latter may trigger a destructive rollback, because deleting on an unreadable keychain
+/// would wipe a token that was actually still there.
+pub(super) enum PreviousToken {
+    Present(String),
+    Absent,
+    Unknown,
+}
+
 /// Returns the currently stored token, if any, without treating "not set" as an error. Used by
 /// `planradar_connect` to snapshot the previous token so it can be restored if the connect fails
 /// after the new token was written.
-pub(super) fn peek_api_token() -> Option<String> {
-    crate::secret_manager::get_token(PLANRADAR_KEYCHAIN_SERVICE, PLANRADAR_KEYCHAIN_USERNAME)
-        .ok()
-        .filter(|token| !token.trim().is_empty())
+pub(super) fn peek_api_token() -> PreviousToken {
+    match crate::secret_manager::get_token(PLANRADAR_KEYCHAIN_SERVICE, PLANRADAR_KEYCHAIN_USERNAME)
+    {
+        Ok(token) if !token.trim().is_empty() => PreviousToken::Present(token),
+        Ok(_) => PreviousToken::Absent,
+        Err(crate::secret_manager::SecretError::NotFound) => PreviousToken::Absent,
+        // A transient read failure (e.g. AccessDenied): we cannot tell whether a token exists,
+        // so the caller must not delete anything.
+        Err(_) => PreviousToken::Unknown,
+    }
 }
 
 /// Removes the stored Planradar token. Used to roll back a partial `planradar_connect` so a

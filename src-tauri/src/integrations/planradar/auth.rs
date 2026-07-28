@@ -2,7 +2,7 @@ use super::client::PlanradarApiClient;
 use super::projects::{list_projects_core, PlanradarListProjectsInput};
 use super::shared::{
     delete_api_token, load_store_or_error, normalize_base_url, peek_api_token, save_store_or_error,
-    store_api_token, PlanradarApiError, PlanradarApiErrorCode,
+    store_api_token, PlanradarApiError, PlanradarApiErrorCode, PreviousToken,
 };
 use serde::{Deserialize, Serialize};
 use specta::Type;
@@ -87,10 +87,13 @@ pub async fn planradar_connect(
     store.api_endpoints.planradar_customer_id = customer_id.clone();
     if let Err(error) = save_store_or_error(app, store) {
         // Restore the previous token (or remove the new one) so a store-write failure cannot
-        // leave the keychain and config store out of sync.
+        // leave the keychain and config store out of sync. When the earlier read failed we do
+        // not know whether a token was stored, so we leave the keychain alone rather than risk
+        // deleting a token that is still valid.
         let _ = match &previous_token {
-            Some(previous) => store_api_token(previous),
-            None => delete_api_token(),
+            PreviousToken::Present(previous) => store_api_token(previous),
+            PreviousToken::Absent => delete_api_token(),
+            PreviousToken::Unknown => Ok(()),
         };
         return Err(error);
     }

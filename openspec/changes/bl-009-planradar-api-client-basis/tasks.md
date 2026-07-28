@@ -32,7 +32,7 @@
 
 - [x] 6.1 (red) Tests mapping API error payloads (auth failure, rate limit, not found) to PlanradarError
 - [x] 6.2 (green) Define PlanradarError enum and implement error mapping
-- [x] 6.3 (red) Test retry with backoff on transient and rate-limit responses
+- [x] 6.3 (red) Test retry with backoff on transient responses, and that rate-limit responses engage a cooldown instead of being retried
 - [x] 6.4 (green) Implement retry logic
 
 ## 7. Configuration
