@@ -65,7 +65,7 @@ This reuses the dnd-kit pointer coordinates already available from `drag-drop-ap
 ## Risks / Trade-offs
 
 - [Visual order and slot times drift if only one is re-keyed] → Both read the same persisted index; the allocator re-key task and the sort-by-index rendering task land together.
-- [Assignments excluded from re-slotting still occupy a render position] → `slot-allocation` leaves an assignment untouched when its times cannot be rewritten safely, meaning a DURATION-based end, more than one VEVENT in the resource, a folded DTSTART or DTEND, or a missing resource URL.
+- [Assignments excluded from re-slotting still occupy a render position] → `slot-allocation` leaves an assignment untouched when its times cannot be rewritten safely, meaning a DURATION-based end, more than one VEVENT in the resource, a folded DTSTART or DTEND, membership in a repeating series, a span across more than one day, or a missing resource URL.
   Such an assignment still has an order index and still renders in the cell, but keeps whatever times it already had, so its card can show times that disagree with its position.
   The order index stays the single source of truth for position, and only the times are stale for that one card.
 - [Re-sequencing churn writes many events on each reorder] → Per-day card counts are small, so revisit fractional indices only if write volume becomes a problem.

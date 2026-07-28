@@ -1,4 +1,4 @@
-use chrono::NaiveTime;
+use chrono::{NaiveDate, NaiveTime};
 use std::collections::HashMap;
 
 use super::events::classify_event;
@@ -159,18 +159,24 @@ fn patch_event_slot(raw_ical: &str, date: &str, start: NaiveTime, end: NaiveTime
 }
 
 /// True if `patch_event_slot` can safely rewrite this resource's DTSTART/DTEND. It cannot,
-/// and the event is therefore excluded from re-allocation rather than risk invalid iCal, when:
+/// and the event is therefore excluded from re-allocation rather than corrupt it, when:
 /// - a DTSTART/DTEND inside the VEVENT is folded across physical lines (patch replaces only
 ///   the first line and would orphan the continuation). Folds elsewhere are harmless because
 ///   patch copies every other line through untouched, so they are deliberately allowed,
 /// - the resource holds more than one VEVENT (patch shares its DTEND-insertion state, so a
-///   recurrence override would be squashed onto the first component's slot), or
+///   recurrence override would be squashed onto the first component's slot),
 /// - the VEVENT expresses its end via DURATION (patch adds a DTEND, which RFC 5545 §3.6.1
-///   forbids alongside DURATION).
+///   forbids alongside DURATION),
+/// - the VEVENT belongs to a repeating series through RRULE, RDATE, or RECURRENCE-ID.
+///   Patching the master moves every occurrence, and only the master's own start date
+///   triggers re-allocation, so the later occurrences would never be corrected, or
+/// - the event does not start and end on the same day (see `spans_multiple_days`).
 fn can_patch_slot(raw_ical: &str) -> bool {
     let mut in_vevent = false;
     let mut vevent_count = 0u32;
     let mut after_rewritten_property = false;
+    let mut dtstart = None;
+    let mut dtend = None;
     for line in raw_ical.lines() {
         if line.starts_with(' ') || line.starts_with('\t') {
             if after_rewritten_property {
@@ -185,16 +191,60 @@ fn can_patch_slot(raw_ical: &str) -> bool {
         } else if line == "END:VEVENT" {
             in_vevent = false;
         } else if in_vevent {
-            if line.starts_with("DURATION:") || line.starts_with("DURATION;") {
+            if is_property(line, "DURATION")
+                || is_property(line, "RRULE")
+                || is_property(line, "RDATE")
+                || is_property(line, "RECURRENCE-ID")
+            {
                 return false;
             }
-            after_rewritten_property = line.starts_with("DTSTART:")
-                || line.starts_with("DTSTART;")
-                || line.starts_with("DTEND:")
-                || line.starts_with("DTEND;");
+            if is_property(line, "DTSTART") {
+                dtstart = Some(line);
+                after_rewritten_property = true;
+            } else if is_property(line, "DTEND") {
+                dtend = Some(line);
+                after_rewritten_property = true;
+            }
         }
     }
-    vevent_count <= 1
+    vevent_count <= 1 && !spans_multiple_days(dtstart, dtend)
+}
+
+/// True when the event covers more than one day. `patch_event_slot` writes both DTSTART and
+/// DTEND with the single day being allocated, which would silently collapse a longer span
+/// onto its first day.
+fn spans_multiple_days(dtstart: Option<&str>, dtend: Option<&str>) -> bool {
+    let (Some(dtstart), Some(dtend)) = (dtstart, dtend) else {
+        return false;
+    };
+    let (Some(start), Some(end)) = (property_date(dtstart), property_date(dtend)) else {
+        return false;
+    };
+    // A DATE-valued DTEND is exclusive (RFC 5545 §3.8.2.2), so a single all-day event ends
+    // on the day after it starts; a DATE-TIME DTEND names the last day itself.
+    let last_day = if property_value(dtend).is_some_and(|value| value.contains('T')) {
+        end
+    } else {
+        end.pred_opt().unwrap_or(end)
+    };
+    last_day != start
+}
+
+/// True when the line carries the named iCal property, i.e. the name is followed by a
+/// parameter (`;`) or the value separator (`:`) rather than being a longer property's prefix.
+fn is_property(line: &str, name: &str) -> bool {
+    line.strip_prefix(name)
+        .is_some_and(|rest| rest.starts_with(':') || rest.starts_with(';'))
+}
+
+/// The value of a property line, i.e. everything after the last colon, which separates any
+/// parameters from the value.
+fn property_value(line: &str) -> Option<&str> {
+    line.rsplit_once(':').map(|(_, value)| value)
+}
+
+fn property_date(line: &str) -> Option<NaiveDate> {
+    NaiveDate::parse_from_str(property_value(line)?.get(..8)?, "%Y%m%d").ok()
 }
 
 #[cfg(test)]
@@ -519,6 +569,41 @@ mod tests {
                 "folded DTSTART would orphan its continuation",
             ),
             (
+                "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:x\r\nDTSTART:20260506T080000\r\nDTEND:20260506T120000\r\nRRULE:FREQ=WEEKLY;COUNT=10\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+                false,
+                "RRULE master would shift every occurrence",
+            ),
+            (
+                "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:x\r\nDTSTART:20260506T080000\r\nDTEND:20260506T120000\r\nRDATE:20260513T080000\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+                false,
+                "RDATE also defines a recurrence set",
+            ),
+            (
+                "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:x\r\nRECURRENCE-ID:20260506T080000\r\nDTSTART:20260506T080000\r\nDTEND:20260506T120000\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+                false,
+                "lone override instance belongs to a series",
+            ),
+            (
+                "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:x\r\nDTSTART:20260506T080000\r\nDTEND:20260508T120000\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+                false,
+                "timed event spanning several days would collapse onto its first day",
+            ),
+            (
+                "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:x\r\nDTSTART;VALUE=DATE:20260506\r\nDTEND;VALUE=DATE:20260510\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+                false,
+                "multi-day all-day event would lose its remaining days",
+            ),
+            (
+                "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:x\r\nDTSTART;VALUE=DATE:20260506\r\nDTEND;VALUE=DATE:20260507\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+                true,
+                "single all-day event: the exclusive DATE DTEND is the next day, not a span",
+            ),
+            (
+                "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:x\r\nDTSTART:20260506T080000\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+                true,
+                "missing DTEND is inserted on the allocated day, so no span to lose",
+            ),
+            (
                 "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:x\r\nDTSTART:20260506T080000\r\nDTEND:20260506T120000\r\nDESCRIPTION:ein sehr langer Text\r\n der umbrochen wurde\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
                 true,
                 "folded DESCRIPTION inside the VEVENT is copied through untouched",
@@ -585,6 +670,56 @@ mod tests {
         assert!(
             updates.is_empty(),
             "uid-b is the only re-slottable assignment and already owns the full window"
+        );
+    }
+
+    #[test]
+    fn recurring_assignment_is_excluded_from_reallocation() {
+        let mut recurring = assignment_event("uid-a", "2026-05-06", "08:00", "16:00");
+        recurring.raw_ical = recurring
+            .raw_ical
+            .replace("SUMMARY:", "RRULE:FREQ=WEEKLY;COUNT=10\r\nSUMMARY:");
+        let events = vec![
+            recurring,
+            assignment_event("uid-b", "2026-05-06", "08:00", "16:00"),
+            assignment_event("uid-c", "2026-05-06", "08:00", "16:00"),
+        ];
+
+        let updates = plan_slot_updates(&events, "2026-05-06", None).updates;
+
+        assert!(
+            updates.iter().all(|u| u.uid != "uid-a"),
+            "re-slotting a series master would move every occurrence"
+        );
+        assert_eq!(
+            updates.len(),
+            2,
+            "only uid-b and uid-c participate, so they split the window in halves"
+        );
+    }
+
+    #[test]
+    fn multi_day_assignment_is_excluded_from_reallocation() {
+        let mut multi_day = assignment_event("uid-a", "2026-05-06", "08:00", "16:00");
+        multi_day.raw_ical = multi_day
+            .raw_ical
+            .replace("DTEND:20260506T160000", "DTEND:20260508T160000");
+        let events = vec![
+            multi_day,
+            assignment_event("uid-b", "2026-05-06", "08:00", "16:00"),
+            assignment_event("uid-c", "2026-05-06", "08:00", "16:00"),
+        ];
+
+        let updates = plan_slot_updates(&events, "2026-05-06", None).updates;
+
+        assert!(
+            updates.iter().all(|u| u.uid != "uid-a"),
+            "re-slotting a multi-day event would collapse it onto its first day"
+        );
+        assert_eq!(
+            updates.len(),
+            2,
+            "only uid-b and uid-c participate, so they split the window in halves"
         );
     }
 

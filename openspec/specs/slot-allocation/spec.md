@@ -78,8 +78,8 @@ The system SHALL re-allocate same-day slots whenever an assignment is created, u
 - **AND** bare, absence, and holiday events are left untouched
 
 ### Requirement: Exclude assignments that cannot be rewritten safely
-The system SHALL leave an assignment untouched when rewriting its times could produce invalid iCal.
-This applies to an event whose end is expressed via DURATION, a resource holding more than one VEVENT, a folded DTSTART or DTEND, and an event without a CalDAV resource URL.
+The system SHALL leave an assignment untouched when rewriting its times could produce invalid iCal or destroy information the assignment carries.
+This applies to an event whose end is expressed via DURATION, a resource holding more than one VEVENT, a folded DTSTART or DTEND, an event that belongs to a repeating series, an event that does not start and end on the same day, and an event without a CalDAV resource URL.
 Such an event takes no share of the window, so the remaining assignments are still spread across the full window and may overlap it.
 
 #### Scenario: Excluded assignment keeps its times
@@ -87,6 +87,18 @@ Such an event takes no share of the window, so the remaining assignments are sti
 - **WHEN** slots are re-allocated
 - **THEN** that assignment's times are not changed
 - **AND** no invalid iCal is written for it
+
+#### Scenario: Repeating assignment is never re-slotted
+- **GIVEN** a day contains an assignment that repeats through RRULE, RDATE, or RECURRENCE-ID
+- **WHEN** slots are re-allocated
+- **THEN** that assignment's times are not changed
+- **AND** the other occurrences of the series are unaffected
+
+#### Scenario: Multi-day assignment keeps its span
+- **GIVEN** a day contains an assignment whose end falls on a later day than its start
+- **WHEN** slots are re-allocated
+- **THEN** that assignment's times are not changed
+- **AND** its span is not collapsed onto the allocated day
 
 #### Scenario: Remaining assignments still use the full window
 - **GIVEN** a day contains one excluded assignment and two ordinary assignments
