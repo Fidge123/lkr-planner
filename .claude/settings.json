@@ -1,9 +1,11 @@
 {
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
   "attribution": {
     "commit": "",
     "pr": "",
     "sessionUrl": false
   },
+  "askUserQuestionTimeout": "never",
   "hooks": {
     "PostToolUse": [
       {
@@ -11,7 +13,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun format; cargo fmt --manifest-path src-tauri/Cargo.toml",
+            "command": "f=\"$(jq -r '.tool_input.file_path // empty')\"; [ -f \"$f\" ] || exit 0; bunx @biomejs/biome format --write \"$f\" 2>/dev/null; rustfmt --edition 2021 \"$f\" 2>/dev/null; true",
+            "timeout": 5,
             "statusMessage": "Formatting..."
           }
         ]
@@ -22,9 +25,27 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun lint && bun test && cargo test --manifest-path src-tauri/Cargo.toml",
-            "timeout": 30,
-            "statusMessage": "Running lint and tests..."
+            "command": "bun lint",
+            "timeout": 10,
+            "statusMessage": "Linting..."
+          },
+          {
+            "type": "command",
+            "command": "bun test",
+            "timeout": 20,
+            "statusMessage": "Running TS tests..."
+          },
+          {
+            "type": "command",
+            "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings",
+            "timeout": 60,
+            "statusMessage": "Running Clippy..."
+          },
+          {
+            "type": "command",
+            "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+            "timeout": 60,
+            "statusMessage": "Running Rust tests..."
           }
         ]
       }
