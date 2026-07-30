@@ -11,7 +11,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun format; cargo fmt --manifest-path src-tauri/Cargo.toml",
+            "command": "f=\"$(jq -r '.tool_input.file_path // empty')\"; case \"$f\" in *.ts|*.tsx|*.js|*.jsx|*.mjs|*.cjs|*.json|*.jsonc|*.css|*.html) bunx @biomejs/biome format --write \"$f\" ;; *.rs) rustfmt --edition 2021 \"$f\" ;; esac",
+            "timeout": 30,
             "statusMessage": "Formatting..."
           }
         ]
@@ -22,9 +23,27 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun lint && bun test && cargo test --manifest-path src-tauri/Cargo.toml",
-            "timeout": 30,
-            "statusMessage": "Running lint and tests..."
+            "command": "bun lint",
+            "timeout": 60,
+            "statusMessage": "Linting..."
+          },
+          {
+            "type": "command",
+            "command": "bun test",
+            "timeout": 120,
+            "statusMessage": "Running TS tests..."
+          },
+          {
+            "type": "command",
+            "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings",
+            "timeout": 300,
+            "statusMessage": "Running Clippy..."
+          },
+          {
+            "type": "command",
+            "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+            "timeout": 300,
+            "statusMessage": "Running Rust tests..."
           }
         ]
       }
