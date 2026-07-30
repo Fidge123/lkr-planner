@@ -1,9 +1,11 @@
 {
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
   "attribution": {
     "commit": "",
     "pr": "",
     "sessionUrl": false
   },
+  "askUserQuestionTimeout": "never",
   "hooks": {
     "PostToolUse": [
       {
@@ -12,7 +14,7 @@
           {
             "type": "command",
             "command": "f=\"$(jq -r '.tool_input.file_path // empty')\"; [ -f \"$f\" ] || exit 0; bunx @biomejs/biome format --write \"$f\" 2>/dev/null; rustfmt --edition 2021 \"$f\" 2>/dev/null; true",
-            "timeout": 30,
+            "timeout": 5,
             "statusMessage": "Formatting..."
           }
         ]
@@ -24,25 +26,25 @@
           {
             "type": "command",
             "command": "bun lint",
-            "timeout": 60,
+            "timeout": 10,
             "statusMessage": "Linting..."
           },
           {
             "type": "command",
             "command": "bun test",
-            "timeout": 120,
+            "timeout": 20,
             "statusMessage": "Running TS tests..."
           },
           {
             "type": "command",
             "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings",
-            "timeout": 300,
+            "timeout": 60,
             "statusMessage": "Running Clippy..."
           },
           {
             "type": "command",
             "command": "cargo test --manifest-path src-tauri/Cargo.toml",
-            "timeout": 300,
+            "timeout": 60,
             "statusMessage": "Running Rust tests..."
           }
         ]
