@@ -29,18 +29,7 @@ Avoid `---` between headers and avoid em dashes.
 ### Frontend
 
 - Avoid nested `div` and `span` elements
-- Create the simplest valid and semantic HTML possible
-
-```tsx
-export function ComponentName({ prop1, prop2 }: Props) {
-
-}
-
-interface Props {
-  prop1: string;
-  prop2: (value: string) => void;
-}
-```
+- Destructure props in the signature and declare the `Props` interface below the component
 
 ### API Calls
 
