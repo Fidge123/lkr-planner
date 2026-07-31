@@ -238,22 +238,23 @@ describe("TimetableCell", () => {
       />,
     );
 
-    expect(html).toContain("background-color:#8bc34a");
-    expect(html).toContain("color:#1f2937");
+    expect(html).toContain("background-color:oklch(var(--event-category-l)");
+    expect(html).toContain("text-base-100");
   });
 
-  it("renders no inline color when the assignment falls back to its status color", () => {
+  it("renders no inline color when the assignment has no category", () => {
     const html = renderToStaticMarkup(
       <TimetableCell
         highlight={false}
-        events={[draggableAssignment]}
+        events={[{ ...draggableAssignment, color: "bg-base-300" }]}
         onAddClick={() => {}}
         onEventClick={() => {}}
       />,
     );
 
     expect(html).not.toContain("background-color");
-    expect(html).toContain("bg-primary");
+    expect(html).toContain("bg-base-300");
+    expect(html).toContain("text-base-content");
   });
 
   it("does not make an assignment with an unresolved project draggable", () => {

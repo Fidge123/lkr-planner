@@ -21,3 +21,12 @@
 - [x] 4.4 Thread the project category through `DayliteProjectCacheEntry`, `fetch_project_by_reference`, and `CalendarCellEvent`, regenerate the TypeScript bindings, satisfying the tests
 - [x] 4.5 Write failing `bun test`s for assignment coloring: event with `category_color` uses the hex value, event without one falls back to the status color, unresolved event keeps `bg-base-300`
 - [x] 4.6 Render the category color on assignment cards in `timetable-cell.tsx` (inline style with luminance-based text color), satisfying the tests
+
+## 5. Tame the category colors
+
+- [x] 5.1 Add a per-theme `--event-category-l` lightness token to `src/app.css`
+- [x] 5.2 Write failing `bun test`s for an OKLCH normalizer: keeps the Daylite hue, caps chroma, pins lightness to the theme token, returns null for an unparsable value
+- [x] 5.3 Implement the normalizer and drop `readableTextColor`, satisfying the tests
+- [x] 5.4 Write failing `bun test`s for a neutral no-category fallback replacing the status-derived colors
+- [x] 5.5 Replace `projectStatusToColor` with the neutral fallback and render normalized colors in `timetable-cell.tsx` and the drag preview, satisfying the tests
+- [x] 5.6 Update the `assignment-persistence` spec delta and `design.md` for the normalized color and neutral fallback

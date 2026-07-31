@@ -18,24 +18,7 @@ export interface CellEvent {
   categoryColor: string | null;
 }
 
-function projectStatusToColor(status: string | null | undefined): string {
-  switch (status) {
-    case "in_progress":
-      return "bg-secondary";
-    case "done":
-      return "bg-success";
-    case "abandoned":
-      return "bg-neutral";
-    case "cancelled":
-      return "bg-neutral";
-    case "deferred":
-      return "bg-warning";
-    case "new_status":
-      return "bg-primary";
-    default:
-      return "bg-base-300";
-  }
-}
+const assignmentFallbackColor = "bg-base-300";
 
 const absenceCodeColors: Record<string, string> = {
   ub: "bg-(--color-absence-vacation)/50",
@@ -60,19 +43,41 @@ export function hasAbsenceConflict(events: CellEvent[]): boolean {
   );
 }
 
-export function readableTextColor(hexColor: string): string {
+const categoryChromaCap = 0.14;
+
+/**
+ * Re-renders a Daylite category color at the theme's event lightness, keeping its
+ * hue and capping its chroma, so arbitrary user-chosen colors stay at an even
+ * visual weight across the grid. Returns null for an unparsable value.
+ */
+export function categoryColorStyle(hexColor: string): string | null {
   const rgb = parseHexColor(hexColor);
-  if (!rgb) return "#ffffff";
+  if (!rgb) return null;
 
-  const [r, g, b] = rgb.map((channel) => {
-    const normalized = channel / 255;
-    return normalized <= 0.03928
-      ? normalized / 12.92
-      : ((normalized + 0.055) / 1.055) ** 2.4;
-  });
-  const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  const [red, green, blue] = rgb.map(toLinearChannel);
+  const long = Math.cbrt(
+    0.4122214708 * red + 0.5363325363 * green + 0.0514459929 * blue,
+  );
+  const medium = Math.cbrt(
+    0.2119034982 * red + 0.6806995451 * green + 0.1073969566 * blue,
+  );
+  const short = Math.cbrt(
+    0.0883024619 * red + 0.2817188376 * green + 0.6299787005 * blue,
+  );
 
-  return luminance > 0.35 ? "#1f2937" : "#ffffff";
+  const a = 1.9779984951 * long - 2.428592205 * medium + 0.4505937099 * short;
+  const b = 0.0259040371 * long + 0.7827717662 * medium - 0.808675766 * short;
+  const chroma = Math.min(Math.hypot(a, b), categoryChromaCap);
+  const hue = ((Math.atan2(b, a) * 180) / Math.PI + 360) % 360;
+
+  return `oklch(var(--event-category-l) ${chroma.toFixed(4)} ${hue.toFixed(2)})`;
+}
+
+function toLinearChannel(channel: number): number {
+  const normalized = channel / 255;
+  return normalized <= 0.04045
+    ? normalized / 12.92
+    : ((normalized + 0.055) / 1.055) ** 2.4;
 }
 
 function parseHexColor(hexColor: string): [number, number, number] | null {
@@ -103,7 +108,7 @@ export function toCellEvent(event: CalendarCellEvent): CellEvent {
         ? "bg-base-200"
         : categoryColor
           ? ""
-          : projectStatusToColor(event.projectStatus);
+          : assignmentFallbackColor;
   return {
     uid: event.uid,
     kind: event.kind,

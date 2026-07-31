@@ -2,8 +2,8 @@ import { describe, expect, it } from "bun:test";
 import type { CalendarCellEvent } from "../generated/tauri";
 import {
   type CellEvent,
+  categoryColorStyle,
   hasAbsenceConflict,
-  readableTextColor,
   toCellEvent,
 } from "./types";
 
@@ -139,7 +139,7 @@ describe("toCellEvent assignment colors", () => {
     expect(event.color).toBe("");
   });
 
-  it("falls back to the status color without a category color", () => {
+  it("falls back to a neutral color without a category color", () => {
     const event = toCellEvent(
       calendarEvent({
         kind: "assignment",
@@ -149,7 +149,25 @@ describe("toCellEvent assignment colors", () => {
     );
 
     expect(event.categoryColor).toBeNull();
-    expect(event.color).toBe("bg-secondary");
+    expect(event.color).toBe("bg-base-300");
+  });
+
+  it("uses the same neutral color for every project status", () => {
+    const statuses = [
+      "new_status",
+      "in_progress",
+      "done",
+      "abandoned",
+      "cancelled",
+      "deferred",
+    ];
+
+    for (const projectStatus of statuses) {
+      const event = toCellEvent(
+        calendarEvent({ kind: "assignment", title: "Projekt", projectStatus }),
+      );
+      expect(event.color).toBe("bg-base-300");
+    }
   });
 
   it("keeps the neutral color for an unresolved project", () => {
@@ -176,21 +194,55 @@ describe("toCellEvent assignment colors", () => {
   });
 });
 
-describe("readableTextColor", () => {
-  it("uses dark text on a light background", () => {
-    expect(readableTextColor("#f5f5f5")).toBe("#1f2937");
+describe("categoryColorStyle", () => {
+  function parse(hexColor: string): { chroma: number; hue: number } {
+    const style = categoryColorStyle(hexColor);
+    if (!style) throw new Error(`expected a color for ${hexColor}`);
+    const match = style.match(
+      /^oklch\(var\(--event-category-l\) ([\d.]+) ([\d.]+)\)$/,
+    );
+    if (!match) throw new Error(`unexpected color syntax: ${style}`);
+    return { chroma: Number(match[1]), hue: Number(match[2]) };
+  }
+
+  it("pins lightness to the theme token", () => {
+    expect(categoryColorStyle("#8bc34a")).toStartWith(
+      "oklch(var(--event-category-l) ",
+    );
   });
 
-  it("uses light text on a dark background", () => {
-    expect(readableTextColor("#1a237e")).toBe("#ffffff");
+  it("keeps the hue of the Daylite color", () => {
+    expect(parse("#ff0000").hue).toBeCloseTo(29.2, 0);
+    expect(parse("#0000ff").hue).toBeCloseTo(264.1, 0);
+  });
+
+  it("caps the chroma of a harsh color", () => {
+    expect(parse("#ff0000").chroma).toBeCloseTo(0.14, 5);
+  });
+
+  it("leaves a muted color's chroma untouched", () => {
+    const { chroma } = parse("#7ec8f0");
+    expect(chroma).toBeLessThan(0.14);
+    expect(chroma).toBeGreaterThan(0);
+  });
+
+  it("keeps a grey category grey", () => {
+    expect(parse("#808080").chroma).toBeCloseTo(0, 3);
+  });
+
+  it("pins lightness however dark or pale the Daylite color is", () => {
+    for (const hexColor of ["#0d0a4a", "#3b7dd8", "#c9c6f5", "#ffffff"]) {
+      expect(categoryColorStyle(hexColor)).toStartWith(
+        "oklch(var(--event-category-l) ",
+      );
+    }
   });
 
   it("supports shorthand hex values", () => {
-    expect(readableTextColor("#fff")).toBe("#1f2937");
-    expect(readableTextColor("#000")).toBe("#ffffff");
+    expect(parse("#f00").hue).toBeCloseTo(29.2, 0);
   });
 
-  it("falls back to light text for an unparsable value", () => {
-    expect(readableTextColor("nicht-eine-farbe")).toBe("#ffffff");
+  it("returns null for an unparsable value", () => {
+    expect(categoryColorStyle("nicht-eine-farbe")).toBeNull();
   });
 });

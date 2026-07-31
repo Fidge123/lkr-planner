@@ -18,6 +18,7 @@ import { ProjectTable } from "./components/project-table";
 import {
   AssignmentCardBody,
   assignmentCardClass,
+  categoryBackground,
 } from "./components/timetable-cell";
 import { TimetableHeader } from "./components/timetable-header";
 import { TimetableRow } from "./components/timetable-row";
@@ -28,7 +29,6 @@ import { type HolidaysState, useHolidays } from "./hooks/use-holidays";
 import type { PlanningAssignmentsState } from "./hooks/use-planning-assignments";
 import { usePlanningEmployees } from "./hooks/use-planning-employees";
 import { usePlanningProjects } from "./hooks/use-planning-projects";
-import { readableTextColor } from "./types";
 import { getWeekDays, toLocalISODate } from "./util";
 
 // dnd-kit refreshes a droppable's rect from a per-cell ResizeObserver, which
@@ -322,15 +322,8 @@ export function PlanningGridTable({
 function DragPreviewCard({ payload }: { payload: AppointmentDragPayload }) {
   return (
     <span
-      className={`${assignmentCardClass} text-base-100 shadow-lg ${payload.color}`}
-      style={
-        payload.categoryColor
-          ? {
-              backgroundColor: payload.categoryColor,
-              color: readableTextColor(payload.categoryColor),
-            }
-          : undefined
-      }
+      className={`${assignmentCardClass} ${payload.categoryColor ? "text-base-100" : "text-base-content"} shadow-lg ${payload.color}`}
+      style={categoryBackground(payload.categoryColor)}
     >
       <AssignmentCardBody
         startTime={null}

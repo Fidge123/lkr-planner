@@ -73,8 +73,25 @@ The backend fetches `GET /categories?entity=project` and keeps a category-name-t
 Inactive categories (`is_active: false`) are still included, because existing projects can keep referencing a category after it was deactivated and should keep its color.
 The calendar pipeline threads the project's category through the resolution paths: `DayliteProjectCacheEntry` gains a category field, `fetch_project_by_reference` returns the category alongside name and status, and `CalendarCellEvent` gains a nullable `category_color` carrying the resolved hex value.
 Resolving the color in the backend keeps all third-party API knowledge in Rust, matching the project convention that the frontend only consumes typed Tauri responses.
-Because category colors are arbitrary hex values controlled in Daylite, they cannot be expressed as static Tailwind classes; the assignment card sets its background via an inline style and picks light or dark text by relative luminance of the hex color to stay readable.
-Fallback chain per assignment event: category `hex_colour` if the project has a category with a color, otherwise the existing `projectStatusToColor` mapping, otherwise the unchanged neutral placeholder color (`bg-base-300`, used when project resolution fails).
+Because category colors are arbitrary hex values controlled in Daylite, they cannot be expressed as static Tailwind classes, so the assignment card sets its background via an inline style.
+Fallback per assignment event: the category `hex_colour` if the project has a category with a color, otherwise the neutral `bg-base-300` used for unresolved projects.
+
+### Normalizing the category color before rendering
+Daylite picks its category colors for small swatches in its own UI, so rendering the raw hex across a whole card produced a grid whose cards ranged from near-black to near-white and from muted to fully saturated.
+That spread, rather than any single color, is what read as harsh.
+Every category color is therefore converted to OKLCH, its hue kept, its chroma capped at `0.14`, and its lightness replaced by the `--event-category-l` theme token (58% light, 62% dark).
+The conversion runs in the frontend and emits `oklch(var(--event-category-l) <chroma> <hue>)`, which keeps the lightness theme-aware in CSS while the hue and chroma math stays unit-testable.
+
+This removes the need to compute a text color per card: with lightness pinned, `text-base-100` is readable on every category color in both themes, so the earlier relative-luminance helper was dropped.
+The trade-off is that a card no longer matches its Daylite swatch exactly, only its hue.
+The alternative of rendering the exact hex in a narrow accent bar on a neutral card was rejected because it gives up most of the at-a-glance scannability this change exists to provide.
+
+### One neutral color for assignments without a category
+`projectStatusToColor` is removed rather than kept as a second fallback tier.
+Status-derived colors were blue for both statuses the assignment picker offers, so they were indistinguishable from a blue category color, and "blue" meant both "this project's category is blue" and "this project has no category".
+Collapsing every status to `bg-base-300` makes a chromatic card mean exactly one thing: the project has a Daylite category with a color.
+This costs nothing in practice, since the picker already restricts assignments to `new_status` and `in_progress`.
+Assignments whose project fails to resolve keep the same neutral color and stay distinguishable by their German error title and by not being draggable.
 
 ## Risks / Trade-offs
 
