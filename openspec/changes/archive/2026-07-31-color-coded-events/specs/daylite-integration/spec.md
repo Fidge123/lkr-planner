@@ -11,7 +11,7 @@ The system SHALL retrieve Daylite categories with their colors for coloring proj
 #### Scenario: Category without a color
 - **WHEN** a category's `hex_colour` is null
 - **THEN** the category yields no color
-- **AND** events of projects in that category fall back to the status-derived color
+- **AND** events of projects in that category fall back to the neutral color
 
 #### Scenario: Inactive categories keep their color
 - **WHEN** a category has `is_active` set to false
