@@ -7,6 +7,30 @@
   },
   "askUserQuestionTimeout": "never",
   "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun install",
+            "timeout": 10,
+            "statusMessage": "Installing TS dependencies..."
+          },
+          {
+            "type": "command",
+            "command": "cargo fetch --manifest-path src-tauri/Cargo.toml",
+            "timeout": 30,
+            "statusMessage": "Installing rust dependencies..."
+          },
+          {
+            "type": "command",
+            "command": "bash scripts/unlock-cassettes.sh || echo 'Cassettes stay locked; the Daylite VCR tests will fail in this session.'",
+            "timeout": 30,
+            "statusMessage": "Unlocking cassettes..."
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
         "matcher": "Write|MultiEdit|Edit",

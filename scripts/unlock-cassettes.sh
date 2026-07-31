@@ -2,6 +2,10 @@
 
 set -euo pipefail
 
+if [ "${CLAUDE_CODE_REMOTE:-}" != "true" ]; then
+  exit 0
+fi
+
 repo_root="$(git rev-parse --show-toplevel)"
 cassette_dir="$repo_root/tests/cassettes"
 
