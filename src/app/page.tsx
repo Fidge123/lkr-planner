@@ -1,7 +1,10 @@
+import type { CollisionDetection } from "@dnd-kit/core";
 import {
   DndContext,
   DragOverlay,
   PointerSensor,
+  pointerWithin,
+  rectIntersection,
   useDndContext,
   useSensor,
   useSensors,
@@ -23,7 +26,7 @@ import { TimetableHeader } from "./components/timetable-header";
 import { TimetableRow } from "./components/timetable-row";
 import { filterVisibleEmployees } from "./employee-visibility";
 import type { AppointmentDragPayload } from "./hooks/use-appointment-drag";
-import { useAppointmentDrag } from "./hooks/use-appointment-drag";
+import { cardsFirst, useAppointmentDrag } from "./hooks/use-appointment-drag";
 import { type HolidaysState, useHolidays } from "./hooks/use-holidays";
 import type { PlanningAssignmentsState } from "./hooks/use-planning-assignments";
 import { usePlanningEmployees } from "./hooks/use-planning-employees";
@@ -35,6 +38,15 @@ import { getWeekDays, toLocalISODate } from "./util";
 // re-schedules while the pointer moves. Neither catches a cell shifting because
 // an earlier row grew under a still pointer, which leaves the drop landing where
 // the cell used to be.
+// Cards are nested inside their cell's droppable, so plain rect intersection always ranks
+// the larger cell first and the drop loses its before/after precision.
+const collisionDetection: CollisionDetection = (args) => {
+  const pointerCollisions = pointerWithin(args);
+  return cardsFirst(
+    pointerCollisions.length > 0 ? pointerCollisions : rectIntersection(args),
+  );
+};
+
 function DropzoneMeasurementTicker() {
   const { active, measureDroppableContainers } = useDndContext();
   useEffect(() => {
@@ -243,6 +255,7 @@ export function PlanningGridTable({
       ) : null}
       <DndContext
         sensors={dragSensors}
+        collisionDetection={collisionDetection}
         onDragStart={drag.onDragStart}
         onDragMove={drag.onDragMove}
         onDragEnd={drag.onDragEnd}

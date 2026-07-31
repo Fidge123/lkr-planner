@@ -32,6 +32,7 @@ describe("TimetableCell", () => {
       href: "/calendars/user/uid-1.ics",
       projectRef: "/v1/projects/1",
       projectStatus: "in_progress",
+      orderIndex: 0,
     };
 
     const html = renderToStaticMarkup(
@@ -97,6 +98,7 @@ describe("TimetableCell", () => {
     href: "/calendars/user/uid-drag.ics",
     projectRef: "/v1/projects/7",
     projectStatus: "in_progress",
+    orderIndex: 0,
   };
 
   it("marks assignment cards as draggable", () => {
@@ -126,6 +128,34 @@ describe("TimetableCell", () => {
     expect(html).toContain("Bauprojekt Süd");
   });
 
+  it("renders assignment cards sorted by their order index", () => {
+    const later: CellEvent = {
+      ...draggableAssignment,
+      uid: "uid-later",
+      title: "Zweiter Einsatz",
+      orderIndex: 1,
+    };
+    const earlier: CellEvent = {
+      ...draggableAssignment,
+      uid: "uid-earlier",
+      title: "Erster Einsatz",
+      orderIndex: 0,
+    };
+
+    const html = renderToStaticMarkup(
+      <TimetableCell
+        highlight={false}
+        events={[later, earlier]}
+        onAddClick={() => {}}
+        onEventClick={() => {}}
+      />,
+    );
+
+    expect(html.indexOf("Erster Einsatz")).toBeLessThan(
+      html.indexOf("Zweiter Einsatz"),
+    );
+  });
+
   it("does not make bare or absence events draggable", () => {
     const bare: CellEvent = {
       uid: "uid-bare",
@@ -137,6 +167,7 @@ describe("TimetableCell", () => {
       href: null,
       projectRef: null,
       projectStatus: null,
+      orderIndex: null,
     };
     const absence: CellEvent = {
       uid: "uid-abs",
@@ -148,6 +179,7 @@ describe("TimetableCell", () => {
       href: null,
       projectRef: null,
       projectStatus: null,
+      orderIndex: null,
     };
 
     const html = renderToStaticMarkup(

@@ -312,6 +312,7 @@ describe("planning grid assignment states", () => {
       startTime: null,
       endTime: null,
       href: null,
+      orderIndex: null,
     };
 
     const html = renderToStaticMarkup(
@@ -350,6 +351,7 @@ describe("planning grid assignment states", () => {
       startTime: null,
       endTime: null,
       href: null,
+      orderIndex: null,
     };
 
     const html = renderToStaticMarkup(
@@ -459,6 +461,7 @@ describe("planning grid drag-and-drop wiring", () => {
     startTime: "08:00",
     endTime: "16:00",
     href: "/calendars/user/event-uid-1.ics",
+    orderIndex: null,
   };
 
   const renderGrid = () =>

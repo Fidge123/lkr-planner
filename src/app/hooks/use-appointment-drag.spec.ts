@@ -2,12 +2,15 @@ import { describe, expect, it, mock } from "bun:test";
 import type {
   AppointmentDragPayload,
   DropCellTarget,
+  DropZoneData,
 } from "./use-appointment-drag";
 import {
+  cardsFirst,
   computeEdgeZone,
   decideDropAction,
   EdgeHoverNavigator,
   performDrop,
+  resolveDropTarget,
 } from "./use-appointment-drag";
 
 const payload: AppointmentDragPayload = {
@@ -18,7 +21,23 @@ const payload: AppointmentDragPayload = {
   date: "2026-07-06",
   title: "Projekt Nord",
   color: "bg-primary",
+  position: 1,
 };
+
+const cardRect = { top: 100, height: 40 };
+const aboveMidpoint = 110;
+const belowMidpoint = 130;
+
+function cardZone(
+  position: number,
+  employeeRef = payload.employeeRef,
+  date = payload.date,
+): { data: DropZoneData; rect: { top: number; height: number } } {
+  return {
+    data: { kind: "card", employeeRef, date, position },
+    rect: cardRect,
+  };
+}
 
 type CommandResult<T> =
   | { status: "ok"; data: T }
@@ -29,6 +48,9 @@ type MoveData =
 
 const okDeps = () => ({
   updateAssignment: mock(
+    async (): Promise<CommandResult<null>> => ({ status: "ok", data: null }),
+  ),
+  reorderAssignment: mock(
     async (): Promise<CommandResult<null>> => ({ status: "ok", data: null }),
   ),
   moveAssignment: mock(
@@ -44,6 +66,7 @@ describe("decideDropAction", () => {
     const target: DropCellTarget = {
       employeeRef: payload.employeeRef,
       date: payload.date,
+      orderIndex: payload.position,
     };
     expect(decideDropAction(payload, target)).toBe("none");
   });
@@ -52,6 +75,7 @@ describe("decideDropAction", () => {
     const target: DropCellTarget = {
       employeeRef: payload.employeeRef,
       date: "2026-07-08",
+      orderIndex: null,
     };
     expect(decideDropAction(payload, target)).toBe("reschedule");
   });
@@ -60,8 +84,27 @@ describe("decideDropAction", () => {
     const target: DropCellTarget = {
       employeeRef: "/v1/contacts/2",
       date: payload.date,
+      orderIndex: null,
     };
     expect(decideDropAction(payload, target)).toBe("move");
+  });
+
+  it("reorders when the position inside the originating cell changes", () => {
+    const target: DropCellTarget = {
+      employeeRef: payload.employeeRef,
+      date: payload.date,
+      orderIndex: 0,
+    };
+    expect(decideDropAction(payload, target)).toBe("reorder");
+  });
+
+  it("is a no-op when the card is dropped back onto its own position", () => {
+    const target: DropCellTarget = {
+      employeeRef: payload.employeeRef,
+      date: payload.date,
+      orderIndex: payload.position,
+    };
+    expect(decideDropAction(payload, target)).toBe("none");
   });
 });
 
@@ -70,20 +113,25 @@ describe("performDrop", () => {
     const deps = okDeps();
     const outcome = await performDrop(
       payload,
-      { employeeRef: payload.employeeRef, date: payload.date },
+      {
+        employeeRef: payload.employeeRef,
+        date: payload.date,
+        orderIndex: payload.position,
+      },
       deps,
     );
 
     expect(outcome).toEqual({ kind: "none" });
     expect(deps.updateAssignment).not.toHaveBeenCalled();
     expect(deps.moveAssignment).not.toHaveBeenCalled();
+    expect(deps.reorderAssignment).not.toHaveBeenCalled();
   });
 
   it("reschedules via updateAssignment within the same employee", async () => {
     const deps = okDeps();
     const outcome = await performDrop(
       payload,
-      { employeeRef: payload.employeeRef, date: "2026-07-08" },
+      { employeeRef: payload.employeeRef, date: "2026-07-08", orderIndex: 2 },
       deps,
     );
 
@@ -94,6 +142,7 @@ describe("performDrop", () => {
       "2026-07-08",
       payload.projectRef,
       payload.title,
+      2,
     );
     expect(deps.moveAssignment).not.toHaveBeenCalled();
   });
@@ -102,7 +151,7 @@ describe("performDrop", () => {
     const deps = okDeps();
     const outcome = await performDrop(
       payload,
-      { employeeRef: "/v1/contacts/2", date: "2026-07-08" },
+      { employeeRef: "/v1/contacts/2", date: "2026-07-08", orderIndex: 0 },
       deps,
     );
 
@@ -113,8 +162,54 @@ describe("performDrop", () => {
       "2026-07-08",
       payload.projectRef,
       payload.title,
+      0,
     );
     expect(deps.updateAssignment).not.toHaveBeenCalled();
+  });
+
+  it("reorders within the originating cell without a cross-calendar move", async () => {
+    const deps = okDeps();
+    const outcome = await performDrop(
+      payload,
+      {
+        employeeRef: payload.employeeRef,
+        date: payload.date,
+        orderIndex: 0,
+      },
+      deps,
+    );
+
+    expect(outcome).toEqual({ kind: "done" });
+    expect(deps.reorderAssignment).toHaveBeenCalledWith(
+      payload.href,
+      payload.uid,
+      payload.date,
+      0,
+    );
+    expect(deps.updateAssignment).not.toHaveBeenCalled();
+    expect(deps.moveAssignment).not.toHaveBeenCalled();
+  });
+
+  it("surfaces the backend error when a reorder fails", async () => {
+    const deps = {
+      ...okDeps(),
+      reorderAssignment: mock(
+        async (): Promise<CommandResult<null>> => ({
+          status: "error",
+          error: "Kalenderserver antwortete mit HTTP 500",
+        }),
+      ),
+    };
+    const outcome = await performDrop(
+      payload,
+      { employeeRef: payload.employeeRef, date: payload.date, orderIndex: 0 },
+      deps,
+    );
+
+    expect(outcome).toEqual({
+      kind: "error",
+      message: "Kalenderserver antwortete mit HTTP 500",
+    });
   });
 
   it("surfaces the backend error when the target employee has no calendar", async () => {
@@ -129,7 +224,7 @@ describe("performDrop", () => {
     };
     const outcome = await performDrop(
       payload,
-      { employeeRef: "/v1/contacts/2", date: "2026-07-08" },
+      { employeeRef: "/v1/contacts/2", date: "2026-07-08", orderIndex: null },
       deps,
     );
 
@@ -155,7 +250,7 @@ describe("performDrop", () => {
     };
     const outcome = await performDrop(
       payload,
-      { employeeRef: "/v1/contacts/2", date: "2026-07-08" },
+      { employeeRef: "/v1/contacts/2", date: "2026-07-08", orderIndex: null },
       deps,
     );
 
@@ -178,7 +273,11 @@ describe("performDrop", () => {
     };
     const outcome = await performDrop(
       payload,
-      { employeeRef: payload.employeeRef, date: "2026-07-08" },
+      {
+        employeeRef: payload.employeeRef,
+        date: "2026-07-08",
+        orderIndex: null,
+      },
       deps,
     );
 
@@ -186,6 +285,93 @@ describe("performDrop", () => {
       kind: "error",
       message: "Kalenderserver antwortete mit HTTP 500",
     });
+  });
+});
+
+describe("resolveDropTarget", () => {
+  it("appends when the drop lands on the cell itself", () => {
+    const target = resolveDropTarget(
+      payload,
+      {
+        data: {
+          kind: "cell",
+          employeeRef: "/v1/contacts/2",
+          date: "2026-07-08",
+        },
+        rect: cardRect,
+      },
+      belowMidpoint,
+    );
+
+    expect(target).toEqual({
+      employeeRef: "/v1/contacts/2",
+      date: "2026-07-08",
+      orderIndex: null,
+    });
+  });
+
+  it("places the card before a target card dropped on its upper half", () => {
+    const target = resolveDropTarget(
+      payload,
+      cardZone(2, "/v1/contacts/2"),
+      aboveMidpoint,
+    );
+
+    expect(target.orderIndex).toBe(2);
+  });
+
+  it("places the card after a target card dropped on its lower half", () => {
+    const target = resolveDropTarget(
+      payload,
+      cardZone(2, "/v1/contacts/2"),
+      belowMidpoint,
+    );
+
+    expect(target.orderIndex).toBe(3);
+  });
+
+  it("keeps the target cell and date of the card it lands on", () => {
+    const target = resolveDropTarget(
+      payload,
+      cardZone(0, "/v1/contacts/2", "2026-07-09"),
+      aboveMidpoint,
+    );
+
+    expect(target.employeeRef).toBe("/v1/contacts/2");
+    expect(target.date).toBe("2026-07-09");
+  });
+
+  it("discounts the slot the card vacates when it moves down its own cell", () => {
+    // The dragged card sits at position 1; dropping below the card at position 2 leaves
+    // it last of three, which is position 2 once its own slot is gone.
+    const target = resolveDropTarget(payload, cardZone(2), belowMidpoint);
+
+    expect(target.orderIndex).toBe(2);
+  });
+
+  it("does not discount a slot when the card moves up its own cell", () => {
+    const target = resolveDropTarget(payload, cardZone(0), aboveMidpoint);
+
+    expect(target.orderIndex).toBe(0);
+  });
+});
+
+describe("cardsFirst", () => {
+  const cellCollision = {
+    id: "cell-a",
+    data: { droppableContainer: { data: { current: { kind: "cell" } } } },
+  };
+  const cardCollision = {
+    id: "card-a",
+    data: { droppableContainer: { data: { current: { kind: "card" } } } },
+  };
+
+  it("drops the enclosing cell when a card is also under the pointer", () => {
+    expect(cardsFirst([cellCollision, cardCollision])).toEqual([cardCollision]);
+  });
+
+  it("keeps the cell when no card was hit", () => {
+    expect(cardsFirst([cellCollision])).toEqual([cellCollision]);
   });
 });
 
@@ -270,5 +456,75 @@ describe("EdgeHoverNavigator", () => {
     await Bun.sleep(30);
 
     expect(onNavigate.mock.calls).toEqual([[1]]);
+  });
+});
+
+// Composes the whole drop gesture the grid runs on drag end: the zone under the pointer
+// becomes an insertion position, which decides the action and the command that is sent.
+describe("drop gesture end to end", () => {
+  it("reorders a card within its own day", async () => {
+    const deps = okDeps();
+
+    const target = resolveDropTarget(payload, cardZone(0), aboveMidpoint);
+    const outcome = await performDrop(payload, target, deps);
+
+    expect(outcome).toEqual({ kind: "done" });
+    expect(deps.reorderAssignment).toHaveBeenCalledWith(
+      payload.href,
+      payload.uid,
+      payload.date,
+      0,
+    );
+    expect(deps.moveAssignment).not.toHaveBeenCalled();
+    expect(deps.updateAssignment).not.toHaveBeenCalled();
+  });
+
+  it("lands after a specific card of another employee", async () => {
+    const deps = okDeps();
+
+    const target = resolveDropTarget(
+      payload,
+      cardZone(0, "/v1/contacts/2", "2026-07-08"),
+      belowMidpoint,
+    );
+    const outcome = await performDrop(payload, target, deps);
+
+    expect(outcome).toEqual({ kind: "done" });
+    expect(deps.moveAssignment).toHaveBeenCalledWith(
+      payload.href,
+      "/v1/contacts/2",
+      "2026-07-08",
+      payload.projectRef,
+      payload.title,
+      1,
+    );
+  });
+
+  it("appends when the drop lands on an empty area of another employee's cell", async () => {
+    const deps = okDeps();
+
+    const target = resolveDropTarget(
+      payload,
+      {
+        data: {
+          kind: "cell",
+          employeeRef: "/v1/contacts/2",
+          date: "2026-07-08",
+        },
+        rect: cardRect,
+      },
+      belowMidpoint,
+    );
+    const outcome = await performDrop(payload, target, deps);
+
+    expect(outcome).toEqual({ kind: "done" });
+    expect(deps.moveAssignment).toHaveBeenCalledWith(
+      payload.href,
+      "/v1/contacts/2",
+      "2026-07-08",
+      payload.projectRef,
+      payload.title,
+      null,
+    );
   });
 });

@@ -14,6 +14,8 @@ export interface CellEvent {
   projectRef: string | null;
   /** Daylite project status. Null for non-assignment events and for assignments whose project could not be resolved. */
   projectStatus: string | null;
+  /** Position among the day's assignments. Null for events that carry no order index yet. */
+  orderIndex: number | null;
 }
 
 function projectStatusToColor(status: string | null | undefined): string {
@@ -52,5 +54,6 @@ export function toCellEvent(event: CalendarCellEvent): CellEvent {
     href: event.href,
     projectRef: event.projectRef,
     projectStatus: event.projectStatus,
+    orderIndex: event.orderIndex,
   };
 }

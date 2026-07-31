@@ -29,6 +29,7 @@ function event(
     startTime: null,
     endTime: null,
     href: null,
+    orderIndex: null,
   };
 }
 

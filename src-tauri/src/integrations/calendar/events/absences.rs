@@ -37,6 +37,7 @@ pub(crate) fn map_absence_raw_events_for_week(
                     start_time: None,
                     end_time: None,
                     href: href.clone(),
+                    order_index: None,
                 });
                 day += chrono::Duration::days(1);
             }
@@ -51,6 +52,7 @@ pub(crate) fn map_absence_raw_events_for_week(
                 start_time: raw.start_time,
                 end_time: raw.end_time,
                 href,
+                order_index: None,
             });
         }
     }

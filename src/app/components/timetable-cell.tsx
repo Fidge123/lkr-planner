@@ -1,4 +1,6 @@
 import { useDraggable, useDroppable } from "@dnd-kit/core";
+import { useCallback } from "react";
+import { assignmentPositions, sortCellEvents } from "../cell-order";
 import type { AppointmentDragPayload } from "../hooks/use-appointment-drag";
 import type { GhostSuggestion } from "../next-day-quick-add";
 import type { CellEvent } from "../types";
@@ -16,13 +18,15 @@ export function TimetableCell({
 }: Props) {
   const { isOver, setNodeRef } = useDroppable({
     id: `cell-${employeeRef}-${date}`,
-    data: { employeeRef, date },
+    data: { kind: "cell", employeeRef, date },
   });
+  const orderedEvents = sortCellEvents(events);
+  const positions = assignmentPositions(orderedEvents);
 
   return (
     <td ref={setNodeRef} className={cellClass(highlight, isHoliday, isOver)}>
       <ul className="flex flex-col gap-1 list-none">
-        {events.map((event) =>
+        {orderedEvents.map((event) =>
           event.kind === "absence" ? (
             <li key={event.uid}>
               <span
@@ -53,6 +57,7 @@ export function TimetableCell({
                 event={event}
                 employeeRef={employeeRef}
                 date={date}
+                position={positions.get(event.uid) ?? 0}
                 onEventClick={onEventClick}
               />
             </li>
@@ -121,6 +126,7 @@ function DraggableAssignmentCard({
   event,
   employeeRef,
   date,
+  position,
   onEventClick,
 }: CardProps) {
   const payload: AppointmentDragPayload = {
@@ -131,6 +137,7 @@ function DraggableAssignmentCard({
     date,
     title: event.title,
     color: event.color,
+    position,
   };
   // An unresolved project renders a German error placeholder as the title;
   // dropping such a card would persist that placeholder as the event summary.
@@ -141,10 +148,25 @@ function DraggableAssignmentCard({
     data: payload,
     disabled: !canDrag,
   });
+  // A card is also a drop zone so a drag can land before or after it. Its own zone is
+  // disabled while it is being dragged, so it never becomes its own target.
+  const { setNodeRef: setDropNodeRef } = useDroppable({
+    id: `card-${employeeRef}-${date}-${event.uid}`,
+    data: { kind: "card", employeeRef, date, position },
+    disabled: isDragging,
+  });
+  // Memoised so React does not detach and re-attach both dnd-kit nodes on every render.
+  const setCardRef = useCallback(
+    (node: HTMLButtonElement | null) => {
+      setNodeRef(node);
+      setDropNodeRef(node);
+    },
+    [setNodeRef, setDropNodeRef],
+  );
 
   return (
     <button
-      ref={setNodeRef}
+      ref={setCardRef}
       type="button"
       className={`btn btn-block h-auto justify-start ${assignmentCardClass} text-base-100 transition-[filter,opacity] hover:brightness-90 active:brightness-75 ${event.color} ${isDragging ? "opacity-40" : ""}`}
       onClick={() => onEventClick(event)}
@@ -163,6 +185,7 @@ interface CardProps {
   event: CellEvent;
   employeeRef: string;
   date: string;
+  position: number;
   onEventClick: (event: CellEvent) => void;
 }
 

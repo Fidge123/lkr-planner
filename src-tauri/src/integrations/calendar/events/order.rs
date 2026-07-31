@@ -30,6 +30,7 @@ mod tests {
                 start_time: Some("09:00".to_string()),
                 end_time: Some("17:00".to_string()),
                 href: None,
+                order_index: Some(0),
             },
             CalendarCellEvent {
                 uid: "absence-1".to_string(),
@@ -41,6 +42,7 @@ mod tests {
                 start_time: None,
                 end_time: None,
                 href: None,
+                order_index: None,
             },
         ];
 
@@ -63,6 +65,7 @@ mod tests {
                 start_time: Some("10:00".to_string()),
                 end_time: None,
                 href: None,
+                order_index: None,
             },
             CalendarCellEvent {
                 uid: "absence-1".to_string(),
@@ -74,6 +77,7 @@ mod tests {
                 start_time: None,
                 end_time: None,
                 href: None,
+                order_index: None,
             },
         ];
 
@@ -96,6 +100,7 @@ mod tests {
                 start_time: Some("09:00".to_string()),
                 end_time: None,
                 href: None,
+                order_index: Some(0),
             },
             CalendarCellEvent {
                 uid: "absence-tue".to_string(),
@@ -107,6 +112,7 @@ mod tests {
                 start_time: None,
                 end_time: None,
                 href: None,
+                order_index: None,
             },
         ];
 

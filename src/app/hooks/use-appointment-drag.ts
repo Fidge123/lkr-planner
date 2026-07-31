@@ -1,4 +1,5 @@
 import type {
+  Collision,
   DragEndEvent,
   DragMoveEvent,
   DragStartEvent,
@@ -16,14 +17,70 @@ export interface AppointmentDragPayload {
   /** Project name; doubles as the persisted event summary on drop. */
   title: string;
   color: string;
+  /** Rendered position among its own cell's assignments. */
+  position: number;
 }
+
+/** Droppable payload of a day cell and of each assignment card inside it. */
+export type DropZoneData =
+  | { kind: "cell"; employeeRef: string; date: string }
+  | { kind: "card"; employeeRef: string; date: string; position: number };
 
 export interface DropCellTarget {
   employeeRef: string;
   date: string;
+  /**
+   * Insertion position among the target cell's assignments, counted without the dragged
+   * card. Null appends it after the cell's existing cards.
+   */
+  orderIndex: number | null;
 }
 
-export type DropAction = "none" | "reschedule" | "move";
+export type DropAction = "none" | "reorder" | "reschedule" | "move";
+
+/**
+ * Turns the drop zone under the pointer into an insertion position. Landing on the upper
+ * half of a card places the dragged card before it, the lower half after it, and landing on
+ * the cell itself appends.
+ */
+export function resolveDropTarget(
+  source: AppointmentDragPayload,
+  over: { data: DropZoneData; rect: { top: number; height: number } },
+  pointerY: number,
+): DropCellTarget {
+  const { employeeRef, date } = over.data;
+  if (over.data.kind === "cell") {
+    return { employeeRef, date, orderIndex: null };
+  }
+
+  const dropsAfter = pointerY >= over.rect.top + over.rect.height / 2;
+  const slot = over.data.position + (dropsAfter ? 1 : 0);
+  // The backend counts the position without the dragged card, so leaving its own cell
+  // frees up the slot it occupied.
+  const leavesEarlierSlot =
+    source.employeeRef === employeeRef &&
+    source.date === date &&
+    source.position < slot;
+  return { employeeRef, date, orderIndex: leavesEarlierSlot ? slot - 1 : slot };
+}
+
+/**
+ * A card droppable always wins over the cell it sits in, so a drop that lands on a card
+ * keeps its before/after precision instead of degrading to an append.
+ */
+export function cardsFirst(collisions: Collision[]): Collision[] {
+  const cards = collisions.filter(
+    (collision) => dropZoneData(collision)?.kind === "card",
+  );
+  return cards.length > 0 ? cards : collisions;
+}
+
+function dropZoneData(collision: Collision): DropZoneData | undefined {
+  const container = collision.data?.droppableContainer as
+    | { data?: { current?: DropZoneData } }
+    | undefined;
+  return container?.data?.current;
+}
 
 export type DropOutcome =
   | { kind: "none" }
@@ -47,6 +104,9 @@ export function decideDropAction(
   if (source.date !== target.date) {
     return "reschedule";
   }
+  if (target.orderIndex !== null && target.orderIndex !== source.position) {
+    return "reorder";
+  }
   return "none";
 }
 
@@ -57,6 +117,15 @@ interface DropDeps {
     date: string,
     projectRef: string,
     projectName: string,
+    orderIndex: number | null,
+  ) => Promise<
+    { status: "ok"; data: null } | { status: "error"; error: string }
+  >;
+  reorderAssignment: (
+    href: string,
+    uid: string,
+    date: string,
+    orderIndex: number,
   ) => Promise<
     { status: "ok"; data: null } | { status: "error"; error: string }
   >;
@@ -66,6 +135,7 @@ interface DropDeps {
     date: string,
     projectRef: string,
     projectName: string,
+    orderIndex: number | null,
   ) => Promise<
     | { status: "ok"; data: MoveAssignmentResult }
     | { status: "error"; error: string }
@@ -85,6 +155,19 @@ export async function performDrop(
     return { kind: "none" };
   }
 
+  if (action === "reorder" && target.orderIndex !== null) {
+    const result = await deps.reorderAssignment(
+      source.href,
+      source.uid,
+      source.date,
+      target.orderIndex,
+    );
+    if (result.status === "error") {
+      return { kind: "error", message: result.error };
+    }
+    return { kind: "done" };
+  }
+
   if (action === "reschedule") {
     const result = await deps.updateAssignment(
       source.href,
@@ -92,6 +175,7 @@ export async function performDrop(
       target.date,
       source.projectRef,
       source.title,
+      target.orderIndex,
     );
     if (result.status === "error") {
       return { kind: "error", message: result.error };
@@ -105,6 +189,7 @@ export async function performDrop(
     target.date,
     source.projectRef,
     source.title,
+    target.orderIndex,
   );
   if (result.status === "error") {
     return { kind: "error", message: result.error };
@@ -258,12 +343,36 @@ export function useAppointmentDrag({
 
     const source = activePayloadRef.current;
     activePayloadRef.current = null;
-    const target = event.over?.data.current as DropCellTarget | undefined;
-    if (!source || !target) return;
+    const over = event.over;
+    const zone = over?.data.current as DropZoneData | undefined;
+    if (!source || !over || !zone) return;
+
+    const activator = event.activatorEvent as Partial<PointerEvent>;
+    const pointerY = (activator.clientY ?? 0) + event.delta.y;
+    const target = resolveDropTarget(
+      source,
+      { data: zone, rect: over.rect },
+      pointerY,
+    );
 
     void performDrop(source, target, {
-      updateAssignment: (href, uid, date, projectRef, projectName) =>
-        commands.updateAssignment({ href, uid, date, projectRef, projectName }),
+      updateAssignment: (
+        href,
+        uid,
+        date,
+        projectRef,
+        projectName,
+        orderIndex,
+      ) =>
+        commands.updateAssignment({
+          href,
+          uid,
+          date,
+          projectRef,
+          projectName,
+          orderIndex,
+        }),
+      reorderAssignment: commands.reorderAssignment,
       moveAssignment: commands.moveAssignment,
     })
       .then((outcome) => {
