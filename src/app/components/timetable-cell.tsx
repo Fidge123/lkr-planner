@@ -146,7 +146,7 @@ function DraggableAssignmentCard({
     <button
       ref={setNodeRef}
       type="button"
-      className={`btn btn-block h-auto justify-start ${assignmentCardClass} text-base-100 transition-all hover:brightness-90 active:brightness-75 ${event.color} ${isDragging ? "opacity-40" : ""}`}
+      className={`btn btn-block h-auto justify-start ${assignmentCardClass} text-base-100 transition-[filter,opacity] hover:brightness-90 active:brightness-75 ${event.color} ${isDragging ? "opacity-40" : ""}`}
       onClick={() => onEventClick(event)}
       {...(canDrag ? { ...listeners, ...attributes } : {})}
     >
