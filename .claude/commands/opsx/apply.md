@@ -1,124 +1,121 @@
 ---
 name: "OPSX: Apply"
 description: "Implement tasks from an OpenSpec change (Experimental)"
-allowed-tools: Bash(openspec:*)
+allowed-tools: Bash(openspec:*) Bash(bunx openspec:*)
 category: "Workflow"
 tags: ["workflow", "artifacts", "experimental"]
 ---
 
 Implement tasks from an OpenSpec change.
 
-**Store selection:** If the user names a store (a store is a standalone OpenSpec repo registered on this machine) or the work lives in one, run `bunx openspec store list --json` to discover registered store ids, then pass `--store <id>` on the commands that read or write specs and changes (`new change`, `status`, `instructions`, `list`, `show`, `validate`, `archive`, `doctor`, `context`, `view`).
+### Store selection
+
+If the user names a store (a store is a standalone OpenSpec repo registered on this machine) or the work lives in one,
+run `bunx openspec store list --json` to discover registered store ids,
+then pass `--store <id>` on the commands that read or write specs and changes (`new change`, `status`, `instructions`, `list`, `show`, `validate`, `archive`, `doctor`, `context`, `view`).
 Other commands do not take the flag.
 Hints printed by commands already carry the flag; keep it on follow-ups.
 Without a store, commands act on the nearest local `openspec/` root.
 
-**Input**: Optionally specify a change name (e.g., `/opsx:apply add-auth`).
+### Input
+
+Optionally specify a change name (e.g., `/opsx:apply add-auth`).
 If omitted, check if it can be inferred from conversation context.
 If vague or ambiguous you MUST prompt for available changes.
 
-**Steps**
+## Steps
 
-1. **Select the change**
+### 1. Select the change
 
-   If a name is provided, use it.
-   Otherwise:
-   - Infer from conversation context if the user mentioned a change
-   - Auto-select if only one active change exists
-   - If ambiguous, run `bunx openspec list --json` to get available changes and ask the user to select one
+If a name is provided, use it.
+Otherwise:
+- Infer from conversation context if the user mentioned a change
+- Auto-select if only one active change exists
+- If ambiguous, run `bunx openspec list --json` to get available changes and ask the user to select one
 
-   Always announce: "Using change: <name>" and how to override (e.g., `/opsx:apply <other>`).
+Always announce: "Using change: <name>" and how to override (e.g., `/opsx:apply <other>`).
 
-2. **Check status to understand the schema**
-   ```bash
-   bunx openspec status --change "<name>" --json
-   ```
-   Parse the JSON to understand:
-   - `schemaName`: The workflow being used (e.g., "spec-driven")
-   - `planningHome`, `changeRoot`, and `actionContext`: planning scope and edit constraints
-   - Which artifact contains the tasks (typically "tasks" for spec-driven, check status for others)
+### 2. Check status to understand the schema
 
-3. **Get apply instructions**
+```bash
+bunx openspec status --change "<name>" --json
+```
+Parse the JSON to understand:
+- `schemaName`: The workflow being used (e.g., "spec-driven")
+- `planningHome`, `changeRoot`, and `actionContext`: planning scope and edit constraints
+- Which artifact contains the tasks (typically "tasks" for spec-driven, check status for others)
 
-   ```bash
-   bunx openspec instructions apply --change "<name>" --json
-   ```
+### 3. Get apply instructions
 
-   This returns:
-   - `contextFiles`: artifact ID -> array of concrete file paths (varies by schema)
-   - Progress (total, complete, remaining)
-   - Task list with status
-   - Dynamic instruction based on current state
-   - Optional `context`: current required project instruction input from the selected root
-   - Optional `operationGuidance`: current advisory guidance for apply
+```bash
+bunx openspec instructions apply --change "<name>" --json
+```
 
-   **Handle states:**
-   - If `state: "blocked"` (missing artifacts): show message, suggest using `/opsx:continue` (if it is not installed, run `bunx openspec status --change "<name>" --json` to see the next artifact and `bunx openspec instructions <artifact-id> --change "<name>" --json` for how to create it)
-   - If `state: "all_done"`: congratulate, suggest archive
-   - Otherwise: proceed to implementation
+This returns:
+- `contextFiles`: artifact ID -> array of concrete file paths (varies by schema)
+- Progress (total, complete, remaining)
+- Task list with status
+- Dynamic instruction based on current state
+- Optional `context`: current required project instruction input from the selected root
+- Optional `operationGuidance`: current advisory guidance for apply
 
-   Treat `context` as a required prompt-level input.
-   Read and consider it, and
-   apply relevant project facts, conventions, and constraints while implementing.
-   Treat `operationGuidance` as optional additive advice.
-   Read and consider every
-   entry, and follow entries that are applicable and compatible with the built-in
-   workflow.
+**Handle states:**
+- If `state: "blocked"` (missing artifacts): show message, suggest using `/opsx:continue` (if it is not installed, run `bunx openspec status --change "<name>" --json` to see the next artifact and `bunx openspec instructions <artifact-id> --change "<name>" --json` for how to create it)
+- If `state: "all_done"`: congratulate, suggest archive
+- Otherwise: proceed to implementation
 
-   Keep both fields separate from CLI-returned state, missing artifacts, tasks,
-   progress, `contextFiles`, and the built-in `instruction`.
-   They are not
-   evidence of task completion, do not replace the built-in instruction, and do
-   not permit bypassing a blocked state.
-   If context conflicts with the built-in
-   instruction, an explicit user choice, or a CLI-controlled value, report the
-   conflict and preserve the controlling value.
-   If guidance is inapplicable or
-   conflicts with those controlling inputs, do not follow it and explain why.
-   These are prompt-level behavior contracts, not enforceable checks.
+Treat `context` as a required prompt-level input.
+Read and consider it, and apply relevant project facts, conventions, and constraints while implementing.
+Treat `operationGuidance` as optional additive advice.
+Read and consider every entry, and follow entries that are applicable and compatible with the built-in workflow.
 
-4. **Read context files**
+Keep both fields separate from CLI-returned state, missing artifacts, tasks, progress, `contextFiles`, and the built-in `instruction`.
+They are not evidence of task completion, do not replace the built-in instruction, and do not permit bypassing a blocked state.
+If context conflicts with the built-in instruction, an explicit user choice, or a CLI-controlled value, report the conflict and preserve the controlling value.
+If guidance is inapplicable or conflicts with those controlling inputs, do not follow it and explain why.
+These are prompt-level behavior contracts, not enforceable checks.
 
-   Read every file path listed under `contextFiles` from the apply instructions output.
-   The files depend on the schema being used:
-   - **spec-driven**: proposal, specs, design, tasks
-   - Other schemas: follow the contextFiles from CLI output
+### 4. Read context files
 
-   Do not copy `context` or `operationGuidance` verbatim into implementation
-   files or planning artifacts unless the user separately asks for that content.
+Read every file path listed under `contextFiles` from the apply instructions output.
+The files depend on the schema being used:
+- **spec-driven**: proposal, specs, design, tasks
+- Other schemas: follow the contextFiles from CLI output
 
-5. **Show current progress**
+Do not copy `context` or `operationGuidance` verbatim into implementation files or planning artifacts unless the user separately asks for that content.
 
-   Display:
-   - Schema being used
-   - Progress: "N/M tasks complete"
-   - Remaining tasks overview
-   - Dynamic instruction from CLI
+### 5. Show current progress
 
-6. **Implement tasks (loop until done or blocked)**
+Display:
+- Schema being used
+- Progress: "N/M tasks complete"
+- Remaining tasks overview
+- Dynamic instruction from CLI
 
-   For each pending task:
-   - Show which task is being worked on
-   - Make the code changes required
-   - Keep changes minimal and focused
-   - Mark task complete in the tasks file: `- [ ]` → `- [x]`
-   - Continue to next task
+### 6. Implement tasks (loop until done or blocked)
 
-   **Pause if:**
-   - Task is unclear → ask for clarification
-   - Implementation reveals a design issue → suggest updating artifacts
-   - Error or blocker encountered → report and wait for guidance
-   - User interrupts
+For each pending task:
+- Show which task is being worked on
+- Make the code changes required
+- Keep changes minimal and focused
+- Mark task complete in the tasks file: `- [ ]` → `- [x]`
+- Continue to next task
 
-7. **On completion or pause, show status**
+**Pause if:**
+- Task is unclear → ask for clarification
+- Implementation reveals a design issue → suggest updating artifacts
+- Error or blocker encountered → report and wait for guidance
+- User interrupts
 
-   Display:
-   - Tasks completed this session
-   - Overall progress: "N/M tasks complete"
-   - If all done: suggest archive
-   - If paused: explain why and wait for guidance
+### 7. On completion or pause, show status
 
-**Output During Implementation**
+Display:
+- Tasks completed this session
+- Overall progress: "N/M tasks complete"
+- If all done: suggest archive
+- If paused: explain why and wait for guidance
+
+### Output During Implementation
 
 ```
 ## Implementing: <change-name> (schema: <schema-name>)
@@ -132,7 +129,7 @@ Working on task 4/7: <task description>
 ✓ Task complete
 ```
 
-**Output On Completion**
+### Output On Completion
 
 ```
 ## Implementation Complete
@@ -149,7 +146,7 @@ Working on task 4/7: <task description>
 All tasks complete! You can archive this change with `/opsx:archive`.
 ```
 
-**Output On Pause (Issue Encountered)**
+### Output On Pause (Issue Encountered)
 
 ```
 ## Implementation Paused
@@ -169,7 +166,8 @@ All tasks complete! You can archive this change with `/opsx:archive`.
 What would you like to do?
 ```
 
-**Guardrails**
+## Guardrails
+
 - Keep going through tasks until done or blocked
 - Always read context files before starting (from the apply instructions output)
 - If task is ambiguous, pause and ask before implementing
@@ -184,7 +182,7 @@ What would you like to do?
 - Do not copy runtime context or operation guidance into implementation files or planning artifacts
 - Preserve CLI-controlled blocked/ready/all-done behavior and completion criteria
 
-**Fluid Workflow Integration**
+## Fluid Workflow Integration
 
 This skill supports the "actions on a change" model:
 
