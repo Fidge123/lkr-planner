@@ -1,3 +1,7 @@
+## Purpose
+
+Persist application configuration in a typed local JSON file that survives restarts, and provide structured error payloads pairing a German user-facing message with technical details.
+
 ## Requirements
 
 ### Requirement: Restart-safe Local Configuration

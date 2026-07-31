@@ -1,3 +1,9 @@
+## Purpose
+
+Make CalDAV the live source of truth for the planning grid by loading each employee's calendar events per week, resolving the Daylite project behind each assignment, and moving assignments between employee calendars.
+
+## Requirements
+
 ### Requirement: Load assignments from CalDAV
 The system SHALL load assignment events from each employee's primary CalDAV calendar.
 

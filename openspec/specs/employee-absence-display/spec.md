@@ -1,3 +1,7 @@
+## Purpose
+
+Show each employee's absences from their ZEP absence calendar in the planning grid, visually distinct from assignments, so planners do not schedule work on days an employee is unavailable.
+
 ## Requirements
 
 ### Requirement: Employee absence fetching

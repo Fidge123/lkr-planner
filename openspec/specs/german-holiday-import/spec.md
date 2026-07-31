@@ -1,3 +1,9 @@
+## Purpose
+
+Show German public holidays, Germany-wide plus Mecklenburg-Vorpommern, in the week view so planners do not schedule work on non-working days, backed by a cache that keeps API calls rare.
+
+## Requirements
+
 ### Requirement: German holiday import
 The system SHALL import German public holidays for week view display.
 

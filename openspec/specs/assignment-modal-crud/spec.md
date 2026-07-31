@@ -1,3 +1,9 @@
+## Purpose
+
+Give planners one modal to create, edit, and delete the assignment of an employee/day cell, and keep the weekly grid in sync after every save or delete.
+
+## Requirements
+
 ### Requirement: Open modal from cell interaction
 The system SHALL open the assignment modal when user clicks an employee/day cell.
 

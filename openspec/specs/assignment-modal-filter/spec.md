@@ -1,3 +1,9 @@
+## Purpose
+
+Let planners find the right project inside the assignment modal by typing a filter, and select a result without leaving the keyboard.
+
+## Requirements
+
 ### Requirement: Live project filter
 The system SHALL filter projects as user types in the filter input.
 The result list starts empty; default content for the empty state is supplied by the `assignment-modal-suggestions` capability and is out of scope here.
