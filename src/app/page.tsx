@@ -322,7 +322,7 @@ export function PlanningGridTable({
 function DragPreviewCard({ payload }: { payload: AppointmentDragPayload }) {
   return (
     <span
-      className={`${assignmentCardClass} ${payload.categoryColor ? "text-base-100" : "text-base-content"} shadow-lg ${payload.color}`}
+      className={`${assignmentCardClass} text-white shadow-lg`}
       style={categoryBackground(payload.categoryColor)}
     >
       <AssignmentCardBody

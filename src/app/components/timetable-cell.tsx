@@ -3,8 +3,8 @@ import { TriangleAlert } from "lucide-react";
 import type { AppointmentDragPayload } from "../hooks/use-appointment-drag";
 import type { GhostSuggestion } from "../next-day-quick-add";
 import {
+  assignmentBackgroundColor,
   type CellEvent,
-  categoryColorStyle,
   hasAbsenceConflict,
 } from "../types";
 
@@ -117,11 +117,10 @@ interface Props {
 export const assignmentCardClass =
   "flex items-center w-full gap-4 p-2 rounded-lg";
 
-export function categoryBackground(
-  categoryColor: string | null,
-): { backgroundColor: string } | undefined {
-  const normalized = categoryColor ? categoryColorStyle(categoryColor) : null;
-  return normalized ? { backgroundColor: normalized } : undefined;
+export function categoryBackground(categoryColor: string | null): {
+  backgroundColor: string;
+} {
+  return { backgroundColor: assignmentBackgroundColor(categoryColor) };
 }
 
 export function AssignmentCardBody({ startTime, endTime, title }: BodyProps) {
@@ -169,7 +168,7 @@ function DraggableAssignmentCard({
     <button
       ref={setNodeRef}
       type="button"
-      className={`btn btn-block h-auto justify-start ${assignmentCardClass} ${event.categoryColor ? "text-base-100" : "text-base-content"} transition-[filter,opacity] hover:brightness-90 active:brightness-75 ${event.color} ${isDragging ? "opacity-40" : ""}`}
+      className={`btn btn-block h-auto justify-start ${assignmentCardClass} text-white transition-[filter,opacity] hover:brightness-90 active:brightness-75 ${isDragging ? "opacity-40" : ""}`}
       style={categoryBackground(event.categoryColor)}
       onClick={() => onEventClick(event)}
       {...(canDrag ? { ...listeners, ...attributes } : {})}

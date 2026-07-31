@@ -1,9 +1,10 @@
 import { describe, expect, it } from "bun:test";
 import type { CalendarCellEvent } from "../generated/tauri";
 import {
+  assignmentBackgroundColor,
   type CellEvent,
-  categoryColorStyle,
   hasAbsenceConflict,
+  oklchFromHex,
   toCellEvent,
 } from "./types";
 
@@ -139,7 +140,7 @@ describe("toCellEvent assignment colors", () => {
     expect(event.color).toBe("");
   });
 
-  it("falls back to a neutral color without a category color", () => {
+  it("carries no color class without a category color either", () => {
     const event = toCellEvent(
       calendarEvent({
         kind: "assignment",
@@ -149,10 +150,10 @@ describe("toCellEvent assignment colors", () => {
     );
 
     expect(event.categoryColor).toBeNull();
-    expect(event.color).toBe("bg-base-300");
+    expect(event.color).toBe("");
   });
 
-  it("uses the same neutral color for every project status", () => {
+  it("ignores the project status entirely", () => {
     const statuses = [
       "new_status",
       "in_progress",
@@ -166,17 +167,17 @@ describe("toCellEvent assignment colors", () => {
       const event = toCellEvent(
         calendarEvent({ kind: "assignment", title: "Projekt", projectStatus }),
       );
-      expect(event.color).toBe("bg-base-300");
+      expect(event.color).toBe("");
     }
   });
 
-  it("keeps the neutral color for an unresolved project", () => {
+  it("carries no color class for an unresolved project", () => {
     const event = toCellEvent(
       calendarEvent({ kind: "assignment", title: "Projekt Nord" }),
     );
 
     expect(event.categoryColor).toBeNull();
-    expect(event.color).toBe("bg-base-300");
+    expect(event.color).toBe("");
   });
 
   it("ignores a category color on absence and bare events", () => {
@@ -194,55 +195,84 @@ describe("toCellEvent assignment colors", () => {
   });
 });
 
-describe("categoryColorStyle", () => {
-  function parse(hexColor: string): { chroma: number; hue: number } {
-    const style = categoryColorStyle(hexColor);
-    if (!style) throw new Error(`expected a color for ${hexColor}`);
-    const match = style.match(
-      /^oklch\(var\(--event-category-l\) ([\d.]+) ([\d.]+)\)$/,
-    );
-    if (!match) throw new Error(`unexpected color syntax: ${style}`);
-    return { chroma: Number(match[1]), hue: Number(match[2]) };
-  }
-
-  it("pins lightness to the theme token", () => {
-    expect(categoryColorStyle("#8bc34a")).toStartWith(
-      "oklch(var(--event-category-l) ",
-    );
+describe("assignmentBackgroundColor", () => {
+  it("returns a plain hex color, never a CSS color function", () => {
+    const color = assignmentBackgroundColor("#8bc34a");
+    expect(color).toMatch(/^#[0-9a-f]{6}$/);
+    expect(color).not.toContain("var(");
+    expect(color).not.toContain("oklch");
   });
 
   it("keeps the hue of the Daylite color", () => {
-    expect(parse("#ff0000").hue).toBeCloseTo(29.2, 0);
-    expect(parse("#0000ff").hue).toBeCloseTo(264.1, 0);
+    expect(oklchFromHex(assignmentBackgroundColor("#e8352a"))?.hue).toBeCloseTo(
+      29,
+      -0.5,
+    );
+    expect(oklchFromHex(assignmentBackgroundColor("#3b7dd8"))?.hue).toBeCloseTo(
+      257,
+      -0.5,
+    );
+  });
+
+  it("renders every category at the same lightness", () => {
+    const lightnesses = ["#2211aa", "#e8352a", "#7ec8f0", "#ffffff"].map(
+      (hex) => oklchFromHex(assignmentBackgroundColor(hex))?.lightness ?? 0,
+    );
+
+    for (const lightness of lightnesses) {
+      expect(lightness).toBeCloseTo(0.58, 1);
+    }
   });
 
   it("caps the chroma of a harsh color", () => {
-    expect(parse("#ff0000").chroma).toBeCloseTo(0.14, 5);
+    const { chroma } = oklchFromHex(assignmentBackgroundColor("#e8352a")) ?? {
+      chroma: 1,
+    };
+    expect(chroma).toBeLessThanOrEqual(0.141);
   });
 
-  it("leaves a muted color's chroma untouched", () => {
-    const { chroma } = parse("#7ec8f0");
+  it("leaves a muted color's chroma below the cap", () => {
+    const { chroma } = oklchFromHex(assignmentBackgroundColor("#7ec8f0")) ?? {
+      chroma: 1,
+    };
     expect(chroma).toBeLessThan(0.14);
     expect(chroma).toBeGreaterThan(0);
   });
 
-  it("keeps a grey category grey", () => {
-    expect(parse("#808080").chroma).toBeCloseTo(0, 3);
+  it("gives an assignment without a category an achromatic color", () => {
+    const color = assignmentBackgroundColor(null);
+    const [, r, g, b] = color.match(/^#(..)(..)(..)$/) ?? [];
+    expect(r).toBe(g);
+    expect(g).toBe(b);
   });
 
-  it("pins lightness however dark or pale the Daylite color is", () => {
-    for (const hexColor of ["#0d0a4a", "#3b7dd8", "#c9c6f5", "#ffffff"]) {
-      expect(categoryColorStyle(hexColor)).toStartWith(
-        "oklch(var(--event-category-l) ",
-      );
+  it("renders the no-category color at the same lightness as a category", () => {
+    const neutral = oklchFromHex(assignmentBackgroundColor(null))?.lightness;
+    expect(neutral).toBeCloseTo(0.58, 1);
+  });
+
+  it("keeps the no-category color clearly darker than a bare event surface", () => {
+    // Bare events use bg-base-200, oklch(93%) in the light theme.
+    const neutral =
+      oklchFromHex(assignmentBackgroundColor(null))?.lightness ?? 1;
+    expect(0.93 - neutral).toBeGreaterThan(0.25);
+  });
+
+  it("falls back to the achromatic color for an unparsable value", () => {
+    expect(assignmentBackgroundColor("nicht-eine-farbe")).toBe(
+      assignmentBackgroundColor(null),
+    );
+  });
+
+  it("keeps different hues distinguishable", () => {
+    expect(assignmentBackgroundColor("#e8352a")).not.toBe(
+      assignmentBackgroundColor("#3b7dd8"),
+    );
+  });
+
+  it("stays inside the sRGB gamut", () => {
+    for (const hex of ["#00ff00", "#ffff00", "#0000ff", "#ff00ff"]) {
+      expect(assignmentBackgroundColor(hex)).toMatch(/^#[0-9a-f]{6}$/);
     }
-  });
-
-  it("supports shorthand hex values", () => {
-    expect(parse("#f00").hue).toBeCloseTo(29.2, 0);
-  });
-
-  it("returns null for an unparsable value", () => {
-    expect(categoryColorStyle("nicht-eine-farbe")).toBeNull();
   });
 });

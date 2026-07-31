@@ -1,7 +1,7 @@
 import { describe, expect, it, mock } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { GhostSuggestion } from "../next-day-quick-add";
-import type { CellEvent } from "../types";
+import { assignmentBackgroundColor, type CellEvent } from "../types";
 import { TimetableCell } from "./timetable-cell";
 
 describe("TimetableCell", () => {
@@ -219,7 +219,9 @@ describe("TimetableCell", () => {
     );
 
     expect(html).toContain("bg-(--color-absence-vacation)/50");
-    expect(html).toContain("bg-primary");
+    expect(html).toContain(
+      `background-color:${assignmentBackgroundColor(null)}`,
+    );
   });
 
   it("paints an assignment card with its Daylite category color", () => {
@@ -238,23 +240,48 @@ describe("TimetableCell", () => {
       />,
     );
 
-    expect(html).toContain("background-color:oklch(var(--event-category-l)");
-    expect(html).toContain("text-base-100");
+    expect(html).toContain(
+      `background-color:${assignmentBackgroundColor("#8bc34a")}`,
+    );
+    expect(html).toContain("text-white");
   });
 
-  it("renders no inline color when the assignment has no category", () => {
+  it("paints an assignment without a category in the achromatic color", () => {
     const html = renderToStaticMarkup(
       <TimetableCell
         highlight={false}
-        events={[{ ...draggableAssignment, color: "bg-base-300" }]}
+        events={[{ ...draggableAssignment, color: "" }]}
         onAddClick={() => {}}
         onEventClick={() => {}}
       />,
     );
 
-    expect(html).not.toContain("background-color");
-    expect(html).toContain("bg-base-300");
-    expect(html).toContain("text-base-content");
+    expect(html).toContain(
+      `background-color:${assignmentBackgroundColor(null)}`,
+    );
+  });
+
+  it("keeps an assignment without a category distinct from a bare event", () => {
+    const bare: CellEvent = {
+      ...draggableAssignment,
+      uid: "uid-bare-cmp",
+      kind: "bare",
+      color: "bg-base-200",
+    };
+
+    const html = renderToStaticMarkup(
+      <TimetableCell
+        highlight={false}
+        events={[{ ...draggableAssignment, color: "" }, bare]}
+        onAddClick={() => {}}
+        onEventClick={() => {}}
+      />,
+    );
+
+    expect(html).toContain(
+      `background-color:${assignmentBackgroundColor(null)}`,
+    );
+    expect(html).toContain("bg-base-200");
   });
 
   it("does not make an assignment with an unresolved project draggable", () => {

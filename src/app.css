@@ -7,19 +7,6 @@
   --color-absence-sick: oklch(65.6% 0.212 354);
 }
 
-/* Daylite category colors are arbitrary user-chosen hex values, so every one is
-   re-rendered at this lightness to keep the grid at an even visual weight.
-   The dark selector mirrors the one DaisyUI emits for the prefersdark theme. */
-:root {
-  --event-category-l: 58%;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme]) {
-    --event-category-l: 62%;
-  }
-}
-
 @plugin "daisyui/theme" {
   name: "corporate";
   default: true;
