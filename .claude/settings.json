@@ -24,7 +24,7 @@
           },
           {
             "type": "command",
-            "command": "bash scripts/unlock-cassettes.sh || echo 'Cassettes stay locked; the Daylite VCR tests will fail in this session.'",
+            "command": "bash scripts/unlock-cassettes.sh",
             "timeout": 30,
             "statusMessage": "Unlocking cassettes..."
           }
@@ -67,8 +67,8 @@
           },
           {
             "type": "command",
-            "command": "bash scripts/unlock-cassettes.sh && cargo test --manifest-path src-tauri/Cargo.toml",
-            "timeout": 90,
+            "command": "cargo test --manifest-path src-tauri/Cargo.toml",
+            "timeout": 120,
             "statusMessage": "Running Rust tests..."
           }
         ]
