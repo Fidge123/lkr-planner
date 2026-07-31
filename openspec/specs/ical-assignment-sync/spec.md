@@ -1,3 +1,7 @@
+## Purpose
+
+Write assignment creates, updates, and deletes through to the employee's primary CalDAV calendar idempotently, and never write into an absence calendar.
+
 ## Requirements
 
 ### Requirement: Create assignment in CalDAV

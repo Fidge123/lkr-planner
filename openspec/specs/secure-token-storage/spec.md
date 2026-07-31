@@ -1,3 +1,7 @@
+## Purpose
+
+Keep API tokens in OS-level secure storage instead of plain-text files, and restrict access to them to the backend.
+
 ## Requirements
 
 ### Requirement: Secure token storage

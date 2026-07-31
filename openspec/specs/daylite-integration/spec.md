@@ -1,3 +1,7 @@
+## Purpose
+
+Provide the backend's Daylite API client: authentication with refresh-token rotation, typed project and contact reads, cached and coalesced requests, and normalized German error messages.
+
 ## Requirements
 
 ### Requirement: API Authentication & Token Rotation
