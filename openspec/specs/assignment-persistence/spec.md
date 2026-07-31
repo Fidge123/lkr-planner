@@ -34,7 +34,8 @@ The system SHALL distinguish lkr-planner assignments from bare calendar events.
 
 #### Scenario: Bare events carry no strip
 - **WHEN** an event has no Daylite project reference
-- **THEN** it is rendered without a strip, so the strip marks an event as an assignment
+- **THEN** it is rendered without a strip
+- **AND** it shares the same surface color as an assignment, so the strip alone marks an event as an assignment
 
 #### Scenario: Display bare event
 - **WHEN** a VEVENT has no structured Daylite project reference

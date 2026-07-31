@@ -29,7 +29,7 @@ const absenceCodeColors: Record<string, string> = {
 
 const defaultAbsenceColor = "bg-info/30";
 
-const assignmentSurfaceColor = "bg-base-300";
+const assignmentSurfaceColor = "bg-base-200";
 
 function absenceCategoryColor(title: string): string {
   const code = title.trim().split(/\s+/)[0]?.toLowerCase() ?? "";

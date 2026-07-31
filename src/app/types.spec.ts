@@ -131,7 +131,7 @@ describe("toCellEvent assignment colors", () => {
     );
 
     expect(event.categoryColor).toBe("#8bc34a");
-    expect(event.color).toBe("bg-base-300");
+    expect(event.color).toBe("bg-base-200");
   });
 
   it("uses the neutral surface without a category color", () => {
@@ -144,7 +144,7 @@ describe("toCellEvent assignment colors", () => {
     );
 
     expect(event.categoryColor).toBeNull();
-    expect(event.color).toBe("bg-base-300");
+    expect(event.color).toBe("bg-base-200");
   });
 
   it("ignores the project status entirely", () => {
@@ -161,7 +161,7 @@ describe("toCellEvent assignment colors", () => {
       const event = toCellEvent(
         calendarEvent({ kind: "assignment", title: "Projekt", projectStatus }),
       );
-      expect(event.color).toBe("bg-base-300");
+      expect(event.color).toBe("bg-base-200");
     }
   });
 
@@ -171,7 +171,7 @@ describe("toCellEvent assignment colors", () => {
     );
 
     expect(event.categoryColor).toBeNull();
-    expect(event.color).toBe("bg-base-300");
+    expect(event.color).toBe("bg-base-200");
   });
 
   it("ignores a category color on absence and bare events", () => {

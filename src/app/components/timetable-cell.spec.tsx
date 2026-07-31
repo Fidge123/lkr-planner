@@ -26,7 +26,7 @@ describe("TimetableCell", () => {
       uid: "uid-1",
       kind: "assignment",
       title: "Bauprojekt Nord",
-      color: "bg-base-300",
+      color: "bg-base-200",
       startTime: "08:00",
       endTime: "16:00",
       href: "/calendars/user/uid-1.ics",
@@ -92,7 +92,7 @@ describe("TimetableCell", () => {
     uid: "uid-drag",
     kind: "assignment",
     title: "Bauprojekt Süd",
-    color: "bg-base-300",
+    color: "bg-base-200",
     startTime: "08:00",
     endTime: "16:00",
     href: "/calendars/user/uid-drag.ics",
@@ -219,13 +219,13 @@ describe("TimetableCell", () => {
     );
 
     expect(html).toContain("bg-(--color-absence-vacation)/50");
-    expect(html).toContain("bg-base-300");
+    expect(html).toContain("bg-base-200");
   });
 
   it("shows the Daylite category color as a strip, not as the card fill", () => {
     const categorized: CellEvent = {
       ...draggableAssignment,
-      color: "bg-base-300",
+      color: "bg-base-200",
       categoryColor: "#8bc34a",
     };
 
@@ -240,13 +240,13 @@ describe("TimetableCell", () => {
 
     expect(html).toContain("border-left-color:#8bc34a");
     expect(html).not.toContain("background-color:#8bc34a");
-    expect(html).toContain("bg-base-300");
+    expect(html).toContain("bg-base-200");
   });
 
   it("passes an unusual but valid CSS color through to the strip untouched", () => {
     const categorized: CellEvent = {
       ...draggableAssignment,
-      color: "bg-base-300",
+      color: "bg-base-200",
       categoryColor: "#8bc34aff",
     };
 
@@ -266,7 +266,7 @@ describe("TimetableCell", () => {
     const html = renderToStaticMarkup(
       <TimetableCell
         highlight={false}
-        events={[{ ...draggableAssignment, color: "bg-base-300" }]}
+        events={[{ ...draggableAssignment, color: "bg-base-200" }]}
         onAddClick={() => {}}
         onEventClick={() => {}}
       />,
