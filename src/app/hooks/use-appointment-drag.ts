@@ -311,6 +311,18 @@ export function useAppointmentDrag({
   const [reconciliation, setReconciliation] =
     useState<MoveReconciliation | null>(null);
 
+  // dnd-kit's `delta` is `scrollAdjustedTranslate`, i.e. the translation plus the scrolling
+  // that happened since the drag started, while card rects are viewport-relative. Deriving
+  // the cursor from it would count auto-scroll twice, so the real pointer is tracked instead.
+  const pointerRef = useRef<{ x: number; y: number } | null>(null);
+  useEffect(() => {
+    const track = (event: PointerEvent) => {
+      pointerRef.current = { x: event.clientX, y: event.clientY };
+    };
+    window.addEventListener("pointermove", track, { passive: true });
+    return () => window.removeEventListener("pointermove", track);
+  }, []);
+
   const onNavigateWeekRef = useRef(onNavigateWeek);
   onNavigateWeekRef.current = onNavigateWeek;
   const reloadAssignmentsRef = useRef(reloadAssignments);
@@ -339,15 +351,21 @@ export function useAppointmentDrag({
     (event: DragMoveEvent | DragEndEvent): DropCellTarget | null => {
       const source = activePayloadRef.current;
       const zone = event.over?.data.current as DropZoneData | undefined;
-      if (!source || !zone) return null;
-      const activator = event.activatorEvent as Partial<PointerEvent>;
-      if (typeof activator.clientY !== "number") return null;
-      return resolveDropTarget(source, zone, activator.clientY + event.delta.y);
+      const pointer = pointerRef.current;
+      if (!source || !zone || !pointer) return null;
+      return resolveDropTarget(source, zone, pointer.y);
     },
     [],
   );
 
   const onDragStart = useCallback((event: DragStartEvent) => {
+    const activator = event.activatorEvent as Partial<PointerEvent>;
+    if (
+      typeof activator.clientX === "number" &&
+      typeof activator.clientY === "number"
+    ) {
+      pointerRef.current = { x: activator.clientX, y: activator.clientY };
+    }
     const payload = event.active.data.current as
       | AppointmentDragPayload
       | undefined;
@@ -358,11 +376,10 @@ export function useAppointmentDrag({
 
   const onDragMove = useCallback(
     (event: DragMoveEvent) => {
-      const activator = event.activatorEvent as Partial<PointerEvent>;
-      if (typeof activator.clientX === "number") {
-        const pointerX = activator.clientX + event.delta.x;
+      const pointer = pointerRef.current;
+      if (pointer) {
         navigatorRef.current?.setZone(
-          computeEdgeZone(pointerX, window.innerWidth, edgeZoneWidth),
+          computeEdgeZone(pointer.x, window.innerWidth, edgeZoneWidth),
         );
       }
 

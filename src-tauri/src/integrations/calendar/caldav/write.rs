@@ -66,24 +66,16 @@ async fn fetch_event_date(
     Ok(Some(event.dtstart))
 }
 
-/// Each PUT carries If-Match only when the day REPORT supplied an ETag, so a server that
-/// omits one degrades to an unguarded write rather than blocking re-allocation.
-async fn reallocate_day(
-    session: &CaldavSession,
-    calendar_url: &str,
-    date: &str,
-) -> Result<(), String> {
-    replan_day_until_settled(session, calendar_url, date, None).await
-}
-
 /// Re-plans and re-PUTs the day until no PUT is rejected with 412, so a plan that raced a
 /// concurrent edit is rebuilt against the day's current state instead of being retried as is.
-/// `reorder` names an event already on the server that moves to the given position.
+///
+/// Each PUT carries If-Match only when the day REPORT supplied an ETag, so a server that
+/// omits one degrades to an unguarded write rather than blocking re-allocation.
 async fn replan_day_until_settled(
     session: &CaldavSession,
     calendar_url: &str,
     date: &str,
-    reorder: Option<(&str, u32)>,
+    placement: Option<DayPlacement<'_>>,
 ) -> Result<(), String> {
     let day = NaiveDate::parse_from_str(date, "%Y-%m-%d")
         .map_err(|_| format!("Ungültiges Datum: {date}"))?;
@@ -93,11 +85,6 @@ async fn replan_day_until_settled(
             fetch_events_in_range(session, calendar_url, day, day + chrono::Duration::days(1))
                 .await?;
 
-        let placement = reorder.map(|(uid, order_index)| DayPlacement {
-            uid,
-            order_index: Some(order_index),
-            written_by_caller: false,
-        });
         let updates = plan_slot_updates(&events, date, placement).updates;
         if !put_slot_updates(session, date, updates).await? {
             return Ok(());
@@ -156,7 +143,7 @@ async fn put_slot_updates(
 /// surfacing an error here would invite a retry that duplicates the event. The next write
 /// on this day converges anyway.
 async fn reallocate_day_best_effort(session: &CaldavSession, calendar_url: &str, date: &str) {
-    if let Err(e) = reallocate_day(session, calendar_url, date).await {
+    if let Err(e) = replan_day_until_settled(session, calendar_url, date, None).await {
         eprintln!("calendar: re-allocation for {date} failed (converges on the next write): {e}");
     }
 }
@@ -376,7 +363,12 @@ pub(crate) async fn reorder_assignment_core(
     }
 
     let calendar_url = parent_collection_url(&resource_url);
-    replan_day_until_settled(session, calendar_url, date, Some((uid, order_index))).await
+    let placement = DayPlacement {
+        uid,
+        order_index: Some(order_index),
+        written_by_caller: false,
+    };
+    replan_day_until_settled(session, calendar_url, date, Some(placement)).await
 }
 
 pub(crate) async fn delete_assignment_core(

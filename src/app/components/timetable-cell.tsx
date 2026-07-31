@@ -186,7 +186,7 @@ function DropPreviewCard({ title }: { title: string }) {
     <li aria-hidden="true">
       <span
         data-drop-preview="true"
-        className={`${assignmentCardClass} h-[3.25rem] border-2 border-dashed border-primary bg-primary/10 text-base-content/70`}
+        className={`${assignmentCardClass} h-[3.25rem] border-2 border-dashed border-primary bg-primary/10 text-base-content/70 pointer-events-none`}
       >
         <h4 className="flex-1 min-w-0 font-medium">{title}</h4>
       </span>

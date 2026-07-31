@@ -1,4 +1,5 @@
 use chrono::{NaiveDate, NaiveTime};
+use std::cmp::Reverse;
 use std::collections::HashMap;
 
 use super::events::classify_event;
@@ -15,26 +16,22 @@ pub(super) fn full_window() -> (NaiveTime, NaiveTime) {
     )
 }
 
-/// Entries are `(order index, UID)` and are sorted on the order index with the UID as
-/// tie-breaker, so the allocation is canonical regardless of input order and the earliest
-/// card in a cell gets the earliest slot.
+/// `uids` arrives in the day's canonical order, which `sequence_day` establishes, so the
+/// first UID gets the earliest slot.
 /// Boundary i sits at start + (i * length) / n minutes, so the first slot starts at
 /// 08:00, the last ends at 16:00, and adjacent slots share a boundary without overlap.
-pub(super) fn allocate_slots(entries: &[(u32, String)]) -> Vec<(String, NaiveTime, NaiveTime)> {
-    if entries.is_empty() {
+pub(super) fn allocate_slots(uids: &[String]) -> Vec<(String, NaiveTime, NaiveTime)> {
+    let n = uids.len() as u32;
+    if n == 0 {
         return Vec::new();
     }
-    let mut sorted = entries.to_vec();
-    sorted.sort();
-    let n = sorted.len() as u32;
-    sorted
-        .into_iter()
+    uids.iter()
         .enumerate()
-        .map(|(i, (_, uid))| {
+        .map(|(i, uid)| {
             let i = i as u32;
             let start = WINDOW_START_MINUTE + (i * WINDOW_LENGTH_MINUTES) / n;
             let end = WINDOW_START_MINUTE + ((i + 1) * WINDOW_LENGTH_MINUTES) / n;
-            (uid, minute_of_day(start), minute_of_day(end))
+            (uid.clone(), minute_of_day(start), minute_of_day(end))
         })
         .collect()
 }
@@ -55,6 +52,7 @@ pub(super) struct SlotUpdate {
 
 /// One assignment singled out of the day, either because the caller is about to write it
 /// itself or because it is being moved to a new position within the day.
+#[derive(Clone, Copy)]
 pub(super) struct DayPlacement<'a> {
     pub(super) uid: &'a str,
     /// Requested position among the day's assignments. `None` keeps the event where it
@@ -102,8 +100,8 @@ pub(super) fn plan_slot_updates(
         })
         .collect();
 
-    let entries = sequence_day(&assignments, placement.as_ref());
-    let assigned: HashMap<String, (u32, NaiveTime, NaiveTime)> = allocate_slots(&entries)
+    let ordered = sequence_day(&assignments, placement.as_ref());
+    let assigned: HashMap<String, (u32, NaiveTime, NaiveTime)> = allocate_slots(&ordered)
         .into_iter()
         .enumerate()
         .map(|(index, (uid, start, end))| (uid, (index as u32, start, end)))
@@ -143,30 +141,22 @@ pub(super) fn plan_slot_updates(
     }
 }
 
-/// Ranks the day's assignments by their persisted order index (unindexed ones last, UID as
-/// tie-breaker) and returns the dense `(index, uid)` sequence the allocation runs on.
+/// Ranks the day's assignments and returns the UIDs in the order the allocation runs on.
 ///
 /// Existing events take odd sort keys so a requested position `d` (key `2d`) lands ahead of
 /// whoever currently occupies rank `d` rather than tying with it.
 fn sequence_day(
     assignments: &[(PendingEvent, &RawVEvent)],
     placement: Option<&DayPlacement>,
-) -> Vec<(u32, String)> {
-    let mut ranked: Vec<(u32, &str)> = assignments
-        .iter()
-        .map(|(pending, _)| {
-            (
-                pending.order_index.unwrap_or(u32::MAX),
-                pending.uid.as_str(),
-            )
-        })
-        .collect();
-    ranked.sort();
+) -> Vec<String> {
+    let mut ranked: Vec<&PendingEvent> = assignments.iter().map(|(pending, _)| pending).collect();
+    ranked.sort_by(|a, b| ordering_key(a).cmp(&ordering_key(b)));
 
     let placed_uid = placement.map(|placement| placement.uid);
     let mut current_position = None;
     let mut keys: Vec<(u32, &str)> = Vec::with_capacity(ranked.len() + 1);
-    for (_, uid) in ranked {
+    for pending in ranked {
+        let uid = pending.uid.as_str();
         if Some(uid) == placed_uid {
             current_position = Some(keys.len() as u32);
             continue;
@@ -175,18 +165,45 @@ fn sequence_day(
     }
 
     if let Some(placement) = placement {
-        let position = placement.order_index.or(current_position);
-        keys.push((
-            position.map_or(u32::MAX, |position| position.saturating_mul(2)),
-            placement.uid,
-        ));
+        // An event the caller is not writing and that this plan cannot patch takes no slot:
+        // allocating one would shrink every other assignment's window for a slot that stays
+        // empty, because the event itself is never rewritten.
+        if placement.written_by_caller || current_position.is_some() {
+            let position = placement.order_index.or(current_position);
+            keys.push((
+                position.map_or(u32::MAX, |position| position.saturating_mul(2)),
+                placement.uid,
+            ));
+        }
     }
     keys.sort();
 
-    keys.into_iter()
-        .enumerate()
-        .map(|(index, (_, uid))| (index as u32, uid.to_string()))
-        .collect()
+    keys.into_iter().map(|(_, uid)| uid.to_string()).collect()
+}
+
+/// Assignments are ordered by their persisted index. Two that share one are read the way a
+/// planner reads the cell: the earlier start comes first, a longer assignment wins an
+/// identical start, and the canonical UID keeps the ordering total. Assignments without an
+/// index or without times sort last.
+fn ordering_key(pending: &PendingEvent) -> (u32, u32, Reverse<u32>, &str) {
+    let start = minute_of_time(pending.start_time.as_deref());
+    let end = minute_of_time(pending.end_time.as_deref());
+    let duration = match (start, end) {
+        (Some(start), Some(end)) => end.saturating_sub(start),
+        _ => 0,
+    };
+    (
+        pending.order_index.unwrap_or(u32::MAX),
+        start.unwrap_or(u32::MAX),
+        Reverse(duration),
+        pending.uid.as_str(),
+    )
+}
+
+/// Minutes since midnight for an `HH:MM` time, `None` for an all-day or malformed one.
+fn minute_of_time(time: Option<&str>) -> Option<u32> {
+    let (hours, minutes) = time?.split_once(':')?;
+    Some(hours.parse::<u32>().ok()? * 60 + minutes.parse::<u32>().ok()?)
 }
 
 /// Every line other than the VEVENT's own DTSTART/DTEND and order property is copied through
@@ -341,23 +358,20 @@ mod tests {
         NaiveTime::from_hms_opt(h, m, 0).unwrap()
     }
 
-    fn entries(values: &[(u32, &str)]) -> Vec<(u32, String)> {
-        values
-            .iter()
-            .map(|(index, uid)| (*index, uid.to_string()))
-            .collect()
+    fn uids(values: &[&str]) -> Vec<String> {
+        values.iter().map(|uid| uid.to_string()).collect()
     }
 
     #[test]
     fn single_assignment_receives_full_window() {
-        let slots = allocate_slots(&entries(&[(0, "a")]));
+        let slots = allocate_slots(&uids(&["a"]));
 
         assert_eq!(slots, vec![("a".to_string(), time(8, 0), time(16, 0))]);
     }
 
     #[test]
     fn two_assignments_receive_half_windows() {
-        let slots = allocate_slots(&entries(&[(0, "a"), (1, "b")]));
+        let slots = allocate_slots(&uids(&["a", "b"]));
 
         assert_eq!(
             slots,
@@ -370,7 +384,7 @@ mod tests {
 
     #[test]
     fn three_assignments_receive_third_windows_at_minute_granularity() {
-        let slots = allocate_slots(&entries(&[(0, "a"), (1, "b"), (2, "c")]));
+        let slots = allocate_slots(&uids(&["a", "b", "c"]));
 
         assert_eq!(
             slots,
@@ -383,48 +397,20 @@ mod tests {
     }
 
     #[test]
-    fn reordered_input_produces_identical_output() {
-        let forward = allocate_slots(&entries(&[(0, "a"), (1, "b"), (2, "c")]));
-        let reversed = allocate_slots(&entries(&[(2, "c"), (0, "a"), (1, "b")]));
-
-        assert_eq!(forward, reversed);
-    }
-
-    #[test]
-    fn order_index_decides_which_assignment_gets_the_earliest_slot() {
-        let slots = allocate_slots(&entries(&[(1, "a"), (0, "b")]));
+    fn slots_follow_the_order_the_caller_supplies() {
+        let slots = allocate_slots(&uids(&["b", "a"]));
 
         assert_eq!(
-            slots,
-            vec![
-                ("b".to_string(), time(8, 0), time(12, 0)),
-                ("a".to_string(), time(12, 0), time(16, 0)),
-            ]
+            slots[0].0, "b",
+            "the caller's sequence is canonical, not the UID"
         );
-    }
-
-    #[test]
-    fn changing_the_order_index_changes_the_allocated_slot() {
-        let before = allocate_slots(&entries(&[(0, "a"), (1, "b")]));
-        let after = allocate_slots(&entries(&[(1, "a"), (0, "b")]));
-
-        assert_eq!(before[0].0, "a");
-        assert_eq!(after[0].0, "b");
-    }
-
-    #[test]
-    fn equal_order_indices_fall_back_to_the_canonical_uid() {
-        let slots = allocate_slots(&entries(&[(0, "b"), (0, "a")]));
-
-        assert_eq!(slots[0].0, "a");
-        assert_eq!(slots[1].0, "b");
+        assert_eq!(slots[0].1, time(8, 0));
     }
 
     #[test]
     fn slots_are_contiguous_and_span_exactly_the_window() {
         for n in 1..=10usize {
-            let input: Vec<(u32, String)> =
-                (0..n).map(|i| (i as u32, format!("uid-{i:02}"))).collect();
+            let input: Vec<String> = (0..n).map(|i| format!("uid-{i:02}")).collect();
             let slots = allocate_slots(&input);
 
             assert_eq!(slots.len(), n);
@@ -1057,6 +1043,122 @@ mod tests {
             uid_c.payload.contains("X-LKR-ORDER:1"),
             "the participating assignments are re-sequenced around it"
         );
+    }
+
+    #[test]
+    fn reordering_an_event_that_cannot_be_patched_allocates_no_slot_for_it() {
+        // uid-x is excluded from re-slotting, so the reorder cannot move it. Allocating a
+        // slot for it anyway would split the day three ways and leave 08:00-10:40 empty
+        // while squeezing the two assignments that can be written.
+        let mut excluded = ordered_assignment_event("uid-x", "2026-05-06", "09:00", "17:00", 0);
+        excluded.raw_ical = excluded
+            .raw_ical
+            .replace("DTEND:20260506T170000\r\n", "DURATION:PT8H\r\n");
+        let events = vec![
+            excluded,
+            ordered_assignment_event("uid-a", "2026-05-06", "08:00", "16:00", 1),
+            ordered_assignment_event("uid-b", "2026-05-06", "08:00", "16:00", 2),
+        ];
+
+        let plan = plan_slot_updates(&events, "2026-05-06", reorder_placement("uid-x", 0));
+
+        assert_eq!(plan.placed, None, "an unwritable event gets no slot");
+        assert_eq!(plan.updates.len(), 2);
+        let uid_a = plan.updates.iter().find(|u| u.uid == "uid-a").unwrap();
+        assert!(uid_a.payload.contains("DTSTART:20260506T080000"));
+        assert!(uid_a.payload.contains("DTEND:20260506T120000"));
+        let uid_b = plan.updates.iter().find(|u| u.uid == "uid-b").unwrap();
+        assert!(uid_b.payload.contains("DTSTART:20260506T120000"));
+    }
+
+    #[test]
+    fn reordering_an_event_that_left_the_day_allocates_no_slot_for_it() {
+        // Another device deleted the card between the drag and the write.
+        let events = vec![ordered_assignment_event(
+            "uid-a",
+            "2026-05-06",
+            "08:00",
+            "12:00",
+            0,
+        )];
+
+        let plan = plan_slot_updates(&events, "2026-05-06", reorder_placement("uid-gone", 0));
+
+        assert_eq!(plan.placed, None);
+        let uid_a = plan.updates.iter().find(|u| u.uid == "uid-a").unwrap();
+        assert!(
+            uid_a.payload.contains("DTEND:20260506T160000"),
+            "the remaining assignment owns the whole window"
+        );
+    }
+
+    #[test]
+    fn a_created_event_still_gets_a_slot_although_the_day_does_not_hold_it_yet() {
+        let plan = plan_slot_updates(&[], "2026-05-06", pending_placement("uid-new", None));
+
+        assert_eq!(plan.placed, Some((0, time(8, 0), time(16, 0))));
+    }
+
+    #[test]
+    fn a_shared_order_index_is_broken_by_the_earlier_start_time() {
+        // An assignment excluded from re-slotting keeps a stale index, so two cards in a
+        // cell can carry the same one.
+        let events = vec![
+            ordered_assignment_event("uid-late", "2026-05-06", "13:00", "16:00", 0),
+            ordered_assignment_event("uid-early", "2026-05-06", "09:00", "12:00", 0),
+        ];
+
+        let updates = plan_slot_updates(&events, "2026-05-06", None).updates;
+
+        let early = updates.iter().find(|u| u.uid == "uid-early").unwrap();
+        assert!(early.payload.contains("X-LKR-ORDER:0"));
+        assert!(early.payload.contains("DTSTART:20260506T080000"));
+        let late = updates.iter().find(|u| u.uid == "uid-late").unwrap();
+        assert!(late.payload.contains("X-LKR-ORDER:1"));
+    }
+
+    #[test]
+    fn an_equal_start_time_is_broken_by_the_longer_assignment() {
+        let events = vec![
+            ordered_assignment_event("uid-short", "2026-05-06", "09:00", "10:00", 0),
+            ordered_assignment_event("uid-long", "2026-05-06", "09:00", "15:00", 0),
+        ];
+
+        let updates = plan_slot_updates(&events, "2026-05-06", None).updates;
+
+        let long = updates.iter().find(|u| u.uid == "uid-long").unwrap();
+        assert!(long.payload.contains("X-LKR-ORDER:0"));
+        let short = updates.iter().find(|u| u.uid == "uid-short").unwrap();
+        assert!(short.payload.contains("X-LKR-ORDER:1"));
+    }
+
+    #[test]
+    fn an_identical_index_start_and_duration_falls_back_to_the_canonical_uid() {
+        let events = vec![
+            ordered_assignment_event("uid-b", "2026-05-06", "09:00", "12:00", 0),
+            ordered_assignment_event("uid-a", "2026-05-06", "09:00", "12:00", 0),
+        ];
+
+        let updates = plan_slot_updates(&events, "2026-05-06", None).updates;
+
+        let first = updates.iter().find(|u| u.uid == "uid-a").unwrap();
+        assert!(first.payload.contains("X-LKR-ORDER:0"));
+    }
+
+    #[test]
+    fn an_assignment_without_times_sorts_after_the_timed_ones() {
+        let mut untimed = ordered_assignment_event("uid-a", "2026-05-06", "09:00", "12:00", 0);
+        untimed.start_time = None;
+        untimed.end_time = None;
+        let events = vec![
+            untimed,
+            ordered_assignment_event("uid-z", "2026-05-06", "09:00", "12:00", 0),
+        ];
+
+        let updates = plan_slot_updates(&events, "2026-05-06", None).updates;
+
+        let timed = updates.iter().find(|u| u.uid == "uid-z").unwrap();
+        assert!(timed.payload.contains("X-LKR-ORDER:0"));
     }
 
     #[test]

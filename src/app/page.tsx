@@ -35,11 +35,6 @@ import { usePlanningEmployees } from "./hooks/use-planning-employees";
 import { usePlanningProjects } from "./hooks/use-planning-projects";
 import { getWeekDays, toLocalISODate } from "./util";
 
-// dnd-kit refreshes a droppable's rect from a per-cell ResizeObserver, which
-// fires only when that cell's own box resizes, and from a timer that only
-// re-schedules while the pointer moves. Neither catches a cell shifting because
-// an earlier row grew under a still pointer, which leaves the drop landing where
-// the cell used to be.
 // The pointer, not the dragged card's box, picks the target cell: the position inside a cell
 // is derived from the pointer too, so both halves of the drop agree on one cursor.
 const collisionDetection: CollisionDetection = (args) => {
@@ -49,6 +44,11 @@ const collisionDetection: CollisionDetection = (args) => {
     : rectIntersection(args);
 };
 
+// dnd-kit refreshes a droppable's rect from a per-cell ResizeObserver, which
+// fires only when that cell's own box resizes, and from a timer that only
+// re-schedules while the pointer moves. Neither catches a cell shifting because
+// an earlier row grew under a still pointer, which leaves the drop landing where
+// the cell used to be.
 function DropzoneMeasurementTicker() {
   const { active, measureDroppableContainers } = useDndContext();
   useEffect(() => {
