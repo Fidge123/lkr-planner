@@ -48,6 +48,7 @@ export type CalendarCellEvent = {
 	kind: CalendarEventKind,
 	title: string,
 	projectStatus: string | null,
+	categoryColor: string | null,
 	date: string,
 	startTime: string | null,
 	endTime: string | null,
@@ -97,6 +98,7 @@ export type DayliteProjectCacheEntry = {
 	reference: string,
 	name: string,
 	status: string,
+	category?: string | null,
 };
 
 export type DayliteProjectSummary = {

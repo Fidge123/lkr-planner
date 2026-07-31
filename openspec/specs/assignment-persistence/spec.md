@@ -20,8 +20,22 @@ The system SHALL distinguish lkr-planner assignments from bare calendar events.
 
 #### Scenario: Display lkr-planner assignment
 - **WHEN** a VEVENT has a DESCRIPTION first line matching `daylite:/<path>`
-- **THEN** it is shown with project color derived from Daylite status
+- **THEN** it is shown on a neutral card carrying a strip in its Daylite project's category color (`hex_colour`)
 - **AND** an edit affordance is shown
+
+#### Scenario: Category color is applied verbatim
+- **WHEN** an assignment event is rendered with a category color
+- **THEN** the value from Daylite is used as-is, so any CSS color notation it uses still applies
+- **AND** it colors only the strip, leaving the card surface and its text unchanged
+
+#### Scenario: Assignment without a category color
+- **WHEN** a resolved Daylite project has no category or its category has no color
+- **THEN** the strip keeps its default muted color, the same one for every project status
+
+#### Scenario: Bare events carry no strip
+- **WHEN** an event has no Daylite project reference
+- **THEN** it is rendered without a strip
+- **AND** it shares the same surface color as an assignment, so the strip alone marks an event as an assignment
 
 #### Scenario: Display bare event
 - **WHEN** a VEVENT has no structured Daylite project reference
@@ -50,13 +64,15 @@ The system SHALL resolve project details for lkr-planner events.
 #### Scenario: Project found in cache
 - **WHEN** a VEVENT references a Daylite project
 - **AND** the project is present in the local Daylite cache
-- **THEN** the project name and status color are displayed from cache
+- **THEN** the project name and category color are displayed from cache
+- **AND** the neutral color is used when no category color is cached
 
 #### Scenario: Project not in cache — API fallback
 - **WHEN** a VEVENT references a Daylite project
 - **AND** the project is not in the local cache
-- **THEN** the system queries the Daylite API for the project details
-- **AND** displays the resolved name and status color on success
+- **THEN** the system queries the Daylite API for the project details including its category
+- **AND** displays the resolved name and category color on success
+- **AND** the neutral color is used when the project has no category color
 
 #### Scenario: Project resolution fails
 - **WHEN** a VEVENT references a Daylite project

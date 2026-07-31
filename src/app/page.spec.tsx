@@ -295,7 +295,7 @@ describe("planning grid assignment states", () => {
     expect(html).toContain("Erneut laden");
   });
 
-  it("renders lkr-planner assignment event in cell with project color", () => {
+  it("renders lkr-planner assignment event in cell with its category color", () => {
     const employee = {
       self: "/v1/contacts/9001",
       full_name: "Monteur Aus Daylite",
@@ -307,6 +307,7 @@ describe("planning grid assignment states", () => {
       kind: "assignment",
       title: "Projekt Nord",
       projectStatus: "in_progress",
+      categoryColor: "#8bc34a",
       projectRef: "/v1/projects/1",
       date: "2026-01-26",
       startTime: null,
@@ -330,7 +331,7 @@ describe("planning grid assignment states", () => {
     );
 
     expect(html).toContain("Projekt Nord");
-    expect(html).toContain("bg-secondary");
+    expect(html).toContain("border-left-color:#8bc34a");
   });
 
   it("renders bare event in cell with neutral style and no edit affordance", () => {
@@ -345,6 +346,7 @@ describe("planning grid assignment states", () => {
       kind: "bare",
       title: "Auto Werkstatt",
       projectStatus: null,
+      categoryColor: null,
       projectRef: null,
       date: "2026-01-26",
       startTime: null,
@@ -454,6 +456,7 @@ describe("planning grid drag-and-drop wiring", () => {
     kind: "assignment",
     title: "Projekt Nord",
     projectStatus: "in_progress",
+    categoryColor: null,
     projectRef: "/v1/projects/1",
     date: "2026-01-26",
     startTime: "08:00",
