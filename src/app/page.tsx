@@ -28,7 +28,7 @@ import { TimetableHeader } from "./components/timetable-header";
 import { TimetableRow } from "./components/timetable-row";
 import { filterVisibleEmployees } from "./employee-visibility";
 import type { AppointmentDragPayload } from "./hooks/use-appointment-drag";
-import { cardsFirst, useAppointmentDrag } from "./hooks/use-appointment-drag";
+import { useAppointmentDrag } from "./hooks/use-appointment-drag";
 import { type HolidaysState, useHolidays } from "./hooks/use-holidays";
 import type { PlanningAssignmentsState } from "./hooks/use-planning-assignments";
 import { usePlanningEmployees } from "./hooks/use-planning-employees";
@@ -40,13 +40,13 @@ import { getWeekDays, toLocalISODate } from "./util";
 // re-schedules while the pointer moves. Neither catches a cell shifting because
 // an earlier row grew under a still pointer, which leaves the drop landing where
 // the cell used to be.
-// Cards are nested inside their cell's droppable, so plain rect intersection always ranks
-// the larger cell first and the drop loses its before/after precision.
+// The pointer, not the dragged card's box, picks the target cell: the position inside a cell
+// is derived from the pointer too, so both halves of the drop agree on one cursor.
 const collisionDetection: CollisionDetection = (args) => {
   const pointerCollisions = pointerWithin(args);
-  return cardsFirst(
-    pointerCollisions.length > 0 ? pointerCollisions : rectIntersection(args),
-  );
+  return pointerCollisions.length > 0
+    ? pointerCollisions
+    : rectIntersection(args);
 };
 
 function DropzoneMeasurementTicker() {
@@ -293,6 +293,8 @@ export function PlanningGridTable({
                     (s) => s.dayliteContactReference === employee.self,
                   ) ?? null
                 }
+                dropPreview={drag.dropPreview}
+                draggedUid={drag.activePayload?.uid ?? null}
                 onOpenIcalDialog={onOpenIcalDialog}
                 onReloadAssignments={reloadAssignments}
               />

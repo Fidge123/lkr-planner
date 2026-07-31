@@ -1,5 +1,4 @@
 import type {
-  Collision,
   DragEndEvent,
   DragMoveEvent,
   DragStartEvent,
@@ -22,65 +21,74 @@ export interface AppointmentDragPayload {
   position: number;
 }
 
-/** Droppable payload of a day cell and of each assignment card inside it. */
-export type DropZoneData =
-  | { kind: "cell"; employeeRef: string; date: string }
-  | { kind: "card"; employeeRef: string; date: string; position: number };
+/** Live geometry of one rendered assignment card. */
+export interface CardRect {
+  uid: string;
+  top: number;
+  height: number;
+}
+
+/**
+ * Droppable payload of a day cell. The cell is the only drop zone: the position inside it
+ * comes from the cards' geometry, so an inserted drop preview never becomes a target of its
+ * own and the cell keeps its highlight wherever the pointer sits within it.
+ */
+export interface DropZoneData {
+  kind: "cell";
+  employeeRef: string;
+  date: string;
+  /** Rects of the cell's assignment cards, in rendered order, measured on demand. */
+  cardRects: () => CardRect[];
+}
 
 export interface DropCellTarget {
   employeeRef: string;
   date: string;
   /**
    * Insertion position among the target cell's assignments, counted without the dragged
-   * card. Null appends it after the cell's existing cards.
+   * card. Equal to the number of those cards when the drop appends.
    */
-  orderIndex: number | null;
+  orderIndex: number;
 }
 
 export type DropAction = "none" | "reorder" | "reschedule" | "move";
 
 /**
- * Turns the drop zone under the pointer into an insertion position. Landing on the upper
- * half of a card places the dragged card before it, the lower half after it, and landing on
- * the cell itself appends.
+ * The insertion position is the number of cards the pointer has already passed, so a pointer
+ * in a card's upper half lands before it and one in its lower half lands after it.
+ *
+ * Inserting a preview at this index only moves cards that already sit below the pointer, so
+ * the index it yields does not change once the preview is on screen and cannot oscillate.
  */
+export function insertionIndexAt(cards: CardRect[], pointerY: number): number {
+  return cards.filter((card) => card.top + card.height / 2 < pointerY).length;
+}
+
 export function resolveDropTarget(
   source: AppointmentDragPayload,
-  over: { data: DropZoneData; rect: { top: number; height: number } },
+  zone: DropZoneData,
   pointerY: number,
 ): DropCellTarget {
-  const { employeeRef, date } = over.data;
-  if (over.data.kind === "cell") {
-    return { employeeRef, date, orderIndex: null };
-  }
-
-  const dropsAfter = pointerY >= over.rect.top + over.rect.height / 2;
-  const slot = over.data.position + (dropsAfter ? 1 : 0);
-  // The backend counts the position without the dragged card, so leaving its own cell
-  // frees up the slot it occupied.
-  const leavesEarlierSlot =
-    source.employeeRef === employeeRef &&
-    source.date === date &&
-    source.position < slot;
-  return { employeeRef, date, orderIndex: leavesEarlierSlot ? slot - 1 : slot };
+  // The dragged card is never its own neighbour: the backend positions it among the day's
+  // other assignments, so excluding it here makes the index directly the persisted one.
+  const others = zone.cardRects().filter((card) => card.uid !== source.uid);
+  return {
+    employeeRef: zone.employeeRef,
+    date: zone.date,
+    orderIndex: insertionIndexAt(others, pointerY),
+  };
 }
 
-/**
- * A card droppable always wins over the cell it sits in, so a drop that lands on a card
- * keeps its before/after precision instead of degrading to an append.
- */
-export function cardsFirst(collisions: Collision[]): Collision[] {
-  const cards = collisions.filter(
-    (collision) => dropZoneData(collision)?.kind === "card",
+function isSameTarget(
+  a: DropCellTarget | null,
+  b: DropCellTarget | null,
+): boolean {
+  if (a === null || b === null) return a === b;
+  return (
+    a.employeeRef === b.employeeRef &&
+    a.date === b.date &&
+    a.orderIndex === b.orderIndex
   );
-  return cards.length > 0 ? cards : collisions;
-}
-
-function dropZoneData(collision: Collision): DropZoneData | undefined {
-  const container = collision.data?.droppableContainer as
-    | { data?: { current?: DropZoneData } }
-    | undefined;
-  return container?.data?.current;
 }
 
 export type DropOutcome =
@@ -105,7 +113,7 @@ export function decideDropAction(
   if (source.date !== target.date) {
     return "reschedule";
   }
-  if (target.orderIndex !== null && target.orderIndex !== source.position) {
+  if (target.orderIndex !== source.position) {
     return "reorder";
   }
   return "none";
@@ -118,7 +126,7 @@ interface DropDeps {
     date: string,
     projectRef: string,
     projectName: string,
-    orderIndex: number | null,
+    orderIndex: number,
   ) => Promise<
     { status: "ok"; data: null } | { status: "error"; error: string }
   >;
@@ -136,7 +144,7 @@ interface DropDeps {
     date: string,
     projectRef: string,
     projectName: string,
-    orderIndex: number | null,
+    orderIndex: number,
   ) => Promise<
     | { status: "ok"; data: MoveAssignmentResult }
     | { status: "error"; error: string }
@@ -156,7 +164,7 @@ export async function performDrop(
     return { kind: "none" };
   }
 
-  if (action === "reorder" && target.orderIndex !== null) {
+  if (action === "reorder") {
     const result = await deps.reorderAssignment(
       source.href,
       source.uid,
@@ -263,8 +271,14 @@ export class EdgeHoverNavigator {
   }
 }
 
+/** Where a drop would land right now, and what the card being dragged is called. */
+export interface DropPreview extends DropCellTarget {
+  title: string;
+}
+
 export interface AppointmentDragState {
   activePayload: AppointmentDragPayload | null;
+  dropPreview: DropPreview | null;
   errorMessage: string | null;
   clearError: () => void;
   reconciliation: MoveReconciliation | null;
@@ -293,6 +307,7 @@ export function useAppointmentDrag({
   // the payload captured at drag start must be used instead of re-reading it on drop.
   const activePayloadRef = useRef<AppointmentDragPayload | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [dropPreview, setDropPreview] = useState<DropPreview | null>(null);
   const [reconciliation, setReconciliation] =
     useState<MoveReconciliation | null>(null);
 
@@ -320,6 +335,18 @@ export function useAppointmentDrag({
     return () => navigatorRef.current?.stop();
   }, []);
 
+  const targetOf = useCallback(
+    (event: DragMoveEvent | DragEndEvent): DropCellTarget | null => {
+      const source = activePayloadRef.current;
+      const zone = event.over?.data.current as DropZoneData | undefined;
+      if (!source || !zone) return null;
+      const activator = event.activatorEvent as Partial<PointerEvent>;
+      if (typeof activator.clientY !== "number") return null;
+      return resolveDropTarget(source, zone, activator.clientY + event.delta.y);
+    },
+    [],
+  );
+
   const onDragStart = useCallback((event: DragStartEvent) => {
     const payload = event.active.data.current as
       | AppointmentDragPayload
@@ -329,82 +356,93 @@ export function useAppointmentDrag({
     setErrorMessage(null);
   }, []);
 
-  const onDragMove = useCallback((event: DragMoveEvent) => {
-    const activator = event.activatorEvent as Partial<PointerEvent>;
-    if (typeof activator.clientX !== "number") return;
-    const pointerX = activator.clientX + event.delta.x;
-    navigatorRef.current?.setZone(
-      computeEdgeZone(pointerX, window.innerWidth, edgeZoneWidth),
-    );
-  }, []);
+  const onDragMove = useCallback(
+    (event: DragMoveEvent) => {
+      const activator = event.activatorEvent as Partial<PointerEvent>;
+      if (typeof activator.clientX === "number") {
+        const pointerX = activator.clientX + event.delta.x;
+        navigatorRef.current?.setZone(
+          computeEdgeZone(pointerX, window.innerWidth, edgeZoneWidth),
+        );
+      }
 
-  const onDragEnd = useCallback((event: DragEndEvent) => {
-    navigatorRef.current?.stop();
-    setActivePayload(null);
+      const target = targetOf(event);
+      const title = activePayloadRef.current?.title ?? "";
+      // Every pointer move fires this, so an unchanged preview must not re-render the grid.
+      setDropPreview((current) =>
+        isSameTarget(current, target)
+          ? current
+          : target === null
+            ? null
+            : { ...target, title },
+      );
+    },
+    [targetOf],
+  );
 
-    const source = activePayloadRef.current;
-    activePayloadRef.current = null;
-    const over = event.over;
-    const zone = over?.data.current as DropZoneData | undefined;
-    if (!source || !over || !zone) return;
+  const onDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      navigatorRef.current?.stop();
+      setActivePayload(null);
+      setDropPreview(null);
 
-    const activator = event.activatorEvent as Partial<PointerEvent>;
-    const pointerY = (activator.clientY ?? 0) + event.delta.y;
-    const target = resolveDropTarget(
-      source,
-      { data: zone, rect: over.rect },
-      pointerY,
-    );
+      const source = activePayloadRef.current;
+      const target = targetOf(event);
+      activePayloadRef.current = null;
+      if (!source || !target) return;
 
-    void performDrop(source, target, {
-      updateAssignment: (
-        href,
-        uid,
-        date,
-        projectRef,
-        projectName,
-        orderIndex,
-      ) =>
-        commands.updateAssignment({
+      void performDrop(source, target, {
+        updateAssignment: (
           href,
           uid,
           date,
           projectRef,
           projectName,
           orderIndex,
-        }),
-      reorderAssignment: commands.reorderAssignment,
-      moveAssignment: commands.moveAssignment,
-    })
-      .then((outcome) => {
-        if (outcome.kind === "done") {
-          invalidateWeeksContainingRef.current(source.uid);
-          reloadAssignmentsRef.current();
-          return;
-        }
-        if (outcome.kind === "partialMove") {
-          droppedUidRef.current = source.uid;
-          setReconciliation({
-            newHref: outcome.newHref,
-            sourceHref: outcome.sourceHref,
-          });
-          return;
-        }
-        if (outcome.kind === "error") {
-          setErrorMessage(outcome.message);
-        }
+        ) =>
+          commands.updateAssignment({
+            href,
+            uid,
+            date,
+            projectRef,
+            projectName,
+            orderIndex,
+          }),
+        reorderAssignment: commands.reorderAssignment,
+        moveAssignment: commands.moveAssignment,
       })
-      // The generated bindings re-throw Error-typed rejections (IPC failures)
-      // instead of returning a status object; without this the drop fails silently.
-      .catch(() =>
-        setErrorMessage("Der Einsatz konnte nicht verschoben werden."),
-      );
-  }, []);
+        .then((outcome) => {
+          if (outcome.kind === "done") {
+            invalidateWeeksContainingRef.current(source.uid);
+            reloadAssignmentsRef.current();
+            return;
+          }
+          if (outcome.kind === "partialMove") {
+            droppedUidRef.current = source.uid;
+            setReconciliation({
+              newHref: outcome.newHref,
+              sourceHref: outcome.sourceHref,
+            });
+            return;
+          }
+          if (outcome.kind === "error") {
+            setErrorMessage(outcome.message);
+          }
+        })
+        // The generated bindings re-throw Error-typed rejections (IPC failures)
+        // instead of returning a status object; without this the drop fails silently.
+        .catch(() =>
+          setErrorMessage("Der Einsatz konnte nicht verschoben werden."),
+        );
+    },
+    [targetOf],
+  );
 
   const onDragCancel = useCallback(() => {
     navigatorRef.current?.stop();
     activePayloadRef.current = null;
     setActivePayload(null);
+    setDropPreview(null);
   }, []);
 
   const clearError = useCallback(() => setErrorMessage(null), []);
@@ -420,6 +458,7 @@ export function useAppointmentDrag({
 
   return {
     activePayload,
+    dropPreview,
     errorMessage,
     clearError,
     reconciliation,

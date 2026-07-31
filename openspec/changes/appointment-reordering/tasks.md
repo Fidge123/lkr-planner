@@ -29,6 +29,12 @@
 - [x] 4.2 Implement insertion-point hit-testing within a cell and set the dragged card's order index accordingly
 - [x] 4.3 Re-sequence and persist the target cell after placement
 
+## 4b. Drop preview
+
+- [x] 4b.1 Write failing tests for the insertion index derived from the cards' geometry, including that it is stable once the preview is spliced in
+- [x] 4b.2 Make the day cell the only drop zone so it keeps its outline while the pointer is over one of its cards
+- [x] 4b.3 Render a placeholder at the resolved position and lift the dragged card out of the cell's layout so the preview costs no height
+
 ## 5. Verification
 
 - [x] 5.1 Add a grid-level test covering reorder-within-day and precise cross-employee placement (mocked commands)
