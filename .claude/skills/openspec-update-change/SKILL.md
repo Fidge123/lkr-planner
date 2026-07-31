@@ -10,17 +10,24 @@ metadata:
   generatedBy: "1.7.0"
 ---
 
-Revise a change's existing planning artifacts and keep them coherent. Never edit code.
+Revise a change's existing planning artifacts and keep them coherent.
+Never edit code.
 
-**Store selection:** If the user names a store (a store is a standalone OpenSpec repo registered on this machine) or the work lives in one, run `bunx openspec store list --json` to discover registered store ids, then pass `--store <id>` on the commands that read or write specs and changes (`new change`, `status`, `instructions`, `list`, `show`, `validate`, `archive`, `doctor`, `context`, `view`). Other commands do not take the flag. Hints printed by commands already carry the flag; keep it on follow-ups. Without a store, commands act on the nearest local `openspec/` root.
+**Store selection:** If the user names a store (a store is a standalone OpenSpec repo registered on this machine) or the work lives in one, run `bunx openspec store list --json` to discover registered store ids, then pass `--store <id>` on the commands that read or write specs and changes (`new change`, `status`, `instructions`, `list`, `show`, `validate`, `archive`, `doctor`, `context`, `view`).
+Other commands do not take the flag.
+Hints printed by commands already carry the flag; keep it on follow-ups.
+Without a store, commands act on the nearest local `openspec/` root.
 
-**Input**: Optionally specify a change name. If omitted, check if it can be inferred from conversation context. If vague or ambiguous you MUST prompt for available changes.
+**Input**: Optionally specify a change name.
+If omitted, check if it can be inferred from conversation context.
+If vague or ambiguous you MUST prompt for available changes.
 
 **Steps**
 
 1. **Select the change**
 
-   If a name is provided, use it. Otherwise:
+   If a name is provided, use it.
+   Otherwise:
    - Infer from conversation context if the user mentioned a change
    - Auto-select if only one active change exists
    - If ambiguous, run `bunx openspec list --json` to get available changes sorted by most recently modified, and ask the user to select one
@@ -39,15 +46,19 @@ Revise a change's existing planning artifacts and keep them coherent. Never edit
    ```bash
    bunx openspec status --change "<name>" --json
    ```
-   Parse the JSON to understand current state. The response includes:
+   Parse the JSON to understand current state.
+   The response includes:
    - `schemaName`: The workflow schema being used (e.g., "spec-driven")
    - `artifacts`: Array of artifacts with their status ("done", "skipped", "ready", "blocked")
    - `isComplete`: Boolean indicating if all artifacts are complete
-   - `planningHome`, `changeRoot`, `artifactPaths`, and `actionContext`: path and scope context. Use these instead of assuming repo-local paths.
+   - `planningHome`, `changeRoot`, `artifactPaths`, and `actionContext`: path and scope context.
+     Use these instead of assuming repo-local paths.
 
-   The artifact ids and paths come from the active schema - do NOT assume them, and do NOT branch on hardcoded artifact names. Custom schemas must work unchanged.
+   The artifact ids and paths come from the active schema - do NOT assume them, and do NOT branch on hardcoded artifact names.
+   Custom schemas must work unchanged.
 
-   The files to edit are `artifactPaths.<id>.existingOutputPaths` - the concrete files that exist on disk, already glob-expanded for glob artifacts (e.g. `specs/**/*.md`). Do NOT write to `resolvedOutputPath`: for a glob artifact it is still the glob pattern, not a real file.
+   The files to edit are `artifactPaths.<id>.existingOutputPaths` - the concrete files that exist on disk, already glob-expanded for glob artifacts (e.g. `specs/**/*.md`).
+   Do NOT write to `resolvedOutputPath`: for a glob artifact it is still the glob pattern, not a real file.
 
 3. **Understand the request**
    - If the user asked for a specific revision ("the design now uses X"), that is the starting edit.
@@ -55,13 +66,17 @@ Revise a change's existing planning artifacts and keep them coherent. Never edit
 
 4. **Read and reconcile**
    - Read the artifact(s) the request touches and the change's other existing artifacts.
-   - Apply the requested edit. Then check every other existing artifact against it - in ANY direction: an edit to a later artifact may require revising an earlier one, not only the other way around. Build order is a useful reading order, not a constraint on which artifacts may be revised.
+   - Apply the requested edit.
+     Then check every other existing artifact against it - in ANY direction: an edit to a later artifact may require revising an earlier one, not only the other way around.
+     Build order is a useful reading order, not a constraint on which artifacts may be revised.
    - Note everything that is now inconsistent, missing, or contradictory.
-   - Revise only files that already exist (`existingOutputPaths`). Do NOT create artifacts that don't exist yet, and do NOT invent new files under a glob artifact - note them and point the user to `/opsx:continue` to create them.
+   - Revise only files that already exist (`existingOutputPaths`).
+     Do NOT create artifacts that don't exist yet, and do NOT invent new files under a glob artifact - note them and point the user to `/opsx:continue` to create them.
    - If the change is already coherent, say so and make no edits.
 
 5. **Confirm and apply, one artifact at a time**
-   - Show each proposed revision and why. Write only after the user confirms.
+   - Show each proposed revision and why.
+     Write only after the user confirms.
    - If the user rejects a revision, do not write it - leave that artifact unchanged.
    - When a substantial rewrite is needed, get that artifact's rules and template first:
      ```bash
@@ -81,10 +96,12 @@ After each invocation, show:
 - Where the change stands and the recommended next command
 
 **Guardrails**
-- Planning artifacts only - NEVER edit implementation code. If the revised plan implies code changes, stop and point to `/opsx:apply`.
+- Planning artifacts only - NEVER edit implementation code.
+  If the revised plan implies code changes, stop and point to `/opsx:apply`.
 - Use the artifact ids and paths reported by `bunx openspec status`; never branch on hardcoded artifact names.
 - Edit only the concrete files in `existingOutputPaths`; never write to a glob `resolvedOutputPath`.
 - Do not advance the build frontier: no new artifacts, no new files under glob artifacts - that is `/opsx:continue`'s job.
 - Confirm every edit with the user before writing.
 - If the request changes the change's *intent* rather than refining it, recommend starting fresh with `/opsx:new` (the "Update vs. Start Fresh" heuristic).
-- `/opsx:continue` and `/opsx:new` may not be installed (core profile). When suggesting one that is unavailable, point to the CLI instead: `bunx openspec status --change "<name>" --json` shows the next artifact and `bunx openspec instructions <artifact-id> --change "<name>" --json` explains how to create it.
+- `/opsx:continue` and `/opsx:new` may not be installed (core profile).
+  When suggesting one that is unavailable, point to the CLI instead: `bunx openspec status --change "<name>" --json` shows the next artifact and `bunx openspec instructions <artifact-id> --change "<name>" --json` explains how to create it.

@@ -8,15 +8,21 @@ tags: ["workflow", "artifacts", "experimental"]
 
 Implement tasks from an OpenSpec change.
 
-**Store selection:** If the user names a store (a store is a standalone OpenSpec repo registered on this machine) or the work lives in one, run `bunx openspec store list --json` to discover registered store ids, then pass `--store <id>` on the commands that read or write specs and changes (`new change`, `status`, `instructions`, `list`, `show`, `validate`, `archive`, `doctor`, `context`, `view`). Other commands do not take the flag. Hints printed by commands already carry the flag; keep it on follow-ups. Without a store, commands act on the nearest local `openspec/` root.
+**Store selection:** If the user names a store (a store is a standalone OpenSpec repo registered on this machine) or the work lives in one, run `bunx openspec store list --json` to discover registered store ids, then pass `--store <id>` on the commands that read or write specs and changes (`new change`, `status`, `instructions`, `list`, `show`, `validate`, `archive`, `doctor`, `context`, `view`).
+Other commands do not take the flag.
+Hints printed by commands already carry the flag; keep it on follow-ups.
+Without a store, commands act on the nearest local `openspec/` root.
 
-**Input**: Optionally specify a change name (e.g., `/opsx:apply add-auth`). If omitted, check if it can be inferred from conversation context. If vague or ambiguous you MUST prompt for available changes.
+**Input**: Optionally specify a change name (e.g., `/opsx:apply add-auth`).
+If omitted, check if it can be inferred from conversation context.
+If vague or ambiguous you MUST prompt for available changes.
 
 **Steps**
 
 1. **Select the change**
 
-   If a name is provided, use it. Otherwise:
+   If a name is provided, use it.
+   Otherwise:
    - Infer from conversation context if the user mentioned a change
    - Auto-select if only one active change exists
    - If ambiguous, run `bunx openspec list --json` to get available changes and ask the user to select one
@@ -51,18 +57,23 @@ Implement tasks from an OpenSpec change.
    - If `state: "all_done"`: congratulate, suggest archive
    - Otherwise: proceed to implementation
 
-   Treat `context` as a required prompt-level input. Read and consider it, and
+   Treat `context` as a required prompt-level input.
+   Read and consider it, and
    apply relevant project facts, conventions, and constraints while implementing.
-   Treat `operationGuidance` as optional additive advice. Read and consider every
+   Treat `operationGuidance` as optional additive advice.
+   Read and consider every
    entry, and follow entries that are applicable and compatible with the built-in
    workflow.
 
    Keep both fields separate from CLI-returned state, missing artifacts, tasks,
-   progress, `contextFiles`, and the built-in `instruction`. They are not
+   progress, `contextFiles`, and the built-in `instruction`.
+   They are not
    evidence of task completion, do not replace the built-in instruction, and do
-   not permit bypassing a blocked state. If context conflicts with the built-in
+   not permit bypassing a blocked state.
+   If context conflicts with the built-in
    instruction, an explicit user choice, or a CLI-controlled value, report the
-   conflict and preserve the controlling value. If guidance is inapplicable or
+   conflict and preserve the controlling value.
+   If guidance is inapplicable or
    conflicts with those controlling inputs, do not follow it and explain why.
    These are prompt-level behavior contracts, not enforceable checks.
 

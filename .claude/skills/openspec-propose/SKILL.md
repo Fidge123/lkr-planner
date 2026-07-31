@@ -12,7 +12,8 @@ metadata:
 
 Propose a new change - create the change and generate all artifacts in one step.
 
-I'll create a change with the artifacts your schema defines. With the default spec-driven schema that is:
+I'll create a change with the artifacts your schema defines.
+With the default spec-driven schema that is:
 - proposal.md (what & why)
 - `specs/<capability>/spec.md` (what the system must do - a delta, not the main spec)
 - design.md (how)
@@ -22,7 +23,10 @@ When ready to implement, run /opsx:apply
 
 ---
 
-**Store selection:** If the user names a store (a store is a standalone OpenSpec repo registered on this machine) or the work lives in one, run `bunx openspec store list --json` to discover registered store ids, then pass `--store <id>` on the commands that read or write specs and changes (`new change`, `status`, `instructions`, `list`, `show`, `validate`, `archive`, `doctor`, `context`, `view`). Other commands do not take the flag. Hints printed by commands already carry the flag; keep it on follow-ups. Without a store, commands act on the nearest local `openspec/` root.
+**Store selection:** If the user names a store (a store is a standalone OpenSpec repo registered on this machine) or the work lives in one, run `bunx openspec store list --json` to discover registered store ids, then pass `--store <id>` on the commands that read or write specs and changes (`new change`, `status`, `instructions`, `list`, `show`, `validate`, `archive`, `doctor`, `context`, `view`).
+Other commands do not take the flag.
+Hints printed by commands already carry the flag; keep it on follow-ups.
+Without a store, commands act on the nearest local `openspec/` root.
 
 **Input**: The user's request should include a change name (kebab-case) OR a description of what they want to build.
 
@@ -50,7 +54,8 @@ When ready to implement, run /opsx:apply
    Parse the JSON to get:
    - `applyRequires`: array of artifact IDs needed before implementation (e.g., `["tasks"]`)
    - `artifacts`: list of all artifacts, each with its `status` and its `requires` edges (the artifact IDs it directly depends on)
-   - `planningHome`, `changeRoot`, `artifactPaths`, and `actionContext`: path and scope context. Use these instead of assuming repo-local paths.
+   - `planningHome`, `changeRoot`, `artifactPaths`, and `actionContext`: path and scope context.
+     Use these instead of assuming repo-local paths.
 
 4. **Create every artifact in the required set**
 
@@ -73,17 +78,23 @@ When ready to implement, run /opsx:apply
         - `dependencies`: Completed artifacts to read for context
       - Read any completed dependency files for context - always re-read them from disk, even if you saw them earlier in the conversation (the user may have edited them)
       - If the `instruction` field delegates creation to a specific skill or command, invoke it to produce the artifact instead of writing the file yourself, then verify the artifact file exists at `resolvedOutputPath`
-      - Otherwise create the artifact file using `template` as the structure and write it to `resolvedOutputPath`. If `resolvedOutputPath` is a glob, follow `instruction` to choose the concrete file path
+      - Otherwise create the artifact file using `template` as the structure and write it to `resolvedOutputPath`.
+        If `resolvedOutputPath` is a glob, follow `instruction` to choose the concrete file path
       - Apply `context` and `rules` as constraints - but do NOT copy them into the file
       - Show brief progress: "Created <artifact-id>"
 
    b. **Continue until every artifact in the required set exists (not just `apply.requires`)**
       - After creating each artifact, re-run `bunx openspec status --change "<name>" --json`
-      - The required set is `applyRequires` plus every artifact reachable from those by following the `requires` edges in `status --json` - walk them transitively (spec-driven closes over proposal, specs, design, tasks). Leave artifacts outside that set alone
-      - `status` is file-existence only, so an `applyRequires` artifact reading `done` does NOT mean its dependencies exist - writing `tasks.md` early marks `tasks` done while `specs` was never written. Use each artifact's `requires` edges, not its `status`, to build the required set: a `done` artifact still lists what it depends on
-      - An artifact already reading `status: "skipped"` is satisfied: the change declares `skip_specs` in `.openspec.yaml`, so its files must NOT exist. Never try to create one
+      - The required set is `applyRequires` plus every artifact reachable from those by following the `requires` edges in `status --json` - walk them transitively (spec-driven closes over proposal, specs, design, tasks).
+        Leave artifacts outside that set alone
+      - `status` is file-existence only, so an `applyRequires` artifact reading `done` does NOT mean its dependencies exist - writing `tasks.md` early marks `tasks` done while `specs` was never written.
+        Use each artifact's `requires` edges, not its `status`, to build the required set: a `done` artifact still lists what it depends on
+      - An artifact already reading `status: "skipped"` is satisfied: the change declares `skip_specs` in `.openspec.yaml`, so its files must NOT exist.
+        Never try to create one
       - Create every artifact in the required set that is missing, then re-check - creating one can unblock others
-      - Skip one only when `status` already reports it `skipped`, or when its own `instruction` says it is conditional: run `bunx openspec instructions <artifact-id> --change "<name>" --json` and skip only if its `instruction` field marks it optional (e.g. "create only if..."). Spec-driven's `design.md` qualifies; `specs` qualifies only via the `skipped` status above, never by your own judgment. Tell the user, and do not reconsider it
+      - Skip one only when `status` already reports it `skipped`, or when its own `instruction` says it is conditional: run `bunx openspec instructions <artifact-id> --change "<name>" --json` and skip only if its `instruction` field marks it optional (e.g. "create only if...").
+        Spec-driven's `design.md` qualifies; `specs` qualifies only via the `skipped` status above, never by your own judgment.
+        Tell the user, and do not reconsider it
       - Dependencies are enablers, not gates: if a required artifact is still `blocked` only because you skipped a conditional dependency, write it anyway
       - Stop when every artifact in the required set is `done`, `skipped`, or was deliberately skipped
 
