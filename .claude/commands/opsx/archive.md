@@ -8,7 +8,7 @@ tags: ["workflow", "archive", "experimental"]
 
 Archive a completed change in the experimental workflow.
 
-**Store selection:** If the user names a store (a store is a standalone OpenSpec repo registered on this machine) or the work lives in one, run `openspec store list --json` to discover registered store ids, then pass `--store <id>` on the commands that read or write specs and changes (`new change`, `status`, `instructions`, `list`, `show`, `validate`, `archive`, `doctor`, `context`, `view`). Other commands do not take the flag. Hints printed by commands already carry the flag; keep it on follow-ups. Without a store, commands act on the nearest local `openspec/` root.
+**Store selection:** If the user names a store (a store is a standalone OpenSpec repo registered on this machine) or the work lives in one, run `bunx openspec store list --json` to discover registered store ids, then pass `--store <id>` on the commands that read or write specs and changes (`new change`, `status`, `instructions`, `list`, `show`, `validate`, `archive`, `doctor`, `context`, `view`). Other commands do not take the flag. Hints printed by commands already carry the flag; keep it on follow-ups. Without a store, commands act on the nearest local `openspec/` root.
 
 **Input**: Optionally specify a change name after `/opsx:archive` (e.g., `/opsx:archive add-auth`). If omitted, check if it can be inferred from conversation context. If vague or ambiguous you MUST prompt for available changes.
 
@@ -19,7 +19,7 @@ Archive a completed change in the experimental workflow.
    If a name is provided, use it. Otherwise:
    - Infer from conversation context if the user mentioned a change
    - Auto-select if only one active change exists
-   - If ambiguous, run `openspec list --json` to get available changes and ask the user to select one
+   - If ambiguous, run `bunx openspec list --json` to get available changes and ask the user to select one
 
    When prompting, show only active changes (not already archived).
    Include the schema used for each change if available.
@@ -30,7 +30,7 @@ Archive a completed change in the experimental workflow.
 
    After resolving the selected change and planning root, run:
    ```bash
-   openspec instructions archive --change "<name>" --json
+   bunx openspec instructions archive --change "<name>" --json
    ```
    Keep the same selected-root flags on this command. This lookup is advisory and
    optional: it only supplies extra prompt inputs, so it must never block archiving.
@@ -55,7 +55,7 @@ Archive a completed change in the experimental workflow.
 
 2. **Check artifact completion status**
 
-   Run `openspec status --change "<name>" --json` to check artifact completion.
+   Run `bunx openspec status --change "<name>" --json` to check artifact completion.
 
    Parse the JSON to understand:
    - `schemaName`: The workflow being used
@@ -103,7 +103,7 @@ Archive a completed change in the experimental workflow.
    - Anything else — ask again rather than archiving
 
    Before a selected sync writes any main spec, run
-   `openspec instructions specs --change "<name>" --json` once with the same
+   `bunx openspec instructions specs --change "<name>" --json` once with the same
    selected-root flags. Require a zero exit status and valid artifact-instruction
    JSON. If the lookup fails or returns invalid JSON, report the error and stop
    before writing any main spec or moving the change. A valid response with omitted
@@ -128,7 +128,7 @@ Archive a completed change in the experimental workflow.
    mkdir -p "<planningHome.changesDir>/archive"
    ```
 
-   Generate the target name: use the change name as-is when it already starts with a `YYYY-MM-DD-` prefix; otherwise prepend the current date as `YYYY-MM-DD-<change-name>`. Never stack a second date (same rule as `openspec archive`).
+   Generate the target name: use the change name as-is when it already starts with a `YYYY-MM-DD-` prefix; otherwise prepend the current date as `YYYY-MM-DD-<change-name>`. Never stack a second date (same rule as `bunx openspec archive`).
 
    **Check if target already exists:**
    - If yes: Fail with error, suggest renaming existing archive or using different date
@@ -209,7 +209,7 @@ Target archive directory already exists.
 
 **Guardrails**
 - Announce the selected change; prompt for selection when it is ambiguous
-- Use artifact graph (openspec status --json) for completion checking
+- Use artifact graph (bunx openspec status --json) for completion checking
 - Don't block archive on warnings - just inform and confirm
 - Preserve .openspec.yaml when moving to archive (it moves with the directory)
 - Show clear summary of what happened
