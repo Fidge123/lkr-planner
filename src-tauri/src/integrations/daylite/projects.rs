@@ -385,10 +385,17 @@ fn map_project_status(status: Option<String>) -> PlanningProjectStatus {
     PlanningProjectStatus::NewStatus
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ResolvedProject {
+    pub(crate) name: String,
+    pub(crate) status: String,
+    pub(crate) category: Option<String>,
+}
+
 pub(crate) async fn fetch_project_by_reference(
     app: tauri::AppHandle,
     project_ref: &str,
-) -> Option<(String, String)> {
+) -> Option<ResolvedProject> {
     // The project_ref is an absolute API path like "/v1/projects/3001".
     // The DayliteApiClient base_url already includes the version prefix, so strip "/v1".
     let path = project_ref.strip_prefix("/v1").unwrap_or(project_ref);
@@ -407,8 +414,12 @@ pub(crate) async fn fetch_project_by_reference(
         )
         .await?;
         let mapped = map_daylite_project_summary(summary);
-        let status_str = project_status_to_string(&mapped.status);
-        Ok(((mapped.name, status_str.to_string()), tokens))
+        let resolved = ResolvedProject {
+            name: mapped.name,
+            status: project_status_to_string(&mapped.status).to_string(),
+            category: mapped.category,
+        };
+        Ok((resolved, tokens))
     })
     .await
     .ok()

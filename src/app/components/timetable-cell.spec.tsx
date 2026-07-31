@@ -32,6 +32,7 @@ describe("TimetableCell", () => {
       href: "/calendars/user/uid-1.ics",
       projectRef: "/v1/projects/1",
       projectStatus: "in_progress",
+      categoryColor: null,
     };
 
     const html = renderToStaticMarkup(
@@ -97,6 +98,7 @@ describe("TimetableCell", () => {
     href: "/calendars/user/uid-drag.ics",
     projectRef: "/v1/projects/7",
     projectStatus: "in_progress",
+    categoryColor: null,
   };
 
   it("marks assignment cards as draggable", () => {
@@ -137,6 +139,7 @@ describe("TimetableCell", () => {
       href: null,
       projectRef: null,
       projectStatus: null,
+      categoryColor: null,
     };
     const absence: CellEvent = {
       uid: "uid-abs",
@@ -148,6 +151,7 @@ describe("TimetableCell", () => {
       href: null,
       projectRef: null,
       projectStatus: null,
+      categoryColor: null,
     };
 
     const html = renderToStaticMarkup(
@@ -162,12 +166,103 @@ describe("TimetableCell", () => {
     expect(html).not.toContain('aria-roledescription="draggable"');
   });
 
+  const absenceEvent: CellEvent = {
+    uid: "uid-absence",
+    kind: "absence",
+    title: "UB",
+    color: "bg-(--color-absence-vacation)/50",
+    startTime: null,
+    endTime: null,
+    href: null,
+    projectRef: null,
+    projectStatus: null,
+    categoryColor: null,
+  };
+
+  it("marks a cell with an absence and an assignment as conflicting", () => {
+    const html = renderToStaticMarkup(
+      <TimetableCell
+        highlight={false}
+        events={[absenceEvent, draggableAssignment]}
+        onAddClick={() => {}}
+        onEventClick={() => {}}
+      />,
+    );
+
+    expect(html).toContain("ring-error");
+    expect(html).toContain("Abwesenheit und Termin am selben Tag");
+    expect(html).toContain("lucide-triangle-alert");
+  });
+
+  it("renders no conflict indicator for an absence without an appointment", () => {
+    const html = renderToStaticMarkup(
+      <TimetableCell
+        highlight={false}
+        events={[absenceEvent]}
+        onAddClick={() => {}}
+        onEventClick={() => {}}
+      />,
+    );
+
+    expect(html).not.toContain("ring-error");
+    expect(html).not.toContain("Abwesenheit und Termin am selben Tag");
+  });
+
+  it("keeps the event colors alongside the conflict indicator", () => {
+    const html = renderToStaticMarkup(
+      <TimetableCell
+        highlight={false}
+        events={[absenceEvent, draggableAssignment]}
+        onAddClick={() => {}}
+        onEventClick={() => {}}
+      />,
+    );
+
+    expect(html).toContain("bg-(--color-absence-vacation)/50");
+    expect(html).toContain("bg-primary");
+  });
+
+  it("paints an assignment card with its Daylite category color", () => {
+    const categorized: CellEvent = {
+      ...draggableAssignment,
+      color: "",
+      categoryColor: "#8bc34a",
+    };
+
+    const html = renderToStaticMarkup(
+      <TimetableCell
+        highlight={false}
+        events={[categorized]}
+        onAddClick={() => {}}
+        onEventClick={() => {}}
+      />,
+    );
+
+    expect(html).toContain("background-color:#8bc34a");
+    expect(html).toContain("color:#1f2937");
+  });
+
+  it("renders no inline color when the assignment falls back to its status color", () => {
+    const html = renderToStaticMarkup(
+      <TimetableCell
+        highlight={false}
+        events={[draggableAssignment]}
+        onAddClick={() => {}}
+        onEventClick={() => {}}
+      />,
+    );
+
+    expect(html).not.toContain("background-color");
+    expect(html).toContain("bg-primary");
+  });
+
   it("does not make an assignment with an unresolved project draggable", () => {
     const unresolved: CellEvent = {
       ...draggableAssignment,
       uid: "uid-unresolved",
       title: "Beschreibung für Projekt Süd konnte nicht abgerufen werden",
       projectStatus: null,
+      categoryColor: null,
     };
 
     const html = renderToStaticMarkup(

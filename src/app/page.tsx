@@ -28,6 +28,7 @@ import { type HolidaysState, useHolidays } from "./hooks/use-holidays";
 import type { PlanningAssignmentsState } from "./hooks/use-planning-assignments";
 import { usePlanningEmployees } from "./hooks/use-planning-employees";
 import { usePlanningProjects } from "./hooks/use-planning-projects";
+import { readableTextColor } from "./types";
 import { getWeekDays, toLocalISODate } from "./util";
 
 // dnd-kit refreshes a droppable's rect from a per-cell ResizeObserver, which
@@ -322,6 +323,14 @@ function DragPreviewCard({ payload }: { payload: AppointmentDragPayload }) {
   return (
     <span
       className={`${assignmentCardClass} text-base-100 shadow-lg ${payload.color}`}
+      style={
+        payload.categoryColor
+          ? {
+              backgroundColor: payload.categoryColor,
+              color: readableTextColor(payload.categoryColor),
+            }
+          : undefined
+      }
     >
       <AssignmentCardBody
         startTime={null}

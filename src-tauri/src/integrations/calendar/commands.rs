@@ -13,6 +13,7 @@ use super::events::{
     classify_event, map_absence_raw_events_for_week, resolve_event, sort_events_absences_first,
 };
 use super::types::{CalendarCellEvent, EmployeeWeekEvents, MoveAssignmentResult, PendingEvent};
+use crate::integrations::daylite::projects::ResolvedProject;
 use crate::integrations::local_store::{DayliteCache, LocalStore};
 
 #[tauri::command]
@@ -46,13 +47,16 @@ pub async fn load_week_events(
     let (fetches, error_results) =
         fetch_week_for_employees(&store, &session, week_start_date).await;
 
-    let api_results = fetch_uncached_projects(app, &store, &fetches).await;
+    let api_results = fetch_uncached_projects(app.clone(), &store, &fetches).await;
+    let category_colors =
+        crate::integrations::daylite::categories::fetch_project_category_colors(app).await;
 
     Ok(assemble_week_events(
         fetches,
         error_results,
         &store.daylite_cache,
         &api_results,
+        &category_colors,
     ))
 }
 
@@ -153,7 +157,7 @@ async fn fetch_uncached_projects(
     app: tauri::AppHandle,
     store: &LocalStore,
     fetches: &[EmployeeFetch],
-) -> HashMap<String, Option<(String, String)>> {
+) -> HashMap<String, Option<ResolvedProject>> {
     let mut missing_refs: HashSet<String> = HashSet::new();
     for fetch in fetches {
         for event in &fetch.pending {
@@ -187,14 +191,15 @@ fn assemble_week_events(
     fetches: Vec<EmployeeFetch>,
     error_results: Vec<EmployeeWeekEvents>,
     cache: &DayliteCache,
-    api_results: &HashMap<String, Option<(String, String)>>,
+    api_results: &HashMap<String, Option<ResolvedProject>>,
+    category_colors: &HashMap<String, String>,
 ) -> Vec<EmployeeWeekEvents> {
     let mut results = error_results;
     for fetch in fetches {
         let mut events: Vec<CalendarCellEvent> = fetch
             .pending
             .into_iter()
-            .map(|p| resolve_event(p, cache, api_results))
+            .map(|p| resolve_event(p, cache, api_results, category_colors))
             .collect();
         events.extend(fetch.absences);
         // Deduplicate by UID to guard against CalDAV servers redelivering the same event.
