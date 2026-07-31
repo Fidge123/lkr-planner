@@ -1,8 +1,11 @@
+use chrono::NaiveDate;
 use tauri_plugin_http::reqwest;
 use uuid::Uuid;
 
-use super::super::ical::build_ical_payload;
+use super::super::ical::{build_ical_payload, parse_ical_events};
+use super::super::slots::{full_window, plan_slot_updates, DayPlan, SlotUpdate};
 use super::super::types::MoveAssignmentResult;
+use super::report::fetch_events_in_range;
 
 pub(crate) struct CaldavSession {
     pub(crate) client: reqwest::Client,
@@ -16,6 +19,168 @@ pub(crate) struct AssignmentWrite {
     pub(crate) date: String,
     pub(crate) project_ref: String,
     pub(crate) project_name: String,
+}
+
+fn parent_collection_url(resource_url: &str) -> &str {
+    resource_url
+        .rsplit_once('/')
+        .map(|(parent, _)| parent)
+        .unwrap_or(resource_url)
+}
+
+/// lkr-planner writes one VEVENT per resource, so the first component is authoritative.
+async fn fetch_event_date(
+    session: &CaldavSession,
+    resource_url: &str,
+) -> Result<Option<String>, String> {
+    let response = session
+        .client
+        .get(resource_url)
+        .basic_auth(&session.username, Some(&session.password))
+        .send()
+        .await
+        .map_err(|e| format!("Einsatz konnte nicht abgerufen werden: {e}"))?;
+
+    let status = response.status().as_u16();
+    if status == 404 {
+        return Ok(None);
+    }
+    if !(200..300).contains(&status) {
+        return Err(format!("Kalenderserver antwortete mit HTTP {status}"));
+    }
+
+    let ical_text = response
+        .text()
+        .await
+        .map_err(|e| format!("Einsatz konnte nicht gelesen werden: {e}"))?;
+    let events = parse_ical_events(&ical_text)?;
+    let Some(event) = events.into_iter().next() else {
+        eprintln!("calendar: {resource_url} contained no readable VEVENT");
+        return Ok(None);
+    };
+    Ok(Some(event.dtstart))
+}
+
+/// Each PUT carries If-Match only when the day REPORT supplied an ETag, so a server that
+/// omits one degrades to an unguarded write rather than blocking re-allocation.
+async fn reallocate_day(
+    session: &CaldavSession,
+    calendar_url: &str,
+    date: &str,
+) -> Result<(), String> {
+    const MAX_REALLOCATE_ATTEMPTS: u32 = 3;
+
+    let day = NaiveDate::parse_from_str(date, "%Y-%m-%d")
+        .map_err(|_| format!("Ungültiges Datum: {date}"))?;
+
+    for _ in 0..MAX_REALLOCATE_ATTEMPTS {
+        let events =
+            fetch_events_in_range(session, calendar_url, day, day + chrono::Duration::days(1))
+                .await?;
+
+        if !put_slot_updates(
+            session,
+            date,
+            plan_slot_updates(&events, date, None).updates,
+        )
+        .await?
+        {
+            return Ok(());
+        }
+    }
+
+    Err(format!(
+        "Zeitfenster für {date} konnten wegen gleichzeitiger Änderungen nicht aktualisiert werden."
+    ))
+}
+
+/// The updates target distinct resources and do not depend on each other, so they go out
+/// concurrently. Returns `true` when a PUT was rejected with 412 and the day needs
+/// re-planning.
+async fn put_slot_updates(
+    session: &CaldavSession,
+    date: &str,
+    updates: Vec<SlotUpdate>,
+) -> Result<bool, String> {
+    let requests = updates.into_iter().map(|update| async move {
+        let resource_url = resolve_href(&update.href, &session.base_url)?;
+
+        eprintln!("calendar: slot re-allocation PUT {resource_url}");
+
+        let mut request = session
+            .client
+            .put(&resource_url)
+            .basic_auth(&session.username, Some(&session.password))
+            .header("Content-Type", "text/calendar; charset=utf-8");
+        if !update.etag.is_empty() {
+            request = request.header("If-Match", update.etag);
+        }
+        let response = request.body(update.payload).send().await.map_err(|e| {
+            format!("Zeitfenster für {date} konnten nicht aktualisiert werden: {e}")
+        })?;
+        Ok::<u16, String>(response.status().as_u16())
+    });
+
+    let mut conflicted = false;
+    for result in futures::future::join_all(requests).await {
+        let status = result?;
+        if status == 412 {
+            conflicted = true;
+            continue;
+        }
+        if !(200..300).contains(&status) {
+            return Err(format!(
+                "Zeitfenster für {date} konnten nicht aktualisiert werden: HTTP {status}"
+            ));
+        }
+    }
+    Ok(conflicted)
+}
+
+/// Failures are logged instead of returned: the primary write already succeeded, so
+/// surfacing an error here would invite a retry that duplicates the event. The next write
+/// on this day converges anyway.
+async fn reallocate_day_best_effort(session: &CaldavSession, calendar_url: &str, date: &str) {
+    if let Err(e) = reallocate_day(session, calendar_url, date).await {
+        eprintln!("calendar: re-allocation for {date} failed (converges on the next write): {e}");
+    }
+}
+
+/// The returned plan carries both the pending event's own slot and the PUTs for its
+/// neighbours, so one fetch serves the whole write. `None` means the day could not be
+/// planned and the caller must fall back to a full re-allocation.
+async fn plan_day_for_pending_write(
+    session: &CaldavSession,
+    calendar_url: &str,
+    date: &str,
+    uid: &str,
+) -> Option<DayPlan> {
+    let day = NaiveDate::parse_from_str(date, "%Y-%m-%d").ok()?;
+    match fetch_events_in_range(session, calendar_url, day, day + chrono::Duration::days(1)).await {
+        Ok(events) => Some(plan_slot_updates(&events, date, Some(uid))),
+        Err(e) => {
+            eprintln!("calendar: day fetch before write failed, using full window: {e}");
+            None
+        }
+    }
+}
+
+/// A 412 means the plan raced a concurrent edit, so the day is re-fetched and re-planned.
+async fn apply_planned_updates_best_effort(
+    session: &CaldavSession,
+    calendar_url: &str,
+    date: &str,
+    updates: Vec<SlotUpdate>,
+) {
+    match put_slot_updates(session, date, updates).await {
+        Ok(false) => {}
+        Ok(true) => reallocate_day_best_effort(session, calendar_url, date).await,
+        Err(e) => {
+            eprintln!(
+                "calendar: re-allocation for {date} failed (converges on the next write): {e}"
+            )
+        }
+    }
 }
 
 pub(crate) async fn create_assignment_core(
@@ -33,7 +198,19 @@ pub(crate) async fn create_assignment_core(
     }
 
     let uid = Uuid::new_v4().to_string();
-    let payload = build_ical_payload(&uid, &write.date, &write.project_name, &write.project_ref);
+    let plan = plan_day_for_pending_write(session, calendar_url, &write.date, &uid).await;
+    let (slot_start, slot_end) = plan
+        .as_ref()
+        .and_then(|plan| plan.extra_slot)
+        .unwrap_or_else(full_window);
+    let payload = build_ical_payload(
+        &uid,
+        &write.date,
+        &write.project_name,
+        &write.project_ref,
+        slot_start,
+        slot_end,
+    );
 
     let base = calendar_url.trim_end_matches('/');
     let resource_url = format!("{base}/{uid}.ics");
@@ -53,6 +230,14 @@ pub(crate) async fn create_assignment_core(
     let status = response.status().as_u16();
     if !(200..300).contains(&status) {
         return Err(format!("Kalenderserver antwortete mit HTTP {status}"));
+    }
+
+    match plan {
+        Some(plan) => {
+            apply_planned_updates_best_effort(session, calendar_url, &write.date, plan.updates)
+                .await
+        }
+        None => reallocate_day_best_effort(session, calendar_url, &write.date).await,
     }
 
     Ok(resource_url)
@@ -75,7 +260,35 @@ pub(crate) async fn update_assignment_core(
         );
     }
 
-    let payload = build_ical_payload(uid, &write.date, &write.project_name, &write.project_ref);
+    let calendar_url = parent_collection_url(&resource_url);
+    // Read the event's current day before the PUT overwrites it: moving an assignment to
+    // another day leaves the source day needing re-allocation too.
+    let (previous_date, plan) = tokio::join!(
+        fetch_event_date(session, &resource_url),
+        plan_day_for_pending_write(session, calendar_url, &write.date, uid),
+    );
+    let previous_date = match previous_date {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!(
+                "calendar: could not read event before update, skipping source-day re-allocation: {e}"
+            );
+            None
+        }
+    };
+
+    let (slot_start, slot_end) = plan
+        .as_ref()
+        .and_then(|plan| plan.extra_slot)
+        .unwrap_or_else(full_window);
+    let payload = build_ical_payload(
+        uid,
+        &write.date,
+        &write.project_name,
+        &write.project_ref,
+        slot_start,
+        slot_end,
+    );
 
     eprintln!("calendar: update_assignment PUT {resource_url}");
 
@@ -92,6 +305,19 @@ pub(crate) async fn update_assignment_core(
     let status = response.status().as_u16();
     if !(200..300).contains(&status) {
         return Err(format!("Kalenderserver antwortete mit HTTP {status}"));
+    }
+
+    match plan {
+        Some(plan) => {
+            apply_planned_updates_best_effort(session, calendar_url, &write.date, plan.updates)
+                .await
+        }
+        None => reallocate_day_best_effort(session, calendar_url, &write.date).await,
+    }
+    if let Some(previous) = previous_date {
+        if previous != write.date {
+            reallocate_day_best_effort(session, calendar_url, &previous).await;
+        }
     }
 
     Ok(())
@@ -112,6 +338,16 @@ pub(crate) async fn delete_assignment_core(
         );
     }
 
+    // Read the event's day before deleting so the remaining same-day assignments
+    // can be re-allocated afterwards.
+    let event_date = match fetch_event_date(session, &resource_url).await {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("calendar: could not read event before delete, skipping re-allocation: {e}");
+            None
+        }
+    };
+
     eprintln!("calendar: delete_assignment DELETE {resource_url}");
 
     let response = session
@@ -129,6 +365,11 @@ pub(crate) async fn delete_assignment_core(
     }
     if !(200..300).contains(&status) {
         return Err(format!("Kalenderserver antwortete mit HTTP {status}"));
+    }
+
+    if let Some(date) = event_date {
+        let calendar_url = parent_collection_url(&resource_url);
+        reallocate_day_best_effort(session, calendar_url, &date).await;
     }
 
     Ok(())
@@ -161,7 +402,7 @@ pub(crate) async fn move_assignment_core(
 /// CalDAV servers return root-absolute hrefs; joining one onto a `base_url` that
 /// already contains a path would duplicate the path segment and produce a 404,
 /// so the href is resolved against the scheme+host origin only.
-fn resolve_href(href: &str, base_url: &str) -> Result<String, String> {
+pub(super) fn resolve_href(href: &str, base_url: &str) -> Result<String, String> {
     if href.starts_with("http://") || href.starts_with("https://") {
         return Ok(href.to_string());
     }
@@ -332,16 +573,23 @@ mod tests {
         assert!(new_href.starts_with(&format!("{target_calendar}/")));
         assert!(new_href.ends_with(".ics"));
 
+        // Slot re-allocation reads the affected days around both writes (REPORT before the
+        // create, GET before the delete), so assert on the writes and their order rather
+        // than on an exact request count.
         let requests = server.requests();
+        let writes: Vec<_> = requests
+            .iter()
+            .filter(|(method, _)| method == "PUT" || method == "DELETE")
+            .collect();
         assert_eq!(
-            requests.len(),
+            writes.len(),
             2,
-            "expected exactly PUT then DELETE: {requests:?}"
+            "expected exactly one PUT and one DELETE: {requests:?}"
         );
-        assert_eq!(requests[0].0, "PUT");
-        assert!(requests[0].1.starts_with("/target/"));
+        assert_eq!(writes[0].0, "PUT");
+        assert!(writes[0].1.starts_with("/target/"));
         assert_eq!(
-            requests[1],
+            *writes[1],
             ("DELETE".to_string(), "/source/old-uid.ics".to_string())
         );
     }
@@ -437,97 +685,237 @@ mod tests {
         );
     }
 
-    #[tokio::test]
-    #[ignore = "VCR: requires live CalDAV server credentials"]
-    async fn create_assignment_core_sends_put_and_returns_href() {
-        // To record: set CALDAV_URL, CALDAV_USER, CALDAV_PASS env vars and run with --ignored.
-        let calendar_url = std::env::var("CALDAV_URL").expect("CALDAV_URL");
-        let username = std::env::var("CALDAV_USER").expect("CALDAV_USER");
-        let password = std::env::var("CALDAV_PASS").expect("CALDAV_PASS");
+    #[test]
+    fn parent_collection_url_strips_the_resource_segment() {
+        assert_eq!(
+            parent_collection_url("https://app.zep.de/caldav/admin/emp-1/uid-1.ics"),
+            "https://app.zep.de/caldav/admin/emp-1"
+        );
+    }
 
-        let session = CaldavSession {
-            client: reqwest::Client::builder()
-                .timeout(Duration::from_secs(30))
-                .build()
-                .unwrap(),
-            username,
-            password,
-            base_url: calendar_url.clone(),
-            absence_urls: vec![],
-        };
+    use super::super::report::discover_calendar_by_name;
+
+    const TEST_DATE: &str = "2026-05-06";
+
+    /// The delete cleans up the event the create made, so the flow leaves the server as it
+    /// found it.
+    async fn run_write_path_flow(
+        session: &CaldavSession,
+        home_set_url: &str,
+        calendar_name: &str,
+    ) -> Result<(), String> {
+        let calendar_url = discover_calendar_by_name(session, home_set_url, calendar_name).await?;
 
         let href = create_assignment_core(
-            &session,
+            session,
             &calendar_url,
             &AssignmentWrite {
-                date: "2026-05-06".to_string(),
+                date: TEST_DATE.to_string(),
                 project_ref: "/v1/projects/42".to_string(),
                 project_name: "Testprojekt".to_string(),
             },
         )
-        .await
-        .expect("create_assignment_core should succeed");
+        .await?;
+        if !href.ends_with(".ics") {
+            return Err(format!("unexpected resource href: {href}"));
+        }
 
-        assert!(href.starts_with(&calendar_url.trim_end_matches('/').to_string()));
-        assert!(href.ends_with(".ics"));
-    }
-
-    #[tokio::test]
-    #[ignore = "VCR: requires live CalDAV server credentials"]
-    async fn update_assignment_core_sends_put_to_stored_href() {
-        let base_url = std::env::var("CALDAV_BASE_URL").expect("CALDAV_BASE_URL");
-        let href = std::env::var("CALDAV_HREF").expect("CALDAV_HREF");
-        let uid = std::env::var("CALDAV_UID").expect("CALDAV_UID");
-        let username = std::env::var("CALDAV_USER").expect("CALDAV_USER");
-        let password = std::env::var("CALDAV_PASS").expect("CALDAV_PASS");
-
-        let session = CaldavSession {
-            client: reqwest::Client::builder()
-                .timeout(Duration::from_secs(30))
-                .build()
-                .unwrap(),
-            username,
-            password,
-            base_url,
-            absence_urls: vec![],
-        };
+        let uid = href
+            .rsplit('/')
+            .next()
+            .and_then(|segment| segment.strip_suffix(".ics"))
+            .ok_or_else(|| format!("cannot derive uid from href: {href}"))?
+            .to_string();
 
         update_assignment_core(
-            &session,
+            session,
             &href,
             &uid,
             &AssignmentWrite {
-                date: "2026-05-07".to_string(),
-                project_ref: "/v1/projects/42".to_string(),
+                date: TEST_DATE.to_string(),
+                project_ref: "/v1/projects/43".to_string(),
                 project_name: "Aktualisiertes Projekt".to_string(),
             },
         )
-        .await
-        .expect("update_assignment_core should succeed");
+        .await?;
+
+        delete_assignment_core(session, &href).await?;
+        Ok(())
+    }
+
+    struct RadicaleServer {
+        child: std::process::Child,
+        dir: std::path::PathBuf,
+        port: u16,
+    }
+
+    impl RadicaleServer {
+        /// Panics rather than skipping on any failure, so a missing `uv`, a failed
+        /// on-demand install, or a server that never starts fails the test instead of
+        /// silently passing without exercising the write path.
+        fn start() -> Self {
+            let port = free_tcp_port();
+            let dir =
+                std::env::temp_dir().join(format!("radicale-it-{}-{port}", std::process::id()));
+            std::fs::create_dir_all(dir.join("collections"))
+                .expect("temp dir for radicale should be creatable");
+            std::fs::write(dir.join("htpasswd"), "testuser:testpass\n")
+                .expect("htpasswd file should be writable");
+            std::fs::write(
+                dir.join("config"),
+                format!(
+                    "[server]\nhosts = 127.0.0.1:{port}\n[auth]\ntype = htpasswd\nhtpasswd_filename = {htpasswd}\nhtpasswd_encryption = plain\n[storage]\nfilesystem_folder = {storage}\n[rights]\ntype = owner_only\n[logging]\nlevel = warning\n",
+                    htpasswd = dir.join("htpasswd").display(),
+                    storage = dir.join("collections").display(),
+                ),
+            )
+            .expect("radicale config should be writable");
+
+            // Redirected to files (not piped) so a chatty server can never block on a full
+            // pipe buffer; read back into the panic message if startup fails.
+            let stdout = std::fs::File::create(dir.join("stdout.log"))
+                .expect("stdout log file should be creatable");
+            let stderr = std::fs::File::create(dir.join("stderr.log"))
+                .expect("stderr log file should be creatable");
+
+            let mut command = std::process::Command::new("uvx");
+            command
+                .args(["radicale", "--config"])
+                .arg(dir.join("config"))
+                .stdout(stdout)
+                .stderr(stderr);
+            #[cfg(unix)]
+            {
+                use std::os::unix::process::CommandExt;
+                // `uvx` forks the real Radicale interpreter rather than exec-replacing
+                // itself, so it becomes a separate process; making it its own process
+                // group leader lets Drop kill the whole group instead of orphaning it.
+                command.process_group(0);
+            }
+
+            let child = command.spawn().unwrap_or_else(|e| {
+                panic!(
+                    "failed to spawn `uvx radicale`: {e}\n\
+                     Install uv (https://docs.astral.sh/uv/getting-started/installation/) \
+                     so `uvx` is on PATH; it fetches Radicale on demand."
+                )
+            });
+
+            let mut server = RadicaleServer { child, dir, port };
+            for _ in 0..100 {
+                if let Some(status) = server
+                    .child
+                    .try_wait()
+                    .expect("polling the radicale process should not fail")
+                {
+                    panic!(
+                        "`uvx radicale` exited early with {status} before becoming ready:\n{}",
+                        server.read_logs()
+                    );
+                }
+                if std::net::TcpStream::connect(("127.0.0.1", server.port)).is_ok() {
+                    return server;
+                }
+                std::thread::sleep(Duration::from_millis(100));
+            }
+            panic!(
+                "radicale did not become ready on port {port} within 10s:\n{}",
+                server.read_logs()
+            );
+        }
+
+        fn read_logs(&self) -> String {
+            let stdout = std::fs::read_to_string(self.dir.join("stdout.log")).unwrap_or_default();
+            let stderr = std::fs::read_to_string(self.dir.join("stderr.log")).unwrap_or_default();
+            format!("--- stdout ---\n{stdout}\n--- stderr ---\n{stderr}")
+        }
+
+        fn base_url(&self) -> String {
+            format!("http://127.0.0.1:{}", self.port)
+        }
+
+        fn home_set_url(&self) -> String {
+            format!("http://127.0.0.1:{}/testuser/", self.port)
+        }
+    }
+
+    impl Drop for RadicaleServer {
+        fn drop(&mut self) {
+            // Kill the whole process group `uvx` and the Radicale it forked belong to;
+            // `child.kill()` alone only reaches the immediate `uvx` process and leaves
+            // Radicale running, reparented to init.
+            #[cfg(unix)]
+            {
+                let pgid = self.child.id();
+                let _ = std::process::Command::new("kill")
+                    .args(["-9", "--", &format!("-{pgid}")])
+                    .status();
+            }
+            #[cfg(not(unix))]
+            {
+                let _ = self.child.kill();
+            }
+            let _ = self.child.wait();
+            let _ = std::fs::remove_dir_all(&self.dir);
+        }
+    }
+
+    fn free_tcp_port() -> u16 {
+        std::net::TcpListener::bind("127.0.0.1:0")
+            .unwrap()
+            .local_addr()
+            .unwrap()
+            .port()
+    }
+
+    /// A client that bypasses any ambient HTTP(S) proxy so it can reach 127.0.0.1 directly.
+    fn direct_client() -> reqwest::Client {
+        reqwest::Client::builder()
+            .no_proxy()
+            .timeout(Duration::from_secs(30))
+            .build()
+            .unwrap()
+    }
+
+    /// The production client never issues MKCALENDAR, so the test seeds the calendar itself
+    /// and discovery then finds it by name.
+    async fn seed_radicale_calendar(server: &RadicaleServer, calid: &str, display_name: &str) {
+        let url = format!("{}/testuser/{calid}/", server.base_url());
+        let body = format!(
+            "<C:mkcalendar xmlns:D=\"DAV:\" xmlns:C=\"urn:ietf:params:xml:ns:caldav\"><D:set><D:prop><D:displayname>{display_name}</D:displayname></D:prop></D:set></C:mkcalendar>"
+        );
+        let status = direct_client()
+            .request(reqwest::Method::from_bytes(b"MKCALENDAR").unwrap(), &url)
+            .basic_auth("testuser", Some("testpass"))
+            .header("Content-Type", "application/xml")
+            .body(body)
+            .send()
+            .await
+            .expect("MKCALENDAR should reach radicale")
+            .status()
+            .as_u16();
+        assert!(
+            (200..300).contains(&status),
+            "MKCALENDAR failed: HTTP {status}"
+        );
     }
 
     #[tokio::test]
-    #[ignore = "VCR: requires live CalDAV server credentials"]
-    async fn delete_assignment_core_sends_delete_to_stored_href() {
-        let base_url = std::env::var("CALDAV_BASE_URL").expect("CALDAV_BASE_URL");
-        let href = std::env::var("CALDAV_HREF").expect("CALDAV_HREF");
-        let username = std::env::var("CALDAV_USER").expect("CALDAV_USER");
-        let password = std::env::var("CALDAV_PASS").expect("CALDAV_PASS");
+    async fn caldav_write_path_against_disposable_radicale() {
+        let server = RadicaleServer::start();
+        seed_radicale_calendar(&server, "neuburg", "neuburg-termine").await;
 
         let session = CaldavSession {
-            client: reqwest::Client::builder()
-                .timeout(Duration::from_secs(30))
-                .build()
-                .unwrap(),
-            username,
-            password,
-            base_url,
+            client: direct_client(),
+            username: "testuser".to_string(),
+            password: "testpass".to_string(),
+            base_url: server.base_url(),
             absence_urls: vec![],
         };
 
-        delete_assignment_core(&session, &href)
+        run_write_path_flow(&session, &server.home_set_url(), "neuburg-termine")
             .await
-            .expect("delete_assignment_core should succeed");
+            .expect("write path against disposable radicale should succeed");
     }
 
     #[test]

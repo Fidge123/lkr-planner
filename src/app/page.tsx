@@ -163,6 +163,23 @@ export function PlanningGridTable({
     assignmentState.loadedWeekStart,
   );
 
+  // WKWebView can leave a card's previous pixels behind when a reload rewrites
+  // the cells, so a re-slotted card renders torn or overlapped until something
+  // forces a native repaint, which is why hovering one clears it. Promoting the
+  // grid to its own compositing layer and releasing it on the next frame
+  // re-rasterizes every cell without affecting layout.
+  const gridRef = useRef<HTMLTableElement>(null);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: eventsByEmployee is the repaint trigger, not a value the effect body reads.
+  useEffect(() => {
+    const grid = gridRef.current;
+    if (!grid) return;
+    grid.style.transform = "translateZ(0)";
+    const frame = requestAnimationFrame(() => {
+      grid.style.transform = "";
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [eventsByEmployee]);
+
   return (
     <section className="w-full h-full overflow-auto">
       {errorMessage ? (
@@ -232,7 +249,7 @@ export function PlanningGridTable({
         onDragCancel={drag.onDragCancel}
       >
         <DropzoneMeasurementTicker />
-        <table className="table table-fixed border-collapse">
+        <table ref={gridRef} className="table table-fixed border-collapse">
           <thead className="text-base-content">
             <tr>
               <th className="w-40 p-4 font-bold">Mitarbeiter</th>

@@ -205,6 +205,25 @@ cargo test --manifest-path src-tauri/Cargo.toml
 git-crypt status -e tests/cassettes
 ```
 
+### CalDAV Integration Test (disposable Radicale server)
+
+The CalDAV assignment write path (create, update, delete) is covered end-to-end by `caldav_write_path_against_disposable_radicale`.
+It runs over real HTTP against a throwaway [Radicale](https://radicale.org/) server, with no production credentials.
+The test spawns Radicale on a random port, seeds a calendar, discovers it by display name, runs create -> update -> delete, and tears everything down.
+
+Calendar discovery (a PROPFIND that finds a collection by its display name) exists only inside this test, so it can find the calendar it just seeded on a throwaway server.
+It is test-only infrastructure and does not change how the running app resolves a calendar URL, which is still read from configuration.
+
+This test is mandatory, not skippable: it uses [`uv`](https://docs.astral.sh/uv/) to fetch and run Radicale on demand via `uvx radicale`, so no manual install step is needed, but it fails loudly if `uv`/`uvx` is missing, the on-demand install fails, or the server never becomes ready.
+
+Install `uv` once to run it locally:
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+CI installs `uv` via `astral-sh/setup-uv` and runs the test automatically; `uvx` caches Radicale after the first run, so later runs start instantly.
+
 #### Create the CI Secret
 
 Create a symmetric git-crypt key, base64-encode it, and store the encoded value as the GitHub Actions repository secret `GIT_CRYPT_KEY_B64`:

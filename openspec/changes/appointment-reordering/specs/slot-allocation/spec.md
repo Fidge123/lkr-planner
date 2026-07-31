@@ -31,3 +31,9 @@ The system SHALL allocate time slots for same-day assignments deterministically,
 - **GIVEN** the same assignments with the same order indices presented in any input sequence
 - **WHEN** allocating time slots
 - **THEN** the resulting slot assignments are identical
+
+#### Scenario: Equal order indices fall back to a stable tie-break
+- **GIVEN** 2 assignments for a day that momentarily carry the same order index
+- **WHEN** allocating time slots
+- **THEN** their relative order is decided by canonical UID
+- **AND** the allocation is still deterministic across runs

@@ -130,7 +130,7 @@ async fn fetch_week_for_employees(
             Ok(raw_events) => {
                 fetches.push(EmployeeFetch {
                     employee_reference,
-                    pending: raw_events.into_iter().map(classify_event).collect(),
+                    pending: raw_events.iter().map(classify_event).collect(),
                     absences: absence_result
                         .map(|raw| map_absence_raw_events_for_week(raw, week_start))
                         .unwrap_or_default(),
