@@ -43,8 +43,8 @@
           },
           {
             "type": "command",
-            "command": "cargo test --manifest-path src-tauri/Cargo.toml",
-            "timeout": 60,
+            "command": "bash scripts/unlock-cassettes.sh && cargo test --manifest-path src-tauri/Cargo.toml",
+            "timeout": 90,
             "statusMessage": "Running Rust tests..."
           }
         ]

@@ -110,6 +110,15 @@ If your checkout is locked, unlock cassette files before running Rust tests:
 git-crypt unlock /path/to/git-crypt-key
 ```
 
+Alternatively export the base64-encoded key as `GIT_CRYPT_KEY_B64` and run:
+
+```bash
+bash scripts/unlock-cassettes.sh
+```
+
+The script is a no-op when the cassettes are already readable.
+It runs before the Rust tests in the Claude Code `Stop` hook so the VCR tests also pass in agent sessions that only have `GIT_CRYPT_KEY_B64`.
+
 #### Run Replay Mode
 
 ```bash
