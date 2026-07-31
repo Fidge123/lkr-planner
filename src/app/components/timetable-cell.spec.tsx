@@ -1,7 +1,7 @@
 import { describe, expect, it, mock } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { GhostSuggestion } from "../next-day-quick-add";
-import { assignmentBackgroundColor, type CellEvent } from "../types";
+import type { CellEvent } from "../types";
 import { TimetableCell } from "./timetable-cell";
 
 describe("TimetableCell", () => {
@@ -26,7 +26,7 @@ describe("TimetableCell", () => {
       uid: "uid-1",
       kind: "assignment",
       title: "Bauprojekt Nord",
-      color: "bg-primary",
+      color: "bg-base-300",
       startTime: "08:00",
       endTime: "16:00",
       href: "/calendars/user/uid-1.ics",
@@ -92,7 +92,7 @@ describe("TimetableCell", () => {
     uid: "uid-drag",
     kind: "assignment",
     title: "Bauprojekt Süd",
-    color: "bg-primary",
+    color: "bg-base-300",
     startTime: "08:00",
     endTime: "16:00",
     href: "/calendars/user/uid-drag.ics",
@@ -219,15 +219,13 @@ describe("TimetableCell", () => {
     );
 
     expect(html).toContain("bg-(--color-absence-vacation)/50");
-    expect(html).toContain(
-      `background-color:${assignmentBackgroundColor(null)}`,
-    );
+    expect(html).toContain("bg-base-300");
   });
 
-  it("paints an assignment card with its Daylite category color", () => {
+  it("shows the Daylite category color as a strip, not as the card fill", () => {
     const categorized: CellEvent = {
       ...draggableAssignment,
-      color: "",
+      color: "bg-base-300",
       categoryColor: "#8bc34a",
     };
 
@@ -240,28 +238,45 @@ describe("TimetableCell", () => {
       />,
     );
 
-    expect(html).toContain(
-      `background-color:${assignmentBackgroundColor("#8bc34a")}`,
-    );
-    expect(html).toContain("text-white");
+    expect(html).toContain("border-left-color:#8bc34a");
+    expect(html).not.toContain("background-color:#8bc34a");
+    expect(html).toContain("bg-base-300");
   });
 
-  it("paints an assignment without a category in the achromatic color", () => {
+  it("passes an unusual but valid CSS color through to the strip untouched", () => {
+    const categorized: CellEvent = {
+      ...draggableAssignment,
+      color: "bg-base-300",
+      categoryColor: "#8bc34aff",
+    };
+
     const html = renderToStaticMarkup(
       <TimetableCell
         highlight={false}
-        events={[{ ...draggableAssignment, color: "" }]}
+        events={[categorized]}
         onAddClick={() => {}}
         onEventClick={() => {}}
       />,
     );
 
-    expect(html).toContain(
-      `background-color:${assignmentBackgroundColor(null)}`,
-    );
+    expect(html).toContain("border-left-color:#8bc34aff");
   });
 
-  it("keeps an assignment without a category distinct from a bare event", () => {
+  it("leaves the strip in its default color when there is no category", () => {
+    const html = renderToStaticMarkup(
+      <TimetableCell
+        highlight={false}
+        events={[{ ...draggableAssignment, color: "bg-base-300" }]}
+        onAddClick={() => {}}
+        onEventClick={() => {}}
+      />,
+    );
+
+    expect(html).not.toContain("border-left-color");
+    expect(html).toContain("border-base-content/30");
+  });
+
+  it("gives bare events no strip", () => {
     const bare: CellEvent = {
       ...draggableAssignment,
       uid: "uid-bare-cmp",
@@ -272,15 +287,13 @@ describe("TimetableCell", () => {
     const html = renderToStaticMarkup(
       <TimetableCell
         highlight={false}
-        events={[{ ...draggableAssignment, color: "" }, bare]}
+        events={[bare]}
         onAddClick={() => {}}
         onEventClick={() => {}}
       />,
     );
 
-    expect(html).toContain(
-      `background-color:${assignmentBackgroundColor(null)}`,
-    );
+    expect(html).not.toContain("border-l-4");
     expect(html).toContain("bg-base-200");
   });
 

@@ -20,22 +20,21 @@ The system SHALL distinguish lkr-planner assignments from bare calendar events.
 
 #### Scenario: Display lkr-planner assignment
 - **WHEN** a VEVENT has a DESCRIPTION first line matching `daylite:/<path>`
-- **THEN** it is shown in the hue of its Daylite project's category (`hex_colour`)
+- **THEN** it is shown on a neutral card carrying a strip in its Daylite project's category color (`hex_colour`)
 - **AND** an edit affordance is shown
 
-#### Scenario: Category colors render at an even visual weight
+#### Scenario: Category color is applied verbatim
 - **WHEN** an assignment event is rendered with a category color
-- **THEN** the category's hue is kept
-- **AND** its chroma is capped so no category renders harsher than another
-- **AND** its lightness is replaced by a per-theme constant, so the color of the source value does not change how heavy the card looks
+- **THEN** the value from Daylite is used as-is, so any CSS color notation it uses still applies
+- **AND** it colors only the strip, leaving the card surface and its text unchanged
 
 #### Scenario: Assignment without a category color
 - **WHEN** a resolved Daylite project has no category or its category has no color
-- **THEN** the event is shown in a neutral color, the same one for every project status
+- **THEN** the strip keeps its default muted color, the same one for every project status
 
-#### Scenario: Readable text on category color
-- **WHEN** an assignment event is rendered with a category color
-- **THEN** the title uses the theme's inverted text color, which stays readable because every category color renders at the same fixed lightness
+#### Scenario: Bare events carry no strip
+- **WHEN** an event has no Daylite project reference
+- **THEN** it is rendered without a strip, so the strip marks an event as an assignment
 
 #### Scenario: Display bare event
 - **WHEN** a VEVENT has no structured Daylite project reference

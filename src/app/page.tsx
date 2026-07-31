@@ -18,7 +18,8 @@ import { ProjectTable } from "./components/project-table";
 import {
   AssignmentCardBody,
   assignmentCardClass,
-  categoryBackground,
+  assignmentStripClass,
+  categoryStrip,
 } from "./components/timetable-cell";
 import { TimetableHeader } from "./components/timetable-header";
 import { TimetableRow } from "./components/timetable-row";
@@ -322,8 +323,8 @@ export function PlanningGridTable({
 function DragPreviewCard({ payload }: { payload: AppointmentDragPayload }) {
   return (
     <span
-      className={`${assignmentCardClass} text-white shadow-lg`}
-      style={categoryBackground(payload.categoryColor)}
+      className={`${assignmentCardClass} ${assignmentStripClass} bg-base-300 text-base-content shadow-lg`}
+      style={categoryStrip(payload.categoryColor)}
     >
       <AssignmentCardBody
         startTime={null}

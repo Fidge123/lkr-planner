@@ -331,7 +331,7 @@ describe("planning grid assignment states", () => {
     );
 
     expect(html).toContain("Projekt Nord");
-    expect(html).toContain("background-color:#");
+    expect(html).toContain("border-left-color:#8bc34a");
   });
 
   it("renders bare event in cell with neutral style and no edit affordance", () => {

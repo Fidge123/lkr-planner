@@ -2,11 +2,7 @@ import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { TriangleAlert } from "lucide-react";
 import type { AppointmentDragPayload } from "../hooks/use-appointment-drag";
 import type { GhostSuggestion } from "../next-day-quick-add";
-import {
-  assignmentBackgroundColor,
-  type CellEvent,
-  hasAbsenceConflict,
-} from "../types";
+import { type CellEvent, hasAbsenceConflict } from "../types";
 
 export function TimetableCell({
   highlight = false,
@@ -117,10 +113,14 @@ interface Props {
 export const assignmentCardClass =
   "flex items-center w-full gap-4 p-2 rounded-lg";
 
-export function categoryBackground(categoryColor: string | null): {
-  backgroundColor: string;
-} {
-  return { backgroundColor: assignmentBackgroundColor(categoryColor) };
+/** Width and default color of the strip live in `assignmentStripClass`; the Daylite
+ *  color is passed through verbatim so any CSS color notation it uses still works. */
+export const assignmentStripClass = "border-l-4 border-base-content/30";
+
+export function categoryStrip(
+  categoryColor: string | null,
+): { borderLeftColor: string } | undefined {
+  return categoryColor ? { borderLeftColor: categoryColor } : undefined;
 }
 
 export function AssignmentCardBody({ startTime, endTime, title }: BodyProps) {
@@ -168,8 +168,8 @@ function DraggableAssignmentCard({
     <button
       ref={setNodeRef}
       type="button"
-      className={`btn btn-block h-auto justify-start ${assignmentCardClass} text-white transition-[filter,opacity] hover:brightness-90 active:brightness-75 ${isDragging ? "opacity-40" : ""}`}
-      style={categoryBackground(event.categoryColor)}
+      className={`btn btn-block h-auto justify-start ${assignmentCardClass} ${assignmentStripClass} text-base-content transition-[filter,opacity] hover:brightness-90 active:brightness-75 ${event.color} ${isDragging ? "opacity-40" : ""}`}
+      style={categoryStrip(event.categoryColor)}
       onClick={() => onEventClick(event)}
       {...(canDrag ? { ...listeners, ...attributes } : {})}
     >
