@@ -109,19 +109,6 @@ export function usePlanningAssignments(
     void prefetchWeek(adjacentWeek(debouncedWeekStart, 7));
   }, [debouncedWeekStart, loadActiveWeek, prefetchWeek]);
 
-  // macOS WKWebView (the packaged app's renderer) can skip repainting a card
-  // whose DOM update landed via a Tauri IPC callback rather than a user input
-  // event, leaving stale or partially overwritten pixels behind until the next
-  // native-triggered repaint (e.g. hovering it). Dispatching a resize forces a
-  // full repaint without changing any layout.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: eventsByEmployee is the repaint trigger, not a value the effect body reads.
-  useEffect(() => {
-    const frame = requestAnimationFrame(() =>
-      window.dispatchEvent(new Event("resize")),
-    );
-    return () => cancelAnimationFrame(frame);
-  }, [eventsByEmployee]);
-
   const reloadAssignments = useCallback(() => {
     void loadActiveWeek(weekStart, true);
   }, [weekStart, loadActiveWeek]);
