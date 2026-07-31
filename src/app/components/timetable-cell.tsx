@@ -1,7 +1,8 @@
 import { useDraggable, useDroppable } from "@dnd-kit/core";
+import { TriangleAlert } from "lucide-react";
 import type { AppointmentDragPayload } from "../hooks/use-appointment-drag";
 import type { GhostSuggestion } from "../next-day-quick-add";
-import type { CellEvent } from "../types";
+import { type CellEvent, hasAbsenceConflict } from "../types";
 
 export function TimetableCell({
   highlight = false,
@@ -18,10 +19,20 @@ export function TimetableCell({
     id: `cell-${employeeRef}-${date}`,
     data: { employeeRef, date },
   });
+  const conflict = hasAbsenceConflict(events);
 
   return (
-    <td ref={setNodeRef} className={cellClass(highlight, isHoliday, isOver)}>
+    <td
+      ref={setNodeRef}
+      className={cellClass(highlight, isHoliday, isOver, conflict)}
+    >
       <ul className="flex flex-col gap-1 list-none">
+        {conflict ? (
+          <li className="flex items-center gap-1 text-error text-xs font-medium">
+            <TriangleAlert className="size-4 shrink-0" aria-hidden="true" />
+            Abwesenheit und Termin am selben Tag
+          </li>
+        ) : null}
         {events.map((event) =>
           event.kind === "absence" ? (
             <li key={event.uid}>
@@ -102,6 +113,16 @@ interface Props {
 export const assignmentCardClass =
   "flex items-center w-full gap-4 p-2 rounded-lg";
 
+/** Width and default color of the strip live in `assignmentStripClass`; the Daylite
+ *  color is passed through verbatim so any CSS color notation it uses still works. */
+export const assignmentStripClass = "border-l-4 border-base-content/30";
+
+export function categoryStrip(
+  categoryColor: string | null,
+): { borderLeftColor: string } | undefined {
+  return categoryColor ? { borderLeftColor: categoryColor } : undefined;
+}
+
 export function AssignmentCardBody({ startTime, endTime, title }: BodyProps) {
   return (
     <>
@@ -131,6 +152,7 @@ function DraggableAssignmentCard({
     date,
     title: event.title,
     color: event.color,
+    categoryColor: event.categoryColor,
   };
   // An unresolved project renders a German error placeholder as the title;
   // dropping such a card would persist that placeholder as the event summary.
@@ -146,7 +168,8 @@ function DraggableAssignmentCard({
     <button
       ref={setNodeRef}
       type="button"
-      className={`btn btn-block h-auto justify-start ${assignmentCardClass} text-base-100 transition-[filter,opacity] hover:brightness-90 active:brightness-75 ${event.color} ${isDragging ? "opacity-40" : ""}`}
+      className={`btn btn-block h-auto justify-start ${assignmentCardClass} ${assignmentStripClass} text-base-content transition-[filter,opacity] hover:brightness-90 active:brightness-75 ${event.color} ${isDragging ? "opacity-40" : ""}`}
+      style={categoryStrip(event.categoryColor)}
       onClick={() => onEventClick(event)}
       {...(canDrag ? { ...listeners, ...attributes } : {})}
     >
@@ -185,11 +208,13 @@ function cellClass(
   highlight: boolean,
   isHoliday: boolean,
   isDropTarget: boolean,
+  conflict: boolean,
 ): string {
   const base = isHoliday
     ? "align-top p-2 bg-base-200/60"
     : highlight
       ? "align-top p-2 bg-primary/10"
       : "align-top p-2";
-  return isDropTarget ? `${base} ring-2 ring-inset ring-primary` : base;
+  if (isDropTarget) return `${base} ring-2 ring-inset ring-primary`;
+  return conflict ? `${base} ring-2 ring-inset ring-error` : base;
 }

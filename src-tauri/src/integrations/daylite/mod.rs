@@ -1,5 +1,6 @@
 pub mod auth;
 mod auth_flow;
+pub mod categories;
 mod client;
 pub mod contacts;
 pub mod projects;
