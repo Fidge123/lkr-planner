@@ -60,8 +60,9 @@ Reuse the codebase's existing `bg-<token>/<opacity>` convention to encode intens
 - Unmatched → `bg-info/30` (unchanged default)
 
 ### Code matching rule
-Match the absence title against the six codes.
-Trim the title and check for equivalence to match the title.
+Match the absence title against the six codes, case-insensitively.
+Trim the title and compare its leading whitespace-delimited token against each code, so both a bare `UB` summary and a `UB Urlaub` style summary classify as vacation.
+A title whose leading token matches no code keeps the default absence color.
 
 ### Conflict indicator: status color, not a category
 When a cell contains both an absence event and an assignment (`kind === "assignment"`) event for the same employee/day, add a red conflict indicator — a `ring-2 ring-error` (or equivalent border) on the cell plus a small warning icon (Lucide).
@@ -93,4 +94,6 @@ Fallback chain per assignment event: category `hex_colour` if the project has a 
 
 ## Open Questions
 
-None — codes, grouping, and conflict-highlighting behavior were confirmed by the user before writing this design. The title-matching format (leading token vs. embedded) is a documented assumption to verify during implementation, not an open design question.
+None.
+Codes, grouping, and conflict-highlighting behavior were confirmed by the user before writing this design.
+Title matching was settled during implementation in favor of the leading token, matching the scenarios in the `employee-absence-display` spec delta.
