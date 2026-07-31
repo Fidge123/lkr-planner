@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Make tests that touch third-party APIs fast and deterministic by recording HTTP interactions into sanitized, encrypted cassettes and replaying them without any network call.
+
+## Requirements
 
 ### Requirement: Record mode
 The system SHALL record HTTP interactions when VCR_MODE=record.

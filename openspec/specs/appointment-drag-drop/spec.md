@@ -1,3 +1,9 @@
+## Purpose
+
+Let planners reschedule and reassign an existing assignment directly in the grid by dragging its card to another day or another employee, instead of reopening the edit modal for every move.
+
+## Requirements
+
 ### Requirement: Draggable assignment cards
 The system SHALL allow assignment cards (`kind: "assignment"`) in the planning grid to be picked up and dragged.
 

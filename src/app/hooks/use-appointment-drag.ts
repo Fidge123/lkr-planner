@@ -17,6 +17,7 @@ export interface AppointmentDragPayload {
   /** Project name; doubles as the persisted event summary on drop. */
   title: string;
   color: string;
+  categoryColor: string | null;
   /** Rendered position among its own cell's assignments. */
   position: number;
 }

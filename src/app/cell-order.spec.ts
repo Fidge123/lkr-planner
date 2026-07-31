@@ -17,6 +17,7 @@ function assignment(
     href: `/calendars/emp-a/${uid}.ics`,
     projectRef: "/v1/projects/1",
     projectStatus: "in_progress",
+    categoryColor: null,
     orderIndex,
   };
 }
@@ -32,6 +33,7 @@ function absence(uid: string): CellEvent {
     href: null,
     projectRef: null,
     projectStatus: null,
+    categoryColor: null,
     orderIndex: null,
   };
 }

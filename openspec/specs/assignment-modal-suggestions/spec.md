@@ -1,3 +1,9 @@
+## Purpose
+
+Fill the assignment modal's empty result list with deterministic default suggestions, the most recently assigned project followed by overdue projects, so the common case needs no typing.
+
+## Requirements
+
 ### Requirement: Default suggestions on modal open
 The system SHALL show deterministic default suggestions when assignment modal opens.
 

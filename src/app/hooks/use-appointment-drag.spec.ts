@@ -21,6 +21,7 @@ const payload: AppointmentDragPayload = {
   date: "2026-07-06",
   title: "Projekt Nord",
   color: "bg-primary",
+  categoryColor: null,
   position: 1,
 };
 

@@ -1,3 +1,7 @@
+## Purpose
+
+Derive the active employee roster from Daylite contacts categorized as "Monteur" and keep each employee's calendar configuration readable from and writable back to Daylite.
+
 ## Requirements
 
 ### Requirement: Employee Roster Sync

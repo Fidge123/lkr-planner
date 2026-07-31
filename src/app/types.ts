@@ -14,41 +14,52 @@ export interface CellEvent {
   projectRef: string | null;
   /** Daylite project status. Null for non-assignment events and for assignments whose project could not be resolved. */
   projectStatus: string | null;
+  /** Color of the resolved project's Daylite category, shown as a strip on the card. Null when the project has no category color. */
+  categoryColor: string | null;
   /** Position among the day's assignments. Null for events that carry no order index yet. */
   orderIndex: number | null;
 }
 
-function projectStatusToColor(status: string | null | undefined): string {
-  switch (status) {
-    case "in_progress":
-      return "bg-secondary";
-    case "done":
-      return "bg-success";
-    case "abandoned":
-      return "bg-neutral";
-    case "cancelled":
-      return "bg-neutral";
-    case "deferred":
-      return "bg-warning";
-    case "new_status":
-      return "bg-primary";
-    default:
-      return "bg-base-300";
-  }
+const absenceCodeColors: Record<string, string> = {
+  ub: "bg-(--color-absence-vacation)/50",
+  su: "bg-(--color-absence-vacation)/30",
+  uu: "bg-(--color-absence-vacation)/15",
+  kr: "bg-(--color-absence-sick)/40",
+  kro: "bg-(--color-absence-sick)/20",
+  fa: "bg-(--color-absence-special)/30",
+};
+
+const defaultAbsenceColor = "bg-info/30";
+
+const assignmentSurfaceColor = "bg-base-200";
+
+function absenceCategoryColor(title: string): string {
+  const code = title.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
+  return absenceCodeColors[code] ?? defaultAbsenceColor;
+}
+
+export function hasAbsenceConflict(events: CellEvent[]): boolean {
+  return (
+    events.some((event) => event.kind === "absence") &&
+    events.some((event) => event.kind !== "absence")
+  );
 }
 
 export function toCellEvent(event: CalendarCellEvent): CellEvent {
+  const categoryColor =
+    event.kind === "assignment" ? (event.categoryColor ?? null) : null;
   const color =
     event.kind === "absence"
-      ? "bg-info/30"
+      ? absenceCategoryColor(event.title)
       : event.kind === "bare"
         ? "bg-base-200"
-        : projectStatusToColor(event.projectStatus);
+        : assignmentSurfaceColor;
   return {
     uid: event.uid,
     kind: event.kind,
     title: event.title,
     color,
+    categoryColor,
     startTime: event.startTime,
     endTime: event.endTime,
     href: event.href,
