@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   CalendarCellEvent,
   EmployeeWeekEvents,
@@ -20,7 +20,9 @@ export interface PlanningAssignmentsState {
   errorsByEmployee: EmployeeErrors;
   isLoading: boolean;
   errorMessage: string | null;
+  loadedWeekStart: string | null;
   reloadAssignments: () => void;
+  invalidateWeeksContaining: (uid: string) => void;
 }
 
 export function usePlanningAssignments(
@@ -33,6 +35,9 @@ export function usePlanningAssignments(
   const [errorsByEmployee, setErrorsByEmployee] = useState<EmployeeErrors>({});
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // Set in the same batch as the events, so a consumer can tell whether it is
+  // rendering this week's data or the previous week's, still up during a fetch.
+  const [loadedWeekStart, setLoadedWeekStart] = useState<string | null>(null);
 
   const loadActiveWeek = useCallback(async (ws: string, invalidate = false) => {
     if (invalidate) {
@@ -45,6 +50,7 @@ export function usePlanningAssignments(
     if (cached) {
       setEventsByEmployee(cached.eventsByEmployee);
       setErrorsByEmployee(cached.errorsByEmployee);
+      setLoadedWeekStart(ws);
       setIsLoading(false);
       setErrorMessage(null);
       return;
@@ -53,17 +59,22 @@ export function usePlanningAssignments(
     setIsLoading(true);
     try {
       const result = await commands.loadWeekEvents(ws);
-      if (id !== requestIdRef.current) return;
       if (result.status === "error") {
+        if (id !== requestIdRef.current) return;
         setErrorMessage(result.error);
         setEventsByEmployee({});
         setErrorsByEmployee({});
+        setLoadedWeekStart(ws);
         return;
       }
+      // Cache unconditionally, even for a superseded request: it's still valid
+      // data for that week. Only the display update below is staleness-gated.
       const data = groupResults(result.data);
       cache.current[ws] = data;
+      if (id !== requestIdRef.current) return;
       setEventsByEmployee(data.eventsByEmployee);
       setErrorsByEmployee(data.errorsByEmployee);
+      setLoadedWeekStart(ws);
       setErrorMessage(null);
     } catch (error) {
       if (id !== requestIdRef.current) return;
@@ -74,6 +85,7 @@ export function usePlanningAssignments(
       );
       setEventsByEmployee({});
       setErrorsByEmployee({});
+      setLoadedWeekStart(ws);
     } finally {
       if (id === requestIdRef.current) {
         setIsLoading(false);
@@ -98,17 +110,43 @@ export function usePlanningAssignments(
   }, [debouncedWeekStart, loadActiveWeek, prefetchWeek]);
 
   const reloadAssignments = useCallback(() => {
-    cache.current = {};
-    void loadActiveWeek(weekStart);
+    void loadActiveWeek(weekStart, true);
   }, [weekStart, loadActiveWeek]);
 
-  return {
-    eventsByEmployee,
-    errorsByEmployee,
-    isLoading,
-    errorMessage,
-    reloadAssignments,
-  };
+  // A drag can end in a different week than it started, and reloadAssignments
+  // only refreshes the week active on drop, leaving the source week cached with
+  // the event still in its old slot.
+  const invalidateWeeksContaining = useCallback((uid: string) => {
+    for (const [ws, data] of Object.entries(cache.current)) {
+      const holdsUid = Object.values(data.eventsByEmployee).some((events) =>
+        events.some((event) => event.uid === uid),
+      );
+      if (holdsUid) {
+        delete cache.current[ws];
+      }
+    }
+  }, []);
+
+  return useMemo(
+    () => ({
+      eventsByEmployee,
+      errorsByEmployee,
+      isLoading,
+      errorMessage,
+      loadedWeekStart,
+      reloadAssignments,
+      invalidateWeeksContaining,
+    }),
+    [
+      eventsByEmployee,
+      errorsByEmployee,
+      isLoading,
+      errorMessage,
+      loadedWeekStart,
+      reloadAssignments,
+      invalidateWeeksContaining,
+    ],
+  );
 }
 
 function groupResults(entries: EmployeeWeekEvents[]): WeekData {

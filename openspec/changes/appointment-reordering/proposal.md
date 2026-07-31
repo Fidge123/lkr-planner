@@ -17,11 +17,11 @@ Planners also want to control the order of an employee's assignments within a da
 - `appointment-reordering`: Persisted order index for same-day assignments, intra-day reorder via drag, and precise before/after placement on cross-day and cross-employee drops.
 
 ### Modified Capabilities
-- `slot-allocation`: Allocate same-day time slots in order-index order rather than by canonical UID, so slot position follows the planner-controlled order. This delta can only be authored once BL-034 is archived and `slot-allocation` is a baseline spec; see design.md.
+- `slot-allocation`: Allocate same-day time slots in order-index order rather than by canonical UID, so slot position follows the planner-controlled order.
 
 ## Impact
 
-- Depends on `drag-drop-appointments` (coarse cross-day/cross-employee drag) and BL-034 (the `slot-allocation` capability must exist and be implemented).
+- Both dependencies are satisfied: `drag-drop-appointments` (archived 2026-07-21) supplies the drag machinery and `move_assignment`, and BL-034 (archived 2026-07-19) makes `slot-allocation` a baseline spec with a working allocator.
 - Frontend: drop logic gains before/after position detection within a cell; `TimetableCell` renders sorted by order index; new intra-day reorder handling on the dnd-kit drop dispatch.
-- Backend: assignment writes persist and re-sequence the order index for the affected day(s); BL-034 slot allocation consumes the index as its sort key.
-- Data: order index stored alongside each lkr-planner assignment (CalDAV VEVENT property or derived from persisted DTSTART order); exact storage decided in design.
+- Backend: assignment writes persist and re-sequence the order index for the affected day(s); `allocate_slots` consumes the index as its sort key instead of the UID.
+- Data: order index stored as an X-property on each lkr-planner VEVENT, which survives re-slotting because `patch_event_slot` rewrites only DTSTART and DTEND.

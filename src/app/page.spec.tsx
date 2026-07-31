@@ -7,7 +7,9 @@ import {
   type PlanningGridAssignmentState,
   type PlanningGridEmployeesState,
   type PlanningGridProjectsState,
+  PlanningGridTable,
 } from "./page";
+import { getWeekDays } from "./util";
 
 const defaultState: PlanningGridProjectsState = {
   projects: [],
@@ -28,7 +30,9 @@ const defaultAssignmentState: PlanningGridAssignmentState = {
   errorsByEmployee: {},
   isLoading: false,
   errorMessage: null,
+  loadedWeekStart: null,
   reloadAssignments: () => {},
+  invalidateWeeksContaining: () => {},
 };
 
 const defaultHolidaysState: HolidaysState = {
@@ -291,7 +295,7 @@ describe("planning grid assignment states", () => {
     expect(html).toContain("Erneut laden");
   });
 
-  it("renders lkr-planner assignment event in cell with project color", () => {
+  it("renders lkr-planner assignment event in cell with its category color", () => {
     const employee = {
       self: "/v1/contacts/9001",
       full_name: "Monteur Aus Daylite",
@@ -303,6 +307,7 @@ describe("planning grid assignment states", () => {
       kind: "assignment",
       title: "Projekt Nord",
       projectStatus: "in_progress",
+      categoryColor: "#8bc34a",
       projectRef: "/v1/projects/1",
       date: "2026-01-26",
       startTime: null,
@@ -326,7 +331,7 @@ describe("planning grid assignment states", () => {
     );
 
     expect(html).toContain("Projekt Nord");
-    expect(html).toContain("bg-secondary");
+    expect(html).toContain("border-left-color:#8bc34a");
   });
 
   it("renders bare event in cell with neutral style and no edit affordance", () => {
@@ -341,6 +346,7 @@ describe("planning grid assignment states", () => {
       kind: "bare",
       title: "Auto Werkstatt",
       projectStatus: null,
+      categoryColor: null,
       projectRef: null,
       date: "2026-01-26",
       startTime: null,
@@ -434,12 +440,88 @@ describe("planning grid assignment states", () => {
   });
 });
 
+describe("planning grid drag-and-drop wiring", () => {
+  beforeAll(() => {
+    setSystemTime(new Date(2026, 0, 28, 9, 0, 0));
+  });
+
+  const employee = {
+    self: "/v1/contacts/9001",
+    full_name: "Monteur Aus Daylite",
+    category: "Monteur",
+    urls: [],
+  };
+  const assignmentEvent: CalendarCellEvent = {
+    uid: "event-uid-1",
+    kind: "assignment",
+    title: "Projekt Nord",
+    projectStatus: "in_progress",
+    categoryColor: null,
+    projectRef: "/v1/projects/1",
+    date: "2026-01-26",
+    startTime: "08:00",
+    endTime: "16:00",
+    href: "/calendars/user/event-uid-1.ics",
+  };
+
+  const renderGrid = () =>
+    renderToStaticMarkup(
+      <PlanningGridTable
+        weekDays={getWeekDays(0)}
+        projectState={{ ...defaultState }}
+        employeeState={{ ...defaultEmployeeState, employees: [employee] }}
+        assignmentState={{
+          ...defaultAssignmentState,
+          eventsByEmployee: { "/v1/contacts/9001": [assignmentEvent] },
+        }}
+        {...defaultIcalProps}
+        onNavigateWeek={() => {}}
+      />,
+    );
+
+  it("renders assignment cards as draggable inside the drag context", () => {
+    const html = renderGrid();
+
+    expect(html).toContain("Projekt Nord");
+    expect(html).toContain('aria-roledescription="draggable"');
+  });
+
+  it("shows no drop error and no reconciliation dialog before any drag", () => {
+    const html = renderGrid();
+
+    expect(html).not.toContain("Einsatz doppelt vorhanden");
+    expect(html).not.toContain("alert-error");
+  });
+});
+
 describe("planning grid weekend visibility", () => {
   beforeAll(() => {
     setSystemTime(new Date(2026, 0, 28, 9, 0, 0));
   });
 
   const countDayColumns = (html: string) => (html.match(/<time/g) ?? []).length;
+
+  it("gives each day column a machine-readable date matching its visible date", () => {
+    const html = renderToStaticMarkup(
+      <PlanningGrid
+        weekOffset={0}
+        projectState={{ ...defaultState }}
+        employeeState={{ ...defaultEmployeeState }}
+        assignmentState={{ ...defaultAssignmentState }}
+        employeeSettings={[]}
+        onOpenIcalDialog={() => {}}
+      />,
+    );
+
+    const columns = [
+      ...html.matchAll(/<time dateTime="([^"]+)"[^>]*>([^<]+)</gi),
+    ];
+    expect(columns).toHaveLength(5);
+    for (const [, machineDate, visibleText] of columns) {
+      const [, month, day] = machineDate.split("-");
+      expect(visibleText).toContain(`${day}.${month}.`);
+    }
+  });
 
   it("renders 5 day columns by default (weekend hidden)", () => {
     const html = renderToStaticMarkup(

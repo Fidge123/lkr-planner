@@ -10,6 +10,7 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "test": "bun test",
+    "test:timezones": "bun run scripts/test-timezones.ts",
     "test:docs": "bun test scripts/backlog-format.spec.ts scripts/adr-format.spec.ts",
     "test:watch": "bun test --watch",
     "icon:generate": "bun run scripts/regenerate-app-icon.ts",
@@ -17,26 +18,27 @@
     "format": "biome format --write ."
   },
   "dependencies": {
-    "@tailwindcss/vite": "^4.3.2",
+    "@dnd-kit/core": "^6.3.1",
+    "@tailwindcss/vite": "^4.3.3",
     "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/plugin-http": "~2.5.9",
     "@tauri-apps/plugin-opener": "^2.5.4",
     "@tauri-apps/plugin-updater": "~2.10.1",
-    "daisyui": "^5.6.18",
-    "lucide-react": "^1.24.0",
-    "react": "^19.2.7",
-    "react-dom": "^19.2.7",
-    "tailwindcss": "^4.3.2"
+    "daisyui": "^5.7.8",
+    "lucide-react": "^1.27.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "tailwindcss": "^4.3.3"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.5.4",
-    "@fission-ai/openspec": "^1.6.0",
+    "@biomejs/biome": "2.5.6",
+    "@fission-ai/openspec": "^1.7.0",
     "@tauri-apps/cli": "^2.11.4",
     "@types/bun": "^1.3.14",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
-    "@vitejs/plugin-react": "^6.0.3",
-    "smol-toml": "^1.7.0",
+    "@vitejs/plugin-react": "^6.0.4",
+    "smol-toml": "^1.7.1",
     "typescript": "~7.0.2",
     "vite": "^8.1.5"
   }

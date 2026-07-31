@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Let the user configure and verify each employee's ZEP CalDAV calendars, covering admin credentials, calendar discovery, per-source save-and-test, and an attention indicator, so a misconfigured calendar is visible before it breaks planning.
+
+## Requirements
 
 ### Requirement: ZEP admin credentials setup
 The system SHALL allow the user to enter and securely store ZEP admin CalDAV credentials.

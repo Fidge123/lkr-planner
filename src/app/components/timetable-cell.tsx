@@ -1,18 +1,38 @@
+import { useDraggable, useDroppable } from "@dnd-kit/core";
+import { TriangleAlert } from "lucide-react";
+import type { AppointmentDragPayload } from "../hooks/use-appointment-drag";
 import type { GhostSuggestion } from "../next-day-quick-add";
-import type { CellEvent } from "../types";
+import { type CellEvent, hasAbsenceConflict } from "../types";
 
 export function TimetableCell({
   highlight = false,
   isHoliday = false,
+  employeeRef = "",
+  date = "",
   events,
   suggestion,
   onAddClick,
   onEventClick,
   onSuggestionClick,
 }: Props) {
+  const { isOver, setNodeRef } = useDroppable({
+    id: `cell-${employeeRef}-${date}`,
+    data: { employeeRef, date },
+  });
+  const conflict = hasAbsenceConflict(events);
+
   return (
-    <td className={cellClass(highlight, isHoliday)}>
+    <td
+      ref={setNodeRef}
+      className={cellClass(highlight, isHoliday, isOver, conflict)}
+    >
       <ul className="flex flex-col gap-1 list-none">
+        {conflict ? (
+          <li className="flex items-center gap-1 text-error text-xs font-medium">
+            <TriangleAlert className="size-4 shrink-0" aria-hidden="true" />
+            Abwesenheit und Termin am selben Tag
+          </li>
+        ) : null}
         {events.map((event) =>
           event.kind === "absence" ? (
             <li key={event.uid}>
@@ -40,17 +60,12 @@ export function TimetableCell({
             </li>
           ) : (
             <li key={event.uid}>
-              <button
-                type="button"
-                className={`btn btn-block h-auto justify-start gap-4 text-base-100 p-2 rounded-lg transition-all hover:brightness-90 active:brightness-75 ${event.color}`}
-                onClick={() => onEventClick(event)}
-              >
-                <EventTime
-                  startTime={event.startTime}
-                  endTime={event.endTime}
-                />
-                <h4 className="flex-1 min-w-0 font-medium">{event.title}</h4>
-              </button>
+              <DraggableAssignmentCard
+                event={event}
+                employeeRef={employeeRef}
+                date={date}
+                onEventClick={onEventClick}
+              />
             </li>
           ),
         )}
@@ -86,11 +101,92 @@ export function TimetableCell({
 interface Props {
   highlight: boolean;
   isHoliday?: boolean;
+  employeeRef?: string;
+  date?: string;
   events: CellEvent[];
   suggestion?: GhostSuggestion;
   onAddClick: () => void;
   onEventClick: (event: CellEvent) => void;
   onSuggestionClick?: (suggestion: GhostSuggestion) => void;
+}
+
+export const assignmentCardClass =
+  "flex items-center w-full gap-4 p-2 rounded-lg";
+
+/** Width and default color of the strip live in `assignmentStripClass`; the Daylite
+ *  color is passed through verbatim so any CSS color notation it uses still works. */
+export const assignmentStripClass = "border-l-4 border-base-content/30";
+
+export function categoryStrip(
+  categoryColor: string | null,
+): { borderLeftColor: string } | undefined {
+  return categoryColor ? { borderLeftColor: categoryColor } : undefined;
+}
+
+export function AssignmentCardBody({ startTime, endTime, title }: BodyProps) {
+  return (
+    <>
+      <EventTime startTime={startTime} endTime={endTime} />
+      <h4 className="flex-1 min-w-0 font-medium">{title}</h4>
+    </>
+  );
+}
+
+interface BodyProps {
+  startTime: string | null;
+  endTime: string | null;
+  title: string;
+}
+
+function DraggableAssignmentCard({
+  event,
+  employeeRef,
+  date,
+  onEventClick,
+}: CardProps) {
+  const payload: AppointmentDragPayload = {
+    uid: event.uid,
+    href: event.href ?? "",
+    projectRef: event.projectRef ?? "",
+    employeeRef,
+    date,
+    title: event.title,
+    color: event.color,
+    categoryColor: event.categoryColor,
+  };
+  // An unresolved project renders a German error placeholder as the title;
+  // dropping such a card would persist that placeholder as the event summary.
+  const unresolved = event.projectRef !== null && !event.projectStatus;
+  const canDrag = Boolean(event.href) && !unresolved;
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `assignment-${employeeRef}-${event.uid}`,
+    data: payload,
+    disabled: !canDrag,
+  });
+
+  return (
+    <button
+      ref={setNodeRef}
+      type="button"
+      className={`btn btn-block h-auto justify-start ${assignmentCardClass} ${assignmentStripClass} text-base-content transition-[filter,opacity] hover:brightness-90 active:brightness-75 ${event.color} ${isDragging ? "opacity-40" : ""}`}
+      style={categoryStrip(event.categoryColor)}
+      onClick={() => onEventClick(event)}
+      {...(canDrag ? { ...listeners, ...attributes } : {})}
+    >
+      <AssignmentCardBody
+        startTime={event.startTime}
+        endTime={event.endTime}
+        title={event.title}
+      />
+    </button>
+  );
+}
+
+interface CardProps {
+  event: CellEvent;
+  employeeRef: string;
+  date: string;
+  onEventClick: (event: CellEvent) => void;
 }
 
 function EventTime({ startTime, endTime }: TimeProps) {
@@ -108,8 +204,17 @@ interface TimeProps {
   endTime: string | null;
 }
 
-function cellClass(highlight: boolean, isHoliday: boolean): string {
-  if (isHoliday) return "align-top p-2 bg-base-200/60";
-  if (highlight) return "align-top p-2 bg-primary/10";
-  return "align-top p-2";
+function cellClass(
+  highlight: boolean,
+  isHoliday: boolean,
+  isDropTarget: boolean,
+  conflict: boolean,
+): string {
+  const base = isHoliday
+    ? "align-top p-2 bg-base-200/60"
+    : highlight
+      ? "align-top p-2 bg-primary/10"
+      : "align-top p-2";
+  if (isDropTarget) return `${base} ring-2 ring-inset ring-primary`;
+  return conflict ? `${base} ring-2 ring-inset ring-error` : base;
 }

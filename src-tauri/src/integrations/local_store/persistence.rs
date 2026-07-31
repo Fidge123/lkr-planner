@@ -171,6 +171,7 @@ mod tests {
                     reference: "/v1/projects/1".to_string(),
                     name: "Projekt Nord".to_string(),
                     status: "in_progress".to_string(),
+                    category: None,
                 }],
                 contacts: vec![DayliteContactCacheEntry {
                     reference: "/v1/contacts/1".to_string(),

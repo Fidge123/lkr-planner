@@ -6,7 +6,7 @@ import { SettingsDialog } from "./app/components/settings/settings-dialog";
 import { usePlanningAssignments } from "./app/hooks/use-planning-assignments";
 import { useZepCalendars } from "./app/hooks/use-zep-calendars";
 import { PlanningGrid } from "./app/page";
-import { getWeekDays } from "./app/util";
+import { getWeekStart } from "./app/util";
 import type { EmployeeSetting, PlanningContactRecord } from "./generated/tauri";
 import { commands } from "./generated/tauri";
 import { loadDayliteContacts } from "./services/daylite-contacts";
@@ -14,9 +14,7 @@ import { loadDayliteContacts } from "./services/daylite-contacts";
 function App() {
   const [weekOffset, setWeekOffset] = useState(0);
   const [showWeekend, setShowWeekend] = useState(false);
-  const weekStart = getWeekDays(weekOffset, showWeekend)[0]
-    .toISOString()
-    .slice(0, 10);
+  const weekStart = getWeekStart(weekOffset, showWeekend);
   const planningAssignmentsState = usePlanningAssignments(weekStart);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [icalDialogEmployee, setIcalDialogEmployee] =
@@ -79,13 +77,17 @@ function App() {
     setIcalDialogEmployee(null);
   };
 
+  const handleNavigateWeek = useCallback((direction: -1 | 1) => {
+    setWeekOffset((prev) => prev + direction);
+  }, []);
+
   const handleSettingsSaved = useCallback(() => {
     void loadEmployeeSettings();
     planningAssignmentsState.reloadAssignments();
   }, [loadEmployeeSettings, planningAssignmentsState.reloadAssignments]);
 
   return (
-    <article className="min-h-screen flex flex-col">
+    <article className="h-screen flex flex-col">
       <header className="navbar p-4 shadow-sm border-b border-base-300">
         <div className="navbar-start gap-2">
           <h1 className="text-2xl font-bold">Wochenplanung</h1>
@@ -102,7 +104,7 @@ function App() {
           <button
             type="button"
             className="btn btn-ghost pl-2"
-            onClick={() => setWeekOffset((prev) => prev - 1)}
+            onClick={() => handleNavigateWeek(-1)}
           >
             <ChevronLeft className="" />
             Zurück
@@ -117,7 +119,7 @@ function App() {
           <button
             type="button"
             className="btn btn-ghost pr-2"
-            onClick={() => setWeekOffset((prev) => prev + 1)}
+            onClick={() => handleNavigateWeek(1)}
           >
             Weiter
             <ChevronRight />
@@ -125,7 +127,7 @@ function App() {
         </nav>
       </header>
 
-      <main className="flex-1 overflow-hidden">
+      <main className="flex-1 min-h-0 overflow-hidden">
         {employeeSettingsError ? (
           <section className="alert alert-error m-4">
             <span>
@@ -141,6 +143,7 @@ function App() {
           employeeSettings={employeeSettings}
           hideNonPlannableEmployees={hideNonPlannableEmployees}
           onOpenIcalDialog={handleOpenIcalDialog}
+          onNavigateWeek={handleNavigateWeek}
         />
       </main>
 

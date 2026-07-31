@@ -4,13 +4,13 @@ import {
   loadDisplaySettings,
   saveDisplaySettings,
 } from "../../../services/display-settings";
-import { type PanelStatus, StatusAlert } from "./panel-status";
+import { usePanelSubmit } from "../../hooks/use-panel-submit";
+import { StatusAlert } from "./panel-status";
 
 export function DisplaySettingsPanel({ onClose, onChanged }: Props) {
   const [hideNonPlannable, setHideNonPlannable] = useState(true);
   const [showWeekend, setShowWeekend] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [status, setStatus] = useState<PanelStatus | null>(null);
+  const { isSaving, status, run } = usePanelSubmit();
 
   useEffect(() => {
     let isActive = true;
@@ -32,24 +32,17 @@ export function DisplaySettingsPanel({ onClose, onChanged }: Props) {
     async (event: ChangeEvent<HTMLInputElement>) => {
       const nextValue = event.target.checked;
       applyValue(nextValue);
-      setIsSaving(true);
-      setStatus(null);
 
-      try {
-        await saveDisplaySettings({ [key]: nextValue });
+      await run(async () => {
+        try {
+          await saveDisplaySettings({ [key]: nextValue });
+        } catch (error) {
+          applyValue(!nextValue);
+          throw error;
+        }
         onChanged?.();
-      } catch (error) {
-        applyValue(!nextValue);
-        setStatus({
-          type: "error",
-          message:
-            error instanceof Error
-              ? error.message
-              : "Die Anzeige-Einstellung konnte nicht gespeichert werden.",
-        });
-      } finally {
-        setIsSaving(false);
-      }
+        return null;
+      }, "Die Anzeige-Einstellung konnte nicht gespeichert werden.");
     };
 
   return (

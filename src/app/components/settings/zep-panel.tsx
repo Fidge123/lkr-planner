@@ -5,14 +5,14 @@ import {
   saveZepCredentials,
   testZepCredentials,
 } from "../../../services/zep";
-import { type PanelStatus, StatusAlert } from "./panel-status";
+import { usePanelSubmit } from "../../hooks/use-panel-submit";
+import { StatusAlert } from "./panel-status";
 
 export function ZepSettingsPanel({ onClose }: Props) {
   const [rootUrlInput, setRootUrlInput] = useState("");
   const [usernameInput, setUsernameInput] = useState("");
   const [passwordInput, setPasswordInput] = useState("");
-  const [isSaving, setIsSaving] = useState(false);
-  const [status, setStatus] = useState<PanelStatus | null>(null);
+  const { isSaving, status, setStatus, run } = usePanelSubmit();
 
   useEffect(() => {
     setStatus(null);
@@ -30,12 +30,10 @@ export function ZepSettingsPanel({ onClose }: Props) {
     return () => {
       isActive = false;
     };
-  }, []);
+  }, [setStatus]);
 
   const onSubmit = async (event: ChangeEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setIsSaving(true);
-    setStatus(null);
 
     const rootUrl = rootUrlInput.trim().replace(/\/+$/, "");
     const username = usernameInput.trim();
@@ -45,7 +43,6 @@ export function ZepSettingsPanel({ onClose }: Props) {
         type: "error",
         message: "Bitte eine ZEP CalDAV-URL eingeben.",
       });
-      setIsSaving(false);
       return;
     }
     if (!username) {
@@ -53,38 +50,26 @@ export function ZepSettingsPanel({ onClose }: Props) {
         type: "error",
         message: "Bitte einen Benutzernamen eingeben.",
       });
-      setIsSaving(false);
       return;
     }
     if (!passwordInput) {
       setStatus({ type: "error", message: "Bitte ein Passwort eingeben." });
-      setIsSaving(false);
       return;
     }
 
-    try {
+    await run(async () => {
       const testResult = await testZepCredentials(
         rootUrl,
         username,
         passwordInput,
       );
       await saveZepCredentials(rootUrl, username, passwordInput);
-      setStatus({
+      setPasswordInput("");
+      return {
         type: "success",
         message: `ZEP-Verbindung erfolgreich gespeichert. ${testResult.calendarCount} Kalender gefunden.`,
-      });
-      setPasswordInput("");
-    } catch (error) {
-      setStatus({
-        type: "error",
-        message:
-          error instanceof Error
-            ? error.message
-            : "Die ZEP-Verbindung konnte nicht gespeichert werden.",
-      });
-    } finally {
-      setIsSaving(false);
-    }
+      };
+    }, "Die ZEP-Verbindung konnte nicht gespeichert werden.");
   };
 
   return (

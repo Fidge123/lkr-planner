@@ -17,6 +17,9 @@ pub struct CalendarCellEvent {
     pub kind: CalendarEventKind,
     pub title: String,
     pub project_status: Option<String>,
+    // Hex color of the resolved Daylite project's category. None when the project has no
+    // category, its category has no color, or the event is not a resolved assignment.
+    pub category_color: Option<String>,
     pub date: String,
     // Start time in HH:MM format. None for all-day events.
     pub start_time: Option<String>,
@@ -26,6 +29,21 @@ pub struct CalendarCellEvent {
     pub href: Option<String>,
     // Daylite project reference (e.g. "/v1/projects/42") stored in DESCRIPTION. None for bare events.
     pub project_ref: Option<String>,
+}
+
+/// CalDAV has no atomic cross-collection move, so the target copy is created
+/// first and the source deleted afterwards, which can leave a partial move.
+#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum MoveAssignmentResult {
+    #[serde(rename_all = "camelCase")]
+    Moved { new_href: String },
+    /// The assignment now exists twice.
+    #[serde(rename_all = "camelCase")]
+    SourceDeleteFailed {
+        new_href: String,
+        source_href: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
@@ -47,6 +65,11 @@ pub(super) struct RawVEvent {
     pub(super) start_time: Option<String>,
     pub(super) end_time: Option<String>,
     pub(super) href: String,
+    // ETag from d:getetag in the REPORT response; sent as If-Match on re-slot PUTs. Empty if absent.
+    pub(super) etag: String,
+    // Full calendar-data text of the resource, used to patch slot times without dropping
+    // user-added properties. Empty when the event was not parsed from a REPORT.
+    pub(super) raw_ical: String,
 }
 
 pub(super) struct PendingEvent {

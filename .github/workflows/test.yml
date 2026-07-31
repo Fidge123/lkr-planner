@@ -23,6 +23,9 @@ jobs:
       - name: Run bun tests
         run: bun test
 
+      - name: Run bun tests across timezones
+        run: bun run test:timezones
+
   rust:
     runs-on: "macos-latest"
     env:
@@ -67,6 +70,9 @@ jobs:
         run: cargo check --manifest-path src-tauri/Cargo.toml
         env:
           RUSTFLAGS: -D warnings
+
+      - name: Install uv (runs the disposable Radicale CalDAV server for integration tests)
+        uses: astral-sh/setup-uv@v4
 
       - name: Run rust tests
         run: cargo test --manifest-path src-tauri/Cargo.toml

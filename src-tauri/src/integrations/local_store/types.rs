@@ -92,6 +92,8 @@ pub struct DayliteProjectCacheEntry {
     pub reference: String,
     pub name: String,
     pub status: String,
+    #[serde(default)]
+    pub category: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq, Default)]

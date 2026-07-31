@@ -74,7 +74,11 @@ function formatGermanDate(isoDate: string | null | undefined): string {
     return "Kein Termin";
   }
 
+  // The backend normalizes a due date to UTC midnight, so it carries no time of
+  // day. Formatting it in local time would shift it to the previous day west of
+  // UTC and show a due date the project never had.
   return date.toLocaleDateString("de-DE", {
+    timeZone: "UTC",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",

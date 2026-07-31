@@ -1,3 +1,7 @@
+## Purpose
+
+Provide the backend's Daylite API client: authentication with refresh-token rotation, typed project and contact reads, cached and coalesced requests, and normalized German error messages.
+
 ## Requirements
 
 ### Requirement: API Authentication & Token Rotation
@@ -68,3 +72,21 @@ The system SHALL normalize malformed API responses into German user-facing error
 - **WHEN** Daylite API returns unexpected response format
 - **THEN** return error code `InvalidResponse`
 - **AND** return user message `"Ungültige Antwort von Daylite"`
+
+### Requirement: Category color retrieval
+The system SHALL retrieve Daylite categories with their colors for coloring project events.
+
+#### Scenario: Fetch project categories
+- **WHEN** the system needs category colors for the planning grid
+- **THEN** it requests `GET /categories` with the `entity=project` filter
+- **AND** parses `name` and `hex_colour` for each category into a name-to-color map
+
+#### Scenario: Category without a color
+- **WHEN** a category's `hex_colour` is null
+- **THEN** the category yields no color
+- **AND** events of projects in that category fall back to the neutral color
+
+#### Scenario: Inactive categories keep their color
+- **WHEN** a category has `is_active` set to false
+- **AND** an existing project still references that category
+- **THEN** the category's color is still used for that project's events
