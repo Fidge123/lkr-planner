@@ -303,7 +303,8 @@ fn normalize_project_summary(project: DayliteProjectSummaryDto) -> DayliteProjec
         keywords: project
             .keywords
             .into_iter()
-            .filter_map(|keyword| trimmed_or_none(Some(keyword)))
+            .map(trimmed)
+            .filter(|keyword| !keyword.is_empty())
             .collect(),
         due: normalize_optional_date(project.due),
         started: normalize_optional_date(project.started),
