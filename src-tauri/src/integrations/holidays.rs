@@ -76,22 +76,7 @@ pub async fn get_holidays_for_week(
         }
     }
 
-    let holidays: Vec<Holiday> = store
-        .holiday_cache
-        .iter()
-        .flat_map(|e| e.holidays.iter())
-        .filter_map(|h| {
-            let date = NaiveDate::parse_from_str(&h.date, "%Y-%m-%d").ok()?;
-            if date >= week_start_date && date <= week_end_date {
-                Some(Holiday {
-                    date: h.date.clone(),
-                    name: h.name.clone(),
-                })
-            } else {
-                None
-            }
-        })
-        .collect();
+    let holidays = holidays_in_range(&store.holiday_cache, week_start_date, week_end_date);
 
     if fetched_any {
         crate::integrations::local_store::save_store_internal(&app, store).map_err(|e| {
@@ -101,6 +86,28 @@ pub async fn get_holidays_for_week(
     }
 
     Ok(holidays)
+}
+
+/// Both bounds are inclusive, so a holiday on the last displayed day still counts.
+fn holidays_in_range(
+    cache: &[crate::integrations::local_store::HolidayCacheEntry],
+    start: NaiveDate,
+    end: NaiveDate,
+) -> Vec<Holiday> {
+    cache
+        .iter()
+        .flat_map(|entry| entry.holidays.iter())
+        .filter_map(|holiday| {
+            let date = NaiveDate::parse_from_str(&holiday.date, "%Y-%m-%d").ok()?;
+            if date < start || date > end {
+                return None;
+            }
+            Some(Holiday {
+                date: holiday.date.clone(),
+                name: holiday.name.clone(),
+            })
+        })
+        .collect()
 }
 
 fn years_for_week(start: NaiveDate, end: NaiveDate) -> Vec<i32> {
@@ -173,7 +180,7 @@ fn filter_holidays(nager_holidays: Vec<NagerHoliday>) -> Vec<Holiday> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::integrations::local_store::HolidayCacheEntry;
+    use crate::integrations::local_store::{CachedHoliday, HolidayCacheEntry};
 
     #[test]
     fn includes_global_holidays() {
@@ -252,71 +259,77 @@ mod tests {
         assert_eq!(years_for_week(start, end), vec![2024, 2025]);
     }
 
+    fn cache_entry(year: i32, holidays: &[(&str, &str)]) -> HolidayCacheEntry {
+        HolidayCacheEntry {
+            year,
+            fetched_at: "2026-01-01".to_string(),
+            holidays: holidays
+                .iter()
+                .map(|(date, name)| CachedHoliday {
+                    date: date.to_string(),
+                    name: name.to_string(),
+                })
+                .collect(),
+        }
+    }
+
     #[test]
     fn week_filter_merges_holidays_from_two_years() {
-        let start = NaiveDate::from_ymd_opt(2024, 12, 30).unwrap();
-        let end = NaiveDate::from_ymd_opt(2025, 1, 5).unwrap();
-
-        let all_holidays = [
-            Holiday {
-                date: "2024-12-25".to_string(),
-                name: "1. Weihnachtstag".to_string(),
-            },
-            Holiday {
-                date: "2024-12-31".to_string(),
-                name: "Silvester".to_string(),
-            },
-            Holiday {
-                date: "2025-01-01".to_string(),
-                name: "Neujahr".to_string(),
-            },
-            Holiday {
-                date: "2025-04-18".to_string(),
-                name: "Karfreitag".to_string(),
-            },
+        let cache = [
+            cache_entry(
+                2024,
+                &[
+                    ("2024-12-25", "1. Weihnachtstag"),
+                    ("2024-12-31", "Silvester"),
+                ],
+            ),
+            cache_entry(
+                2025,
+                &[("2025-01-01", "Neujahr"), ("2025-04-18", "Karfreitag")],
+            ),
         ];
 
-        let filtered: Vec<&Holiday> = all_holidays
-            .iter()
-            .filter(|h| {
-                let date = NaiveDate::parse_from_str(&h.date, "%Y-%m-%d").unwrap();
-                date >= start && date <= end
-            })
-            .collect();
+        let filtered = holidays_in_range(
+            &cache,
+            NaiveDate::from_ymd_opt(2024, 12, 30).unwrap(),
+            NaiveDate::from_ymd_opt(2025, 1, 5).unwrap(),
+        );
 
-        assert_eq!(filtered.len(), 2);
-        assert!(filtered.iter().any(|h| h.date == "2024-12-31"));
-        assert!(filtered.iter().any(|h| h.date == "2025-01-01"));
+        let dates: Vec<&str> = filtered.iter().map(|h| h.date.as_str()).collect();
+        assert_eq!(dates, vec!["2024-12-31", "2025-01-01"]);
     }
 
     #[test]
     fn week_filter_includes_holidays_on_weekend_days() {
         let start = NaiveDate::from_ymd_opt(2026, 1, 26).unwrap();
-        let end = start + chrono::Duration::days(6);
-        assert_eq!(end, NaiveDate::from_ymd_opt(2026, 2, 1).unwrap());
+        let cache = [cache_entry(
+            2026,
+            &[
+                ("2026-01-31", "Samstagsfeiertag"),
+                ("2026-02-01", "Sonntagsfeiertag"),
+            ],
+        )];
 
-        let all_holidays = [
-            Holiday {
-                date: "2026-01-31".to_string(), // Saturday
-                name: "Samstagsfeiertag".to_string(),
-            },
-            Holiday {
-                date: "2026-02-01".to_string(), // Sunday (week end)
-                name: "Sonntagsfeiertag".to_string(),
-            },
-        ];
+        let filtered = holidays_in_range(&cache, start, start + chrono::Duration::days(6));
 
-        let filtered: Vec<&Holiday> = all_holidays
-            .iter()
-            .filter(|h| {
-                let date = NaiveDate::parse_from_str(&h.date, "%Y-%m-%d").unwrap();
-                date >= start && date <= end
-            })
-            .collect();
+        let dates: Vec<&str> = filtered.iter().map(|h| h.date.as_str()).collect();
+        assert_eq!(dates, vec!["2026-01-31", "2026-02-01"]);
+    }
 
-        assert_eq!(filtered.len(), 2);
-        assert!(filtered.iter().any(|h| h.date == "2026-01-31"));
-        assert!(filtered.iter().any(|h| h.date == "2026-02-01"));
+    #[test]
+    fn week_filter_excludes_holidays_outside_the_week() {
+        let cache = [cache_entry(
+            2026,
+            &[("2026-01-25", "Davor"), ("2026-02-02", "Danach")],
+        )];
+
+        let filtered = holidays_in_range(
+            &cache,
+            NaiveDate::from_ymd_opt(2026, 1, 26).unwrap(),
+            NaiveDate::from_ymd_opt(2026, 2, 1).unwrap(),
+        );
+
+        assert!(filtered.is_empty());
     }
 
     #[test]

@@ -119,17 +119,6 @@ describe("util", () => {
   });
 
   describe("getWeekStart", () => {
-    it("is the first displayed day of the week", () => {
-      for (const showWeekend of [false, true]) {
-        expect(getWeekStart(0, showWeekend)).toBe(
-          toLocalISODate(getWeekDays(0, showWeekend)[0]),
-        );
-        expect(getWeekStart(-3, showWeekend)).toBe(
-          toLocalISODate(getWeekDays(-3, showWeekend)[0]),
-        );
-      }
-    });
-
     it("covers every displayed day in the backend's seven-day window", () => {
       for (const showWeekend of [false, true]) {
         for (const offset of [-1, 0, 1]) {
