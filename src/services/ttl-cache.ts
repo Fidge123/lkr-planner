@@ -15,8 +15,6 @@ interface TtlCacheOptions<T> {
   load: () => Promise<T[]>;
   /** Prefixes the error thrown when neither the cache nor the fallback can serve. */
   failureMessage: string;
-  /** Reported when a rejection carries no message of its own. */
-  unknownErrorMessage: string;
   /** Consulted only when the load fails and nothing is held in memory. */
   fallback?: () => Promise<T[]>;
   /** Injectable so tests can control freshness without waiting. */
@@ -43,7 +41,6 @@ export function createTtlCache<T>({
   ttlMs,
   load,
   failureMessage,
-  unknownErrorMessage,
   fallback,
   now = Date.now,
 }: TtlCacheOptions<T>): TtlCache<T> {
@@ -74,7 +71,7 @@ export function createTtlCache<T>({
         return { data, source: "network" } satisfies CacheLoadResult<T>;
       })
       .catch(async (error) => {
-        const errorMessage = readErrorMessage(error, unknownErrorMessage);
+        const errorMessage = readErrorMessage(error);
 
         if (entry) {
           return {
@@ -154,10 +151,16 @@ export function createTtlCache<T>({
   };
 }
 
-function readErrorMessage(error: unknown, fallbackMessage: string): string {
+/**
+ * Callers reach this cache through unwrapCommandResult, which always throws an Error
+ * with a message, so the last resort is unreachable today. It keeps whatever the value
+ * stringifies to rather than a fixed sentence, because if some future loader does
+ * reject with something else, that detail is the only clue there will be.
+ */
+function readErrorMessage(error: unknown): string {
   if (error instanceof Error && error.message.trim().length > 0) {
     return error.message;
   }
 
-  return fallbackMessage;
+  return String(error);
 }

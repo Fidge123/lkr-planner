@@ -10,7 +10,6 @@ function countingCache(
   const cache = createTtlCache<string>({
     ttlMs: 30_000,
     failureMessage: "Laden fehlgeschlagen",
-    unknownErrorMessage: "Unbekannter Fehler",
     now: () => nowMs,
     load: () => {
       const result = results[Math.min(calls, results.length - 1)];
@@ -237,16 +236,24 @@ describe("createTtlCache", () => {
     );
   });
 
-  it("reports a non-Error rejection with the German fallback message", async () => {
+  it("keeps what a non-Error rejection stringifies to", async () => {
     const { cache } = countingCache([
       async () => {
         throw "kaputt";
       },
     ]);
 
-    await expect(cache.get()).rejects.toThrow(
-      "Laden fehlgeschlagen: Unbekannter Fehler",
-    );
+    await expect(cache.get()).rejects.toThrow("Laden fehlgeschlagen: kaputt");
+  });
+
+  it("falls back to the stringified Error when it carries no message", async () => {
+    const { cache } = countingCache([
+      async () => {
+        throw new Error("");
+      },
+    ]);
+
+    await expect(cache.get()).rejects.toThrow(/^Laden fehlgeschlagen: Error$/);
   });
 
   it("rewrites cached entries in place without resetting the ttl", async () => {

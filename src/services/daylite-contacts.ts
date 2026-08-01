@@ -15,7 +15,6 @@ const DEFAULT_DAYLITE_CONTACT_CACHE_TTL_MS = 30_000;
 
 const contactCache = createTtlCache<PlanningContactRecord>({
   ttlMs: DEFAULT_DAYLITE_CONTACT_CACHE_TTL_MS,
-  unknownErrorMessage: "Die Daten konnten nicht von Daylite geladen werden.",
   failureMessage: "Mitarbeiterladen fehlgeschlagen",
   load: async () =>
     unwrapCommandResult(
