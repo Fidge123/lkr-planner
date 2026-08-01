@@ -325,14 +325,7 @@ pub(crate) async fn reorder_assignment_core(
 ) -> Result<(), String> {
     let resource_url = resolve_href(href, &session.base_url)?;
 
-    if targets_absence_calendar(&resource_url, &session.absence_urls) {
-        eprintln!(
-            "calendar: refused reorder_assignment write to absence calendar URL '{resource_url}'"
-        );
-        return Err(
-            "Einsätze können nicht in einen Abwesenheitskalender geschrieben werden.".to_string(),
-        );
-    }
+    refuse_absence_calendar(session, &resource_url, "reorder_assignment")?;
 
     let calendar_url = parent_collection_url(&resource_url);
     let placement = DayPlacement {
