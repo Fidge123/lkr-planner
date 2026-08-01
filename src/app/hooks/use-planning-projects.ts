@@ -16,7 +16,7 @@ export function usePlanningProjects(): PlanningGridProjectsState {
     try {
       const result = await loadDayliteProjects({ forceRefresh });
       if (id !== requestIdRef.current) return;
-      setProjects(result.projects);
+      setProjects(result.data);
       setErrorMessage(result.errorMessage ?? null);
     } catch (error) {
       if (id !== requestIdRef.current) return;

@@ -52,7 +52,7 @@ describe("daylite contact service", () => {
 
     expect(result.source).toBe("network");
     expect(result.errorMessage).toBeUndefined();
-    expect(result.contacts).toEqual([
+    expect(result.data).toEqual([
       {
         self: "/v1/contacts/1001",
         full_name: "Max Mustermann",
@@ -94,7 +94,7 @@ describe("daylite contact service", () => {
     expect(result.errorMessage).toBe(
       "Die Daten konnten nicht von Daylite geladen werden.",
     );
-    expect(result.contacts[0]?.self).toBe("/v1/contacts/2001");
+    expect(result.data[0]?.self).toBe("/v1/contacts/2001");
     expect(mockDayliteListCachedContacts).toHaveBeenCalledTimes(1);
   });
 
@@ -122,7 +122,7 @@ describe("daylite contact service", () => {
     const staleFallback = await loadDayliteContacts({ nowMs: 45_000 });
 
     expect(staleFallback.source).toBe("stale-cache");
-    expect(staleFallback.contacts[0]?.self).toBe("/v1/contacts/3001");
+    expect(staleFallback.data[0]?.self).toBe("/v1/contacts/3001");
     expect(staleFallback.errorMessage).toBe(
       "Die Daten konnten nicht von Daylite geladen werden.",
     );
@@ -171,7 +171,7 @@ describe("daylite contact service", () => {
 
     const cached = await loadDayliteContacts({ nowMs: 1_001 });
     expect(cached.source).toBe("cache");
-    expect(cached.contacts[0]?.full_name).toBe("Mira Monteur (Aktualisiert)");
+    expect(cached.data[0]?.full_name).toBe("Mira Monteur (Aktualisiert)");
   });
 
   it("returns an empty list when cached contacts command fails", async () => {

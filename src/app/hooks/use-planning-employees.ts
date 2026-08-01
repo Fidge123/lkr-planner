@@ -27,7 +27,7 @@ export function usePlanningEmployees(): PlanningGridEmployeesState {
     try {
       const result = await loadDayliteContacts({ forceRefresh });
       if (id !== requestIdRef.current) return;
-      setEmployees(result.contacts);
+      setEmployees(result.data);
       setErrorMessage(result.errorMessage ?? null);
     } catch (error) {
       if (id !== requestIdRef.current) return;

@@ -39,7 +39,7 @@ describe("daylite project service", () => {
 
     expect(result.source).toBe("network");
     expect(result.errorMessage).toBeUndefined();
-    expect(result.projects).toEqual([
+    expect(result.data).toEqual([
       expect.objectContaining({
         self: "/v1/projects/7000",
         name: "Projekt Nord",
@@ -65,8 +65,8 @@ describe("daylite project service", () => {
 
     const result = await loadDayliteProjects({ nowMs: 1_000 });
 
-    expect(result.projects[0]?.self).toBe("/v1/projects/7999");
-    expect(result.projects[0]?.name).toBe("Projekt Self Feld");
+    expect(result.data[0]?.self).toBe("/v1/projects/7999");
+    expect(result.data[0]?.name).toBe("Projekt Self Feld");
   });
 
   it("returns the unfiltered Daylite list after loading projects", async () => {
@@ -106,7 +106,7 @@ describe("daylite project service", () => {
 
     const result = await loadDayliteProjects({ nowMs: 1_000 });
 
-    expect(result.projects.map((project) => project.self)).toEqual([
+    expect(result.data.map((project) => project.self)).toEqual([
       "/v1/projects/7101",
       "/v1/projects/7102",
       "/v1/projects/7103",
@@ -151,8 +151,8 @@ describe("daylite project service", () => {
     const planningData = await loadDayliteProjects({ nowMs: 10_000 });
     const overviewData = await loadDayliteProjects({ nowMs: 10_010 });
 
-    expect(planningData.projects[0]?.self).toBe("/v1/projects/7010");
-    expect(overviewData.projects[0]?.self).toBe("/v1/projects/7010");
+    expect(planningData.data[0]?.self).toBe("/v1/projects/7010");
+    expect(overviewData.data[0]?.self).toBe("/v1/projects/7010");
     expect(mockDayliteListProjects).toHaveBeenCalledTimes(1);
   });
 
@@ -184,8 +184,8 @@ describe("daylite project service", () => {
     const first = await loadDayliteProjects({ nowMs: 1_000 });
     const second = await loadDayliteProjects({ nowMs: 31_500 });
 
-    expect(first.projects[0]?.self).toBe("/v1/projects/7002");
-    expect(second.projects[0]?.self).toBe("/v1/projects/7003");
+    expect(first.data[0]?.self).toBe("/v1/projects/7002");
+    expect(second.data[0]?.self).toBe("/v1/projects/7003");
     expect(mockDayliteListProjects).toHaveBeenCalledTimes(2);
   });
 
@@ -216,7 +216,7 @@ describe("daylite project service", () => {
 
     const [first, second] = await Promise.all([firstPromise, secondPromise]);
 
-    expect(first.projects).toEqual(second.projects);
+    expect(first.data).toEqual(second.data);
     expect(first.source).toBe("network");
     expect(second.source).toBe("network");
   });
@@ -245,7 +245,7 @@ describe("daylite project service", () => {
     const staleFallback = await loadDayliteProjects({ nowMs: 45_000 });
 
     expect(staleFallback.source).toBe("stale-cache");
-    expect(staleFallback.projects[0]?.self).toBe("/v1/projects/7005");
+    expect(staleFallback.data[0]?.self).toBe("/v1/projects/7005");
     expect(staleFallback.errorMessage).toBe(
       "Die Daten konnten nicht von Daylite geladen werden.",
     );

@@ -5,82 +5,29 @@ import {
 } from "../generated/tauri";
 import { unwrapCommandResult } from "./command-result";
 import { normalizeOptionalString } from "./daylite-service-helpers";
+import {
+  type CacheLoadOptions,
+  type CacheLoadResult,
+  createTtlCache,
+} from "./ttl-cache";
 
 export const DEFAULT_DAYLITE_CONTACT_CACHE_TTL_MS = 30_000;
 
-type DayliteContactsSource = "network" | "cache" | "disk-cache" | "stale-cache";
+const contactCache = createTtlCache<PlanningContactRecord>({
+  ttlMs: DEFAULT_DAYLITE_CONTACT_CACHE_TTL_MS,
+  failureMessage: "Mitarbeiterladen fehlgeschlagen",
+  load: async () =>
+    unwrapCommandResult(
+      await commands.dayliteListContacts(),
+      "Die Daten konnten nicht von Daylite geladen werden.",
+    ),
+  fallback: () => loadCachedDayliteContacts(),
+});
 
-interface DayliteContactsLoadResult {
-  contacts: PlanningContactRecord[];
-  source: DayliteContactsSource;
-  errorMessage?: string | null;
-}
-
-interface ContactCacheEntry {
-  contacts: PlanningContactRecord[];
-  fetchedAtMs: number;
-}
-
-interface DayliteContactsLoadOptions {
-  nowMs?: number;
-  forceRefresh?: boolean;
-}
-
-let contactCache: ContactCacheEntry | null = null;
-let inFlightRequest: Promise<DayliteContactsLoadResult> | null = null;
-
-export async function loadDayliteContacts(
-  options: DayliteContactsLoadOptions = {},
-): Promise<DayliteContactsLoadResult> {
-  const nowMs = options.nowMs ?? Date.now();
-  const forceRefresh = options.forceRefresh ?? false;
-  const cacheAgeMs = contactCache ? nowMs - contactCache.fetchedAtMs : Infinity;
-  const cacheIsFresh =
-    contactCache !== null && cacheAgeMs < DEFAULT_DAYLITE_CONTACT_CACHE_TTL_MS;
-
-  if (!forceRefresh && cacheIsFresh && contactCache) {
-    return {
-      contacts: contactCache.contacts,
-      source: "cache",
-    };
-  }
-
-  inFlightRequest ??= fetchContacts()
-    .then((contacts) => {
-      contactCache = { contacts, fetchedAtMs: nowMs };
-      return {
-        contacts,
-        source: "network",
-      } satisfies DayliteContactsLoadResult;
-    })
-    .catch(async (error) => {
-      const errorMessage = getErrorMessage(error);
-
-      if (contactCache) {
-        return {
-          contacts: contactCache.contacts,
-          source: "stale-cache",
-          errorMessage,
-        } satisfies DayliteContactsLoadResult;
-      }
-
-      const contactsFromStore = await loadCachedDayliteContacts();
-      if (contactsFromStore.length > 0) {
-        contactCache = { contacts: contactsFromStore, fetchedAtMs: nowMs };
-        return {
-          contacts: contactsFromStore,
-          source: "disk-cache",
-          errorMessage,
-        } satisfies DayliteContactsLoadResult;
-      }
-
-      throw new Error(`Mitarbeiterladen fehlgeschlagen: ${errorMessage}`);
-    })
-    .finally(() => {
-      inFlightRequest = null;
-    });
-
-  return inFlightRequest;
+export function loadDayliteContacts(
+  options: CacheLoadOptions = {},
+): Promise<CacheLoadResult<PlanningContactRecord>> {
+  return contactCache.get(options);
 }
 
 export async function loadCachedDayliteContacts(): Promise<
@@ -101,36 +48,15 @@ export async function updateDayliteContactIcalUrls(
     await commands.dayliteUpdateContactIcalUrls(input),
     "Die Daten konnten nicht von Daylite geladen werden.",
   );
-  updateInMemoryContactCache(contact);
+
+  contactCache.update((contacts) => {
+    const others = contacts.filter((entry) => entry.self !== contact.self);
+    return sortContacts(
+      isMonteurContact(contact) ? [...others, contact] : others,
+    );
+  });
+
   return contact;
-}
-
-async function fetchContacts(): Promise<PlanningContactRecord[]> {
-  return unwrapCommandResult(
-    await commands.dayliteListContacts(),
-    "Die Daten konnten nicht von Daylite geladen werden.",
-  );
-}
-
-function updateInMemoryContactCache(
-  updatedContact: PlanningContactRecord,
-): void {
-  if (!contactCache) {
-    return;
-  }
-
-  const contactsWithoutUpdated = contactCache.contacts.filter(
-    (contact) => contact.self !== updatedContact.self,
-  );
-
-  if (isMonteurContact(updatedContact)) {
-    contactsWithoutUpdated.push(updatedContact);
-  }
-
-  contactCache = {
-    contacts: sortContacts(contactsWithoutUpdated),
-    fetchedAtMs: contactCache.fetchedAtMs,
-  };
 }
 
 function isMonteurContact(contact: PlanningContactRecord): boolean {
@@ -147,15 +73,6 @@ function sortContacts(
   );
 }
 
-function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-
-  return "Die Daten konnten nicht von Daylite geladen werden.";
-}
-
 export function test_resetDayliteContactCache(): void {
-  contactCache = null;
-  inFlightRequest = null;
+  contactCache.reset();
 }
