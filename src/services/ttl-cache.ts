@@ -144,6 +144,9 @@ export function createTtlCache<T>({
     },
 
     reset(): void {
+      // Supersedes any settling chain: without this its `then` would repopulate the
+      // entry just cleared, and its `finally` would clear a later request's slot.
+      generation += 1;
       entry = null;
       inFlight = null;
       pendingUpdates = [];

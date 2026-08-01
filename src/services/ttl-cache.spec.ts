@@ -301,6 +301,40 @@ describe("createTtlCache", () => {
     expect((await cache.get()).data).toEqual(["a"]);
   });
 
+  it("reset stops a settling load from repopulating the cache", async () => {
+    let release: (value: string[]) => void = () => {};
+    const pending = new Promise<string[]>((resolve) => {
+      release = resolve;
+    });
+    const { cache } = countingCache([() => pending, ok("neu")]);
+
+    const abandoned = cache.get();
+    cache.reset();
+    release(["alt"]);
+    await abandoned;
+
+    expect((await cache.get()).data).toEqual(["neu"]);
+  });
+
+  it("reset stops a settling load from clearing a later request", async () => {
+    let release: (value: string[]) => void = () => {};
+    const pending = new Promise<string[]>((resolve) => {
+      release = resolve;
+    });
+    const { cache, callCount } = countingCache([() => pending, ok("neu")]);
+
+    const abandoned = cache.get();
+    cache.reset();
+    const second = cache.get();
+    release(["alt"]);
+    await abandoned;
+
+    // The abandoned chain must not have freed the slot the second read owns.
+    await cache.get();
+    expect(callCount()).toBe(2);
+    expect((await second).data).toEqual(["neu"]);
+  });
+
   it("reset forces the next read back to the network", async () => {
     const { cache, callCount } = countingCache([ok("alt"), ok("neu")]);
     await cache.get();
