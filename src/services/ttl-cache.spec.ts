@@ -62,6 +62,39 @@ describe("createTtlCache", () => {
     expect(callCount()).toBe(2);
   });
 
+  it("does not let a forced refresh adopt an already running load", async () => {
+    let releaseFirst: (value: string[]) => void = () => {};
+    const pending = new Promise<string[]>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const { cache, callCount } = countingCache([() => pending, ok("neu")]);
+
+    const joined = cache.get({ nowMs: 1_000 });
+    const forced = cache.get({ nowMs: 1_000, forceRefresh: true });
+    expect(callCount()).toBe(2);
+
+    releaseFirst(["alt"]);
+
+    expect((await forced).data).toEqual(["neu"]);
+    expect((await joined).data).toEqual(["alt"]);
+  });
+
+  it("keeps the forced result when the superseded load settles last", async () => {
+    let releaseFirst: (value: string[]) => void = () => {};
+    const pending = new Promise<string[]>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const { cache } = countingCache([() => pending, ok("neu")]);
+
+    const joined = cache.get({ nowMs: 1_000 });
+    await cache.get({ nowMs: 1_000, forceRefresh: true });
+
+    releaseFirst(["alt"]);
+    await joined;
+
+    expect((await cache.get({ nowMs: 1_500 })).data).toEqual(["neu"]);
+  });
+
   it("coalesces parallel reads into a single load", async () => {
     let release: (value: string[]) => void = () => {};
     const pending = new Promise<string[]>((resolve) => {

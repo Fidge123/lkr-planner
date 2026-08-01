@@ -42,6 +42,54 @@ export function createTtlCache<T>({
 }: TtlCacheOptions<T>): TtlCache<T> {
   let entry: { data: T[]; fetchedAtMs: number } | null = null;
   let inFlight: Promise<CacheLoadResult<T>> | null = null;
+  // Bumped whenever a request is superseded, so a chain that is still settling
+  // cannot write its result over the newer one that replaced it.
+  let generation = 0;
+
+  function startLoad(nowMs: number): Promise<CacheLoadResult<T>> {
+    const requestGeneration = ++generation;
+    const isCurrent = () => requestGeneration === generation;
+
+    return load()
+      .then((data) => {
+        if (isCurrent()) {
+          entry = { data, fetchedAtMs: nowMs };
+        }
+        return { data, source: "network" } satisfies CacheLoadResult<T>;
+      })
+      .catch(async (error) => {
+        const errorMessage = readErrorMessage(error, unknownErrorMessage);
+
+        if (entry) {
+          return {
+            data: entry.data,
+            source: "stale-cache",
+            errorMessage,
+          } satisfies CacheLoadResult<T>;
+        }
+
+        // A failing fallback must not replace the load failure the caller needs to
+        // see, nor escape as a rejection this catch never wrapped.
+        const fromFallback = (await fallback?.().catch(() => [])) ?? [];
+        if (fromFallback.length > 0) {
+          if (isCurrent()) {
+            entry = { data: fromFallback, fetchedAtMs: nowMs };
+          }
+          return {
+            data: fromFallback,
+            source: "disk-cache",
+            errorMessage,
+          } satisfies CacheLoadResult<T>;
+        }
+
+        throw new Error(`${failureMessage}: ${errorMessage}`);
+      })
+      .finally(() => {
+        if (isCurrent()) {
+          inFlight = null;
+        }
+      });
+  }
 
   return {
     async get({
@@ -52,39 +100,13 @@ export function createTtlCache<T>({
         return { data: entry.data, source: "cache" };
       }
 
-      inFlight ??= load()
-        .then((data) => {
-          entry = { data, fetchedAtMs: nowMs };
-          return { data, source: "network" } satisfies CacheLoadResult<T>;
-        })
-        .catch(async (error) => {
-          const errorMessage = readErrorMessage(error, unknownErrorMessage);
+      // A forced refresh asks for data newer than now, so it must not adopt a
+      // request that was already running when the caller asked.
+      if (forceRefresh) {
+        inFlight = null;
+      }
 
-          if (entry) {
-            return {
-              data: entry.data,
-              source: "stale-cache",
-              errorMessage,
-            } satisfies CacheLoadResult<T>;
-          }
-
-          // A failing fallback must not replace the load failure the caller needs to
-          // see, nor escape as a rejection this catch never wrapped.
-          const fromFallback = (await fallback?.().catch(() => [])) ?? [];
-          if (fromFallback.length > 0) {
-            entry = { data: fromFallback, fetchedAtMs: nowMs };
-            return {
-              data: fromFallback,
-              source: "disk-cache",
-              errorMessage,
-            } satisfies CacheLoadResult<T>;
-          }
-
-          throw new Error(`${failureMessage}: ${errorMessage}`);
-        })
-        .finally(() => {
-          inFlight = null;
-        });
+      inFlight ??= startLoad(nowMs);
 
       return inFlight;
     },
