@@ -3,8 +3,8 @@ use super::client::DayliteApiClient;
 use super::client::DayliteHttpMethod;
 use super::client::DayliteHttpRequest;
 use super::shared::{
-    build_limit_query, run_daylite_command, with_token_refresh_lock, DayliteApiError,
-    DayliteSearchInput, DayliteSearchResult, DayliteSearchSort, DayliteTokenState,
+    build_limit_query, run_daylite_command, trimmed, trimmed_or_none, with_token_refresh_lock,
+    DayliteApiError, DayliteSearchInput, DayliteSearchResult, DayliteSearchSort, DayliteTokenState,
 };
 use chrono::{DateTime, NaiveDate, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
@@ -263,7 +263,7 @@ pub(super) async fn search_projects_core(
     Ok((
         DayliteSearchResult {
             results,
-            next: normalize_optional_string(search_result.next),
+            next: trimmed_or_none(search_result.next),
         },
         token_state,
     ))
@@ -296,11 +296,15 @@ fn map_daylite_project_summary(project: DayliteProjectSummaryDto) -> PlanningPro
 
 fn normalize_project_summary(project: DayliteProjectSummaryDto) -> DayliteProjectSummary {
     DayliteProjectSummary {
-        reference: normalize_required_string(project.reference),
-        name: normalize_required_string(project.name),
-        status: normalize_optional_string(project.status),
-        category: normalize_optional_string(project.category),
-        keywords: normalize_keywords(project.keywords),
+        reference: trimmed(project.reference),
+        name: trimmed(project.name),
+        status: trimmed_or_none(project.status),
+        category: trimmed_or_none(project.category),
+        keywords: project
+            .keywords
+            .into_iter()
+            .filter_map(|keyword| trimmed_or_none(Some(keyword)))
+            .collect(),
         due: normalize_optional_date(project.due),
         started: normalize_optional_date(project.started),
         completed: normalize_optional_date(project.completed),
@@ -309,37 +313,8 @@ fn normalize_project_summary(project: DayliteProjectSummaryDto) -> DayliteProjec
     }
 }
 
-fn normalize_required_string(value: String) -> String {
-    value.trim().to_string()
-}
-
-fn normalize_optional_string(value: Option<String>) -> Option<String> {
-    value.and_then(|candidate| {
-        let normalized = candidate.trim();
-        if normalized.is_empty() {
-            None
-        } else {
-            Some(normalized.to_string())
-        }
-    })
-}
-
-fn normalize_keywords(values: Vec<String>) -> Vec<String> {
-    values
-        .into_iter()
-        .filter_map(|value| {
-            let normalized = value.trim();
-            if normalized.is_empty() {
-                None
-            } else {
-                Some(normalized.to_string())
-            }
-        })
-        .collect()
-}
-
 fn normalize_optional_date(value: Option<String>) -> Option<String> {
-    let raw_value = normalize_optional_string(value)?;
+    let raw_value = trimmed_or_none(value)?;
 
     if let Ok(parsed_date_time) = DateTime::parse_from_rfc3339(&raw_value) {
         return Some(
@@ -359,7 +334,7 @@ fn normalize_optional_date(value: Option<String>) -> Option<String> {
 }
 
 fn map_project_status(status: Option<String>) -> PlanningProjectStatus {
-    let normalized = normalize_optional_string(status)
+    let normalized = trimmed_or_none(status)
         .map(|value| value.to_lowercase())
         .unwrap_or_default();
 
