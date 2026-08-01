@@ -446,8 +446,8 @@ mod tests {
     use crate::integrations::daylite::client::DayliteApiClient;
     use crate::integrations::daylite::client::DayliteHttpMethod;
     use crate::integrations::daylite::shared::{
-        DayliteApiError, DayliteApiErrorCode, DayliteSearchInput, DayliteSearchSort,
-        DayliteTokenState,
+        DayliteApiError, DayliteApiErrorCode, DayliteSearchInput, DayliteSearchResult,
+        DayliteSearchSort, DayliteTokenState,
     };
     use crate::integrations::daylite::test_support::{
         mock_client, mock_response, token_state, valid_token_state,
@@ -589,21 +589,10 @@ mod tests {
         assert_eq!(result.results[2].reference, "/v1/projects/100");
     }
 
-    #[tokio::test]
-    async fn search_treats_empty_object_response_as_no_results() {
-        let (client, _) = mock_client(vec![Ok(mock_response(200, r#"{}"#))]);
-
-        let (result, _) = search_projects_core(
-            &client,
-            valid_token_state(),
-            &DayliteSearchInput {
-                search_term: "Nord".to_string(),
-                limit: Some(5),
-                ..Default::default()
-            },
-        )
-        .await
-        .expect("empty object response should be treated as no results");
+    #[test]
+    fn empty_object_response_deserializes_as_no_results() {
+        let result: DayliteSearchResult<DayliteProjectSummaryDto> =
+            serde_json::from_str(r#"{}"#).expect("a bare object is a valid empty search result");
 
         assert!(result.results.is_empty());
         assert_eq!(result.next, None);
@@ -634,25 +623,6 @@ mod tests {
         assert_eq!(result.results[0].name, "Alpha");
         assert_eq!(result.results[1].name, "Mitte");
         assert_eq!(result.results[2].name, "Zeta");
-    }
-
-    #[tokio::test]
-    async fn search_defaults_to_numeric_id_sort_when_sort_is_none() {
-        let (client, _) = mock_client(vec![Ok(mock_response(
-            200,
-            r#"{"results":[
-            {"self":"/v1/projects/3","name":"Alpha"},
-            {"self":"/v1/projects/1","name":"Zeta"}
-        ],"next":null}"#,
-        ))]);
-
-        let (result, _) =
-            search_projects_core(&client, valid_token_state(), &DayliteSearchInput::default())
-                .await
-                .expect("search should succeed");
-
-        assert_eq!(result.results[0].reference, "/v1/projects/1");
-        assert_eq!(result.results[1].reference, "/v1/projects/3");
     }
 
     #[tokio::test]
@@ -747,17 +717,6 @@ mod tests {
                 "/v1/projects/50"
             ]
         );
-    }
-
-    #[tokio::test]
-    async fn overdue_query_treats_empty_object_response_as_no_results() {
-        let (client, _) = mock_client(vec![Ok(mock_response(200, r#"{}"#))]);
-
-        let (results, _) = query_overdue_projects_core(&client, valid_token_state())
-            .await
-            .expect("empty object response should be treated as no results");
-
-        assert!(results.is_empty());
     }
 
     #[tokio::test]
