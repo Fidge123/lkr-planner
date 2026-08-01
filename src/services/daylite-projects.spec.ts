@@ -1,9 +1,7 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
 import {
-  DEFAULT_DAYLITE_PROJECT_CACHE_TTL_MS,
   loadDayliteProjects,
   test_resetDayliteProjectCache,
-  test_setDayliteProjectCacheTtlMs,
 } from "./daylite-projects";
 
 const mockDayliteListProjects = mock(() => Promise.resolve({} as unknown));
@@ -18,7 +16,6 @@ describe("daylite project service", () => {
   beforeEach(() => {
     mockDayliteListProjects.mockClear();
     test_resetDayliteProjectCache();
-    test_setDayliteProjectCacheTtlMs(DEFAULT_DAYLITE_PROJECT_CACHE_TTL_MS);
   });
 
   it("passes through planning-ready project status/date fields", async () => {

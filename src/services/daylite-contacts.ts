@@ -26,7 +26,6 @@ interface DayliteContactsLoadOptions {
   forceRefresh?: boolean;
 }
 
-let cacheTtlMs = DEFAULT_DAYLITE_CONTACT_CACHE_TTL_MS;
 let contactCache: ContactCacheEntry | null = null;
 let inFlightRequest: Promise<DayliteContactsLoadResult> | null = null;
 
@@ -36,7 +35,8 @@ export async function loadDayliteContacts(
   const nowMs = options.nowMs ?? Date.now();
   const forceRefresh = options.forceRefresh ?? false;
   const cacheAgeMs = contactCache ? nowMs - contactCache.fetchedAtMs : Infinity;
-  const cacheIsFresh = contactCache !== null && cacheAgeMs < cacheTtlMs;
+  const cacheIsFresh =
+    contactCache !== null && cacheAgeMs < DEFAULT_DAYLITE_CONTACT_CACHE_TTL_MS;
 
   if (!forceRefresh && cacheIsFresh && contactCache) {
     return {
@@ -153,15 +153,6 @@ function getErrorMessage(error: unknown): string {
   }
 
   return "Die Daten konnten nicht von Daylite geladen werden.";
-}
-
-export function test_setDayliteContactCacheTtlMs(ttlMs: number): void {
-  if (!Number.isFinite(ttlMs) || ttlMs <= 0) {
-    cacheTtlMs = DEFAULT_DAYLITE_CONTACT_CACHE_TTL_MS;
-    return;
-  }
-
-  cacheTtlMs = Math.floor(ttlMs);
 }
 
 export function test_resetDayliteContactCache(): void {

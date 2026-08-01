@@ -1,10 +1,8 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
 import {
-  DEFAULT_DAYLITE_CONTACT_CACHE_TTL_MS,
   loadCachedDayliteContacts,
   loadDayliteContacts,
   test_resetDayliteContactCache,
-  test_setDayliteContactCacheTtlMs,
   updateDayliteContactIcalUrls,
 } from "./daylite-contacts";
 
@@ -30,7 +28,6 @@ describe("daylite contact service", () => {
     mockDayliteListCachedContacts.mockClear();
     mockDayliteUpdateContactIcalUrls.mockClear();
     test_resetDayliteContactCache();
-    test_setDayliteContactCacheTtlMs(DEFAULT_DAYLITE_CONTACT_CACHE_TTL_MS);
   });
 
   it("returns planning contacts from backend command", async () => {

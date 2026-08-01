@@ -16,7 +16,6 @@ interface ProjectCacheEntry {
   fetchedAtMs: number;
 }
 
-let cacheTtlMs = DEFAULT_DAYLITE_PROJECT_CACHE_TTL_MS;
 let projectCache: ProjectCacheEntry | null = null;
 let inFlightRequest: Promise<DayliteProjectsLoadResult> | null = null;
 
@@ -25,7 +24,8 @@ export async function loadDayliteProjects({
   forceRefresh = false,
 }): Promise<DayliteProjectsLoadResult> {
   const cacheAgeMs = projectCache ? nowMs - projectCache.fetchedAtMs : Infinity;
-  const cacheIsFresh = projectCache !== null && cacheAgeMs < cacheTtlMs;
+  const cacheIsFresh =
+    projectCache !== null && cacheAgeMs < DEFAULT_DAYLITE_PROJECT_CACHE_TTL_MS;
 
   if (!forceRefresh && cacheIsFresh && projectCache) {
     return {
@@ -73,15 +73,6 @@ function getErrorMessage(error: unknown): string {
   }
 
   return String(error);
-}
-
-export function test_setDayliteProjectCacheTtlMs(ttlMs: number): void {
-  if (!Number.isFinite(ttlMs) || ttlMs <= 0) {
-    cacheTtlMs = DEFAULT_DAYLITE_PROJECT_CACHE_TTL_MS;
-    return;
-  }
-
-  cacheTtlMs = Math.floor(ttlMs);
 }
 
 export function test_resetDayliteProjectCache(): void {
