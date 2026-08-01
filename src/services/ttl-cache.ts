@@ -7,7 +7,6 @@ export interface CacheLoadResult<T> {
 }
 
 export interface CacheLoadOptions {
-  nowMs?: number;
   forceRefresh?: boolean;
 }
 
@@ -20,6 +19,8 @@ interface TtlCacheOptions<T> {
   unknownErrorMessage: string;
   /** Consulted only when the load fails and nothing is held in memory. */
   fallback?: () => Promise<T[]>;
+  /** Injectable so tests can control freshness without waiting. */
+  now?: () => number;
 }
 
 export interface TtlCache<T> {
@@ -39,6 +40,7 @@ export function createTtlCache<T>({
   failureMessage,
   unknownErrorMessage,
   fallback,
+  now = Date.now,
 }: TtlCacheOptions<T>): TtlCache<T> {
   let entry: { data: T[]; fetchedAtMs: number } | null = null;
   let inFlight: Promise<CacheLoadResult<T>> | null = null;
@@ -46,14 +48,14 @@ export function createTtlCache<T>({
   // cannot write its result over the newer one that replaced it.
   let generation = 0;
 
-  function startLoad(nowMs: number): Promise<CacheLoadResult<T>> {
+  function startLoad(): Promise<CacheLoadResult<T>> {
     const requestGeneration = ++generation;
     const isCurrent = () => requestGeneration === generation;
 
     return load()
       .then((data) => {
         if (isCurrent()) {
-          entry = { data, fetchedAtMs: nowMs };
+          entry = { data, fetchedAtMs: now() };
         }
         return { data, source: "network" } satisfies CacheLoadResult<T>;
       })
@@ -73,7 +75,7 @@ export function createTtlCache<T>({
         const fromFallback = (await fallback?.().catch(() => [])) ?? [];
         if (fromFallback.length > 0) {
           if (isCurrent()) {
-            entry = { data: fromFallback, fetchedAtMs: nowMs };
+            entry = { data: fromFallback, fetchedAtMs: now() };
           }
           return {
             data: fromFallback,
@@ -93,10 +95,9 @@ export function createTtlCache<T>({
 
   return {
     async get({
-      nowMs = Date.now(),
       forceRefresh = false,
     }: CacheLoadOptions = {}): Promise<CacheLoadResult<T>> {
-      if (!forceRefresh && entry && nowMs - entry.fetchedAtMs < ttlMs) {
+      if (!forceRefresh && entry && now() - entry.fetchedAtMs < ttlMs) {
         return { data: entry.data, source: "cache" };
       }
 
@@ -106,7 +107,7 @@ export function createTtlCache<T>({
         inFlight = null;
       }
 
-      inFlight ??= startLoad(nowMs);
+      inFlight ??= startLoad();
 
       return inFlight;
     },

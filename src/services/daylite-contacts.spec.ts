@@ -48,7 +48,7 @@ describe("daylite contact service", () => {
       ],
     });
 
-    const result = await loadDayliteContacts({ nowMs: 1_000 });
+    const result = await loadDayliteContacts();
 
     expect(result.source).toBe("network");
     expect(result.errorMessage).toBeUndefined();
@@ -88,7 +88,7 @@ describe("daylite contact service", () => {
       ],
     });
 
-    const result = await loadDayliteContacts({ nowMs: 2_000 });
+    const result = await loadDayliteContacts();
 
     expect(result.source).toBe("disk-cache");
     expect(result.errorMessage).toBe(
@@ -110,7 +110,7 @@ describe("daylite contact service", () => {
         },
       ],
     });
-    await loadDayliteContacts({ nowMs: 1_000 });
+    await loadDayliteContacts();
 
     mockDayliteUpdateContactIcalUrls.mockResolvedValue({
       status: "ok",
@@ -139,7 +139,7 @@ describe("daylite contact service", () => {
 
     expect(updated.full_name).toBe("Mira Monteur (Aktualisiert)");
 
-    const cached = await loadDayliteContacts({ nowMs: 1_001 });
+    const cached = await loadDayliteContacts();
     expect(cached.source).toBe("cache");
     expect(cached.data[0]?.full_name).toBe("Mira Monteur (Aktualisiert)");
   });

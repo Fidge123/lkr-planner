@@ -42,7 +42,7 @@ describe("daylite project service", () => {
       ],
     });
 
-    const result = await loadDayliteProjects({ nowMs: 1_000 });
+    const result = await loadDayliteProjects();
 
     expect(result.source).toBe("network");
     expect(result.errorMessage).toBeUndefined();
@@ -69,7 +69,7 @@ describe("daylite project service", () => {
       },
     });
 
-    await expect(loadDayliteProjects({ nowMs: 1_000 })).rejects.toThrow(
+    await expect(loadDayliteProjects()).rejects.toThrow(
       "Projektladen fehlgeschlagen: Die Daten konnten nicht von Daylite geladen werden.",
     );
   });
