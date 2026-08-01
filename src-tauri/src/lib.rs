@@ -19,6 +19,7 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         integrations::calendar::commands::create_assignment,
         integrations::calendar::commands::update_assignment,
         integrations::calendar::commands::move_assignment,
+        integrations::calendar::commands::reorder_assignment,
         integrations::calendar::commands::delete_assignment,
         integrations::zep::commands::zep_save_credentials,
         integrations::zep::commands::zep_load_credentials,

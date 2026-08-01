@@ -33,7 +33,15 @@ The system SHALL allocate time slots for same-day assignments deterministically,
 - **THEN** the resulting slot assignments are identical
 
 #### Scenario: Equal order indices fall back to a stable tie-break
-- **GIVEN** 2 assignments for a day that momentarily carry the same order index
+- **GIVEN** 2 assignments for a day that carry the same order index
 - **WHEN** allocating time slots
-- **THEN** their relative order is decided by canonical UID
+- **THEN** the one that starts earlier is ordered first
+- **AND** an identical start time is decided in favour of the longer assignment
+- **AND** an identical start time and duration is decided by canonical UID
 - **AND** the allocation is still deterministic across runs
+
+#### Scenario: An assignment excluded from re-slotting takes no slot
+- **GIVEN** a day contains an assignment `slot-allocation` cannot rewrite
+- **WHEN** that assignment is reordered
+- **THEN** no slot is allocated for it
+- **AND** the assignments that can be rewritten keep sharing the full window between them

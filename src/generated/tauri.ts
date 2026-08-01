@@ -18,7 +18,8 @@ export const commands = {
 	dayliteUpdateContactIcalUrls: (input: DayliteUpdateContactIcalUrlsInput) => typedError<PlanningContactRecord, DayliteApiError>(__TAURI_INVOKE("daylite_update_contact_ical_urls", { input })),
 	createAssignment: (input: CreateAssignmentInput) => typedError<string, string>(__TAURI_INVOKE("create_assignment", { input })),
 	updateAssignment: (input: UpdateAssignmentInput) => typedError<null, string>(__TAURI_INVOKE("update_assignment", { input })),
-	moveAssignment: (href: string, targetEmployeeReference: string, date: string, projectRef: string, projectName: string) => typedError<MoveAssignmentResult, string>(__TAURI_INVOKE("move_assignment", { href, targetEmployeeReference, date, projectRef, projectName })),
+	moveAssignment: (href: string, targetEmployeeReference: string, date: string, projectRef: string, projectName: string, orderIndex: number | null) => typedError<MoveAssignmentResult, string>(__TAURI_INVOKE("move_assignment", { href, targetEmployeeReference, date, projectRef, projectName, orderIndex })),
+	reorderAssignment: (href: string, uid: string, date: string, orderIndex: number) => typedError<null, string>(__TAURI_INVOKE("reorder_assignment", { href, uid, date, orderIndex })),
 	deleteAssignment: (href: string) => typedError<null, string>(__TAURI_INVOKE("delete_assignment", { href })),
 	zepSaveCredentials: (rootUrl: string, username: string, password: string) => typedError<null, ZepError>(__TAURI_INVOKE("zep_save_credentials", { rootUrl, username, password })),
 	zepLoadCredentials: () => typedError<{
@@ -53,6 +54,7 @@ export type CalendarCellEvent = {
 	endTime: string | null,
 	href: string | null,
 	projectRef: string | null,
+	orderIndex: number | null,
 };
 
 export type CalendarEventKind = "assignment" | "bare" | "absence";
@@ -233,6 +235,8 @@ export type UpdateAssignmentInput = {
 	date: string,
 	projectRef: string,
 	projectName: string,
+	/**  Position among the target day's assignments. None keeps the assignment where it is. */
+	orderIndex: number | null,
 };
 
 export type ZepCalendar = {

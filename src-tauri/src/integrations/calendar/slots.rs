@@ -1,8 +1,10 @@
 use chrono::{NaiveDate, NaiveTime};
+use std::cmp::Reverse;
 use std::collections::HashMap;
 
 use super::events::classify_event;
-use super::types::RawVEvent;
+use super::ical::ORDER_PROPERTY;
+use super::types::{PendingEvent, RawVEvent};
 
 const WINDOW_START_MINUTE: u32 = 8 * 60;
 const WINDOW_LENGTH_MINUTES: u32 = 8 * 60;
@@ -14,24 +16,22 @@ pub(super) fn full_window() -> (NaiveTime, NaiveTime) {
     )
 }
 
-/// UIDs are sorted first so the allocation is canonical regardless of input order.
+/// `uids` arrives in the day's canonical order, which `sequence_day` establishes, so the
+/// first UID gets the earliest slot.
 /// Boundary i sits at start + (i * length) / n minutes, so the first slot starts at
 /// 08:00, the last ends at 16:00, and adjacent slots share a boundary without overlap.
 pub(super) fn allocate_slots(uids: &[String]) -> Vec<(String, NaiveTime, NaiveTime)> {
-    if uids.is_empty() {
+    let n = uids.len() as u32;
+    if n == 0 {
         return Vec::new();
     }
-    let mut sorted = uids.to_vec();
-    sorted.sort();
-    let n = sorted.len() as u32;
-    sorted
-        .into_iter()
+    uids.iter()
         .enumerate()
         .map(|(i, uid)| {
             let i = i as u32;
             let start = WINDOW_START_MINUTE + (i * WINDOW_LENGTH_MINUTES) / n;
             let end = WINDOW_START_MINUTE + ((i + 1) * WINDOW_LENGTH_MINUTES) / n;
-            (uid, minute_of_day(start), minute_of_day(end))
+            (uid.clone(), minute_of_day(start), minute_of_day(end))
         })
         .collect()
 }
@@ -50,8 +50,21 @@ pub(super) struct SlotUpdate {
     pub(super) payload: String,
 }
 
+/// One assignment singled out of the day, either because the caller is about to write it
+/// itself or because it is being moved to a new position within the day.
+#[derive(Clone, Copy)]
+pub(super) struct DayPlacement<'a> {
+    pub(super) uid: &'a str,
+    /// Requested position among the day's assignments. `None` keeps the event where it
+    /// already sits, or appends it when the day does not contain it yet.
+    pub(super) order_index: Option<u32>,
+    /// True when the caller PUTs this event itself, so the plan must not update it as well.
+    pub(super) written_by_caller: bool,
+}
+
 pub(super) struct DayPlan {
-    pub(super) extra_slot: Option<(NaiveTime, NaiveTime)>,
+    /// Order index and slot the placed event must be written with.
+    pub(super) placed: Option<(u32, NaiveTime, NaiveTime)>,
     pub(super) updates: Vec<SlotUpdate>,
 }
 
@@ -64,13 +77,17 @@ pub(super) struct DayPlan {
 /// overlap an excluded event. That is intended: the alternative would be to silently shrink
 /// everyone else's slot on the guess that the untouched event still occupies its old times.
 ///
-/// `extra_uid` names an event the caller writes itself (a create or update in flight):
-/// it participates in the allocation and gets its slot back via `extra_slot`, but no
-/// update is planned for it, so each event is written exactly once per operation.
+/// The day is re-sequenced to a dense 0..n-1 ordering on every call, so an event is updated
+/// whenever its order index or its slot times no longer match.
+///
+/// A `placement` names an event the caller singles out: it lands at the requested position,
+/// and when `written_by_caller` is set the caller PUTs it itself, so no update is planned
+/// for it and each event is written exactly once per operation. Its resulting index and
+/// slot come back via `DayPlan::placed`.
 pub(super) fn plan_slot_updates(
     events: &[RawVEvent],
     date: &str,
-    extra_uid: Option<&str>,
+    placement: Option<DayPlacement>,
 ) -> DayPlan {
     let assignments: Vec<_> = events
         .iter()
@@ -79,35 +96,36 @@ pub(super) fn plan_slot_updates(
             pending.date == date
                 && pending.project_ref.is_some()
                 && !pending.href.is_empty()
-                && Some(pending.uid.as_str()) != extra_uid
                 && can_patch_slot(&event.raw_ical)
         })
         .collect();
 
-    let mut uids: Vec<String> = assignments
-        .iter()
-        .map(|(pending, _)| pending.uid.clone())
-        .collect();
-    if let Some(extra) = extra_uid {
-        uids.push(extra.to_string());
-    }
-    let slots: HashMap<String, (NaiveTime, NaiveTime)> = allocate_slots(&uids)
+    let ordered = sequence_day(&assignments, placement.as_ref());
+    let assigned: HashMap<String, (u32, NaiveTime, NaiveTime)> = allocate_slots(&ordered)
         .into_iter()
-        .map(|(uid, start, end)| (uid, (start, end)))
+        .enumerate()
+        .map(|(index, (uid, start, end))| (uid, (index as u32, start, end)))
         .collect();
+
+    let written_by_caller = placement
+        .as_ref()
+        .filter(|placement| placement.written_by_caller)
+        .map(|placement| placement.uid);
 
     let updates = assignments
         .into_iter()
+        .filter(|(pending, _)| Some(pending.uid.as_str()) != written_by_caller)
         .filter_map(|(pending, event)| {
-            let (start, end) = *slots.get(&pending.uid)?;
+            let (index, start, end) = *assigned.get(&pending.uid)?;
             let start_str = start.format("%H:%M").to_string();
             let end_str = end.format("%H:%M").to_string();
-            if pending.start_time.as_deref() == Some(start_str.as_str())
+            if pending.order_index == Some(index)
+                && pending.start_time.as_deref() == Some(start_str.as_str())
                 && pending.end_time.as_deref() == Some(end_str.as_str())
             {
                 return None;
             }
-            let payload = patch_event_slot(&event.raw_ical, date, start, end);
+            let payload = patch_event_slot(&event.raw_ical, date, start, end, index);
             Some(SlotUpdate {
                 href: pending.href,
                 uid: pending.uid,
@@ -118,28 +136,105 @@ pub(super) fn plan_slot_updates(
         .collect();
 
     DayPlan {
-        extra_slot: extra_uid.and_then(|uid| slots.get(uid).copied()),
+        placed: placement.and_then(|placement| assigned.get(placement.uid).copied()),
         updates,
     }
 }
 
-/// Every line other than the VEVENT's own DTSTART/DTEND is copied through untouched, so
-/// user-added content (extra DESCRIPTION lines, LOCATION, alarms) survives re-slotting and
-/// a VTIMEZONE's DTSTART is left alone. A missing DTEND is inserted before END:VEVENT.
-fn patch_event_slot(raw_ical: &str, date: &str, start: NaiveTime, end: NaiveTime) -> String {
+/// Ranks the day's assignments and returns the UIDs in the order the allocation runs on.
+///
+/// Existing events take odd sort keys so a requested position `d` (key `2d`) lands ahead of
+/// whoever currently occupies rank `d` rather than tying with it.
+fn sequence_day(
+    assignments: &[(PendingEvent, &RawVEvent)],
+    placement: Option<&DayPlacement>,
+) -> Vec<String> {
+    let mut ranked: Vec<&PendingEvent> = assignments.iter().map(|(pending, _)| pending).collect();
+    ranked.sort_by(|a, b| ordering_key(a).cmp(&ordering_key(b)));
+
+    let placed_uid = placement.map(|placement| placement.uid);
+    let mut current_position = None;
+    let mut keys: Vec<(u32, &str)> = Vec::with_capacity(ranked.len() + 1);
+    for pending in ranked {
+        let uid = pending.uid.as_str();
+        if Some(uid) == placed_uid {
+            current_position = Some(keys.len() as u32);
+            continue;
+        }
+        keys.push((keys.len() as u32 * 2 + 1, uid));
+    }
+
+    if let Some(placement) = placement {
+        // An event the caller is not writing and that this plan cannot patch takes no slot:
+        // allocating one would shrink every other assignment's window for a slot that stays
+        // empty, because the event itself is never rewritten.
+        if placement.written_by_caller || current_position.is_some() {
+            let position = placement.order_index.or(current_position);
+            keys.push((
+                position.map_or(u32::MAX, |position| position.saturating_mul(2)),
+                placement.uid,
+            ));
+        }
+    }
+    keys.sort();
+
+    keys.into_iter().map(|(_, uid)| uid.to_string()).collect()
+}
+
+/// Assignments are ordered by their persisted index. Two that share one are read the way a
+/// planner reads the cell: the earlier start comes first, a longer assignment wins an
+/// identical start, and the canonical UID keeps the ordering total. Assignments without an
+/// index or without times sort last.
+fn ordering_key(pending: &PendingEvent) -> (u32, u32, Reverse<u32>, &str) {
+    let start = minute_of_time(pending.start_time.as_deref());
+    let end = minute_of_time(pending.end_time.as_deref());
+    let duration = match (start, end) {
+        (Some(start), Some(end)) => end.saturating_sub(start),
+        _ => 0,
+    };
+    (
+        pending.order_index.unwrap_or(u32::MAX),
+        start.unwrap_or(u32::MAX),
+        Reverse(duration),
+        pending.uid.as_str(),
+    )
+}
+
+/// Minutes since midnight for an `HH:MM` time, `None` for an all-day or malformed one.
+fn minute_of_time(time: Option<&str>) -> Option<u32> {
+    let (hours, minutes) = time?.split_once(':')?;
+    Some(hours.parse::<u32>().ok()? * 60 + minutes.parse::<u32>().ok()?)
+}
+
+/// Every line other than the VEVENT's own DTSTART/DTEND and order property is copied through
+/// untouched, so user-added content (extra DESCRIPTION lines, LOCATION, alarms) survives
+/// re-slotting and a VTIMEZONE's DTSTART is left alone. A missing DTEND or order property is
+/// inserted before END:VEVENT.
+fn patch_event_slot(
+    raw_ical: &str,
+    date: &str,
+    start: NaiveTime,
+    end: NaiveTime,
+    order_index: u32,
+) -> String {
     let compact = date.replace('-', "");
     let dtstart = format!("DTSTART:{compact}T{}", start.format("%H%M%S"));
     let dtend = format!("DTEND:{compact}T{}", end.format("%H%M%S"));
+    let order = format!("{ORDER_PROPERTY}:{order_index}");
 
     let mut out: Vec<&str> = Vec::new();
     let mut in_vevent = false;
     let mut wrote_dtend = false;
+    let mut wrote_order = false;
     for line in raw_ical.lines() {
         if line == "BEGIN:VEVENT" {
             in_vevent = true;
         } else if line == "END:VEVENT" {
             if in_vevent && !wrote_dtend {
                 out.push(&dtend);
+            }
+            if in_vevent && !wrote_order {
+                out.push(&order);
             }
             in_vevent = false;
         } else if in_vevent {
@@ -152,6 +247,11 @@ fn patch_event_slot(raw_ical: &str, date: &str, start: NaiveTime, end: NaiveTime
                 wrote_dtend = true;
                 continue;
             }
+            if is_property(line, ORDER_PROPERTY) {
+                out.push(&order);
+                wrote_order = true;
+                continue;
+            }
         }
         out.push(line);
     }
@@ -160,7 +260,8 @@ fn patch_event_slot(raw_ical: &str, date: &str, start: NaiveTime, end: NaiveTime
 
 /// True if `patch_event_slot` can safely rewrite this resource's DTSTART/DTEND. It cannot,
 /// and the event is therefore excluded from re-allocation rather than corrupt it, when:
-/// - a DTSTART/DTEND inside the VEVENT is folded across physical lines (patch replaces only
+/// - a rewritten property inside the VEVENT (DTSTART, DTEND, or the order property) is folded
+///   across physical lines (patch replaces only
 ///   the first line and would orphan the continuation). Folds elsewhere are harmless because
 ///   patch copies every other line through untouched, so they are deliberately allowed,
 /// - the resource holds more than one VEVENT (patch shares its DTEND-insertion state, so a
@@ -203,6 +304,8 @@ fn can_patch_slot(raw_ical: &str) -> bool {
                 after_rewritten_property = true;
             } else if is_property(line, "DTEND") {
                 dtend = Some(line);
+                after_rewritten_property = true;
+            } else if is_property(line, ORDER_PROPERTY) {
                 after_rewritten_property = true;
             }
         }
@@ -256,7 +359,7 @@ mod tests {
     }
 
     fn uids(values: &[&str]) -> Vec<String> {
-        values.iter().map(|s| s.to_string()).collect()
+        values.iter().map(|uid| uid.to_string()).collect()
     }
 
     #[test]
@@ -294,11 +397,14 @@ mod tests {
     }
 
     #[test]
-    fn reordered_input_produces_identical_output() {
-        let forward = allocate_slots(&uids(&["a", "b", "c"]));
-        let reversed = allocate_slots(&uids(&["c", "a", "b"]));
+    fn slots_follow_the_order_the_caller_supplies() {
+        let slots = allocate_slots(&uids(&["b", "a"]));
 
-        assert_eq!(forward, reversed);
+        assert_eq!(
+            slots[0].0, "b",
+            "the caller's sequence is canonical, not the UID"
+        );
+        assert_eq!(slots[0].1, time(8, 0));
     }
 
     #[test]
@@ -336,12 +442,36 @@ mod tests {
         assert!(allocate_slots(&[]).is_empty());
     }
 
+    /// An assignment that predates the order property, so it carries no order index.
     fn assignment_event(uid: &str, date: &str, start: &str, end: &str) -> RawVEvent {
+        build_assignment_event(uid, date, start, end, None)
+    }
+
+    fn ordered_assignment_event(
+        uid: &str,
+        date: &str,
+        start: &str,
+        end: &str,
+        order_index: u32,
+    ) -> RawVEvent {
+        build_assignment_event(uid, date, start, end, Some(order_index))
+    }
+
+    fn build_assignment_event(
+        uid: &str,
+        date: &str,
+        start: &str,
+        end: &str,
+        order_index: Option<u32>,
+    ) -> RawVEvent {
         let compact = date.replace('-', "");
         let start_compact = start.replace(':', "");
         let end_compact = end.replace(':', "");
+        let order_line = order_index
+            .map(|index| format!("{ORDER_PROPERTY}:{index}\r\n"))
+            .unwrap_or_default();
         let raw_ical = format!(
-            "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:{uid}\r\nDTSTART:{compact}T{start_compact}00\r\nDTEND:{compact}T{end_compact}00\r\nSUMMARY:Projekt {uid}\r\nDESCRIPTION:daylite:/v1/projects/{uid}\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"
+            "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:{uid}\r\nDTSTART:{compact}T{start_compact}00\r\nDTEND:{compact}T{end_compact}00\r\nSUMMARY:Projekt {uid}\r\nDESCRIPTION:daylite:/v1/projects/{uid}\r\n{order_line}END:VEVENT\r\nEND:VCALENDAR\r\n"
         );
         RawVEvent {
             uid: uid.to_string(),
@@ -353,8 +483,25 @@ mod tests {
             href: format!("/cal/emp/{uid}.ics"),
             etag: format!("\"etag-{uid}\""),
             raw_ical,
+            order_index,
             ..Default::default()
         }
+    }
+
+    fn pending_placement(uid: &str, order_index: Option<u32>) -> Option<DayPlacement<'_>> {
+        Some(DayPlacement {
+            uid,
+            order_index,
+            written_by_caller: true,
+        })
+    }
+
+    fn reorder_placement(uid: &str, order_index: u32) -> Option<DayPlacement<'_>> {
+        Some(DayPlacement {
+            uid,
+            order_index: Some(order_index),
+            written_by_caller: false,
+        })
     }
 
     #[test]
@@ -405,8 +552,8 @@ mod tests {
     #[test]
     fn assignments_already_in_their_slot_need_no_update() {
         let events = vec![
-            assignment_event("uid-a", "2026-05-06", "08:00", "12:00"),
-            assignment_event("uid-b", "2026-05-06", "12:00", "16:00"),
+            ordered_assignment_event("uid-a", "2026-05-06", "08:00", "12:00", 0),
+            ordered_assignment_event("uid-b", "2026-05-06", "12:00", "16:00", 1),
         ];
 
         assert!(plan_slot_updates(&events, "2026-05-06", None)
@@ -417,8 +564,8 @@ mod tests {
     #[test]
     fn events_on_other_days_are_ignored() {
         let events = vec![
-            assignment_event("uid-a", "2026-05-06", "08:00", "16:00"),
-            assignment_event("uid-b", "2026-05-07", "08:00", "16:00"),
+            ordered_assignment_event("uid-a", "2026-05-06", "08:00", "16:00", 0),
+            ordered_assignment_event("uid-b", "2026-05-07", "08:00", "16:00", 0),
         ];
 
         let updates = plan_slot_updates(&events, "2026-05-06", None).updates;
@@ -446,9 +593,9 @@ mod tests {
     fn extra_uid_gets_a_slot_without_an_update_of_its_own() {
         let events = vec![assignment_event("uid-a", "2026-05-06", "08:00", "16:00")];
 
-        let plan = plan_slot_updates(&events, "2026-05-06", Some("uid-b"));
+        let plan = plan_slot_updates(&events, "2026-05-06", pending_placement("uid-b", None));
 
-        assert_eq!(plan.extra_slot, Some((time(12, 0), time(16, 0))));
+        assert_eq!(plan.placed, Some((1, time(12, 0), time(16, 0))));
         assert_eq!(plan.updates.len(), 1);
         assert_eq!(plan.updates[0].uid, "uid-a");
         assert!(plan.updates[0].payload.contains("DTEND:20260506T120000"));
@@ -456,9 +603,9 @@ mod tests {
 
     #[test]
     fn extra_uid_alone_receives_the_full_window() {
-        let plan = plan_slot_updates(&[], "2026-05-06", Some("uid-new"));
+        let plan = plan_slot_updates(&[], "2026-05-06", pending_placement("uid-new", None));
 
-        assert_eq!(plan.extra_slot, Some((time(8, 0), time(16, 0))));
+        assert_eq!(plan.placed, Some((0, time(8, 0), time(16, 0))));
         assert!(plan.updates.is_empty());
     }
 
@@ -467,13 +614,13 @@ mod tests {
         // The event being updated is still on the server; passing it as extra_uid must
         // not double-count it in the allocation or plan a second PUT for it.
         let events = vec![
-            assignment_event("uid-a", "2026-05-06", "08:00", "12:00"),
-            assignment_event("uid-b", "2026-05-06", "12:00", "16:00"),
+            ordered_assignment_event("uid-a", "2026-05-06", "08:00", "12:00", 0),
+            ordered_assignment_event("uid-b", "2026-05-06", "12:00", "16:00", 1),
         ];
 
-        let plan = plan_slot_updates(&events, "2026-05-06", Some("uid-b"));
+        let plan = plan_slot_updates(&events, "2026-05-06", pending_placement("uid-b", None));
 
-        assert_eq!(plan.extra_slot, Some((time(12, 0), time(16, 0))));
+        assert_eq!(plan.placed, Some((1, time(12, 0), time(16, 0))));
         assert!(plan.updates.is_empty(), "uid-a already sits in its slot");
     }
 
@@ -529,7 +676,7 @@ mod tests {
         orphan.href = String::new();
         let events = vec![
             orphan,
-            assignment_event("uid-b", "2026-05-06", "08:00", "16:00"),
+            ordered_assignment_event("uid-b", "2026-05-06", "08:00", "16:00", 0),
         ];
 
         let updates = plan_slot_updates(&events, "2026-05-06", None).updates;
@@ -658,7 +805,7 @@ mod tests {
         );
         let events = vec![
             recurring,
-            assignment_event("uid-b", "2026-05-06", "08:00", "16:00"),
+            ordered_assignment_event("uid-b", "2026-05-06", "08:00", "16:00", 0),
         ];
 
         let updates = plan_slot_updates(&events, "2026-05-06", None).updates;
@@ -732,7 +879,7 @@ mod tests {
         );
         let events = vec![
             folded,
-            assignment_event("uid-b", "2026-05-06", "08:00", "16:00"),
+            ordered_assignment_event("uid-b", "2026-05-06", "08:00", "16:00", 0),
         ];
 
         let updates = plan_slot_updates(&events, "2026-05-06", None).updates;
@@ -748,10 +895,304 @@ mod tests {
     }
 
     #[test]
+    fn day_is_resequenced_to_dense_order_indices() {
+        let events = vec![
+            assignment_event("uid-a", "2026-05-06", "08:00", "16:00"),
+            assignment_event("uid-b", "2026-05-06", "08:00", "16:00"),
+        ];
+
+        let updates = plan_slot_updates(&events, "2026-05-06", None).updates;
+
+        assert_eq!(updates.len(), 2);
+        assert!(updates[0].payload.contains("X-LKR-ORDER:0"));
+        assert!(updates[1].payload.contains("X-LKR-ORDER:1"));
+    }
+
+    #[test]
+    fn order_index_rather_than_uid_decides_the_allocated_slot() {
+        let events = vec![
+            ordered_assignment_event("uid-a", "2026-05-06", "08:00", "16:00", 1),
+            ordered_assignment_event("uid-b", "2026-05-06", "08:00", "16:00", 0),
+        ];
+
+        let updates = plan_slot_updates(&events, "2026-05-06", None).updates;
+
+        let uid_b = updates.iter().find(|u| u.uid == "uid-b").unwrap();
+        let uid_a = updates.iter().find(|u| u.uid == "uid-a").unwrap();
+        assert!(uid_b.payload.contains("DTSTART:20260506T080000"));
+        assert!(uid_b.payload.contains("DTEND:20260506T120000"));
+        assert!(uid_a.payload.contains("DTSTART:20260506T120000"));
+        assert!(uid_a.payload.contains("DTEND:20260506T160000"));
+    }
+
+    #[test]
+    fn changing_the_order_index_changes_the_allocated_times() {
+        let before = vec![
+            ordered_assignment_event("uid-a", "2026-05-06", "08:00", "12:00", 0),
+            ordered_assignment_event("uid-b", "2026-05-06", "12:00", "16:00", 1),
+        ];
+        let after = vec![
+            ordered_assignment_event("uid-a", "2026-05-06", "08:00", "12:00", 1),
+            ordered_assignment_event("uid-b", "2026-05-06", "12:00", "16:00", 0),
+        ];
+
+        assert!(plan_slot_updates(&before, "2026-05-06", None)
+            .updates
+            .is_empty());
+        let updates = plan_slot_updates(&after, "2026-05-06", None).updates;
+        let uid_a = updates.iter().find(|u| u.uid == "uid-a").unwrap();
+        assert!(uid_a.payload.contains("DTSTART:20260506T120000"));
+    }
+
+    #[test]
+    fn a_new_assignment_without_a_requested_position_is_appended() {
+        let events = vec![
+            ordered_assignment_event("uid-a", "2026-05-06", "08:00", "16:00", 0),
+            ordered_assignment_event("uid-b", "2026-05-06", "08:00", "16:00", 1),
+        ];
+
+        let plan = plan_slot_updates(&events, "2026-05-06", pending_placement("uid-new", None));
+
+        assert_eq!(plan.placed.unwrap().0, 2);
+    }
+
+    #[test]
+    fn a_pending_write_without_a_requested_position_keeps_its_place() {
+        let events = vec![
+            ordered_assignment_event("uid-a", "2026-05-06", "08:00", "10:40", 0),
+            ordered_assignment_event("uid-b", "2026-05-06", "10:40", "13:20", 1),
+            ordered_assignment_event("uid-c", "2026-05-06", "13:20", "16:00", 2),
+        ];
+
+        let plan = plan_slot_updates(&events, "2026-05-06", pending_placement("uid-b", None));
+
+        assert_eq!(plan.placed, Some((1, time(10, 40), time(13, 20))));
+        assert!(
+            plan.updates.is_empty(),
+            "nothing else moved, so nothing else is written"
+        );
+    }
+
+    #[test]
+    fn a_pending_write_lands_at_the_requested_position() {
+        let events = vec![
+            ordered_assignment_event("uid-a", "2026-05-06", "08:00", "12:00", 0),
+            ordered_assignment_event("uid-b", "2026-05-06", "12:00", "16:00", 1),
+        ];
+
+        let plan = plan_slot_updates(&events, "2026-05-06", pending_placement("uid-new", Some(1)));
+
+        assert_eq!(plan.placed.unwrap().0, 1, "lands between uid-a and uid-b");
+        let uid_b = plan.updates.iter().find(|u| u.uid == "uid-b").unwrap();
+        assert!(uid_b.payload.contains("X-LKR-ORDER:2"));
+    }
+
+    #[test]
+    fn reordering_within_the_day_rewrites_the_moved_card_and_its_neighbours() {
+        let events = vec![
+            ordered_assignment_event("uid-a", "2026-05-06", "08:00", "10:40", 0),
+            ordered_assignment_event("uid-b", "2026-05-06", "10:40", "13:20", 1),
+            ordered_assignment_event("uid-c", "2026-05-06", "13:20", "16:00", 2),
+        ];
+
+        let updates =
+            plan_slot_updates(&events, "2026-05-06", reorder_placement("uid-c", 0)).updates;
+
+        let uid_c = updates.iter().find(|u| u.uid == "uid-c").unwrap();
+        assert!(uid_c.payload.contains("X-LKR-ORDER:0"));
+        assert!(uid_c.payload.contains("DTSTART:20260506T080000"));
+        let uid_a = updates.iter().find(|u| u.uid == "uid-a").unwrap();
+        assert!(uid_a.payload.contains("X-LKR-ORDER:1"));
+        assert!(uid_a.payload.contains("DTSTART:20260506T104000"));
+    }
+
+    #[test]
+    fn reordering_a_card_onto_its_own_position_writes_nothing() {
+        let events = vec![
+            ordered_assignment_event("uid-a", "2026-05-06", "08:00", "12:00", 0),
+            ordered_assignment_event("uid-b", "2026-05-06", "12:00", "16:00", 1),
+        ];
+
+        assert!(
+            plan_slot_updates(&events, "2026-05-06", reorder_placement("uid-b", 1))
+                .updates
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn assignment_excluded_from_reslotting_keeps_its_order_index_and_times() {
+        let mut excluded = ordered_assignment_event("uid-a", "2026-05-06", "09:00", "17:00", 1);
+        excluded.raw_ical = excluded
+            .raw_ical
+            .replace("DTEND:20260506T170000\r\n", "DURATION:PT8H\r\n");
+        let events = vec![
+            excluded,
+            ordered_assignment_event("uid-b", "2026-05-06", "08:00", "16:00", 0),
+            ordered_assignment_event("uid-c", "2026-05-06", "08:00", "16:00", 2),
+        ];
+
+        let updates = plan_slot_updates(&events, "2026-05-06", None).updates;
+
+        assert!(
+            updates.iter().all(|u| u.uid != "uid-a"),
+            "an excluded assignment keeps both its order index and its times"
+        );
+        let uid_c = updates.iter().find(|u| u.uid == "uid-c").unwrap();
+        assert!(
+            uid_c.payload.contains("X-LKR-ORDER:1"),
+            "the participating assignments are re-sequenced around it"
+        );
+    }
+
+    #[test]
+    fn reordering_an_event_that_cannot_be_patched_allocates_no_slot_for_it() {
+        // uid-x is excluded from re-slotting, so the reorder cannot move it. Allocating a
+        // slot for it anyway would split the day three ways and leave 08:00-10:40 empty
+        // while squeezing the two assignments that can be written.
+        let mut excluded = ordered_assignment_event("uid-x", "2026-05-06", "09:00", "17:00", 0);
+        excluded.raw_ical = excluded
+            .raw_ical
+            .replace("DTEND:20260506T170000\r\n", "DURATION:PT8H\r\n");
+        let events = vec![
+            excluded,
+            ordered_assignment_event("uid-a", "2026-05-06", "08:00", "16:00", 1),
+            ordered_assignment_event("uid-b", "2026-05-06", "08:00", "16:00", 2),
+        ];
+
+        let plan = plan_slot_updates(&events, "2026-05-06", reorder_placement("uid-x", 0));
+
+        assert_eq!(plan.placed, None, "an unwritable event gets no slot");
+        assert_eq!(plan.updates.len(), 2);
+        let uid_a = plan.updates.iter().find(|u| u.uid == "uid-a").unwrap();
+        assert!(uid_a.payload.contains("DTSTART:20260506T080000"));
+        assert!(uid_a.payload.contains("DTEND:20260506T120000"));
+        let uid_b = plan.updates.iter().find(|u| u.uid == "uid-b").unwrap();
+        assert!(uid_b.payload.contains("DTSTART:20260506T120000"));
+    }
+
+    #[test]
+    fn reordering_an_event_that_left_the_day_allocates_no_slot_for_it() {
+        // Another device deleted the card between the drag and the write.
+        let events = vec![ordered_assignment_event(
+            "uid-a",
+            "2026-05-06",
+            "08:00",
+            "12:00",
+            0,
+        )];
+
+        let plan = plan_slot_updates(&events, "2026-05-06", reorder_placement("uid-gone", 0));
+
+        assert_eq!(plan.placed, None);
+        let uid_a = plan.updates.iter().find(|u| u.uid == "uid-a").unwrap();
+        assert!(
+            uid_a.payload.contains("DTEND:20260506T160000"),
+            "the remaining assignment owns the whole window"
+        );
+    }
+
+    #[test]
+    fn a_created_event_still_gets_a_slot_although_the_day_does_not_hold_it_yet() {
+        let plan = plan_slot_updates(&[], "2026-05-06", pending_placement("uid-new", None));
+
+        assert_eq!(plan.placed, Some((0, time(8, 0), time(16, 0))));
+    }
+
+    #[test]
+    fn a_shared_order_index_is_broken_by_the_earlier_start_time() {
+        // An assignment excluded from re-slotting keeps a stale index, so two cards in a
+        // cell can carry the same one.
+        let events = vec![
+            ordered_assignment_event("uid-late", "2026-05-06", "13:00", "16:00", 0),
+            ordered_assignment_event("uid-early", "2026-05-06", "09:00", "12:00", 0),
+        ];
+
+        let updates = plan_slot_updates(&events, "2026-05-06", None).updates;
+
+        let early = updates.iter().find(|u| u.uid == "uid-early").unwrap();
+        assert!(early.payload.contains("X-LKR-ORDER:0"));
+        assert!(early.payload.contains("DTSTART:20260506T080000"));
+        let late = updates.iter().find(|u| u.uid == "uid-late").unwrap();
+        assert!(late.payload.contains("X-LKR-ORDER:1"));
+    }
+
+    #[test]
+    fn an_equal_start_time_is_broken_by_the_longer_assignment() {
+        let events = vec![
+            ordered_assignment_event("uid-short", "2026-05-06", "09:00", "10:00", 0),
+            ordered_assignment_event("uid-long", "2026-05-06", "09:00", "15:00", 0),
+        ];
+
+        let updates = plan_slot_updates(&events, "2026-05-06", None).updates;
+
+        let long = updates.iter().find(|u| u.uid == "uid-long").unwrap();
+        assert!(long.payload.contains("X-LKR-ORDER:0"));
+        let short = updates.iter().find(|u| u.uid == "uid-short").unwrap();
+        assert!(short.payload.contains("X-LKR-ORDER:1"));
+    }
+
+    #[test]
+    fn an_identical_index_start_and_duration_falls_back_to_the_canonical_uid() {
+        let events = vec![
+            ordered_assignment_event("uid-b", "2026-05-06", "09:00", "12:00", 0),
+            ordered_assignment_event("uid-a", "2026-05-06", "09:00", "12:00", 0),
+        ];
+
+        let updates = plan_slot_updates(&events, "2026-05-06", None).updates;
+
+        let first = updates.iter().find(|u| u.uid == "uid-a").unwrap();
+        assert!(first.payload.contains("X-LKR-ORDER:0"));
+    }
+
+    #[test]
+    fn an_assignment_without_times_sorts_after_the_timed_ones() {
+        let mut untimed = ordered_assignment_event("uid-a", "2026-05-06", "09:00", "12:00", 0);
+        untimed.start_time = None;
+        untimed.end_time = None;
+        let events = vec![
+            untimed,
+            ordered_assignment_event("uid-z", "2026-05-06", "09:00", "12:00", 0),
+        ];
+
+        let updates = plan_slot_updates(&events, "2026-05-06", None).updates;
+
+        let timed = updates.iter().find(|u| u.uid == "uid-z").unwrap();
+        assert!(timed.payload.contains("X-LKR-ORDER:0"));
+    }
+
+    #[test]
+    fn patching_replaces_an_existing_order_property() {
+        let raw = "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:uid-a\r\nDTSTART:20260506T080000\r\nDTEND:20260506T160000\r\nX-LKR-ORDER:3\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+
+        let patched = patch_event_slot(raw, "2026-05-06", time(8, 0), time(12, 0), 1);
+
+        assert!(patched.contains("X-LKR-ORDER:1"));
+        assert!(!patched.contains("X-LKR-ORDER:3"));
+    }
+
+    #[test]
+    fn patching_inserts_the_order_property_when_missing() {
+        let raw = "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:uid-a\r\nDTSTART:20260506T080000\r\nDTEND:20260506T160000\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+
+        let patched = patch_event_slot(raw, "2026-05-06", time(8, 0), time(12, 0), 2);
+
+        assert!(patched.contains("X-LKR-ORDER:2"));
+        assert!(patched.contains("END:VEVENT"));
+    }
+
+    #[test]
+    fn can_patch_slot_rejects_a_folded_order_property() {
+        let folded = "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:x\r\nDTSTART:20260506T080000\r\nDTEND:20260506T120000\r\nX-LKR-ORDER:1\r\n 2\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+
+        assert!(!can_patch_slot(folded));
+    }
+
+    #[test]
     fn patching_preserves_user_added_properties_and_alarms() {
         let raw = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:uid-a\r\nDTSTART:20260506T080000\r\nDTEND:20260506T160000\r\nSUMMARY:Projekt Nord\r\nDESCRIPTION:daylite:/v1/projects/42\\nNotiz vom Nutzer\r\nLOCATION:Baustelle Nord\r\nBEGIN:VALARM\r\nTRIGGER:-PT15M\r\nACTION:DISPLAY\r\nEND:VALARM\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
 
-        let patched = patch_event_slot(raw, "2026-05-06", time(8, 0), time(12, 0));
+        let patched = patch_event_slot(raw, "2026-05-06", time(8, 0), time(12, 0), 0);
 
         assert!(patched.contains("DTSTART:20260506T080000"));
         assert!(patched.contains("DTEND:20260506T120000"));
@@ -768,7 +1209,7 @@ mod tests {
     fn patching_replaces_dtstart_with_parameters() {
         let raw = "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:uid-a\r\nDTSTART;TZID=Europe/Vienna:20260506T090000\r\nDTEND;TZID=Europe/Vienna:20260506T170000\r\nSUMMARY:Projekt\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
 
-        let patched = patch_event_slot(raw, "2026-05-06", time(12, 0), time(16, 0));
+        let patched = patch_event_slot(raw, "2026-05-06", time(12, 0), time(16, 0), 1);
 
         assert!(patched.contains("DTSTART:20260506T120000"));
         assert!(patched.contains("DTEND:20260506T160000"));
@@ -782,7 +1223,7 @@ mod tests {
     fn patching_inserts_dtend_when_missing() {
         let raw = "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:uid-a\r\nDTSTART;VALUE=DATE:20260506\r\nSUMMARY:Projekt\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
 
-        let patched = patch_event_slot(raw, "2026-05-06", time(8, 0), time(12, 0));
+        let patched = patch_event_slot(raw, "2026-05-06", time(8, 0), time(12, 0), 0);
 
         assert!(patched.contains("DTSTART:20260506T080000"));
         assert!(patched.contains("DTEND:20260506T120000"));
@@ -792,7 +1233,7 @@ mod tests {
     fn patching_leaves_vtimezone_dtstart_untouched() {
         let raw = "BEGIN:VCALENDAR\r\nBEGIN:VTIMEZONE\r\nTZID:Europe/Vienna\r\nBEGIN:STANDARD\r\nDTSTART:19701025T030000\r\nEND:STANDARD\r\nEND:VTIMEZONE\r\nBEGIN:VEVENT\r\nUID:uid-a\r\nDTSTART:20260506T080000\r\nDTEND:20260506T160000\r\nSUMMARY:Projekt\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
 
-        let patched = patch_event_slot(raw, "2026-05-06", time(8, 0), time(12, 0));
+        let patched = patch_event_slot(raw, "2026-05-06", time(8, 0), time(12, 0), 0);
 
         assert!(
             patched.contains("DTSTART:19701025T030000"),

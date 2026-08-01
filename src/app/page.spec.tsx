@@ -83,6 +83,7 @@ function cellEvent(overrides: Partial<CalendarCellEvent>): CalendarCellEvent {
     startTime: null,
     endTime: null,
     href: null,
+    orderIndex: null,
     ...overrides,
   };
 }

@@ -3,6 +3,10 @@ use icalendar::{Calendar, CalendarComponent, CalendarDateTime, Component, DatePe
 
 use super::types::RawVEvent;
 
+/// X-property carrying the assignment's position among its same-day siblings. It survives
+/// re-slotting because `patch_event_slot` copies every line it does not rewrite.
+pub(super) const ORDER_PROPERTY: &str = "X-LKR-ORDER";
+
 pub(crate) fn build_ical_payload(
     uid: &str,
     date: &str,
@@ -10,6 +14,7 @@ pub(crate) fn build_ical_payload(
     project_ref: &str,
     start: NaiveTime,
     end: NaiveTime,
+    order_index: u32,
 ) -> String {
     let compact = date.replace('-', "");
     let dtstart = format!("{compact}T{}", start.format("%H%M%S"));
@@ -18,7 +23,7 @@ pub(crate) fn build_ical_payload(
     let summary = escape_ical_text(summary);
     let description = escape_ical_text(&format!("daylite:{project_ref}"));
     format!(
-        "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//lkr-planner//EN\r\nBEGIN:VEVENT\r\nUID:{uid}\r\nDTSTAMP:{dtstamp}\r\nDTSTART:{dtstart}\r\nDTEND:{dtend}\r\nSUMMARY:{summary}\r\nDESCRIPTION:{description}\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"
+        "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//lkr-planner//EN\r\nBEGIN:VEVENT\r\nUID:{uid}\r\nDTSTAMP:{dtstamp}\r\nDTSTART:{dtstart}\r\nDTEND:{dtend}\r\nSUMMARY:{summary}\r\nDESCRIPTION:{description}\r\n{ORDER_PROPERTY}:{order_index}\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"
     )
 }
 
@@ -75,6 +80,9 @@ pub(super) fn parse_ical_events(ical_text: &str) -> Result<Vec<RawVEvent>, Strin
                 dtend,
                 start_time,
                 end_time,
+                order_index: event
+                    .property_value(ORDER_PROPERTY)
+                    .and_then(|value| value.trim().parse().ok()),
                 // href, etag, and raw_ical are populated by parse_caldav_report.
                 href: String::new(),
                 etag: String::new(),
@@ -153,6 +161,24 @@ mod tests {
     }
 
     #[test]
+    fn parses_the_order_index_from_the_x_property() {
+        let ical = "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:uid-1\r\nSUMMARY:Projekt\r\nDTSTART:20260506T080000\r\nX-LKR-ORDER:2\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+
+        let events = parse_ical_events(ical).unwrap();
+
+        assert_eq!(events[0].order_index, Some(2));
+    }
+
+    #[test]
+    fn order_index_is_none_when_the_x_property_is_absent() {
+        let ical = "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:uid-1\r\nSUMMARY:Projekt\r\nDTSTART:20260506T080000\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+
+        let events = parse_ical_events(ical).unwrap();
+
+        assert_eq!(events[0].order_index, None);
+    }
+
+    #[test]
     fn malformed_ical_text_returns_error() {
         let result = parse_ical_events("this is definitely not valid ical");
         assert!(result.is_err(), "expected Err for malformed iCal, got Ok");
@@ -175,6 +201,7 @@ mod tests {
             "/v1/projects/42",
             start,
             end,
+            0,
         );
 
         assert!(payload.contains("BEGIN:VCALENDAR"), "missing VCALENDAR");
@@ -194,8 +221,15 @@ mod tests {
     #[test]
     fn build_ical_payload_uses_floating_local_time_no_z_suffix() {
         let (start, end) = window();
-        let payload =
-            build_ical_payload("uid-2", "2026-12-31", "Test", "/v1/projects/1", start, end);
+        let payload = build_ical_payload(
+            "uid-2",
+            "2026-12-31",
+            "Test",
+            "/v1/projects/1",
+            start,
+            end,
+            0,
+        );
         assert!(
             payload.contains("DTSTART:20261231T080000\r\n"),
             "DTSTART must not have Z suffix"
@@ -215,6 +249,7 @@ mod tests {
             "/v1/projects/1",
             NaiveTime::from_hms_opt(10, 40, 0).unwrap(),
             NaiveTime::from_hms_opt(13, 20, 0).unwrap(),
+            1,
         );
         assert!(
             payload.contains("DTSTART:20260506T104000"),
@@ -227,6 +262,26 @@ mod tests {
     }
 
     #[test]
+    fn build_ical_payload_writes_the_order_index() {
+        let (start, end) = window();
+        let payload = build_ical_payload(
+            "uid-o",
+            "2026-05-06",
+            "Test",
+            "/v1/projects/1",
+            start,
+            end,
+            3,
+        );
+
+        assert!(
+            payload.contains("X-LKR-ORDER:3\r\n"),
+            "the order index must round-trip through the written VEVENT, got: {payload}"
+        );
+        assert_eq!(parse_ical_events(&payload).unwrap()[0].order_index, Some(3));
+    }
+
+    #[test]
     fn build_ical_payload_escapes_special_chars_in_summary() {
         let (start, end) = window();
         let payload = build_ical_payload(
@@ -236,6 +291,7 @@ mod tests {
             "/v1/projects/42",
             start,
             end,
+            0,
         );
         assert!(
             payload.contains("SUMMARY:Müller\\, Söhne\\; Bau \\\\ Test"),
@@ -253,6 +309,7 @@ mod tests {
             "/v1/projects/42",
             start,
             end,
+            0,
         );
         assert!(
             payload.contains("SUMMARY:Zeile1\\nZeile2"),
@@ -276,6 +333,7 @@ mod tests {
             "/v1/projects/42",
             start,
             end,
+            0,
         );
         assert!(
             payload.contains("DESCRIPTION:daylite:/v1/projects/42"),

@@ -47,6 +47,7 @@ pub(crate) fn classify_event(event: &RawVEvent) -> PendingEvent {
         start_time: event.start_time.clone(),
         end_time: event.end_time.clone(),
         href: event.href.clone(),
+        order_index: event.order_index,
     }
 }
 
@@ -100,6 +101,18 @@ mod tests {
 
         assert_eq!(pending.date, "2026-01-26");
         assert_eq!(pending.summary, "Projekt Nord");
+    }
+
+    /// The order index is what the reordering feature persists, so classification
+    /// must carry it through untouched.
+    #[test]
+    fn carries_the_order_index_through_classification() {
+        let pending = classify_event(&RawVEvent {
+            order_index: Some(2),
+            ..event("daylite:/v1/projects/3001")
+        });
+
+        assert_eq!(pending.order_index, Some(2));
     }
 
     #[test]
