@@ -68,7 +68,9 @@ export function createTtlCache<T>({
             } satisfies CacheLoadResult<T>;
           }
 
-          const fromFallback = (await fallback?.()) ?? [];
+          // A failing fallback must not replace the load failure the caller needs to
+          // see, nor escape as a rejection this catch never wrapped.
+          const fromFallback = (await fallback?.().catch(() => [])) ?? [];
           if (fromFallback.length > 0) {
             entry = { data: fromFallback, fetchedAtMs: nowMs };
             return {

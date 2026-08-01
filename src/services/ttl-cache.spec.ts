@@ -104,6 +104,16 @@ describe("createTtlCache", () => {
     expect(result.errorMessage).toBe("Backend weg");
   });
 
+  it("reports the load failure when the disk fallback also fails", async () => {
+    const { cache } = countingCache([fails("Backend weg")], async () => {
+      throw new Error("Platte weg");
+    });
+
+    await expect(cache.get({ nowMs: 1_000 })).rejects.toThrow(
+      "Laden fehlgeschlagen: Backend weg",
+    );
+  });
+
   it("keeps serving the disk fallback from memory afterwards", async () => {
     const { cache, callCount } = countingCache(
       [fails("Backend weg")],
