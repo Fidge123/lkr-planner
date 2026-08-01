@@ -363,26 +363,14 @@ fn map_project_status(status: Option<String>) -> PlanningProjectStatus {
         .map(|value| value.to_lowercase())
         .unwrap_or_default();
 
-    if normalized == "in_progress" {
-        return PlanningProjectStatus::InProgress;
+    match normalized.as_str() {
+        "in_progress" => PlanningProjectStatus::InProgress,
+        "done" => PlanningProjectStatus::Done,
+        "abandoned" => PlanningProjectStatus::Abandoned,
+        "cancelled" => PlanningProjectStatus::Cancelled,
+        "deferred" => PlanningProjectStatus::Deferred,
+        _ => PlanningProjectStatus::NewStatus,
     }
-    if normalized == "done" {
-        return PlanningProjectStatus::Done;
-    }
-    if normalized == "abandoned" {
-        return PlanningProjectStatus::Abandoned;
-    }
-    if normalized == "cancelled" {
-        return PlanningProjectStatus::Cancelled;
-    }
-    if normalized == "deferred" {
-        return PlanningProjectStatus::Deferred;
-    }
-    if normalized == "new" || normalized == "new_status" {
-        return PlanningProjectStatus::NewStatus;
-    }
-
-    PlanningProjectStatus::NewStatus
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
