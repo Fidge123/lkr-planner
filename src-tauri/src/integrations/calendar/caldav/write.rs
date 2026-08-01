@@ -188,14 +188,7 @@ pub(crate) async fn create_assignment_core(
     calendar_url: &str,
     write: &AssignmentWrite,
 ) -> Result<String, String> {
-    if targets_absence_calendar(calendar_url, &session.absence_urls) {
-        eprintln!(
-            "calendar: refused create_assignment write to absence calendar URL '{calendar_url}'"
-        );
-        return Err(
-            "Einsätze können nicht in einen Abwesenheitskalender geschrieben werden.".to_string(),
-        );
-    }
+    refuse_absence_calendar(session, calendar_url, "create_assignment")?;
 
     let uid = Uuid::new_v4().to_string();
     let plan = plan_day_for_pending_write(session, calendar_url, &write.date, &uid).await;
@@ -217,20 +210,13 @@ pub(crate) async fn create_assignment_core(
 
     eprintln!("calendar: create_assignment PUT {resource_url}");
 
-    let response = session
-        .client
-        .put(&resource_url)
-        .basic_auth(&session.username, Some(&session.password))
-        .header("Content-Type", "text/calendar; charset=utf-8")
-        .body(payload)
-        .send()
-        .await
-        .map_err(|e| format!("Einsatz konnte nicht gespeichert werden: {e}"))?;
-
-    let status = response.status().as_u16();
-    if !(200..300).contains(&status) {
-        return Err(format!("Kalenderserver antwortete mit HTTP {status}"));
-    }
+    put_ical(
+        session,
+        &resource_url,
+        payload,
+        "Einsatz konnte nicht gespeichert werden",
+    )
+    .await?;
 
     match plan {
         Some(plan) => {
@@ -251,14 +237,7 @@ pub(crate) async fn update_assignment_core(
 ) -> Result<(), String> {
     let resource_url = resolve_href(href, &session.base_url)?;
 
-    if targets_absence_calendar(&resource_url, &session.absence_urls) {
-        eprintln!(
-            "calendar: refused update_assignment write to absence calendar URL '{resource_url}'"
-        );
-        return Err(
-            "Einsätze können nicht in einen Abwesenheitskalender geschrieben werden.".to_string(),
-        );
-    }
+    refuse_absence_calendar(session, &resource_url, "update_assignment")?;
 
     let calendar_url = parent_collection_url(&resource_url);
     // Read the event's current day before the PUT overwrites it: moving an assignment to
@@ -292,20 +271,13 @@ pub(crate) async fn update_assignment_core(
 
     eprintln!("calendar: update_assignment PUT {resource_url}");
 
-    let response = session
-        .client
-        .put(&resource_url)
-        .basic_auth(&session.username, Some(&session.password))
-        .header("Content-Type", "text/calendar; charset=utf-8")
-        .body(payload)
-        .send()
-        .await
-        .map_err(|e| format!("Einsatz konnte nicht aktualisiert werden: {e}"))?;
-
-    let status = response.status().as_u16();
-    if !(200..300).contains(&status) {
-        return Err(format!("Kalenderserver antwortete mit HTTP {status}"));
-    }
+    put_ical(
+        session,
+        &resource_url,
+        payload,
+        "Einsatz konnte nicht aktualisiert werden",
+    )
+    .await?;
 
     match plan {
         Some(plan) => {
@@ -329,14 +301,7 @@ pub(crate) async fn delete_assignment_core(
 ) -> Result<(), String> {
     let resource_url = resolve_href(href, &session.base_url)?;
 
-    if targets_absence_calendar(&resource_url, &session.absence_urls) {
-        eprintln!(
-            "calendar: refused delete_assignment write to absence calendar URL '{resource_url}'"
-        );
-        return Err(
-            "Einsätze können nicht in einen Abwesenheitskalender geschrieben werden.".to_string(),
-        );
-    }
+    refuse_absence_calendar(session, &resource_url, "delete_assignment")?;
 
     // Read the event's day before deleting so the remaining same-day assignments
     // can be re-allocated afterwards.
@@ -414,8 +379,46 @@ pub(super) fn resolve_href(href: &str, base_url: &str) -> Result<String, String>
     Ok(resolved.to_string())
 }
 
-/// Safety guard: assignment writes must never land in an absence calendar, even
-/// if the store is misconfigured (primary == absence) or an href is corrupted.
+/// Safety guard every assignment write goes through: writes must never land in an
+/// absence calendar, even if the store is misconfigured (primary == absence) or an
+/// href is corrupted.
+fn refuse_absence_calendar(
+    session: &CaldavSession,
+    target_url: &str,
+    operation: &str,
+) -> Result<(), String> {
+    if !targets_absence_calendar(target_url, &session.absence_urls) {
+        return Ok(());
+    }
+
+    eprintln!("calendar: refused {operation} write to absence calendar URL '{target_url}'");
+    Err("Einsätze können nicht in einen Abwesenheitskalender geschrieben werden.".to_string())
+}
+
+async fn put_ical(
+    session: &CaldavSession,
+    resource_url: &str,
+    payload: String,
+    failure_message: &str,
+) -> Result<(), String> {
+    let response = session
+        .client
+        .put(resource_url)
+        .basic_auth(&session.username, Some(&session.password))
+        .header("Content-Type", "text/calendar; charset=utf-8")
+        .body(payload)
+        .send()
+        .await
+        .map_err(|e| format!("{failure_message}: {e}"))?;
+
+    let status = response.status().as_u16();
+    if !(200..300).contains(&status) {
+        return Err(format!("Kalenderserver antwortete mit HTTP {status}"));
+    }
+
+    Ok(())
+}
+
 fn targets_absence_calendar(target_url: &str, absence_urls: &[String]) -> bool {
     let target = target_url.trim_end_matches('/');
     absence_urls.iter().any(|raw| {
