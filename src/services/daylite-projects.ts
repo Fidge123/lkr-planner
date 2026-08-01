@@ -6,7 +6,7 @@ import {
   createTtlCache,
 } from "./ttl-cache";
 
-export const DEFAULT_DAYLITE_PROJECT_CACHE_TTL_MS = 30_000;
+const DEFAULT_DAYLITE_PROJECT_CACHE_TTL_MS = 30_000;
 
 const projectCache = createTtlCache<PlanningProjectRecord>({
   ttlMs: DEFAULT_DAYLITE_PROJECT_CACHE_TTL_MS,

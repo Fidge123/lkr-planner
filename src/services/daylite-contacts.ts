@@ -11,7 +11,7 @@ import {
   createTtlCache,
 } from "./ttl-cache";
 
-export const DEFAULT_DAYLITE_CONTACT_CACHE_TTL_MS = 30_000;
+const DEFAULT_DAYLITE_CONTACT_CACHE_TTL_MS = 30_000;
 
 const contactCache = createTtlCache<PlanningContactRecord>({
   ttlMs: DEFAULT_DAYLITE_CONTACT_CACHE_TTL_MS,
