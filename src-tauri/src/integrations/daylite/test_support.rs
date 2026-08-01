@@ -1,7 +1,9 @@
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
-use super::client::{BoxFuture, DayliteHttpRequest, DayliteHttpResponse, DayliteHttpTransport};
+use super::client::{
+    BoxFuture, DayliteApiClient, DayliteHttpRequest, DayliteHttpResponse, DayliteHttpTransport,
+};
 use super::shared::{DayliteApiError, DayliteTokenState};
 
 #[derive(Clone)]
@@ -44,6 +46,18 @@ impl DayliteHttpTransport for MockTransport {
                 .expect("mock should contain enough responses")
         })
     }
+}
+
+/// The transport is returned alongside the client so a test can assert on the
+/// requests it recorded; tests that only need the client discard it with `_`.
+pub(super) fn mock_client(
+    responses: Vec<Result<DayliteHttpResponse, DayliteApiError>>,
+) -> (DayliteApiClient, MockTransport) {
+    let transport = MockTransport::new(responses);
+    (
+        DayliteApiClient::with_transport(Box::new(transport.clone())),
+        transport,
+    )
 }
 
 pub(super) fn mock_response(status: u16, body: &str) -> DayliteHttpResponse {

@@ -143,7 +143,7 @@ fn parse_contact_id(contact_reference: &str) -> Result<u64, DayliteApiError> {
 mod tests {
     use super::super::mapping::contact_display_name;
     use super::*;
-    use crate::integrations::daylite::test_support::{mock_response, token_state, MockTransport};
+    use crate::integrations::daylite::test_support::{mock_client, mock_response, token_state};
     use crate::integrations::local_store::DayliteContactCacheEntry;
 
     #[tokio::test]
@@ -152,8 +152,7 @@ mod tests {
             200,
             r#"{"results":[{"self":"/v1/contacts/900","first_name":"Max","last_name":"M","category":"Monteur","urls":[]},{"self":"/v1/contacts/901","first_name":"Bea","last_name":"T","category":"Test","urls":[]}]}"#,
         );
-        let transport = MockTransport::new(vec![Ok(search_response)]);
-        let client = DayliteApiClient::with_transport(Box::new(transport.clone()));
+        let (client, transport) = mock_client(vec![Ok(search_response)]);
 
         let (contacts, _) = list_contacts_core(&client, token_state("token", "refresh"))
             .await
@@ -192,8 +191,7 @@ mod tests {
             200,
             r#"{"self":"/v1/contacts/500","first_name":"Max","last_name":"M","category":"Monteur","urls":[{"label":"Website","url":"https://example.com"},{"label":"Einsatz iCal","url":"https://example.com/primary.ics"},{"label":"Abwesenheit iCal","url":"https://example.com/absence.ics"}]}"#,
         );
-        let transport = MockTransport::new(vec![Ok(get_response), Ok(patch_response)]);
-        let client = DayliteApiClient::with_transport(Box::new(transport.clone()));
+        let (client, transport) = mock_client(vec![Ok(get_response), Ok(patch_response)]);
         let mut store = LocalStore::default();
 
         let (contact, token_state) = update_contact_ical_urls_core(
@@ -231,8 +229,7 @@ mod tests {
             r#"{"self":"/v1/contacts/800","first_name":"Karl","last_name":"G","category":"Monteur","urls":[]}"#,
         );
         let patch_response = mock_response(204, "");
-        let transport = MockTransport::new(vec![Ok(get_response), Ok(patch_response)]);
-        let client = DayliteApiClient::with_transport(Box::new(transport));
+        let (client, _) = mock_client(vec![Ok(get_response), Ok(patch_response)]);
         let mut store = LocalStore::default();
 
         let (contact, _) = update_contact_ical_urls_core(
@@ -267,8 +264,7 @@ mod tests {
             200,
             r#"{"self":"/v1/contacts/600","first_name":"Anna","last_name":"B","category":"Monteur","urls":[{"label":"Einsatz iCal","url":"https://example.com/anna.ics"}]}"#,
         );
-        let transport = MockTransport::new(vec![Ok(get_response), Ok(patch_response)]);
-        let client = DayliteApiClient::with_transport(Box::new(transport));
+        let (client, _) = mock_client(vec![Ok(get_response), Ok(patch_response)]);
         let mut store = LocalStore::default();
         store.daylite_cache.contacts = vec![DayliteContactCacheEntry {
             reference: "/v1/contacts/600".to_string(),
@@ -310,8 +306,7 @@ mod tests {
             200,
             r#"{"self":"/v1/contacts/700","first_name":"Kai","last_name":"V","category":"Vertrieb","urls":[]}"#,
         );
-        let transport = MockTransport::new(vec![Ok(get_response), Ok(patch_response)]);
-        let client = DayliteApiClient::with_transport(Box::new(transport));
+        let (client, _) = mock_client(vec![Ok(get_response), Ok(patch_response)]);
         let mut store = LocalStore::default();
         store.daylite_cache.contacts = vec![DayliteContactCacheEntry {
             reference: "/v1/contacts/700".to_string(),

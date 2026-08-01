@@ -450,7 +450,7 @@ mod tests {
         DayliteTokenState,
     };
     use crate::integrations::daylite::test_support::{
-        mock_response, token_state, valid_token_state, MockTransport,
+        mock_client, mock_response, token_state, valid_token_state,
     };
 
     #[test]
@@ -498,11 +498,10 @@ mod tests {
 
     #[tokio::test]
     async fn list_projects_sends_search_request_and_maps_results() {
-        let transport = MockTransport::new(vec![Ok(mock_response(
+        let (client, transport) = mock_client(vec![Ok(mock_response(
             200,
             r#"{"results":[{"self":"/v1/projects/1","name":"Projekt A","status":"in_progress"},{"self":"/v1/projects/2","name":"Projekt B"}],"next":null}"#,
         ))]);
-        let client = DayliteApiClient::with_transport(Box::new(transport.clone()));
 
         let (projects, token_state) = list_projects_core(&client, valid_token_state())
             .await
@@ -528,11 +527,10 @@ mod tests {
 
     #[tokio::test]
     async fn search_projects_sends_correct_body_and_query() {
-        let transport = MockTransport::new(vec![Ok(mock_response(
+        let (client, transport) = mock_client(vec![Ok(mock_response(
             200,
             r#"{"results":[{"self":" /v1/projects/10 ","name":" Projekt Nord ","category":" Bau ","keywords":[" Aufträge ",""],"due":"2026-02-15"}],"next":" /v1/projects/_search?offset=5 "}"#,
         ))]);
-        let client = DayliteApiClient::with_transport(Box::new(transport.clone()));
 
         let (result, _) = search_projects_core(
             &client,
@@ -572,7 +570,7 @@ mod tests {
 
     #[tokio::test]
     async fn search_results_are_sorted_by_numeric_id_ascending() {
-        let transport = MockTransport::new(vec![Ok(mock_response(
+        let (client, _) = mock_client(vec![Ok(mock_response(
             200,
             r#"{"results":[
             {"self":"/v1/projects/100","name":"Hundert"},
@@ -580,7 +578,6 @@ mod tests {
             {"self":"/v1/projects/3","name":"Drei"}
         ],"next":null}"#,
         ))]);
-        let client = DayliteApiClient::with_transport(Box::new(transport));
 
         let (result, _) =
             search_projects_core(&client, valid_token_state(), &DayliteSearchInput::default())
@@ -594,8 +591,7 @@ mod tests {
 
     #[tokio::test]
     async fn search_treats_empty_object_response_as_no_results() {
-        let transport = MockTransport::new(vec![Ok(mock_response(200, r#"{}"#))]);
-        let client = DayliteApiClient::with_transport(Box::new(transport));
+        let (client, _) = mock_client(vec![Ok(mock_response(200, r#"{}"#))]);
 
         let (result, _) = search_projects_core(
             &client,
@@ -615,7 +611,7 @@ mod tests {
 
     #[tokio::test]
     async fn search_sorts_by_name_when_sort_is_name() {
-        let transport = MockTransport::new(vec![Ok(mock_response(
+        let (client, _) = mock_client(vec![Ok(mock_response(
             200,
             r#"{"results":[
             {"self":"/v1/projects/1","name":"Zeta"},
@@ -623,7 +619,6 @@ mod tests {
             {"self":"/v1/projects/3","name":"Mitte"}
         ],"next":null}"#,
         ))]);
-        let client = DayliteApiClient::with_transport(Box::new(transport));
 
         let (result, _) = search_projects_core(
             &client,
@@ -643,14 +638,13 @@ mod tests {
 
     #[tokio::test]
     async fn search_defaults_to_numeric_id_sort_when_sort_is_none() {
-        let transport = MockTransport::new(vec![Ok(mock_response(
+        let (client, _) = mock_client(vec![Ok(mock_response(
             200,
             r#"{"results":[
             {"self":"/v1/projects/3","name":"Alpha"},
             {"self":"/v1/projects/1","name":"Zeta"}
         ],"next":null}"#,
         ))]);
-        let client = DayliteApiClient::with_transport(Box::new(transport));
 
         let (result, _) =
             search_projects_core(&client, valid_token_state(), &DayliteSearchInput::default())
@@ -663,7 +657,7 @@ mod tests {
 
     #[tokio::test]
     async fn search_limit_is_applied_after_sort() {
-        let transport = MockTransport::new(vec![Ok(mock_response(
+        let (client, _) = mock_client(vec![Ok(mock_response(
             200,
             r#"{"results":[
             {"self":"/v1/projects/100","name":"Hundert"},
@@ -671,7 +665,6 @@ mod tests {
             {"self":"/v1/projects/3","name":"Drei"}
         ],"next":null}"#,
         ))]);
-        let client = DayliteApiClient::with_transport(Box::new(transport));
 
         let (result, _) = search_projects_core(
             &client,
@@ -691,11 +684,10 @@ mod tests {
 
     #[tokio::test]
     async fn overdue_query_sends_category_and_status_filter_in_a_single_call() {
-        let transport = MockTransport::new(vec![Ok(mock_response(
+        let (client, transport) = mock_client(vec![Ok(mock_response(
             200,
             r#"{"results":[],"next":null}"#,
         ))]);
-        let client = DayliteApiClient::with_transport(Box::new(transport.clone()));
 
         query_overdue_projects_core(&client, valid_token_state())
             .await
@@ -724,7 +716,7 @@ mod tests {
 
     #[tokio::test]
     async fn overdue_results_are_sorted_by_numeric_id_and_limited_to_five() {
-        let transport = MockTransport::new(vec![Ok(mock_response(
+        let (client, _) = mock_client(vec![Ok(mock_response(
             200,
             r#"{"results":[
             {"self":"/v1/projects/100","name":"Hundert"},
@@ -735,7 +727,6 @@ mod tests {
             {"self":"/v1/projects/9","name":"Neun"}
         ],"next":null}"#,
         ))]);
-        let client = DayliteApiClient::with_transport(Box::new(transport));
 
         let (results, _) = query_overdue_projects_core(&client, valid_token_state())
             .await
@@ -760,8 +751,7 @@ mod tests {
 
     #[tokio::test]
     async fn overdue_query_treats_empty_object_response_as_no_results() {
-        let transport = MockTransport::new(vec![Ok(mock_response(200, r#"{}"#))]);
-        let client = DayliteApiClient::with_transport(Box::new(transport));
+        let (client, _) = mock_client(vec![Ok(mock_response(200, r#"{}"#))]);
 
         let (results, _) = query_overdue_projects_core(&client, valid_token_state())
             .await
@@ -818,14 +808,13 @@ mod tests {
 
     #[tokio::test]
     async fn list_projects_returns_updated_token_state_after_refresh() {
-        let transport = MockTransport::new(vec![
+        let (client, _) = mock_client(vec![
             Ok(mock_response(
                 200,
                 r#"{"access_token":"new-at","refresh_token":"new-rt","expires_in":3600}"#,
             )),
             Ok(mock_response(200, r#"{"results":[],"next":null}"#)),
         ]);
-        let client = DayliteApiClient::with_transport(Box::new(transport));
 
         let (projects, token_state) = list_projects_core(
             &client,
@@ -959,11 +948,10 @@ mod tests {
 
     #[tokio::test]
     async fn search_with_statuses_sends_array_body_with_or_clauses() {
-        let transport = MockTransport::new(vec![Ok(mock_response(
+        let (client, transport) = mock_client(vec![Ok(mock_response(
             200,
             r#"{"results":[],"next":null}"#,
         ))]);
-        let client = DayliteApiClient::with_transport(Box::new(transport.clone()));
 
         search_projects_core(
             &client,
@@ -992,11 +980,10 @@ mod tests {
 
     #[tokio::test]
     async fn search_without_statuses_sends_plain_object_body() {
-        let transport = MockTransport::new(vec![Ok(mock_response(
+        let (client, transport) = mock_client(vec![Ok(mock_response(
             200,
             r#"{"results":[],"next":null}"#,
         ))]);
-        let client = DayliteApiClient::with_transport(Box::new(transport.clone()));
 
         search_projects_core(
             &client,
@@ -1026,11 +1013,10 @@ mod tests {
 
     #[tokio::test]
     async fn search_with_full_records_sends_query_param() {
-        let transport = MockTransport::new(vec![Ok(mock_response(
+        let (client, transport) = mock_client(vec![Ok(mock_response(
             200,
             r#"{"results":[],"next":null}"#,
         ))]);
-        let client = DayliteApiClient::with_transport(Box::new(transport.clone()));
 
         search_projects_core(
             &client,
@@ -1057,11 +1043,10 @@ mod tests {
 
     #[tokio::test]
     async fn search_without_full_records_omits_query_param() {
-        let transport = MockTransport::new(vec![Ok(mock_response(
+        let (client, transport) = mock_client(vec![Ok(mock_response(
             200,
             r#"{"results":[],"next":null}"#,
         ))]);
-        let client = DayliteApiClient::with_transport(Box::new(transport.clone()));
 
         search_projects_core(
             &client,
@@ -1084,11 +1069,10 @@ mod tests {
 
     #[tokio::test]
     async fn search_with_start_sends_query_param() {
-        let transport = MockTransport::new(vec![Ok(mock_response(
+        let (client, transport) = mock_client(vec![Ok(mock_response(
             200,
             r#"{"results":[],"next":null}"#,
         ))]);
-        let client = DayliteApiClient::with_transport(Box::new(transport.clone()));
 
         search_projects_core(
             &client,
@@ -1114,8 +1098,7 @@ mod tests {
 
     #[tokio::test]
     async fn malformed_response_returns_invalid_response_with_german_message() {
-        let transport = MockTransport::new(vec![Ok(mock_response(200, "not valid json {{{"))]);
-        let client = DayliteApiClient::with_transport(Box::new(transport));
+        let (client, _) = mock_client(vec![Ok(mock_response(200, "not valid json {{{"))]);
 
         let result = search_projects_core(
             &client,
@@ -1138,13 +1121,12 @@ mod tests {
 
     #[tokio::test]
     async fn timeout_error_propagates_from_transport() {
-        let transport = MockTransport::new(vec![Err(DayliteApiError {
+        let (client, _) = mock_client(vec![Err(DayliteApiError {
             code: DayliteApiErrorCode::Timeout,
             http_status: None,
             user_message: "Zeitüberschreitung bei der Daylite-Anfrage.".to_string(),
             technical_message: "request timed out".to_string(),
         })]);
-        let client = DayliteApiClient::with_transport(Box::new(transport));
 
         let result = search_projects_core(
             &client,

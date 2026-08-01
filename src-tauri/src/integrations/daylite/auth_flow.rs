@@ -165,7 +165,7 @@ mod tests {
         DayliteApiClient, DayliteHttpMethod, DayliteHttpRequest,
     };
     use crate::integrations::daylite::shared::{DayliteApiErrorCode, DayliteTokenState};
-    use crate::integrations::daylite::test_support::{mock_response, token_state, MockTransport};
+    use crate::integrations::daylite::test_support::{mock_client, mock_response, token_state};
     use serde::Deserialize;
 
     #[tokio::test]
@@ -212,8 +212,7 @@ mod tests {
 
     #[tokio::test]
     async fn send_authenticated_json_uses_existing_access_token_and_parses_payload() {
-        let transport = MockTransport::new(vec![Ok(mock_response(200, r#"{"value":"ok"}"#))]);
-        let client = DayliteApiClient::with_transport(Box::new(transport.clone()));
+        let (client, transport) = mock_client(vec![Ok(mock_response(200, r#"{"value":"ok"}"#))]);
 
         let (data, token_state) = send_authenticated_json::<AuthFlowFixture>(
             &client,
@@ -245,14 +244,13 @@ mod tests {
 
     #[tokio::test]
     async fn send_authenticated_json_refreshes_before_request_when_access_token_is_missing() {
-        let transport = MockTransport::new(vec![
+        let (client, transport) = mock_client(vec![
             Ok(mock_response(
                 200,
                 r#"{"access_token":"refreshed-access-token","refresh_token":"refreshed-refresh-token","expires_in":3600}"#,
             )),
             Ok(mock_response(200, r#"{"value":"ok"}"#)),
         ]);
-        let client = DayliteApiClient::with_transport(Box::new(transport.clone()));
 
         let (_, token_state) = send_authenticated_json::<AuthFlowFixture>(
             &client,
@@ -282,9 +280,7 @@ mod tests {
 
     #[tokio::test]
     async fn refresh_tokens_returns_error_on_non_2xx_status() {
-        let transport =
-            MockTransport::new(vec![Ok(mock_response(401, r#"{"error":"unauthorized"}"#))]);
-        let client = DayliteApiClient::with_transport(Box::new(transport));
+        let (client, _) = mock_client(vec![Ok(mock_response(401, r#"{"error":"unauthorized"}"#))]);
 
         let error = refresh_tokens(&client, "valid-refresh-token".to_string())
             .await
@@ -296,8 +292,7 @@ mod tests {
 
     #[tokio::test]
     async fn refresh_tokens_returns_error_on_malformed_json() {
-        let transport = MockTransport::new(vec![Ok(mock_response(200, "this is not valid json"))]);
-        let client = DayliteApiClient::with_transport(Box::new(transport));
+        let (client, _) = mock_client(vec![Ok(mock_response(200, "this is not valid json"))]);
 
         let error = refresh_tokens(&client, "valid-refresh-token".to_string())
             .await
@@ -308,11 +303,10 @@ mod tests {
 
     #[tokio::test]
     async fn refresh_tokens_returns_error_on_empty_access_token() {
-        let transport = MockTransport::new(vec![Ok(mock_response(
+        let (client, _) = mock_client(vec![Ok(mock_response(
             200,
             r#"{"access_token":" ","refresh_token":"rt","expires_in":3600}"#,
         ))]);
-        let client = DayliteApiClient::with_transport(Box::new(transport));
 
         let error = refresh_tokens(&client, "valid-refresh-token".to_string())
             .await
@@ -324,11 +318,10 @@ mod tests {
 
     #[tokio::test]
     async fn refresh_tokens_returns_error_on_empty_refresh_token_in_response() {
-        let transport = MockTransport::new(vec![Ok(mock_response(
+        let (client, _) = mock_client(vec![Ok(mock_response(
             200,
             r#"{"access_token":"at","refresh_token":"","expires_in":3600}"#,
         ))]);
-        let client = DayliteApiClient::with_transport(Box::new(transport));
 
         let error = refresh_tokens(&client, "valid-refresh-token".to_string())
             .await
@@ -340,11 +333,10 @@ mod tests {
 
     #[tokio::test]
     async fn refresh_tokens_returns_error_on_zero_expires_in() {
-        let transport = MockTransport::new(vec![Ok(mock_response(
+        let (client, _) = mock_client(vec![Ok(mock_response(
             200,
             r#"{"access_token":"at","refresh_token":"rt","expires_in":0}"#,
         ))]);
-        let client = DayliteApiClient::with_transport(Box::new(transport));
 
         let error = refresh_tokens(&client, "valid-refresh-token".to_string())
             .await
@@ -356,11 +348,10 @@ mod tests {
 
     #[tokio::test]
     async fn send_authenticated_json_returns_error_on_non_2xx_response() {
-        let transport = MockTransport::new(vec![Ok(mock_response(
+        let (client, _) = mock_client(vec![Ok(mock_response(
             500,
             r#"{"error":"internal server error"}"#,
         ))]);
-        let client = DayliteApiClient::with_transport(Box::new(transport));
 
         let error = send_authenticated_json::<AuthFlowFixture>(
             &client,
@@ -376,8 +367,7 @@ mod tests {
 
     #[tokio::test]
     async fn send_authenticated_json_returns_error_on_invalid_json_response() {
-        let transport = MockTransport::new(vec![Ok(mock_response(200, "not valid json at all"))]);
-        let client = DayliteApiClient::with_transport(Box::new(transport));
+        let (client, _) = mock_client(vec![Ok(mock_response(200, "not valid json at all"))]);
 
         let error = send_authenticated_json::<AuthFlowFixture>(
             &client,
