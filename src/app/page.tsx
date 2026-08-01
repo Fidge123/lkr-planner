@@ -184,46 +184,20 @@ export function PlanningGridTable({
 
   return (
     <section className="w-full h-full overflow-auto">
-      {errorMessage ? (
-        <section className="alert alert-error m-4">
-          <span>{errorMessage}</span>
-          <button type="button" className="btn btn-sm" onClick={reloadProjects}>
-            Erneut laden
-          </button>
-        </section>
-      ) : null}
-      {employeeErrorMessage ? (
-        <section className="alert alert-error m-4">
-          <span>{employeeErrorMessage}</span>
-          <button
-            type="button"
-            className="btn btn-sm"
-            onClick={reloadEmployees}
-          >
-            Erneut laden
-          </button>
-        </section>
-      ) : null}
-      {assignmentErrorMessage ? (
-        <section className="alert alert-error m-4">
-          <span>{assignmentErrorMessage}</span>
-          <button
-            type="button"
-            className="btn btn-sm"
-            onClick={reloadAssignments}
-          >
-            Erneut laden
-          </button>
-        </section>
-      ) : null}
-      {holidayErrorMessage ? (
-        <section className="alert alert-warning m-4">
-          <span>{holidayErrorMessage}</span>
-          <button type="button" className="btn btn-sm" onClick={reloadHolidays}>
-            Erneut laden
-          </button>
-        </section>
-      ) : null}
+      <ReloadableAlert message={errorMessage} onReload={reloadProjects} />
+      <ReloadableAlert
+        message={employeeErrorMessage}
+        onReload={reloadEmployees}
+      />
+      <ReloadableAlert
+        message={assignmentErrorMessage}
+        onReload={reloadAssignments}
+      />
+      <ReloadableAlert
+        message={holidayErrorMessage}
+        onReload={reloadHolidays}
+        variant="warning"
+      />
       {isAssignmentsLoading ? (
         <p className="px-4 py-2 text-base-content/70">
           Einsätze werden geladen...
@@ -318,6 +292,35 @@ export function PlanningGridTable({
       <ProjectTable projects={projects} isLoading={isLoading} />
     </section>
   );
+}
+
+// Spelled out rather than interpolated so the class names survive Tailwind's
+// static scan of the source.
+const alertVariantClass = {
+  error: "alert-error",
+  warning: "alert-warning",
+} as const;
+
+function ReloadableAlert({
+  message,
+  onReload,
+  variant = "error",
+}: ReloadableAlertProps) {
+  if (!message) return null;
+  return (
+    <section className={`alert ${alertVariantClass[variant]} m-4`}>
+      <span>{message}</span>
+      <button type="button" className="btn btn-sm" onClick={onReload}>
+        Erneut laden
+      </button>
+    </section>
+  );
+}
+
+interface ReloadableAlertProps {
+  message: string | null;
+  onReload: () => void;
+  variant?: keyof typeof alertVariantClass;
 }
 
 function DragPreviewCard({ payload }: { payload: AppointmentDragPayload }) {
