@@ -373,18 +373,23 @@ mod tests {
         }
     }
 
-    #[test]
-    fn replays_recorded_response_without_network_call() {
-        let _guard = env_lock().lock().expect("env lock should not be poisoned");
-        let cassette_path = cassette_path("daylite-client-replay.json");
-        unsafe {
-            std::env::remove_var("VCR_MODE");
-        }
-        let transport = ReqwestTransport::new_with_record_replay(
-            "http://127.0.0.1:9",
-            RecordReplayConfig::from_env(cassette_path),
-        )
-        .expect("replay transport should be created");
+    #[tokio::test]
+    async fn replays_recorded_response_without_network_call() {
+        // The env lock guards only the VCR_MODE mutation and the read that follows it;
+        // once the config is captured the replay touches no shared state, so the guard
+        // is dropped before the awaits rather than held across them.
+        let transport = {
+            let _guard = env_lock().lock().expect("env lock should not be poisoned");
+            let cassette_path = cassette_path("daylite-client-replay.json");
+            unsafe {
+                std::env::remove_var("VCR_MODE");
+            }
+            ReqwestTransport::new_with_record_replay(
+                "http://127.0.0.1:9",
+                RecordReplayConfig::from_env(cassette_path),
+            )
+            .expect("replay transport should be created")
+        };
         let request = DayliteHttpRequest {
             method: DayliteHttpMethod::Get,
             path: "/projects".to_string(),
@@ -394,9 +399,13 @@ mod tests {
         };
 
         let started_at = Instant::now();
-        let first = tauri::async_runtime::block_on(async { transport.send(request.clone()).await })
+        let first = transport
+            .send(request.clone())
+            .await
             .expect("first replay should succeed");
-        let second = tauri::async_runtime::block_on(async { transport.send(request).await })
+        let second = transport
+            .send(request)
+            .await
             .expect("second replay should succeed");
 
         assert_eq!(first.status, 200);

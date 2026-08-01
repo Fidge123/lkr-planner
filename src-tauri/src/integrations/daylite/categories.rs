@@ -101,116 +101,104 @@ mod tests {
         mock_response, valid_token_state, MockTransport,
     };
 
-    #[test]
-    fn requests_categories_filtered_to_projects() {
-        tauri::async_runtime::block_on(async {
-            let transport = MockTransport::new(vec![Ok(mock_response(200, r##"{"results":[]}"##))]);
-            let client = DayliteApiClient::with_transport(Box::new(transport.clone()));
+    #[tokio::test]
+    async fn requests_categories_filtered_to_projects() {
+        let transport = MockTransport::new(vec![Ok(mock_response(200, r##"{"results":[]}"##))]);
+        let client = DayliteApiClient::with_transport(Box::new(transport.clone()));
 
-            fetch_project_category_colors_core(&client, valid_token_state())
-                .await
-                .expect("category fetch should succeed");
+        fetch_project_category_colors_core(&client, valid_token_state())
+            .await
+            .expect("category fetch should succeed");
 
-            let requests = transport.requests();
-            assert_eq!(requests.len(), 1);
-            assert_eq!(requests[0].path, "/categories");
-            assert_eq!(requests[0].method, DayliteHttpMethod::Get);
-            assert_eq!(
-                requests[0].query,
-                vec![("entity".to_string(), "project".to_string())]
-            );
-        });
+        let requests = transport.requests();
+        assert_eq!(requests.len(), 1);
+        assert_eq!(requests[0].path, "/categories");
+        assert_eq!(requests[0].method, DayliteHttpMethod::Get);
+        assert_eq!(
+            requests[0].query,
+            vec![("entity".to_string(), "project".to_string())]
+        );
     }
 
-    #[test]
-    fn maps_category_names_to_their_colors() {
-        tauri::async_runtime::block_on(async {
-            let transport = MockTransport::new(vec![Ok(mock_response(
-                200,
-                r##"{"results":[
-                    {"name":" Bau ","hex_colour":" #8bc34a ","is_active":true},
-                    {"name":"Wartung","hex_colour":"#03a9f4","is_active":true}
-                ]}"##,
-            ))]);
-            let client = DayliteApiClient::with_transport(Box::new(transport));
+    #[tokio::test]
+    async fn maps_category_names_to_their_colors() {
+        let transport = MockTransport::new(vec![Ok(mock_response(
+            200,
+            r##"{"results":[
+                {"name":" Bau ","hex_colour":" #8bc34a ","is_active":true},
+                {"name":"Wartung","hex_colour":"#03a9f4","is_active":true}
+            ]}"##,
+        ))]);
+        let client = DayliteApiClient::with_transport(Box::new(transport));
 
-            let (colors, _) = fetch_project_category_colors_core(&client, valid_token_state())
-                .await
-                .expect("category fetch should succeed");
+        let (colors, _) = fetch_project_category_colors_core(&client, valid_token_state())
+            .await
+            .expect("category fetch should succeed");
 
-            assert_eq!(colors.get("Bau"), Some(&"#8bc34a".to_string()));
-            assert_eq!(colors.get("Wartung"), Some(&"#03a9f4".to_string()));
-        });
+        assert_eq!(colors.get("Bau"), Some(&"#8bc34a".to_string()));
+        assert_eq!(colors.get("Wartung"), Some(&"#03a9f4".to_string()));
     }
 
-    #[test]
-    fn omits_categories_without_a_color() {
-        tauri::async_runtime::block_on(async {
-            let transport = MockTransport::new(vec![Ok(mock_response(
-                200,
-                r##"{"results":[
-                    {"name":"Ohne Farbe","hex_colour":null,"is_active":true},
-                    {"name":"Leer","hex_colour":"  ","is_active":true}
-                ]}"##,
-            ))]);
-            let client = DayliteApiClient::with_transport(Box::new(transport));
+    #[tokio::test]
+    async fn omits_categories_without_a_color() {
+        let transport = MockTransport::new(vec![Ok(mock_response(
+            200,
+            r##"{"results":[
+                {"name":"Ohne Farbe","hex_colour":null,"is_active":true},
+                {"name":"Leer","hex_colour":"  ","is_active":true}
+            ]}"##,
+        ))]);
+        let client = DayliteApiClient::with_transport(Box::new(transport));
 
-            let (colors, _) = fetch_project_category_colors_core(&client, valid_token_state())
-                .await
-                .expect("category fetch should succeed");
+        let (colors, _) = fetch_project_category_colors_core(&client, valid_token_state())
+            .await
+            .expect("category fetch should succeed");
 
-            assert!(colors.is_empty());
-        });
+        assert!(colors.is_empty());
     }
 
-    #[test]
-    fn keeps_inactive_categories() {
-        tauri::async_runtime::block_on(async {
-            let transport = MockTransport::new(vec![Ok(mock_response(
-                200,
-                r##"{"results":[{"name":"Stillgelegt","hex_colour":"#ff9800","is_active":false}]}"##,
-            ))]);
-            let client = DayliteApiClient::with_transport(Box::new(transport));
+    #[tokio::test]
+    async fn keeps_inactive_categories() {
+        let transport = MockTransport::new(vec![Ok(mock_response(
+            200,
+            r##"{"results":[{"name":"Stillgelegt","hex_colour":"#ff9800","is_active":false}]}"##,
+        ))]);
+        let client = DayliteApiClient::with_transport(Box::new(transport));
 
-            let (colors, _) = fetch_project_category_colors_core(&client, valid_token_state())
-                .await
-                .expect("category fetch should succeed");
+        let (colors, _) = fetch_project_category_colors_core(&client, valid_token_state())
+            .await
+            .expect("category fetch should succeed");
 
-            assert_eq!(colors.get("Stillgelegt"), Some(&"#ff9800".to_string()));
-        });
+        assert_eq!(colors.get("Stillgelegt"), Some(&"#ff9800".to_string()));
     }
 
-    #[test]
-    fn accepts_a_bare_array_response() {
-        tauri::async_runtime::block_on(async {
-            let transport = MockTransport::new(vec![Ok(mock_response(
-                200,
-                r##"[{"name":"Bau","hex_colour":"#8bc34a"}]"##,
-            ))]);
-            let client = DayliteApiClient::with_transport(Box::new(transport));
+    #[tokio::test]
+    async fn accepts_a_bare_array_response() {
+        let transport = MockTransport::new(vec![Ok(mock_response(
+            200,
+            r##"[{"name":"Bau","hex_colour":"#8bc34a"}]"##,
+        ))]);
+        let client = DayliteApiClient::with_transport(Box::new(transport));
 
-            let (colors, _) = fetch_project_category_colors_core(&client, valid_token_state())
-                .await
-                .expect("category fetch should succeed");
+        let (colors, _) = fetch_project_category_colors_core(&client, valid_token_state())
+            .await
+            .expect("category fetch should succeed");
 
-            assert_eq!(colors.get("Bau"), Some(&"#8bc34a".to_string()));
-        });
+        assert_eq!(colors.get("Bau"), Some(&"#8bc34a".to_string()));
     }
 
-    #[test]
-    fn prefixes_a_missing_hash_on_hex_colours() {
-        tauri::async_runtime::block_on(async {
-            let transport = MockTransport::new(vec![Ok(mock_response(
-                200,
-                r##"{"results":[{"name":"Bau","hex_colour":"8BC34A"}]}"##,
-            ))]);
-            let client = DayliteApiClient::with_transport(Box::new(transport));
+    #[tokio::test]
+    async fn prefixes_a_missing_hash_on_hex_colours() {
+        let transport = MockTransport::new(vec![Ok(mock_response(
+            200,
+            r##"{"results":[{"name":"Bau","hex_colour":"8BC34A"}]}"##,
+        ))]);
+        let client = DayliteApiClient::with_transport(Box::new(transport));
 
-            let (colors, _) = fetch_project_category_colors_core(&client, valid_token_state())
-                .await
-                .expect("category fetch should succeed");
+        let (colors, _) = fetch_project_category_colors_core(&client, valid_token_state())
+            .await
+            .expect("category fetch should succeed");
 
-            assert_eq!(colors.get("Bau"), Some(&"#8BC34A".to_string()));
-        });
+        assert_eq!(colors.get("Bau"), Some(&"#8BC34A".to_string()));
     }
 }

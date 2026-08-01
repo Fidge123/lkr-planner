@@ -168,47 +168,41 @@ mod tests {
     use crate::integrations::daylite::test_support::{mock_response, token_state, MockTransport};
     use serde::Deserialize;
 
-    #[test]
-    fn ensure_access_token_returns_missing_token_error_when_both_tokens_are_missing() {
-        tauri::async_runtime::block_on(async {
-            let client =
-                DayliteApiClient::new("https://daylite.example").expect("client should be created");
+    #[tokio::test]
+    async fn ensure_access_token_returns_missing_token_error_when_both_tokens_are_missing() {
+        let client =
+            DayliteApiClient::new("https://daylite.example").expect("client should be created");
 
-            let error = ensure_access_token(&client, DayliteTokenState::default())
-                .await
-                .expect_err("missing tokens should fail");
+        let error = ensure_access_token(&client, DayliteTokenState::default())
+            .await
+            .expect_err("missing tokens should fail");
 
-            assert_eq!(error.code, DayliteApiErrorCode::MissingToken);
-        });
+        assert_eq!(error.code, DayliteApiErrorCode::MissingToken);
     }
 
-    #[test]
-    fn ensure_access_token_keeps_existing_access_token_when_expiry_is_in_future() {
-        tauri::async_runtime::block_on(async {
-            let client =
-                DayliteApiClient::new("https://daylite.example").expect("client should be created");
-            let original_state = token_state("existing-access-token", "refresh-token");
+    #[tokio::test]
+    async fn ensure_access_token_keeps_existing_access_token_when_expiry_is_in_future() {
+        let client =
+            DayliteApiClient::new("https://daylite.example").expect("client should be created");
+        let original_state = token_state("existing-access-token", "refresh-token");
 
-            let token_state = ensure_access_token(&client, original_state.clone())
-                .await
-                .expect("existing token should be reused");
+        let token_state = ensure_access_token(&client, original_state.clone())
+            .await
+            .expect("existing token should be reused");
 
-            assert_eq!(token_state, original_state);
-        });
+        assert_eq!(token_state, original_state);
     }
 
-    #[test]
-    fn refresh_tokens_rejects_blank_refresh_token() {
-        tauri::async_runtime::block_on(async {
-            let client =
-                DayliteApiClient::new("https://daylite.example").expect("client should be created");
+    #[tokio::test]
+    async fn refresh_tokens_rejects_blank_refresh_token() {
+        let client =
+            DayliteApiClient::new("https://daylite.example").expect("client should be created");
 
-            let error = refresh_tokens(&client, "   ".to_string())
-                .await
-                .expect_err("blank refresh token should fail");
+        let error = refresh_tokens(&client, "   ".to_string())
+            .await
+            .expect_err("blank refresh token should fail");
 
-            assert_eq!(error.code, DayliteApiErrorCode::MissingToken);
-        });
+        assert_eq!(error.code, DayliteApiErrorCode::MissingToken);
     }
 
     #[derive(Debug, Deserialize, PartialEq, Eq)]
@@ -216,219 +210,197 @@ mod tests {
         value: String,
     }
 
-    #[test]
-    fn send_authenticated_json_uses_existing_access_token_and_parses_payload() {
-        tauri::async_runtime::block_on(async {
-            let transport = MockTransport::new(vec![Ok(mock_response(200, r#"{"value":"ok"}"#))]);
-            let client = DayliteApiClient::with_transport(Box::new(transport.clone()));
+    #[tokio::test]
+    async fn send_authenticated_json_uses_existing_access_token_and_parses_payload() {
+        let transport = MockTransport::new(vec![Ok(mock_response(200, r#"{"value":"ok"}"#))]);
+        let client = DayliteApiClient::with_transport(Box::new(transport.clone()));
 
-            let (data, token_state) = send_authenticated_json::<AuthFlowFixture>(
-                &client,
-                token_state("existing-access-token", "refresh-token"),
-                DayliteHttpRequest {
-                    query: vec![("full-records".to_string(), "true".to_string())],
-                    ..DayliteHttpRequest::new(DayliteHttpMethod::Post, "/projects/_search")
-                },
-            )
-            .await
-            .expect("request should succeed");
+        let (data, token_state) = send_authenticated_json::<AuthFlowFixture>(
+            &client,
+            token_state("existing-access-token", "refresh-token"),
+            DayliteHttpRequest {
+                query: vec![("full-records".to_string(), "true".to_string())],
+                ..DayliteHttpRequest::new(DayliteHttpMethod::Post, "/projects/_search")
+            },
+        )
+        .await
+        .expect("request should succeed");
 
-            assert_eq!(
-                data,
-                AuthFlowFixture {
-                    value: "ok".to_string(),
-                }
-            );
-            assert_eq!(token_state.access_token, "existing-access-token");
+        assert_eq!(
+            data,
+            AuthFlowFixture {
+                value: "ok".to_string(),
+            }
+        );
+        assert_eq!(token_state.access_token, "existing-access-token");
 
-            let requests = transport.requests();
-            assert_eq!(requests.len(), 1);
-            assert_eq!(requests[0].path, "/projects/_search");
-            assert_eq!(
-                requests[0].access_token,
-                Some("existing-access-token".to_string())
-            );
-        });
+        let requests = transport.requests();
+        assert_eq!(requests.len(), 1);
+        assert_eq!(requests[0].path, "/projects/_search");
+        assert_eq!(
+            requests[0].access_token,
+            Some("existing-access-token".to_string())
+        );
     }
 
-    #[test]
-    fn send_authenticated_json_refreshes_before_request_when_access_token_is_missing() {
-        tauri::async_runtime::block_on(async {
-            let transport = MockTransport::new(vec![
-                Ok(mock_response(
-                    200,
-                    r#"{"access_token":"refreshed-access-token","refresh_token":"refreshed-refresh-token","expires_in":3600}"#,
-                )),
-                Ok(mock_response(200, r#"{"value":"ok"}"#)),
-            ]);
-            let client = DayliteApiClient::with_transport(Box::new(transport.clone()));
-
-            let (_, token_state) = send_authenticated_json::<AuthFlowFixture>(
-                &client,
-                DayliteTokenState {
-                    access_token: String::new(),
-                    refresh_token: "initial-refresh-token".to_string(),
-                    access_token_expires_at_ms: None,
-                },
-                DayliteHttpRequest::new(DayliteHttpMethod::Get, "/contacts/100"),
-            )
-            .await
-            .expect("request should succeed after refresh");
-
-            assert_eq!(token_state.access_token, "refreshed-access-token");
-            assert_eq!(token_state.refresh_token, "refreshed-refresh-token");
-            assert!(token_state.access_token_expires_at_ms.is_some());
-
-            let requests = transport.requests();
-            assert_eq!(requests.len(), 2);
-            assert_eq!(requests[0].path, "/personal_token/refresh_token");
-            assert_eq!(requests[1].path, "/contacts/100");
-            assert_eq!(
-                requests[1].access_token,
-                Some("refreshed-access-token".to_string())
-            );
-        });
-    }
-
-    #[test]
-    fn refresh_tokens_returns_error_on_non_2xx_status() {
-        tauri::async_runtime::block_on(async {
-            let transport =
-                MockTransport::new(vec![Ok(mock_response(401, r#"{"error":"unauthorized"}"#))]);
-            let client = DayliteApiClient::with_transport(Box::new(transport));
-
-            let error = refresh_tokens(&client, "valid-refresh-token".to_string())
-                .await
-                .expect_err("non-2xx refresh should fail");
-
-            assert_eq!(error.code, DayliteApiErrorCode::TokenRefreshFailed);
-            assert_eq!(error.http_status, Some(401));
-        });
-    }
-
-    #[test]
-    fn refresh_tokens_returns_error_on_malformed_json() {
-        tauri::async_runtime::block_on(async {
-            let transport =
-                MockTransport::new(vec![Ok(mock_response(200, "this is not valid json"))]);
-            let client = DayliteApiClient::with_transport(Box::new(transport));
-
-            let error = refresh_tokens(&client, "valid-refresh-token".to_string())
-                .await
-                .expect_err("malformed JSON refresh should fail");
-
-            assert_eq!(error.code, DayliteApiErrorCode::TokenRefreshFailed);
-        });
-    }
-
-    #[test]
-    fn refresh_tokens_returns_error_on_empty_access_token() {
-        tauri::async_runtime::block_on(async {
-            let transport = MockTransport::new(vec![Ok(mock_response(
+    #[tokio::test]
+    async fn send_authenticated_json_refreshes_before_request_when_access_token_is_missing() {
+        let transport = MockTransport::new(vec![
+            Ok(mock_response(
                 200,
-                r#"{"access_token":" ","refresh_token":"rt","expires_in":3600}"#,
-            ))]);
-            let client = DayliteApiClient::with_transport(Box::new(transport));
+                r#"{"access_token":"refreshed-access-token","refresh_token":"refreshed-refresh-token","expires_in":3600}"#,
+            )),
+            Ok(mock_response(200, r#"{"value":"ok"}"#)),
+        ]);
+        let client = DayliteApiClient::with_transport(Box::new(transport.clone()));
 
-            let error = refresh_tokens(&client, "valid-refresh-token".to_string())
-                .await
-                .expect_err("empty access_token should fail");
+        let (_, token_state) = send_authenticated_json::<AuthFlowFixture>(
+            &client,
+            DayliteTokenState {
+                access_token: String::new(),
+                refresh_token: "initial-refresh-token".to_string(),
+                access_token_expires_at_ms: None,
+            },
+            DayliteHttpRequest::new(DayliteHttpMethod::Get, "/contacts/100"),
+        )
+        .await
+        .expect("request should succeed after refresh");
 
-            assert_eq!(error.code, DayliteApiErrorCode::TokenRefreshFailed);
-            assert!(error.technical_message.contains("access_token"));
-        });
+        assert_eq!(token_state.access_token, "refreshed-access-token");
+        assert_eq!(token_state.refresh_token, "refreshed-refresh-token");
+        assert!(token_state.access_token_expires_at_ms.is_some());
+
+        let requests = transport.requests();
+        assert_eq!(requests.len(), 2);
+        assert_eq!(requests[0].path, "/personal_token/refresh_token");
+        assert_eq!(requests[1].path, "/contacts/100");
+        assert_eq!(
+            requests[1].access_token,
+            Some("refreshed-access-token".to_string())
+        );
     }
 
-    #[test]
-    fn refresh_tokens_returns_error_on_empty_refresh_token_in_response() {
-        tauri::async_runtime::block_on(async {
-            let transport = MockTransport::new(vec![Ok(mock_response(
-                200,
-                r#"{"access_token":"at","refresh_token":"","expires_in":3600}"#,
-            ))]);
-            let client = DayliteApiClient::with_transport(Box::new(transport));
+    #[tokio::test]
+    async fn refresh_tokens_returns_error_on_non_2xx_status() {
+        let transport =
+            MockTransport::new(vec![Ok(mock_response(401, r#"{"error":"unauthorized"}"#))]);
+        let client = DayliteApiClient::with_transport(Box::new(transport));
 
-            let error = refresh_tokens(&client, "valid-refresh-token".to_string())
-                .await
-                .expect_err("empty refresh_token in response should fail");
-
-            assert_eq!(error.code, DayliteApiErrorCode::TokenRefreshFailed);
-            assert!(error.technical_message.contains("refresh_token"));
-        });
-    }
-
-    #[test]
-    fn refresh_tokens_returns_error_on_zero_expires_in() {
-        tauri::async_runtime::block_on(async {
-            let transport = MockTransport::new(vec![Ok(mock_response(
-                200,
-                r#"{"access_token":"at","refresh_token":"rt","expires_in":0}"#,
-            ))]);
-            let client = DayliteApiClient::with_transport(Box::new(transport));
-
-            let error = refresh_tokens(&client, "valid-refresh-token".to_string())
-                .await
-                .expect_err("expires_in=0 should fail");
-
-            assert_eq!(error.code, DayliteApiErrorCode::TokenRefreshFailed);
-            assert!(error.technical_message.contains("expires_in=0"));
-        });
-    }
-
-    #[test]
-    fn send_authenticated_json_returns_error_on_non_2xx_response() {
-        tauri::async_runtime::block_on(async {
-            let transport = MockTransport::new(vec![Ok(mock_response(
-                500,
-                r#"{"error":"internal server error"}"#,
-            ))]);
-            let client = DayliteApiClient::with_transport(Box::new(transport));
-
-            let error = send_authenticated_json::<AuthFlowFixture>(
-                &client,
-                token_state("valid-token", "refresh"),
-                DayliteHttpRequest::new(DayliteHttpMethod::Get, "/projects/123"),
-            )
+        let error = refresh_tokens(&client, "valid-refresh-token".to_string())
             .await
-            .expect_err("non-2xx response should fail");
+            .expect_err("non-2xx refresh should fail");
 
-            assert_eq!(error.code, DayliteApiErrorCode::ServerError);
-            assert_eq!(error.http_status, Some(500));
-        });
+        assert_eq!(error.code, DayliteApiErrorCode::TokenRefreshFailed);
+        assert_eq!(error.http_status, Some(401));
     }
 
-    #[test]
-    fn send_authenticated_json_returns_error_on_invalid_json_response() {
-        tauri::async_runtime::block_on(async {
-            let transport =
-                MockTransport::new(vec![Ok(mock_response(200, "not valid json at all"))]);
-            let client = DayliteApiClient::with_transport(Box::new(transport));
+    #[tokio::test]
+    async fn refresh_tokens_returns_error_on_malformed_json() {
+        let transport = MockTransport::new(vec![Ok(mock_response(200, "this is not valid json"))]);
+        let client = DayliteApiClient::with_transport(Box::new(transport));
 
-            let error = send_authenticated_json::<AuthFlowFixture>(
-                &client,
-                token_state("valid-token", "refresh"),
-                DayliteHttpRequest::new(DayliteHttpMethod::Get, "/contacts/100"),
-            )
+        let error = refresh_tokens(&client, "valid-refresh-token".to_string())
             .await
-            .expect_err("invalid JSON response should fail");
+            .expect_err("malformed JSON refresh should fail");
 
-            assert_eq!(error.code, DayliteApiErrorCode::InvalidResponse);
-        });
+        assert_eq!(error.code, DayliteApiErrorCode::TokenRefreshFailed);
     }
 
-    #[test]
-    fn refresh_tokens_replays_vcr_cassette() {
-        tauri::async_runtime::block_on(async {
-            let client = DayliteApiClient::with_replay_cassette("daylite-refresh-tokens.json")
-                .expect("replay client should be created");
+    #[tokio::test]
+    async fn refresh_tokens_returns_error_on_empty_access_token() {
+        let transport = MockTransport::new(vec![Ok(mock_response(
+            200,
+            r#"{"access_token":" ","refresh_token":"rt","expires_in":3600}"#,
+        ))]);
+        let client = DayliteApiClient::with_transport(Box::new(transport));
 
-            let token_state = refresh_tokens(&client, "dummy-refresh-token".to_string())
-                .await
-                .expect("refresh should replay from cassette");
+        let error = refresh_tokens(&client, "valid-refresh-token".to_string())
+            .await
+            .expect_err("empty access_token should fail");
 
-            assert_eq!(token_state.access_token, "replayed-access-token");
-            assert_eq!(token_state.refresh_token, "replayed-refresh-token");
-            assert!(token_state.access_token_expires_at_ms.is_some());
-        });
+        assert_eq!(error.code, DayliteApiErrorCode::TokenRefreshFailed);
+        assert!(error.technical_message.contains("access_token"));
+    }
+
+    #[tokio::test]
+    async fn refresh_tokens_returns_error_on_empty_refresh_token_in_response() {
+        let transport = MockTransport::new(vec![Ok(mock_response(
+            200,
+            r#"{"access_token":"at","refresh_token":"","expires_in":3600}"#,
+        ))]);
+        let client = DayliteApiClient::with_transport(Box::new(transport));
+
+        let error = refresh_tokens(&client, "valid-refresh-token".to_string())
+            .await
+            .expect_err("empty refresh_token in response should fail");
+
+        assert_eq!(error.code, DayliteApiErrorCode::TokenRefreshFailed);
+        assert!(error.technical_message.contains("refresh_token"));
+    }
+
+    #[tokio::test]
+    async fn refresh_tokens_returns_error_on_zero_expires_in() {
+        let transport = MockTransport::new(vec![Ok(mock_response(
+            200,
+            r#"{"access_token":"at","refresh_token":"rt","expires_in":0}"#,
+        ))]);
+        let client = DayliteApiClient::with_transport(Box::new(transport));
+
+        let error = refresh_tokens(&client, "valid-refresh-token".to_string())
+            .await
+            .expect_err("expires_in=0 should fail");
+
+        assert_eq!(error.code, DayliteApiErrorCode::TokenRefreshFailed);
+        assert!(error.technical_message.contains("expires_in=0"));
+    }
+
+    #[tokio::test]
+    async fn send_authenticated_json_returns_error_on_non_2xx_response() {
+        let transport = MockTransport::new(vec![Ok(mock_response(
+            500,
+            r#"{"error":"internal server error"}"#,
+        ))]);
+        let client = DayliteApiClient::with_transport(Box::new(transport));
+
+        let error = send_authenticated_json::<AuthFlowFixture>(
+            &client,
+            token_state("valid-token", "refresh"),
+            DayliteHttpRequest::new(DayliteHttpMethod::Get, "/projects/123"),
+        )
+        .await
+        .expect_err("non-2xx response should fail");
+
+        assert_eq!(error.code, DayliteApiErrorCode::ServerError);
+        assert_eq!(error.http_status, Some(500));
+    }
+
+    #[tokio::test]
+    async fn send_authenticated_json_returns_error_on_invalid_json_response() {
+        let transport = MockTransport::new(vec![Ok(mock_response(200, "not valid json at all"))]);
+        let client = DayliteApiClient::with_transport(Box::new(transport));
+
+        let error = send_authenticated_json::<AuthFlowFixture>(
+            &client,
+            token_state("valid-token", "refresh"),
+            DayliteHttpRequest::new(DayliteHttpMethod::Get, "/contacts/100"),
+        )
+        .await
+        .expect_err("invalid JSON response should fail");
+
+        assert_eq!(error.code, DayliteApiErrorCode::InvalidResponse);
+    }
+
+    #[tokio::test]
+    async fn refresh_tokens_replays_vcr_cassette() {
+        let client = DayliteApiClient::with_replay_cassette("daylite-refresh-tokens.json")
+            .expect("replay client should be created");
+
+        let token_state = refresh_tokens(&client, "dummy-refresh-token".to_string())
+            .await
+            .expect("refresh should replay from cassette");
+
+        assert_eq!(token_state.access_token, "replayed-access-token");
+        assert_eq!(token_state.refresh_token, "replayed-refresh-token");
+        assert!(token_state.access_token_expires_at_ms.is_some());
     }
 }

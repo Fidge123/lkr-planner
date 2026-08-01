@@ -95,74 +95,68 @@ pub(super) fn update_setting(
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_untested_does_nothing_when_all_urls_already_tested() {
-        tauri::async_runtime::block_on(async {
-            let mut settings = vec![EmployeeSetting {
-                daylite_contact_reference: "/v1/contacts/1".to_string(),
-                zep_primary_calendar: Some("https://app.zep.de/caldav/admin/emp1/".to_string()),
-                zep_absence_calendar: Some("https://app.zep.de/caldav/admin/emp1-ab/".to_string()),
-                primary_ical_last_tested_at: Some("2026-01-01T12:00:00.000Z".to_string()),
-                primary_ical_last_test_passed: Some(true),
-                absence_ical_last_tested_at: Some("2026-01-01T12:00:00.000Z".to_string()),
-                absence_ical_last_test_passed: Some(false),
-            }];
+    #[tokio::test]
+    async fn test_untested_does_nothing_when_all_urls_already_tested() {
+        let mut settings = vec![EmployeeSetting {
+            daylite_contact_reference: "/v1/contacts/1".to_string(),
+            zep_primary_calendar: Some("https://app.zep.de/caldav/admin/emp1/".to_string()),
+            zep_absence_calendar: Some("https://app.zep.de/caldav/admin/emp1-ab/".to_string()),
+            primary_ical_last_tested_at: Some("2026-01-01T12:00:00.000Z".to_string()),
+            primary_ical_last_test_passed: Some(true),
+            absence_ical_last_tested_at: Some("2026-01-01T12:00:00.000Z".to_string()),
+            absence_ical_last_test_passed: Some(false),
+        }];
 
-            test_untested_calendar_urls(&mut settings).await;
+        test_untested_calendar_urls(&mut settings).await;
 
-            assert_eq!(
-                settings[0].primary_ical_last_tested_at,
-                Some("2026-01-01T12:00:00.000Z".to_string())
-            );
-            assert_eq!(settings[0].primary_ical_last_test_passed, Some(true));
-            assert_eq!(
-                settings[0].absence_ical_last_tested_at,
-                Some("2026-01-01T12:00:00.000Z".to_string())
-            );
-            assert_eq!(settings[0].absence_ical_last_test_passed, Some(false));
-        });
+        assert_eq!(
+            settings[0].primary_ical_last_tested_at,
+            Some("2026-01-01T12:00:00.000Z".to_string())
+        );
+        assert_eq!(settings[0].primary_ical_last_test_passed, Some(true));
+        assert_eq!(
+            settings[0].absence_ical_last_tested_at,
+            Some("2026-01-01T12:00:00.000Z".to_string())
+        );
+        assert_eq!(settings[0].absence_ical_last_test_passed, Some(false));
     }
 
-    #[test]
-    fn test_untested_skips_gracefully_when_zep_credentials_missing() {
+    #[tokio::test]
+    async fn test_untested_skips_gracefully_when_zep_credentials_missing() {
         // In the test environment there are no ZEP credentials in the keychain,
         // so test_untested_calendar_urls must return without panicking or mutating
         // the test timestamps (credentials check happens before any network call).
-        tauri::async_runtime::block_on(async {
-            let mut settings = vec![EmployeeSetting {
-                daylite_contact_reference: "/v1/contacts/2".to_string(),
-                zep_primary_calendar: Some("https://app.zep.de/caldav/admin/emp2/".to_string()),
-                zep_absence_calendar: None,
-                primary_ical_last_tested_at: None,
-                primary_ical_last_test_passed: None,
-                absence_ical_last_tested_at: None,
-                absence_ical_last_test_passed: None,
-            }];
+        let mut settings = vec![EmployeeSetting {
+            daylite_contact_reference: "/v1/contacts/2".to_string(),
+            zep_primary_calendar: Some("https://app.zep.de/caldav/admin/emp2/".to_string()),
+            zep_absence_calendar: None,
+            primary_ical_last_tested_at: None,
+            primary_ical_last_test_passed: None,
+            absence_ical_last_tested_at: None,
+            absence_ical_last_test_passed: None,
+        }];
 
-            test_untested_calendar_urls(&mut settings).await;
+        test_untested_calendar_urls(&mut settings).await;
 
-            assert_eq!(settings[0].primary_ical_last_tested_at, None);
-            assert_eq!(settings[0].primary_ical_last_test_passed, None);
-        });
+        assert_eq!(settings[0].primary_ical_last_tested_at, None);
+        assert_eq!(settings[0].primary_ical_last_test_passed, None);
     }
 
-    #[test]
-    fn test_untested_does_nothing_when_no_calendar_urls_set() {
-        tauri::async_runtime::block_on(async {
-            let mut settings = vec![EmployeeSetting {
-                daylite_contact_reference: "/v1/contacts/3".to_string(),
-                zep_primary_calendar: None,
-                zep_absence_calendar: None,
-                primary_ical_last_tested_at: None,
-                primary_ical_last_test_passed: None,
-                absence_ical_last_tested_at: None,
-                absence_ical_last_test_passed: None,
-            }];
+    #[tokio::test]
+    async fn test_untested_does_nothing_when_no_calendar_urls_set() {
+        let mut settings = vec![EmployeeSetting {
+            daylite_contact_reference: "/v1/contacts/3".to_string(),
+            zep_primary_calendar: None,
+            zep_absence_calendar: None,
+            primary_ical_last_tested_at: None,
+            primary_ical_last_test_passed: None,
+            absence_ical_last_tested_at: None,
+            absence_ical_last_test_passed: None,
+        }];
 
-            test_untested_calendar_urls(&mut settings).await;
+        test_untested_calendar_urls(&mut settings).await;
 
-            assert_eq!(settings[0].primary_ical_last_tested_at, None);
-        });
+        assert_eq!(settings[0].primary_ical_last_tested_at, None);
     }
 
     #[test]
