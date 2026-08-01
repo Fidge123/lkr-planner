@@ -16,6 +16,8 @@ interface TtlCacheOptions<T> {
   load: () => Promise<T[]>;
   /** Prefixes the error thrown when neither the cache nor the fallback can serve. */
   failureMessage: string;
+  /** Reported when a rejection carries no message of its own. */
+  unknownErrorMessage: string;
   /** Consulted only when the load fails and nothing is held in memory. */
   fallback?: () => Promise<T[]>;
 }
@@ -35,6 +37,7 @@ export function createTtlCache<T>({
   ttlMs,
   load,
   failureMessage,
+  unknownErrorMessage,
   fallback,
 }: TtlCacheOptions<T>): TtlCache<T> {
   let entry: { data: T[]; fetchedAtMs: number } | null = null;
@@ -55,7 +58,7 @@ export function createTtlCache<T>({
           return { data, source: "network" } satisfies CacheLoadResult<T>;
         })
         .catch(async (error) => {
-          const errorMessage = readErrorMessage(error);
+          const errorMessage = readErrorMessage(error, unknownErrorMessage);
 
           if (entry) {
             return {
@@ -96,10 +99,10 @@ export function createTtlCache<T>({
   };
 }
 
-function readErrorMessage(error: unknown): string {
+function readErrorMessage(error: unknown, fallbackMessage: string): string {
   if (error instanceof Error && error.message.trim().length > 0) {
     return error.message;
   }
 
-  return "Die Daten konnten nicht von Daylite geladen werden.";
+  return fallbackMessage;
 }

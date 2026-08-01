@@ -10,6 +10,7 @@ export const DEFAULT_DAYLITE_PROJECT_CACHE_TTL_MS = 30_000;
 
 const projectCache = createTtlCache<PlanningProjectRecord>({
   ttlMs: DEFAULT_DAYLITE_PROJECT_CACHE_TTL_MS,
+  unknownErrorMessage: "Die Daten konnten nicht von Daylite geladen werden.",
   failureMessage: "Projektladen fehlgeschlagen",
   load: async () =>
     unwrapCommandResult(

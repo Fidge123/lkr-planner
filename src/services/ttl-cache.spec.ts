@@ -9,6 +9,7 @@ function countingCache(
   const cache = createTtlCache<string>({
     ttlMs: 30_000,
     failureMessage: "Laden fehlgeschlagen",
+    unknownErrorMessage: "Unbekannter Fehler",
     load: () => {
       const result = results[Math.min(calls, results.length - 1)];
       calls += 1;
@@ -132,7 +133,7 @@ describe("createTtlCache", () => {
     ]);
 
     await expect(cache.get({ nowMs: 1_000 })).rejects.toThrow(
-      "Laden fehlgeschlagen: Die Daten konnten nicht von Daylite geladen werden.",
+      "Laden fehlgeschlagen: Unbekannter Fehler",
     );
   });
 
