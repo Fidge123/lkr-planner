@@ -48,8 +48,6 @@ impl DayliteHttpTransport for MockTransport {
     }
 }
 
-/// The transport is returned alongside the client so a test can assert on the
-/// requests it recorded; tests that only need the client discard it with `_`.
 pub(super) fn mock_client(
     responses: Vec<Result<DayliteHttpResponse, DayliteApiError>>,
 ) -> (DayliteApiClient, MockTransport) {
