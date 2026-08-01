@@ -6,7 +6,7 @@ import { CalendarSection } from "./calendar-section";
 import { EmployeeIcalDialog } from "./employee-ical-dialog";
 
 function calendarState(
-  overrides: Partial<ZepCalendarsState>,
+  overrides: Partial<ZepCalendarsState> = {},
 ): ZepCalendarsState {
   return {
     calendars: null,
@@ -31,142 +31,92 @@ const EMPLOYEE: PlanningContactRecord = {
   urls: [],
 };
 
-describe("CalendarSection (10.8 - independent state)", () => {
-  it("primary submitting does not affect the absence section", () => {
-    const primaryHtml = renderToStaticMarkup(
-      <CalendarSection
-        title="Einsatz"
-        source="primary"
-        calendars={CALENDARS}
-        selectedUrl={CALENDARS[0].url}
-        storedUrl={CALENDARS[0].url}
-        onUrlChange={() => {}}
-        status={null}
-        isSubmitting={true}
-        onSubmit={() => {}}
-        isDisabled={false}
-      />,
-    );
-    const absenceHtml = renderToStaticMarkup(
-      <CalendarSection
-        title="Abwesenheit"
-        source="absence"
-        calendars={CALENDARS}
-        selectedUrl={CALENDARS[0].url}
-        storedUrl={CALENDARS[0].url}
-        onUrlChange={() => {}}
-        status={null}
-        isSubmitting={false}
-        onSubmit={() => {}}
-        isDisabled={false}
-        isOptional
-      />,
-    );
+function renderSection(
+  overrides: Partial<Parameters<typeof CalendarSection>[0]> = {},
+): string {
+  return renderToStaticMarkup(
+    <CalendarSection
+      title="Einsatz"
+      source="primary"
+      calendars={CALENDARS}
+      selectedUrl={CALENDARS[0].url}
+      storedUrl={CALENDARS[0].url}
+      onUrlChange={() => {}}
+      status={null}
+      isSubmitting={false}
+      onSubmit={() => {}}
+      isDisabled={false}
+      {...overrides}
+    />,
+  );
+}
+
+function renderDialog(
+  overrides: Partial<Parameters<typeof EmployeeIcalDialog>[0]> = {},
+): string {
+  return renderToStaticMarkup(
+    <EmployeeIcalDialog
+      employee={EMPLOYEE}
+      employeeSetting={null}
+      onClose={() => {}}
+      onSettingsSaved={() => {}}
+      calendarState={calendarState()}
+      {...overrides}
+    />,
+  );
+}
+
+describe("CalendarSection", () => {
+  it("submitting one section does not affect the other", () => {
+    const primaryHtml = renderSection({ isSubmitting: true });
+    const absenceHtml = renderSection({
+      title: "Abwesenheit",
+      source: "absence",
+      isOptional: true,
+    });
 
     expect(primaryHtml).toContain("Teste...");
     expect(absenceHtml).toContain("Speichern");
     expect(absenceHtml).not.toContain("Teste...");
   });
-});
 
-describe("CalendarSection - clear calendar", () => {
-  it("shows 'Entfernen' button when no URL is selected but one was previously stored", () => {
-    const html = renderToStaticMarkup(
-      <CalendarSection
-        title="Einsatz"
-        source="primary"
-        calendars={CALENDARS}
-        selectedUrl=""
-        storedUrl={CALENDARS[0].url}
-        onUrlChange={() => {}}
-        status={null}
-        isSubmitting={false}
-        onSubmit={() => {}}
-        isDisabled={false}
-      />,
-    );
-
-    expect(html).toContain("Entfernen");
-    expect(html).not.toContain("Speichern");
-    expect(html).not.toMatch(/disabled/);
-  });
-
-  it("disables the button when no URL is selected and no URL was stored", () => {
-    const html = renderToStaticMarkup(
-      <CalendarSection
-        title="Einsatz"
-        source="primary"
-        calendars={CALENDARS}
-        selectedUrl=""
-        storedUrl=""
-        onUrlChange={() => {}}
-        status={null}
-        isSubmitting={false}
-        onSubmit={() => {}}
-        isDisabled={false}
-      />,
-    );
-
-    expect(html).toMatch(/disabled/);
-  });
-});
-
-describe("CalendarSection (10.9 - in-flight state)", () => {
-  it("shows 'Teste...' and disables the button while isSubmitting=true", () => {
-    const html = renderToStaticMarkup(
-      <CalendarSection
-        title="Einsatz"
-        source="primary"
-        calendars={CALENDARS}
-        selectedUrl={CALENDARS[0].url}
-        storedUrl={CALENDARS[0].url}
-        onUrlChange={() => {}}
-        status={null}
-        isSubmitting={true}
-        onSubmit={() => {}}
-        isDisabled={false}
-      />,
-    );
+  it("shows 'Teste...' and disables the button while submitting", () => {
+    const html = renderSection({ isSubmitting: true });
 
     expect(html).toContain("Teste...");
     expect(html).not.toContain("Speichern");
     expect(html).toMatch(/disabled/);
   });
 
-  it("shows 'Speichern & Testen' and enabled button when idle", () => {
-    const html = renderToStaticMarkup(
-      <CalendarSection
-        title="Einsatz"
-        source="primary"
-        calendars={CALENDARS}
-        selectedUrl={CALENDARS[0].url}
-        storedUrl={CALENDARS[0].url}
-        onUrlChange={() => {}}
-        status={null}
-        isSubmitting={false}
-        onSubmit={() => {}}
-        isDisabled={false}
-      />,
-    );
+  it("shows 'Speichern & Testen' and an enabled button when idle", () => {
+    const html = renderSection();
 
     expect(html).toContain("Speichern");
     expect(html).not.toContain("Teste...");
     expect(html).not.toMatch(/disabled/);
   });
+
+  it("offers 'Entfernen' when the stored URL is being cleared", () => {
+    const html = renderSection({ selectedUrl: "" });
+
+    expect(html).toContain("Entfernen");
+    expect(html).not.toContain("Speichern");
+    expect(html).not.toMatch(/disabled/);
+  });
+
+  it("disables the button when no URL is selected and none was stored", () => {
+    expect(renderSection({ selectedUrl: "", storedUrl: "" })).toMatch(
+      /disabled/,
+    );
+  });
 });
 
-describe("EmployeeIcalDialog (10.10 - discovery failure)", () => {
-  it("shows error banner with reload button when calendar discovery failed", () => {
+describe("EmployeeIcalDialog", () => {
+  it("shows an error banner with a reload button when discovery failed", () => {
     const errorMessage = "Verbindung zum ZEP-Server fehlgeschlagen.";
-    const html = renderToStaticMarkup(
-      <EmployeeIcalDialog
-        employee={EMPLOYEE}
-        employeeSetting={null}
-        onClose={() => {}}
-        onSettingsSaved={() => {}}
-        calendarState={calendarState({ errorMessage })}
-      />,
-    );
+    const html = renderDialog({
+      calendarState: calendarState({ errorMessage }),
+    });
 
     expect(html).toContain(errorMessage);
     expect(html).toContain("Neu laden");
@@ -174,32 +124,15 @@ describe("EmployeeIcalDialog (10.10 - discovery failure)", () => {
     expect(html).toContain("iCal-Konfiguration");
   });
 
-  it("disables calendar sections while discovery error is shown (zepCalendars=null)", () => {
-    const html = renderToStaticMarkup(
-      <EmployeeIcalDialog
-        employee={EMPLOYEE}
-        employeeSetting={null}
-        onClose={() => {}}
-        onSettingsSaved={() => {}}
-        calendarState={calendarState({ errorMessage: "Fehler" })}
-      />,
-    );
+  it("disables both calendar sections while the discovery error is shown", () => {
+    const html = renderDialog({
+      calendarState: calendarState({ errorMessage: "Fehler" }),
+    });
 
-    const selectMatches = [...html.matchAll(/<select[^>]*disabled[^>]*>/g)];
-    expect(selectMatches.length).toBe(2);
+    expect([...html.matchAll(/<select[^>]*disabled[^>]*>/g)]).toHaveLength(2);
   });
 
   it("renders nothing when no employee is selected", () => {
-    const html = renderToStaticMarkup(
-      <EmployeeIcalDialog
-        employee={null}
-        employeeSetting={null}
-        onClose={() => {}}
-        onSettingsSaved={() => {}}
-        calendarState={calendarState({})}
-      />,
-    );
-
-    expect(html).toBe("");
+    expect(renderDialog({ employee: null })).toBe("");
   });
 });
