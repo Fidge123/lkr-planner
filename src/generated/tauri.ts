@@ -5,7 +5,6 @@ import { invoke as __TAURI_INVOKE } from "@tauri-apps/api/core";
 
 /** Commands */
 export const commands = {
-	checkHealth: () => typedError<HealthStatus, string>(__TAURI_INVOKE("check_health")),
 	loadLocalStore: () => typedError<LocalStore, StoreError>(__TAURI_INVOKE("load_local_store")),
 	saveLocalStore: (store: LocalStore) => typedError<null, StoreError>(__TAURI_INVOKE("save_local_store", { store })),
 	loadWeekEvents: (weekStart: string) => typedError<EmployeeWeekEvents[], string>(__TAURI_INVOKE("load_week_events", { weekStart })),
@@ -167,14 +166,6 @@ export type EmployeeWeekEvents = {
 	events: CalendarCellEvent[],
 	error: string | null,
 };
-
-export type HealthStatus = {
-	status: HealthStatusEnum,
-	timestamp: string,
-	version: string,
-};
-
-export type HealthStatusEnum = "healthy" | "unhealthy";
 
 export type Holiday = {
 	date: string,
