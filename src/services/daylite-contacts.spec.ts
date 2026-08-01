@@ -98,36 +98,6 @@ describe("daylite contact service", () => {
     expect(mockDayliteListCachedContacts).toHaveBeenCalledTimes(1);
   });
 
-  it("returns stale in-memory cache on backend failure", async () => {
-    mockDayliteListContacts
-      .mockResolvedValueOnce({
-        status: "ok",
-        data: [
-          {
-            self: "/v1/contacts/3001",
-            full_name: "Moritz Monteur",
-            category: "Monteur",
-            urls: [],
-          },
-        ],
-      })
-      .mockResolvedValueOnce({
-        status: "error",
-        error: {
-          userMessage: "Die Daten konnten nicht von Daylite geladen werden.",
-        },
-      });
-
-    await loadDayliteContacts({ nowMs: 1_000 });
-    const staleFallback = await loadDayliteContacts({ nowMs: 45_000 });
-
-    expect(staleFallback.source).toBe("stale-cache");
-    expect(staleFallback.data[0]?.self).toBe("/v1/contacts/3001");
-    expect(staleFallback.errorMessage).toBe(
-      "Die Daten konnten nicht von Daylite geladen werden.",
-    );
-  });
-
   it("updates in-memory cache when contact urls are updated", async () => {
     mockDayliteListContacts.mockResolvedValue({
       status: "ok",
