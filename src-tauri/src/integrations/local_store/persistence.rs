@@ -154,11 +154,9 @@ mod tests {
                 zep_primary_calendar: Some(
                     "https://app.zep.de/caldav/admin/emp-1-primary/".to_string(),
                 ),
-                zep_absence_calendar: None,
                 primary_ical_last_tested_at: Some("2026-03-01T10:00:00Z".to_string()),
                 primary_ical_last_test_passed: Some(true),
-                absence_ical_last_tested_at: None,
-                absence_ical_last_test_passed: None,
+                ..Default::default()
             }],
             display_settings: DisplaySettings {
                 hide_non_plannable_employees: false,

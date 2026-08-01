@@ -129,11 +129,7 @@ mod tests {
         let mut settings = vec![EmployeeSetting {
             daylite_contact_reference: "/v1/contacts/2".to_string(),
             zep_primary_calendar: Some("https://app.zep.de/caldav/admin/emp2/".to_string()),
-            zep_absence_calendar: None,
-            primary_ical_last_tested_at: None,
-            primary_ical_last_test_passed: None,
-            absence_ical_last_tested_at: None,
-            absence_ical_last_test_passed: None,
+            ..Default::default()
         }];
 
         test_untested_calendar_urls(&mut settings).await;
@@ -146,12 +142,7 @@ mod tests {
     async fn test_untested_does_nothing_when_no_calendar_urls_set() {
         let mut settings = vec![EmployeeSetting {
             daylite_contact_reference: "/v1/contacts/3".to_string(),
-            zep_primary_calendar: None,
-            zep_absence_calendar: None,
-            primary_ical_last_tested_at: None,
-            primary_ical_last_test_passed: None,
-            absence_ical_last_tested_at: None,
-            absence_ical_last_test_passed: None,
+            ..Default::default()
         }];
 
         test_untested_calendar_urls(&mut settings).await;
@@ -176,12 +167,9 @@ mod tests {
     fn update_setting_updates_existing_entry_and_clears_timestamp() {
         let mut settings = vec![EmployeeSetting {
             daylite_contact_reference: "/v1/contacts/42".to_string(),
-            zep_primary_calendar: None,
-            zep_absence_calendar: None,
             primary_ical_last_tested_at: Some("2026-01-01T00:00:00Z".to_string()),
             primary_ical_last_test_passed: Some(true),
-            absence_ical_last_tested_at: None,
-            absence_ical_last_test_passed: None,
+            ..Default::default()
         }];
         update_setting(&mut settings, "/v1/contacts/42", |s| {
             s.zep_primary_calendar = Some("https://cal.example/".to_string());

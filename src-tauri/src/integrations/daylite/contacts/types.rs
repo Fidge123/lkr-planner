@@ -28,7 +28,7 @@ pub struct DayliteUpdateContactIcalUrlsInput {
     pub absence_ical_url: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq, Default)]
 pub struct PlanningContactRecord {
     #[serde(rename = "self")]
     pub reference: String,
