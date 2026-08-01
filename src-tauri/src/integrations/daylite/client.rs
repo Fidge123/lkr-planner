@@ -26,9 +26,14 @@ impl DayliteApiClient {
         Self { transport }
     }
 
+    /// Points at a port nothing listens on, so a cassette miss fails fast instead
+    /// of reaching the live API.
     #[cfg(test)]
     pub(super) fn with_replay_cassette(cassette_file_name: &str) -> Result<Self, DayliteApiError> {
-        Self::with_cassette("http://127.0.0.1:9", cassette_file_name, VcrMode::Replay)
+        Self::with_record_replay(
+            "http://127.0.0.1:9",
+            RecordReplayConfig::new(cassette_path_for_test(cassette_file_name), VcrMode::Replay),
+        )
     }
 
     #[cfg(test)]
@@ -36,14 +41,10 @@ impl DayliteApiClient {
         base_url: &str,
         cassette_file_name: &str,
     ) -> Result<Self, DayliteApiError> {
-        let transport = ReqwestTransport::new_with_record_replay(
+        Self::with_record_replay(
             base_url,
             RecordReplayConfig::from_env(cassette_path_for_test(cassette_file_name)),
-        )?;
-
-        Ok(Self {
-            transport: Box::new(transport),
-        })
+        )
     }
 
     pub(super) async fn send_request(
@@ -54,18 +55,12 @@ impl DayliteApiClient {
     }
 
     #[cfg(test)]
-    fn with_cassette(
+    fn with_record_replay(
         base_url: &str,
-        cassette_file_name: &str,
-        mode: VcrMode,
+        config: RecordReplayConfig,
     ) -> Result<Self, DayliteApiError> {
-        let transport = ReqwestTransport::new_with_record_replay(
-            base_url,
-            RecordReplayConfig::new(cassette_path_for_test(cassette_file_name), mode),
-        )?;
-
         Ok(Self {
-            transport: Box::new(transport),
+            transport: Box::new(ReqwestTransport::new_with_record_replay(base_url, config)?),
         })
     }
 }
