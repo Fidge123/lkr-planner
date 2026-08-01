@@ -47,14 +47,23 @@ export function createTtlCache<T>({
   // Bumped whenever a request is superseded, so a chain that is still settling
   // cannot write its result over the newer one that replaced it.
   let generation = 0;
+  // Updates made while a load was already running: the data it returns was read
+  // before the update, so it has to be replayed onto whatever lands.
+  let pendingUpdates: ((current: T[]) => T[])[] = [];
+
+  function replayPendingUpdates(data: T[]): T[] {
+    return pendingUpdates.reduce((current, apply) => apply(current), data);
+  }
 
   function startLoad(): Promise<CacheLoadResult<T>> {
     const requestGeneration = ++generation;
     const isCurrent = () => requestGeneration === generation;
 
     return load()
-      .then((data) => {
+      .then((loaded) => {
+        const data = replayPendingUpdates(loaded);
         if (isCurrent()) {
+          pendingUpdates = [];
           entry = { data, fetchedAtMs: now() };
         }
         return { data, source: "network" } satisfies CacheLoadResult<T>;
@@ -72,9 +81,11 @@ export function createTtlCache<T>({
 
         // A failing fallback must not replace the load failure the caller needs to
         // see, nor escape as a rejection this catch never wrapped.
-        const fromFallback = (await fallback?.().catch(() => [])) ?? [];
-        if (fromFallback.length > 0) {
+        const fromDisk = (await fallback?.().catch(() => [])) ?? [];
+        if (fromDisk.length > 0) {
+          const fromFallback = replayPendingUpdates(fromDisk);
           if (isCurrent()) {
+            pendingUpdates = [];
             entry = { data: fromFallback, fetchedAtMs: now() };
           }
           return {
@@ -113,6 +124,9 @@ export function createTtlCache<T>({
     },
 
     update(next: (current: T[]) => T[]): void {
+      if (inFlight) {
+        pendingUpdates.push(next);
+      }
       if (!entry) return;
       entry = { data: next(entry.data), fetchedAtMs: entry.fetchedAtMs };
     },
@@ -120,6 +134,7 @@ export function createTtlCache<T>({
     reset(): void {
       entry = null;
       inFlight = null;
+      pendingUpdates = [];
     },
   };
 }

@@ -227,6 +227,37 @@ describe("createTtlCache", () => {
     expect(callCount()).toBe(1);
   });
 
+  it("replays an update made while a load was in flight", async () => {
+    let release: (value: string[]) => void = () => {};
+    const pending = new Promise<string[]>((resolve) => {
+      release = resolve;
+    });
+    const { cache } = countingCache([() => pending]);
+
+    const inFlight = cache.get();
+    cache.update((current) => current.filter((entry) => entry !== "b"));
+    release(["a", "b"]);
+
+    expect((await inFlight).data).toEqual(["a"]);
+    expect((await cache.get()).data).toEqual(["a"]);
+  });
+
+  it("replays an in-flight update onto the disk fallback too", async () => {
+    let reject: (error: Error) => void = () => {};
+    const pending = new Promise<string[]>((_, rejectPending) => {
+      reject = rejectPending;
+    });
+    const { cache } = countingCache([() => pending], ok("a", "b"));
+
+    const inFlight = cache.get();
+    cache.update((current) => current.filter((entry) => entry !== "b"));
+    reject(new Error("Backend weg"));
+
+    const result = await inFlight;
+    expect(result.source).toBe("disk-cache");
+    expect(result.data).toEqual(["a"]);
+  });
+
   it("ignores an update while nothing is cached", async () => {
     const { cache } = countingCache([ok("a")]);
 
