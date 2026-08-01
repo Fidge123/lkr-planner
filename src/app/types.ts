@@ -16,6 +16,8 @@ export interface CellEvent {
   projectStatus: string | null;
   /** Color of the resolved project's Daylite category, shown as a strip on the card. Null when the project has no category color. */
   categoryColor: string | null;
+  /** Position among the day's assignments. Null for events that carry no order index yet. */
+  orderIndex: number | null;
 }
 
 const absenceCodeColors: Record<string, string> = {
@@ -63,5 +65,6 @@ export function toCellEvent(event: CalendarCellEvent): CellEvent {
     href: event.href,
     projectRef: event.projectRef,
     projectStatus: event.projectStatus,
+    orderIndex: event.orderIndex,
   };
 }

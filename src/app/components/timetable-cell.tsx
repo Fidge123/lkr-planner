@@ -1,6 +1,13 @@
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { TriangleAlert } from "lucide-react";
-import type { AppointmentDragPayload } from "../hooks/use-appointment-drag";
+import type { ReactNode } from "react";
+import { useRef } from "react";
+import { assignmentPositions, sortCellEvents } from "../cell-order";
+import type {
+  AppointmentDragPayload,
+  CardRect,
+  DropPreview,
+} from "../hooks/use-appointment-drag";
 import type { GhostSuggestion } from "../next-day-quick-add";
 import { type CellEvent, hasAbsenceConflict } from "../types";
 
@@ -11,15 +18,42 @@ export function TimetableCell({
   date = "",
   events,
   suggestion,
+  dropPreview = null,
+  draggedUid = null,
   onAddClick,
   onEventClick,
   onSuggestionClick,
 }: Props) {
+  const orderedEvents = sortCellEvents(events);
+  const positions = assignmentPositions(orderedEvents);
+  const conflict = hasAbsenceConflict(events);
+
+  // Measured on demand rather than tracked in state: the drop position is only ever read
+  // mid-drag, and rects go stale as soon as a row above this one changes height.
+  const cardNodes = useRef(new Map<string, HTMLLIElement>());
   const { isOver, setNodeRef } = useDroppable({
     id: `cell-${employeeRef}-${date}`,
-    data: { employeeRef, date },
+    data: {
+      kind: "cell",
+      employeeRef,
+      date,
+      cardRects: () =>
+        [...positions.keys()].flatMap((uid) => {
+          const rect = cardNodes.current.get(uid)?.getBoundingClientRect();
+          // A card lifted out of the flow measures as a zero rect, which would otherwise
+          // sort ahead of every real card.
+          if (!rect || rect.height === 0) return [];
+          return [{ uid, top: rect.top, height: rect.height }];
+        }) satisfies CardRect[],
+    },
   });
-  const conflict = hasAbsenceConflict(events);
+
+  const preview =
+    dropPreview &&
+    dropPreview.employeeRef === employeeRef &&
+    dropPreview.date === date
+      ? dropPreview
+      : null;
 
   return (
     <td
@@ -33,7 +67,7 @@ export function TimetableCell({
             Abwesenheit und Termin am selben Tag
           </li>
         ) : null}
-        {events.map((event) =>
+        {withDropPreview(orderedEvents, preview, draggedUid, (event) =>
           event.kind === "absence" ? (
             <li key={event.uid}>
               <span
@@ -59,11 +93,28 @@ export function TimetableCell({
               </span>
             </li>
           ) : (
-            <li key={event.uid}>
+            <li
+              key={event.uid}
+              // Collapsed while in flight so the drop preview replaces the card instead of
+              // adding to the cell's height: a cell that grows mid-drag pushes the rows
+              // under it away from the pointer. The card itself stays laid out, because
+              // dnd-kit measures it to position the drag overlay.
+              className={
+                event.uid === draggedUid
+                  ? "relative h-0 overflow-visible"
+                  : undefined
+              }
+              ref={(node) => {
+                if (node) cardNodes.current.set(event.uid, node);
+                else cardNodes.current.delete(event.uid);
+              }}
+            >
               <DraggableAssignmentCard
                 event={event}
                 employeeRef={employeeRef}
                 date={date}
+                position={positions.get(event.uid) ?? 0}
+                lifted={event.uid === draggedUid}
                 onEventClick={onEventClick}
               />
             </li>
@@ -98,6 +149,51 @@ export function TimetableCell({
   );
 }
 
+/**
+ * Splices the drop preview into the cell's rendered items, before the first assignment that
+ * already has `orderIndex` other assignments ahead of it. The dragged card is skipped in that
+ * count because it does not occupy a position in the day it is being dropped into.
+ */
+function withDropPreview(
+  events: CellEvent[],
+  preview: DropPreview | null,
+  draggedUid: string | null,
+  renderEvent: (event: CellEvent) => ReactNode,
+): ReactNode[] {
+  const items: ReactNode[] = [];
+  let othersAhead = 0;
+  let placed = false;
+  for (const event of events) {
+    if (event.kind === "assignment") {
+      if (preview && !placed && othersAhead === preview.orderIndex) {
+        items.push(
+          <DropPreviewCard key="drop-preview" title={preview.title} />,
+        );
+        placed = true;
+      }
+      if (event.uid !== draggedUid) othersAhead += 1;
+    }
+    items.push(renderEvent(event));
+  }
+  if (preview && !placed) {
+    items.push(<DropPreviewCard key="drop-preview" title={preview.title} />);
+  }
+  return items;
+}
+
+function DropPreviewCard({ title }: { title: string }) {
+  return (
+    <li aria-hidden="true">
+      <span
+        data-drop-preview="true"
+        className={`${assignmentCardClass} h-[3.25rem] border-2 border-dashed border-primary bg-primary/10 text-base-content/70 pointer-events-none`}
+      >
+        <h4 className="flex-1 min-w-0 font-medium">{title}</h4>
+      </span>
+    </li>
+  );
+}
+
 interface Props {
   highlight: boolean;
   isHoliday?: boolean;
@@ -105,6 +201,10 @@ interface Props {
   date?: string;
   events: CellEvent[];
   suggestion?: GhostSuggestion;
+  /** Where the in-flight drag would land; null unless this cell is the target. */
+  dropPreview?: DropPreview | null;
+  /** UID of the card being dragged, so it is not counted as its own neighbour. */
+  draggedUid?: string | null;
   onAddClick: () => void;
   onEventClick: (event: CellEvent) => void;
   onSuggestionClick?: (suggestion: GhostSuggestion) => void;
@@ -142,6 +242,8 @@ function DraggableAssignmentCard({
   event,
   employeeRef,
   date,
+  position,
+  lifted = false,
   onEventClick,
 }: CardProps) {
   const payload: AppointmentDragPayload = {
@@ -153,12 +255,13 @@ function DraggableAssignmentCard({
     title: event.title,
     color: event.color,
     categoryColor: event.categoryColor,
+    position,
   };
   // An unresolved project renders a German error placeholder as the title;
   // dropping such a card would persist that placeholder as the event summary.
   const unresolved = event.projectRef !== null && !event.projectStatus;
   const canDrag = Boolean(event.href) && !unresolved;
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+  const { attributes, listeners, setNodeRef } = useDraggable({
     id: `assignment-${employeeRef}-${event.uid}`,
     data: payload,
     disabled: !canDrag,
@@ -168,7 +271,7 @@ function DraggableAssignmentCard({
     <button
       ref={setNodeRef}
       type="button"
-      className={`btn btn-block h-auto justify-start ${assignmentCardClass} ${assignmentStripClass} text-base-content transition-[filter,opacity] hover:brightness-90 active:brightness-75 ${event.color} ${isDragging ? "opacity-40" : ""}`}
+      className={`btn btn-block h-auto justify-start ${assignmentCardClass} ${assignmentStripClass} text-base-content transition-[filter] hover:brightness-90 active:brightness-75 ${event.color} ${lifted ? "absolute inset-x-0 top-0 invisible pointer-events-none" : ""}`}
       style={categoryStrip(event.categoryColor)}
       onClick={() => onEventClick(event)}
       {...(canDrag ? { ...listeners, ...attributes } : {})}
@@ -186,6 +289,9 @@ interface CardProps {
   event: CellEvent;
   employeeRef: string;
   date: string;
+  position: number;
+  /** Out of the cell's flow while this card is the one being dragged. */
+  lifted?: boolean;
   onEventClick: (event: CellEvent) => void;
 }
 

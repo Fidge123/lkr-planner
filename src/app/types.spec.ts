@@ -16,6 +16,7 @@ function calendarEvent(
     endTime: null,
     href: null,
     projectRef: null,
+    orderIndex: null,
     ...overrides,
   };
 }
@@ -32,6 +33,7 @@ function cellEvent(overrides: Partial<CellEvent> = {}): CellEvent {
     projectRef: null,
     categoryColor: null,
     projectStatus: null,
+    orderIndex: null,
     ...overrides,
   };
 }

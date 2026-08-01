@@ -1,7 +1,10 @@
+import type { CollisionDetection } from "@dnd-kit/core";
 import {
   DndContext,
   DragOverlay,
   PointerSensor,
+  pointerWithin,
+  rectIntersection,
   useDndContext,
   useSensor,
   useSensors,
@@ -31,6 +34,15 @@ import type { PlanningAssignmentsState } from "./hooks/use-planning-assignments"
 import { usePlanningEmployees } from "./hooks/use-planning-employees";
 import { usePlanningProjects } from "./hooks/use-planning-projects";
 import { getWeekDays, toLocalISODate } from "./util";
+
+// The pointer, not the dragged card's box, picks the target cell: the position inside a cell
+// is derived from the pointer too, so both halves of the drop agree on one cursor.
+const collisionDetection: CollisionDetection = (args) => {
+  const pointerCollisions = pointerWithin(args);
+  return pointerCollisions.length > 0
+    ? pointerCollisions
+    : rectIntersection(args);
+};
 
 // dnd-kit refreshes a droppable's rect from a per-cell ResizeObserver, which
 // fires only when that cell's own box resizes, and from a timer that only
@@ -245,6 +257,7 @@ export function PlanningGridTable({
       ) : null}
       <DndContext
         sensors={dragSensors}
+        collisionDetection={collisionDetection}
         onDragStart={drag.onDragStart}
         onDragMove={drag.onDragMove}
         onDragEnd={drag.onDragEnd}
@@ -280,6 +293,8 @@ export function PlanningGridTable({
                     (s) => s.dayliteContactReference === employee.self,
                   ) ?? null
                 }
+                dropPreview={drag.dropPreview}
+                draggedUid={drag.activePayload?.uid ?? null}
                 onOpenIcalDialog={onOpenIcalDialog}
                 onReloadAssignments={reloadAssignments}
               />

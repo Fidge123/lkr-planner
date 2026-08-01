@@ -33,6 +33,7 @@ describe("TimetableCell", () => {
       projectRef: "/v1/projects/1",
       projectStatus: "in_progress",
       categoryColor: null,
+      orderIndex: 0,
     };
 
     const html = renderToStaticMarkup(
@@ -99,6 +100,7 @@ describe("TimetableCell", () => {
     projectRef: "/v1/projects/7",
     projectStatus: "in_progress",
     categoryColor: null,
+    orderIndex: 0,
   };
 
   it("marks assignment cards as draggable", () => {
@@ -128,6 +130,136 @@ describe("TimetableCell", () => {
     expect(html).toContain("Bauprojekt Süd");
   });
 
+  const first: CellEvent = {
+    ...draggableAssignment,
+    uid: "uid-first",
+    title: "Erster Einsatz",
+    orderIndex: 0,
+  };
+  const second: CellEvent = {
+    ...draggableAssignment,
+    uid: "uid-second",
+    title: "Zweiter Einsatz",
+    orderIndex: 1,
+  };
+  const previewProps = {
+    highlight: false,
+    events: [first, second],
+    onAddClick: () => {},
+    onEventClick: () => {},
+    employeeRef: "/v1/contacts/1",
+    date: "2026-07-28",
+  };
+  const preview = {
+    employeeRef: "/v1/contacts/1",
+    date: "2026-07-28",
+    title: "Schwebender Einsatz",
+  };
+
+  it("shows the drop preview between the cards it would land between", () => {
+    const html = renderToStaticMarkup(
+      <TimetableCell
+        {...previewProps}
+        dropPreview={{ ...preview, orderIndex: 1 }}
+      />,
+    );
+
+    expect(html).toContain("Schwebender Einsatz");
+    expect(html.indexOf("Erster Einsatz")).toBeLessThan(
+      html.indexOf("Schwebender Einsatz"),
+    );
+    expect(html.indexOf("Schwebender Einsatz")).toBeLessThan(
+      html.indexOf("Zweiter Einsatz"),
+    );
+  });
+
+  it("shows the drop preview above every card for index 0", () => {
+    const html = renderToStaticMarkup(
+      <TimetableCell
+        {...previewProps}
+        dropPreview={{ ...preview, orderIndex: 0 }}
+      />,
+    );
+
+    expect(html.indexOf("Schwebender Einsatz")).toBeLessThan(
+      html.indexOf("Erster Einsatz"),
+    );
+  });
+
+  it("shows the drop preview below every card when the drop appends", () => {
+    const html = renderToStaticMarkup(
+      <TimetableCell
+        {...previewProps}
+        dropPreview={{ ...preview, orderIndex: 2 }}
+      />,
+    );
+
+    expect(html.indexOf("Zweiter Einsatz")).toBeLessThan(
+      html.indexOf("Schwebender Einsatz"),
+    );
+  });
+
+  it("skips the dragged card when counting the preview position", () => {
+    // The dragged card does not occupy a position in the day it is dropped into, so an
+    // index of 1 still lands after the one remaining card.
+    const html = renderToStaticMarkup(
+      <TimetableCell
+        {...previewProps}
+        draggedUid="uid-first"
+        dropPreview={{ ...preview, orderIndex: 1 }}
+      />,
+    );
+
+    expect(html.indexOf("Zweiter Einsatz")).toBeLessThan(
+      html.indexOf("Schwebender Einsatz"),
+    );
+  });
+
+  it("renders no drop preview when the drag targets another cell", () => {
+    const html = renderToStaticMarkup(
+      <TimetableCell
+        {...previewProps}
+        dropPreview={{ ...preview, date: "2026-07-29", orderIndex: 0 }}
+      />,
+    );
+
+    expect(html).not.toContain("Schwebender Einsatz");
+  });
+
+  it("renders no drop preview when no drag is in flight", () => {
+    const html = renderToStaticMarkup(<TimetableCell {...previewProps} />);
+
+    expect(html).not.toContain("drop-preview");
+  });
+
+  it("renders assignment cards sorted by their order index", () => {
+    const later: CellEvent = {
+      ...draggableAssignment,
+      uid: "uid-later",
+      title: "Zweiter Einsatz",
+      orderIndex: 1,
+    };
+    const earlier: CellEvent = {
+      ...draggableAssignment,
+      uid: "uid-earlier",
+      title: "Erster Einsatz",
+      orderIndex: 0,
+    };
+
+    const html = renderToStaticMarkup(
+      <TimetableCell
+        highlight={false}
+        events={[later, earlier]}
+        onAddClick={() => {}}
+        onEventClick={() => {}}
+      />,
+    );
+
+    expect(html.indexOf("Erster Einsatz")).toBeLessThan(
+      html.indexOf("Zweiter Einsatz"),
+    );
+  });
+
   it("does not make bare or absence events draggable", () => {
     const bare: CellEvent = {
       uid: "uid-bare",
@@ -140,6 +272,7 @@ describe("TimetableCell", () => {
       projectRef: null,
       projectStatus: null,
       categoryColor: null,
+      orderIndex: null,
     };
     const absence: CellEvent = {
       uid: "uid-abs",
@@ -152,6 +285,7 @@ describe("TimetableCell", () => {
       projectRef: null,
       projectStatus: null,
       categoryColor: null,
+      orderIndex: null,
     };
 
     const html = renderToStaticMarkup(
@@ -177,6 +311,7 @@ describe("TimetableCell", () => {
     projectRef: null,
     projectStatus: null,
     categoryColor: null,
+    orderIndex: null,
   };
 
   it("marks a cell with an absence and an assignment as conflicting", () => {

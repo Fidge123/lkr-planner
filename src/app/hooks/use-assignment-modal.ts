@@ -167,6 +167,8 @@ export function useAssignmentModal({
           date,
           projectRef: selectedProjectRef,
           projectName,
+          // Editing an assignment must not move it within its day.
+          orderIndex: null,
         })
       : await commands.createAssignment({
           employeeReference,

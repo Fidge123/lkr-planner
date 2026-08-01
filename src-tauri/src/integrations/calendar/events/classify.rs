@@ -47,6 +47,7 @@ pub(crate) fn classify_event(event: &RawVEvent) -> PendingEvent {
         start_time: event.start_time.clone(),
         end_time: event.end_time.clone(),
         href: event.href.clone(),
+        order_index: event.order_index,
     }
 }
 
@@ -69,6 +70,20 @@ mod tests {
         assert_eq!(pending.project_ref, Some("/v1/projects/3001".to_string()));
         assert_eq!(pending.date, "2026-01-26");
         assert_eq!(pending.summary, "Projekt Nord");
+    }
+
+    #[test]
+    fn carries_the_order_index_through_classification() {
+        let event = RawVEvent {
+            uid: "uid-order".to_string(),
+            summary: "Projekt Nord".to_string(),
+            description: "daylite:/v1/projects/3001".to_string(),
+            dtstart: "2026-01-26".to_string(),
+            order_index: Some(2),
+            ..Default::default()
+        };
+
+        assert_eq!(classify_event(&event).order_index, Some(2));
     }
 
     #[test]

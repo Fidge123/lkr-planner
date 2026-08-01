@@ -7,6 +7,7 @@ import {
   type PlanningContactRecord,
 } from "../../generated/tauri";
 import { recordLastAssignedProject } from "../../services/assignment-suggestions";
+import type { DropPreview } from "../hooks/use-appointment-drag";
 import type { GhostSuggestion, ModalSaveAction } from "../next-day-quick-add";
 import { isGhostVisible, nextGhostState } from "../next-day-quick-add";
 import type { CellEvent } from "../types";
@@ -21,6 +22,8 @@ export function TimetableRow({
   calendarError,
   week,
   employeeSetting,
+  dropPreview = null,
+  draggedUid = null,
   onOpenIcalDialog,
   onReloadAssignments,
 }: Props) {
@@ -133,6 +136,8 @@ export function TimetableRow({
                 date={isoDay}
                 events={dayEvents}
                 suggestion={suggestion}
+                dropPreview={dropPreview}
+                draggedUid={draggedUid}
                 onAddClick={() => openCreateModal(isoDay)}
                 onEventClick={(event) => openEditModal(isoDay, event)}
                 onSuggestionClick={handleSuggestionClick}
@@ -184,6 +189,8 @@ interface Props {
     holidayDates: Set<string>;
   };
   employeeSetting: EmployeeSetting | null;
+  dropPreview?: DropPreview | null;
+  draggedUid?: string | null;
   onOpenIcalDialog: (employee: PlanningContactRecord) => void;
   onReloadAssignments: () => void;
 }

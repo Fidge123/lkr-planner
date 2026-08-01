@@ -53,3 +53,20 @@ The system SHALL let cross-day and cross-employee drops land the dragged assignm
 - **WHEN** a dragged assignment is dropped onto a target cell below all existing cards
 - **THEN** the dragged assignment is placed last
 - **AND** the target cell is re-sequenced and persisted
+
+### Requirement: Drop preview during a drag
+The system SHALL show, while an assignment is being dragged, which day cell would receive it and the exact position it would take inside that cell.
+
+#### Scenario: Target cell stays outlined over its cards
+- **WHEN** the pointer is anywhere inside a day cell, including over one of its existing cards
+- **THEN** that cell is outlined as the drop target
+
+#### Scenario: Preview marks the landing position
+- **WHEN** a drag hovers a position in a cell
+- **THEN** a placeholder is rendered at the position the assignment would take
+- **AND** the placeholder moves as the pointer moves to another position
+
+#### Scenario: Preview does not disturb the grid
+- **WHEN** the placeholder is shown in a cell
+- **THEN** the dragged assignment's card is taken out of that cell's layout
+- **AND** the position under the pointer does not change as a result of showing the placeholder

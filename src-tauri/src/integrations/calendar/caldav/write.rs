@@ -1,11 +1,13 @@
-use chrono::NaiveDate;
+use chrono::{NaiveDate, NaiveTime};
 use tauri_plugin_http::reqwest;
 use uuid::Uuid;
 
 use super::super::ical::{build_ical_payload, parse_ical_events};
-use super::super::slots::{full_window, plan_slot_updates, DayPlan, SlotUpdate};
+use super::super::slots::{full_window, plan_slot_updates, DayPlacement, DayPlan, SlotUpdate};
 use super::super::types::MoveAssignmentResult;
 use super::report::fetch_events_in_range;
+
+const MAX_REALLOCATE_ATTEMPTS: u32 = 3;
 
 pub(crate) struct CaldavSession {
     pub(crate) client: reqwest::Client,
@@ -19,6 +21,9 @@ pub(crate) struct AssignmentWrite {
     pub(crate) date: String,
     pub(crate) project_ref: String,
     pub(crate) project_name: String,
+    /// Requested position among the target day's assignments. `None` keeps an existing
+    /// assignment where it is and appends a new one.
+    pub(crate) order_index: Option<u32>,
 }
 
 fn parent_collection_url(resource_url: &str) -> &str {
@@ -61,15 +66,17 @@ async fn fetch_event_date(
     Ok(Some(event.dtstart))
 }
 
+/// Re-plans and re-PUTs the day until no PUT is rejected with 412, so a plan that raced a
+/// concurrent edit is rebuilt against the day's current state instead of being retried as is.
+///
 /// Each PUT carries If-Match only when the day REPORT supplied an ETag, so a server that
 /// omits one degrades to an unguarded write rather than blocking re-allocation.
-async fn reallocate_day(
+async fn replan_day_until_settled(
     session: &CaldavSession,
     calendar_url: &str,
     date: &str,
+    placement: Option<DayPlacement<'_>>,
 ) -> Result<(), String> {
-    const MAX_REALLOCATE_ATTEMPTS: u32 = 3;
-
     let day = NaiveDate::parse_from_str(date, "%Y-%m-%d")
         .map_err(|_| format!("Ungültiges Datum: {date}"))?;
 
@@ -78,13 +85,8 @@ async fn reallocate_day(
             fetch_events_in_range(session, calendar_url, day, day + chrono::Duration::days(1))
                 .await?;
 
-        if !put_slot_updates(
-            session,
-            date,
-            plan_slot_updates(&events, date, None).updates,
-        )
-        .await?
-        {
+        let updates = plan_slot_updates(&events, date, placement).updates;
+        if !put_slot_updates(session, date, updates).await? {
             return Ok(());
         }
     }
@@ -141,7 +143,7 @@ async fn put_slot_updates(
 /// surfacing an error here would invite a retry that duplicates the event. The next write
 /// on this day converges anyway.
 async fn reallocate_day_best_effort(session: &CaldavSession, calendar_url: &str, date: &str) {
-    if let Err(e) = reallocate_day(session, calendar_url, date).await {
+    if let Err(e) = replan_day_until_settled(session, calendar_url, date, None).await {
         eprintln!("calendar: re-allocation for {date} failed (converges on the next write): {e}");
     }
 }
@@ -152,12 +154,21 @@ async fn reallocate_day_best_effort(session: &CaldavSession, calendar_url: &str,
 async fn plan_day_for_pending_write(
     session: &CaldavSession,
     calendar_url: &str,
-    date: &str,
+    write: &AssignmentWrite,
     uid: &str,
 ) -> Option<DayPlan> {
+    let date = &write.date;
     let day = NaiveDate::parse_from_str(date, "%Y-%m-%d").ok()?;
     match fetch_events_in_range(session, calendar_url, day, day + chrono::Duration::days(1)).await {
-        Ok(events) => Some(plan_slot_updates(&events, date, Some(uid))),
+        Ok(events) => Some(plan_slot_updates(
+            &events,
+            date,
+            Some(DayPlacement {
+                uid,
+                order_index: write.order_index,
+                written_by_caller: true,
+            }),
+        )),
         Err(e) => {
             eprintln!("calendar: day fetch before write failed, using full window: {e}");
             None
@@ -183,6 +194,17 @@ async fn apply_planned_updates_best_effort(
     }
 }
 
+/// A day that could not be planned falls back to the lone-assignment case: the full window
+/// and the first position.
+fn placed_or_full_window(plan: &Option<DayPlan>) -> (u32, NaiveTime, NaiveTime) {
+    plan.as_ref()
+        .and_then(|plan| plan.placed)
+        .unwrap_or_else(|| {
+            let (start, end) = full_window();
+            (0, start, end)
+        })
+}
+
 pub(crate) async fn create_assignment_core(
     session: &CaldavSession,
     calendar_url: &str,
@@ -198,11 +220,8 @@ pub(crate) async fn create_assignment_core(
     }
 
     let uid = Uuid::new_v4().to_string();
-    let plan = plan_day_for_pending_write(session, calendar_url, &write.date, &uid).await;
-    let (slot_start, slot_end) = plan
-        .as_ref()
-        .and_then(|plan| plan.extra_slot)
-        .unwrap_or_else(full_window);
+    let plan = plan_day_for_pending_write(session, calendar_url, write, &uid).await;
+    let (order_index, slot_start, slot_end) = placed_or_full_window(&plan);
     let payload = build_ical_payload(
         &uid,
         &write.date,
@@ -210,6 +229,7 @@ pub(crate) async fn create_assignment_core(
         &write.project_ref,
         slot_start,
         slot_end,
+        order_index,
     );
 
     let base = calendar_url.trim_end_matches('/');
@@ -265,7 +285,7 @@ pub(crate) async fn update_assignment_core(
     // another day leaves the source day needing re-allocation too.
     let (previous_date, plan) = tokio::join!(
         fetch_event_date(session, &resource_url),
-        plan_day_for_pending_write(session, calendar_url, &write.date, uid),
+        plan_day_for_pending_write(session, calendar_url, write, uid),
     );
     let previous_date = match previous_date {
         Ok(d) => d,
@@ -277,10 +297,7 @@ pub(crate) async fn update_assignment_core(
         }
     };
 
-    let (slot_start, slot_end) = plan
-        .as_ref()
-        .and_then(|plan| plan.extra_slot)
-        .unwrap_or_else(full_window);
+    let (order_index, slot_start, slot_end) = placed_or_full_window(&plan);
     let payload = build_ical_payload(
         uid,
         &write.date,
@@ -288,6 +305,7 @@ pub(crate) async fn update_assignment_core(
         &write.project_ref,
         slot_start,
         slot_end,
+        order_index,
     );
 
     eprintln!("calendar: update_assignment PUT {resource_url}");
@@ -321,6 +339,36 @@ pub(crate) async fn update_assignment_core(
     }
 
     Ok(())
+}
+
+/// Moving a card within its own cell changes nothing but the day's ordering, so the event is
+/// never rewritten from the payload: the day is re-sequenced and the affected events, this one
+/// included, are patched in place.
+pub(crate) async fn reorder_assignment_core(
+    session: &CaldavSession,
+    href: &str,
+    uid: &str,
+    date: &str,
+    order_index: u32,
+) -> Result<(), String> {
+    let resource_url = resolve_href(href, &session.base_url)?;
+
+    if targets_absence_calendar(&resource_url, &session.absence_urls) {
+        eprintln!(
+            "calendar: refused reorder_assignment write to absence calendar URL '{resource_url}'"
+        );
+        return Err(
+            "Einsätze können nicht in einen Abwesenheitskalender geschrieben werden.".to_string(),
+        );
+    }
+
+    let calendar_url = parent_collection_url(&resource_url);
+    let placement = DayPlacement {
+        uid,
+        order_index: Some(order_index),
+        written_by_caller: false,
+    };
+    replan_day_until_settled(session, calendar_url, date, Some(placement)).await
 }
 
 pub(crate) async fn delete_assignment_core(
@@ -549,6 +597,7 @@ mod tests {
             date: "2026-07-08".to_string(),
             project_ref: "/v1/projects/42".to_string(),
             project_name: "Projekt Nord".to_string(),
+            order_index: None,
         }
     }
 
@@ -713,6 +762,7 @@ mod tests {
                 date: TEST_DATE.to_string(),
                 project_ref: "/v1/projects/42".to_string(),
                 project_name: "Testprojekt".to_string(),
+                order_index: None,
             },
         )
         .await?;
@@ -735,6 +785,7 @@ mod tests {
                 date: TEST_DATE.to_string(),
                 project_ref: "/v1/projects/43".to_string(),
                 project_name: "Aktualisiertes Projekt".to_string(),
+                order_index: None,
             },
         )
         .await?;

@@ -76,6 +76,7 @@ describe("AssignmentModal", () => {
       startTime: "08:00",
       endTime: "16:00",
       href: "/calendars/user/cal/uid-1.ics",
+      orderIndex: null,
     };
 
     const html = renderToStaticMarkup(
@@ -118,6 +119,7 @@ describe("AssignmentModal", () => {
       startTime: null,
       endTime: null,
       href: "/calendars/user/cal/uid-2.ics",
+      orderIndex: null,
     };
 
     const html = renderToStaticMarkup(

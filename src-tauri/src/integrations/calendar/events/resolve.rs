@@ -18,6 +18,7 @@ pub(crate) fn resolve_event(
         start_time,
         end_time,
         href,
+        order_index,
     } = pending;
 
     let href = if href.is_empty() { None } else { Some(href) };
@@ -34,6 +35,7 @@ pub(crate) fn resolve_event(
             start_time,
             end_time,
             href,
+            order_index,
         };
     };
 
@@ -49,6 +51,7 @@ pub(crate) fn resolve_event(
             start_time,
             end_time,
             href,
+            order_index,
         };
     }
 
@@ -64,6 +67,7 @@ pub(crate) fn resolve_event(
             start_time,
             end_time,
             href,
+            order_index,
         };
     }
 
@@ -78,6 +82,7 @@ pub(crate) fn resolve_event(
         start_time,
         end_time,
         href,
+        order_index,
     }
 }
 
@@ -127,6 +132,7 @@ mod tests {
             start_time: None,
             end_time: None,
             href: String::new(),
+            order_index: None,
         };
         let cache = cache_with_project(None);
         let api_results = HashMap::new();
@@ -149,6 +155,7 @@ mod tests {
             start_time: None,
             end_time: None,
             href: String::new(),
+            order_index: None,
         };
         let cache = cache_with_project(Some("Bau"));
 
@@ -172,6 +179,7 @@ mod tests {
             start_time: None,
             end_time: None,
             href: String::new(),
+            order_index: None,
         };
         let cache = cache_with_project(Some("Ohne Farbe"));
 
@@ -195,6 +203,7 @@ mod tests {
             start_time: None,
             end_time: None,
             href: String::new(),
+            order_index: None,
         };
         let cache = DayliteCache::default();
         let mut api_results = HashMap::new();
@@ -225,6 +234,7 @@ mod tests {
             start_time: None,
             end_time: None,
             href: String::new(),
+            order_index: None,
         };
         let cache = DayliteCache::default();
         let mut api_results = HashMap::new();
@@ -257,6 +267,7 @@ mod tests {
             start_time: None,
             end_time: None,
             href: String::new(),
+            order_index: None,
         };
         let cache = DayliteCache::default();
         let mut api_results = HashMap::new();
@@ -287,6 +298,7 @@ mod tests {
             start_time: None,
             end_time: None,
             href: String::new(),
+            order_index: None,
         };
         let cache = DayliteCache::default();
         let api_results = HashMap::new();
@@ -338,5 +350,26 @@ mod tests {
             cell_event.href,
             Some("/calendars/user/cal/uid-href.ics".to_string())
         );
+    }
+
+    #[test]
+    fn order_index_propagates_through_classify_and_resolve_to_cell_event() {
+        let event = RawVEvent {
+            uid: "uid-order".to_string(),
+            summary: "Projekt Nord".to_string(),
+            description: "daylite:/v1/projects/3001".to_string(),
+            dtstart: "2026-05-05".to_string(),
+            order_index: Some(1),
+            ..Default::default()
+        };
+
+        let cell_event = resolve_event(
+            classify_event(&event),
+            &DayliteCache::default(),
+            &HashMap::new(),
+            &HashMap::new(),
+        );
+
+        assert_eq!(cell_event.order_index, Some(1));
     }
 }

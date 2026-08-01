@@ -7,7 +7,7 @@ use tauri_plugin_http::reqwest;
 
 use super::caldav::{
     create_assignment_core, delete_assignment_core, fetch_calendar_events, move_assignment_core,
-    update_assignment_core, AssignmentWrite, CaldavSession,
+    reorder_assignment_core, update_assignment_core, AssignmentWrite, CaldavSession,
 };
 use super::events::{
     classify_event, map_absence_raw_events_for_week, resolve_event, sort_events_absences_first,
@@ -233,6 +233,8 @@ pub struct UpdateAssignmentInput {
     pub date: String,
     pub project_ref: String,
     pub project_name: String,
+    /// Position among the target day's assignments. None keeps the assignment where it is.
+    pub order_index: Option<u32>,
 }
 
 #[tauri::command]
@@ -255,6 +257,7 @@ pub async fn create_assignment(
             date: input.date,
             project_ref: input.project_ref,
             project_name: input.project_name,
+            order_index: None,
         },
     )
     .await
@@ -323,6 +326,7 @@ pub async fn update_assignment(
             date: input.date,
             project_ref: input.project_ref,
             project_name: input.project_name,
+            order_index: input.order_index,
         },
     )
     .await
@@ -337,6 +341,7 @@ pub async fn move_assignment(
     date: String,
     project_ref: String,
     project_name: String,
+    order_index: Option<u32>,
 ) -> Result<MoveAssignmentResult, String> {
     let store =
         crate::integrations::local_store::load_local_store(app).map_err(|e| e.user_message)?;
@@ -353,9 +358,26 @@ pub async fn move_assignment(
             date,
             project_ref,
             project_name,
+            order_index,
         },
     )
     .await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn reorder_assignment(
+    app: tauri::AppHandle,
+    href: String,
+    uid: String,
+    date: String,
+    order_index: u32,
+) -> Result<(), String> {
+    let store =
+        crate::integrations::local_store::load_local_store(app).map_err(|e| e.user_message)?;
+    let session = load_caldav_session(&store)?;
+
+    reorder_assignment_core(&session, &href, &uid, &date, order_index).await
 }
 
 #[tauri::command]
