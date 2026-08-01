@@ -244,7 +244,7 @@ export function PlanningGridTable({
           <tbody>
             {visibleEmployees.map((employee, index) => (
               <TimetableRow
-                key={buildEmployeeRowKey(employee, index)}
+                key={employee.self || `employee-${index}`}
                 employee={employee}
                 calendarEvents={eventsByEmployee[employee.self] ?? []}
                 calendarError={errorsByEmployee[employee.self] ?? null}
@@ -378,20 +378,3 @@ export interface PlanningGridEmployeesState {
 }
 
 export type PlanningGridAssignmentState = PlanningAssignmentsState;
-
-function buildEmployeeRowKey(
-  employee: PlanningContactRecord,
-  index: number,
-): string {
-  const stableReference = employee.self.trim();
-  if (stableReference.length > 0) {
-    return stableReference;
-  }
-
-  const stableName = (employee.nickname ?? employee.full_name ?? "").trim();
-  if (stableName.length > 0) {
-    return `employee-${stableName}-${index}`;
-  }
-
-  return `employee-empty-${index}`;
-}
