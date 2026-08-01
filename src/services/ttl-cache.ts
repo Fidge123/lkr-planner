@@ -27,6 +27,11 @@ export interface TtlCache<T> {
   get: (options?: CacheLoadOptions) => Promise<CacheLoadResult<T>>;
   /** Rewrites the cached entries in place, keeping the current fetch timestamp. */
   update: (next: (current: T[]) => T[]) => void;
+  /**
+   * Publishes already-known data without counting as a fetch, so a caller that has
+   * read it from elsewhere can spare the fallback a second read of the same source.
+   */
+  seed: (data: T[]) => void;
   reset: () => void;
 }
 
@@ -129,6 +134,13 @@ export function createTtlCache<T>({
       }
       if (!entry) return;
       entry = { data: next(entry.data), fetchedAtMs: entry.fetchedAtMs };
+    },
+
+    seed(data: T[]): void {
+      if (entry || data.length === 0) return;
+      // Stamped as already expired: unlike the fallback, which runs because the
+      // network just failed, seeding happens before the load and must not suppress it.
+      entry = { data, fetchedAtMs: now() - ttlMs };
     },
 
     reset(): void {

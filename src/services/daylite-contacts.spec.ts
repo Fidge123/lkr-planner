@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, mock } from "bun:test";
 import {
   loadCachedDayliteContacts,
   loadDayliteContacts,
+  preloadDayliteContactsFromDisk,
   test_resetDayliteContactCache,
   updateDayliteContactIcalUrls,
 } from "./daylite-contacts";
@@ -142,6 +143,33 @@ describe("daylite contact service", () => {
     const cached = await loadDayliteContacts();
     expect(cached.source).toBe("cache");
     expect(cached.data[0]?.full_name).toBe("Mira Monteur (Aktualisiert)");
+  });
+
+  it("reads the on-disk store once when the preload already served it", async () => {
+    mockDayliteListCachedContacts.mockResolvedValue({
+      status: "ok",
+      data: [
+        {
+          self: "/v1/contacts/5001",
+          full_name: "Malte Monteur",
+          category: "Monteur",
+          urls: [],
+        },
+      ],
+    });
+    mockDayliteListContacts.mockResolvedValue({
+      status: "error",
+      error: {
+        userMessage: "Die Daten konnten nicht von Daylite geladen werden.",
+      },
+    });
+
+    await preloadDayliteContactsFromDisk();
+    const result = await loadDayliteContacts();
+
+    expect(result.source).toBe("stale-cache");
+    expect(result.data[0]?.self).toBe("/v1/contacts/5001");
+    expect(mockDayliteListCachedContacts).toHaveBeenCalledTimes(1);
   });
 
   it("returns an empty list when cached contacts command fails", async () => {

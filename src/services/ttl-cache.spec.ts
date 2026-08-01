@@ -194,6 +194,41 @@ describe("createTtlCache", () => {
     expect(callCount()).toBe(1);
   });
 
+  it("serves seeded data from memory instead of consulting the fallback", async () => {
+    let fallbackCalls = 0;
+    const { cache } = countingCache([fails("Backend weg")], async () => {
+      fallbackCalls += 1;
+      return ["von-platte"];
+    });
+
+    cache.seed(["vorab"]);
+    const result = await cache.get();
+
+    expect(result.source).toBe("stale-cache");
+    expect(result.data).toEqual(["vorab"]);
+    expect(fallbackCalls).toBe(0);
+  });
+
+  it("seeded data never counts as fresh, so the load still runs", async () => {
+    const { cache, callCount } = countingCache([ok("frisch")]);
+
+    cache.seed(["vorab"]);
+    const result = await cache.get();
+
+    expect(result.source).toBe("network");
+    expect(result.data).toEqual(["frisch"]);
+    expect(callCount()).toBe(1);
+  });
+
+  it("seeding does not displace data already held", async () => {
+    const { cache } = countingCache([ok("frisch")]);
+    await cache.get();
+
+    cache.seed(["vorab"]);
+
+    expect((await cache.get()).data).toEqual(["frisch"]);
+  });
+
   it("throws with the failure prefix when nothing can serve the read", async () => {
     const { cache } = countingCache([fails("Backend weg")]);
 
