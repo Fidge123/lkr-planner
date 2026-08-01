@@ -8,7 +8,7 @@ export interface CachedResourceState<T> {
   reload: () => void;
 }
 
-interface Options<T> {
+export interface ResourceLoadSpec<T> {
   load: (options: { forceRefresh: boolean }) => Promise<CacheLoadResult<T>>;
   /** German message for a rejection that carries none of its own. */
   errorMessage: string;
@@ -16,45 +16,65 @@ interface Options<T> {
   preload?: () => Promise<T[]>;
 }
 
+export interface ResourceUpdate<T> {
+  data?: T[];
+  errorMessage?: string | null;
+  isLoading?: boolean;
+}
+
+/**
+ * A failing preload is an optimisation that missed, never a user-facing error, so it
+ * cannot reject: an escaping rejection would skip the `isLoading: false` update and
+ * leave the caller loading forever.
+ */
+export async function runResourceLoad<T>(
+  { load, preload, errorMessage }: ResourceLoadSpec<T>,
+  forceRefresh: boolean,
+  emit: (update: ResourceUpdate<T>) => void,
+): Promise<void> {
+  if (!forceRefresh && preload) {
+    const preloaded = await preload().catch(() => []);
+    if (preloaded.length > 0) {
+      emit({ data: preloaded });
+    }
+  }
+
+  try {
+    const result = await load({ forceRefresh });
+    emit({ data: result.data, errorMessage: result.errorMessage ?? null });
+  } catch (error) {
+    emit({
+      errorMessage: error instanceof Error ? error.message : errorMessage,
+    });
+  } finally {
+    emit({ isLoading: false });
+  }
+}
+
 export function useCachedResource<T>(
-  options: Options<T>,
+  spec: ResourceLoadSpec<T>,
 ): CachedResourceState<T> {
   const [data, setData] = useState<T[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // A superseded request must not overwrite a newer one's result, and the
-  // options object is rebuilt every render, so both are read through refs.
+  // spec object is rebuilt every render, so both are read through refs.
   const requestIdRef = useRef(0);
-  const optionsRef = useRef(options);
-  optionsRef.current = options;
+  const specRef = useRef(spec);
+  specRef.current = spec;
 
   const loadResource = useCallback(async (forceRefresh: boolean) => {
-    const { load, preload, errorMessage: fallbackMessage } = optionsRef.current;
     const id = ++requestIdRef.current;
     setIsLoading(true);
 
-    if (!forceRefresh && preload) {
-      const preloaded = await preload();
+    await runResourceLoad(specRef.current, forceRefresh, (update) => {
       if (id !== requestIdRef.current) return;
-      if (preloaded.length > 0) {
-        setData(preloaded);
-      }
-    }
-
-    try {
-      const result = await load({ forceRefresh });
-      if (id !== requestIdRef.current) return;
-      setData(result.data);
-      setErrorMessage(result.errorMessage ?? null);
-    } catch (error) {
-      if (id !== requestIdRef.current) return;
-      setErrorMessage(error instanceof Error ? error.message : fallbackMessage);
-    } finally {
-      if (id === requestIdRef.current) {
-        setIsLoading(false);
-      }
-    }
+      if (update.data !== undefined) setData(update.data);
+      if (update.errorMessage !== undefined)
+        setErrorMessage(update.errorMessage);
+      if (update.isLoading !== undefined) setIsLoading(update.isLoading);
+    });
   }, []);
 
   useEffect(() => {
