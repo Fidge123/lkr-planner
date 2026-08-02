@@ -20,11 +20,15 @@ export function isProtectedAssignment(
   return project?.category === fixedAppointmentCategory;
 }
 
+const genericWriteError = "Die Änderung konnte nicht gespeichert werden.";
+
+// Keyed on the status, never on the message: an error that carries no message
+// must not read as success.
 export function commandErrorMessage(result: {
   status: string;
   error?: string;
 }): string | null {
-  return result.status === "error" ? (result.error ?? null) : null;
+  return result.status === "error" ? result.error || genericWriteError : null;
 }
 
 export function resolveDisplayedProjects(

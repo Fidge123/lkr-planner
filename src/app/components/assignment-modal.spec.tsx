@@ -411,6 +411,15 @@ describe("commandErrorMessage", () => {
   it("reports no error for a successful write", () => {
     expect(commandErrorMessage({ status: "ok" })).toBeNull();
   });
+
+  it("keeps a message-less rejection an error instead of reading as success", () => {
+    expect(commandErrorMessage({ status: "error", error: "" })).toBe(
+      "Die Änderung konnte nicht gespeichert werden.",
+    );
+    expect(commandErrorMessage({ status: "error" })).toBe(
+      "Die Änderung konnte nicht gespeichert werden.",
+    );
+  });
 });
 
 describe("DeleteConfirmDialog", () => {
