@@ -29,6 +29,9 @@ pub struct CalendarCellEvent {
     pub href: Option<String>,
     // Daylite project reference (e.g. "/v1/projects/42") stored in DESCRIPTION. None for bare events.
     pub project_ref: Option<String>,
+    // Position among the same-day, same-employee assignments. None for events that carry no
+    // order property yet; those sort after the indexed ones.
+    pub order_index: Option<u32>,
 }
 
 /// CalDAV has no atomic cross-collection move, so the target copy is created
@@ -70,6 +73,8 @@ pub(super) struct RawVEvent {
     // Full calendar-data text of the resource, used to patch slot times without dropping
     // user-added properties. Empty when the event was not parsed from a REPORT.
     pub(super) raw_ical: String,
+    // Value of the order property; None when the event carries none.
+    pub(super) order_index: Option<u32>,
 }
 
 pub(super) struct PendingEvent {
@@ -81,4 +86,5 @@ pub(super) struct PendingEvent {
     pub(super) start_time: Option<String>,
     pub(super) end_time: Option<String>,
     pub(super) href: String,
+    pub(super) order_index: Option<u32>,
 }

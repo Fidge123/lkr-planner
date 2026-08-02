@@ -1,7 +1,10 @@
+import type { CollisionDetection } from "@dnd-kit/core";
 import {
   DndContext,
   DragOverlay,
   PointerSensor,
+  pointerWithin,
+  rectIntersection,
   useDndContext,
   useSensor,
   useSensors,
@@ -31,6 +34,15 @@ import type { PlanningAssignmentsState } from "./hooks/use-planning-assignments"
 import { usePlanningEmployees } from "./hooks/use-planning-employees";
 import { usePlanningProjects } from "./hooks/use-planning-projects";
 import { getWeekDays, toLocalISODate } from "./util";
+
+// The pointer, not the dragged card's box, picks the target cell: the position inside a cell
+// is derived from the pointer too, so both halves of the drop agree on one cursor.
+const collisionDetection: CollisionDetection = (args) => {
+  const pointerCollisions = pointerWithin(args);
+  return pointerCollisions.length > 0
+    ? pointerCollisions
+    : rectIntersection(args);
+};
 
 // dnd-kit refreshes a droppable's rect from a per-cell ResizeObserver, which
 // fires only when that cell's own box resizes, and from a timer that only
@@ -184,46 +196,20 @@ export function PlanningGridTable({
 
   return (
     <section className="w-full h-full overflow-auto">
-      {errorMessage ? (
-        <section className="alert alert-error m-4">
-          <span>{errorMessage}</span>
-          <button type="button" className="btn btn-sm" onClick={reloadProjects}>
-            Erneut laden
-          </button>
-        </section>
-      ) : null}
-      {employeeErrorMessage ? (
-        <section className="alert alert-error m-4">
-          <span>{employeeErrorMessage}</span>
-          <button
-            type="button"
-            className="btn btn-sm"
-            onClick={reloadEmployees}
-          >
-            Erneut laden
-          </button>
-        </section>
-      ) : null}
-      {assignmentErrorMessage ? (
-        <section className="alert alert-error m-4">
-          <span>{assignmentErrorMessage}</span>
-          <button
-            type="button"
-            className="btn btn-sm"
-            onClick={reloadAssignments}
-          >
-            Erneut laden
-          </button>
-        </section>
-      ) : null}
-      {holidayErrorMessage ? (
-        <section className="alert alert-warning m-4">
-          <span>{holidayErrorMessage}</span>
-          <button type="button" className="btn btn-sm" onClick={reloadHolidays}>
-            Erneut laden
-          </button>
-        </section>
-      ) : null}
+      <ReloadableAlert message={errorMessage} onReload={reloadProjects} />
+      <ReloadableAlert
+        message={employeeErrorMessage}
+        onReload={reloadEmployees}
+      />
+      <ReloadableAlert
+        message={assignmentErrorMessage}
+        onReload={reloadAssignments}
+      />
+      <ReloadableAlert
+        message={holidayErrorMessage}
+        onReload={reloadHolidays}
+        variant="warning"
+      />
       {isAssignmentsLoading ? (
         <p className="px-4 py-2 text-base-content/70">
           Einsätze werden geladen...
@@ -245,6 +231,7 @@ export function PlanningGridTable({
       ) : null}
       <DndContext
         sensors={dragSensors}
+        collisionDetection={collisionDetection}
         onDragStart={drag.onDragStart}
         onDragMove={drag.onDragMove}
         onDragEnd={drag.onDragEnd}
@@ -270,7 +257,7 @@ export function PlanningGridTable({
           <tbody>
             {visibleEmployees.map((employee, index) => (
               <TimetableRow
-                key={buildEmployeeRowKey(employee, index)}
+                key={employee.self || `employee-${index}`}
                 employee={employee}
                 calendarEvents={eventsByEmployee[employee.self] ?? []}
                 calendarError={errorsByEmployee[employee.self] ?? null}
@@ -280,6 +267,8 @@ export function PlanningGridTable({
                     (s) => s.dayliteContactReference === employee.self,
                   ) ?? null
                 }
+                dropPreview={drag.dropPreview}
+                draggedUid={drag.activePayload?.uid ?? null}
                 onOpenIcalDialog={onOpenIcalDialog}
                 onReloadAssignments={reloadAssignments}
               />
@@ -318,6 +307,35 @@ export function PlanningGridTable({
       <ProjectTable projects={projects} isLoading={isLoading} />
     </section>
   );
+}
+
+// Spelled out rather than interpolated so the class names survive Tailwind's
+// static scan of the source.
+const alertVariantClass = {
+  error: "alert-error",
+  warning: "alert-warning",
+} as const;
+
+function ReloadableAlert({
+  message,
+  onReload,
+  variant = "error",
+}: ReloadableAlertProps) {
+  if (!message) return null;
+  return (
+    <section className={`alert ${alertVariantClass[variant]} m-4`}>
+      <span>{message}</span>
+      <button type="button" className="btn btn-sm" onClick={onReload}>
+        Erneut laden
+      </button>
+    </section>
+  );
+}
+
+interface ReloadableAlertProps {
+  message: string | null;
+  onReload: () => void;
+  variant?: keyof typeof alertVariantClass;
 }
 
 function DragPreviewCard({ payload }: { payload: AppointmentDragPayload }) {
@@ -375,20 +393,3 @@ export interface PlanningGridEmployeesState {
 }
 
 export type PlanningGridAssignmentState = PlanningAssignmentsState;
-
-function buildEmployeeRowKey(
-  employee: PlanningContactRecord,
-  index: number,
-): string {
-  const stableReference = employee.self.trim();
-  if (stableReference.length > 0) {
-    return stableReference;
-  }
-
-  const stableName = (employee.nickname ?? employee.full_name ?? "").trim();
-  if (stableName.length > 0) {
-    return `employee-${stableName}-${index}`;
-  }
-
-  return `employee-empty-${index}`;
-}

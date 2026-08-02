@@ -79,117 +79,115 @@ impl DayliteVcrConfig {
     }
 }
 
-#[test]
+#[tokio::test]
 #[ignore = "requires live Daylite credentials, VCR_MODE=record, and writes cassette files"]
-fn record_daylite_cassettes_from_live_api() {
-    tauri::async_runtime::block_on(async {
-        let config = DayliteVcrConfig::from_env()
-            .expect("live Daylite VCR configuration should be provided via env vars");
+async fn record_daylite_cassettes_from_live_api() {
+    let config = DayliteVcrConfig::from_env()
+        .expect("live Daylite VCR configuration should be provided via env vars");
 
-        let refreshed_tokens = refresh_tokens(
-            &DayliteApiClient::with_env_cassette(&config.base_url, "daylite-refresh-tokens.json")
-                .expect("refresh cassette client should be created"),
-            config.refresh_token.clone(),
-        )
-        .await
-        .expect("refresh token cassette should be recorded");
+    let refreshed_tokens = refresh_tokens(
+        &DayliteApiClient::with_env_cassette(&config.base_url, "daylite-refresh-tokens.json")
+            .expect("refresh cassette client should be created"),
+        config.refresh_token.clone(),
+    )
+    .await
+    .expect("refresh token cassette should be recorded");
 
-        let stable_token_state = DayliteTokenState {
-            access_token: refreshed_tokens.access_token.clone(),
-            refresh_token: refreshed_tokens.refresh_token.clone(),
-            access_token_expires_at_ms: Some(u64::MAX),
-        };
+    let stable_token_state = DayliteTokenState {
+        access_token: refreshed_tokens.access_token.clone(),
+        refresh_token: refreshed_tokens.refresh_token.clone(),
+        access_token_expires_at_ms: Some(u64::MAX),
+    };
 
-        list_projects_core(
-            &DayliteApiClient::with_env_cassette(&config.base_url, "daylite-list-projects.json")
-                .expect("project list cassette client should be created"),
-            stable_token_state.clone(),
-        )
-        .await
-        .expect("project list cassette should be recorded");
+    list_projects_core(
+        &DayliteApiClient::with_env_cassette(&config.base_url, "daylite-list-projects.json")
+            .expect("project list cassette client should be created"),
+        stable_token_state.clone(),
+    )
+    .await
+    .expect("project list cassette should be recorded");
 
-        search_projects_core(
-            &DayliteApiClient::with_env_cassette(&config.base_url, "daylite-search-projects.json")
-                .expect("project search cassette client should be created"),
-            stable_token_state.clone(),
-            &DayliteSearchInput {
-                search_term: config.project_search_term.clone(),
-                limit: Some(5),
-                statuses: None,
-                full_records: None,
-                start: None,
-                sort: None,
-            },
-        )
-        .await
-        .expect("project search cassette should be recorded");
+    search_projects_core(
+        &DayliteApiClient::with_env_cassette(&config.base_url, "daylite-search-projects.json")
+            .expect("project search cassette client should be created"),
+        stable_token_state.clone(),
+        &DayliteSearchInput {
+            search_term: config.project_search_term.clone(),
+            limit: Some(5),
+            statuses: None,
+            full_records: None,
+            start: None,
+            sort: None,
+        },
+    )
+    .await
+    .expect("project search cassette should be recorded");
 
-        search_projects_core(
-            &DayliteApiClient::with_env_cassette(&config.base_url, "daylite-search-projects.json")
-                .expect("project search cassette client should be created"),
-            stable_token_state.clone(),
-            &DayliteSearchInput {
-                search_term: config.project_search_term.clone(),
-                limit: Some(5),
-                statuses: Some(vec!["new_status".to_string(), "in_progress".to_string()]),
-                full_records: Some(true),
-                start: None,
-                sort: None,
-            },
-        )
-        .await
-        .expect("project search cassette should be recorded");
+    search_projects_core(
+        &DayliteApiClient::with_env_cassette(&config.base_url, "daylite-search-projects.json")
+            .expect("project search cassette client should be created"),
+        stable_token_state.clone(),
+        &DayliteSearchInput {
+            search_term: config.project_search_term.clone(),
+            limit: Some(5),
+            statuses: Some(vec!["new_status".to_string(), "in_progress".to_string()]),
+            full_records: Some(true),
+            start: None,
+            sort: None,
+        },
+    )
+    .await
+    .expect("project search cassette should be recorded");
 
-        // Captures Daylite's real "no matches" response shape (a bare `{}` body),
-        // which the empty-search-result fix relies on. Mirrors the assignment
-        // picker's actual request shape (candidate pool + name sort + status filter).
-        search_projects_core(
-            &DayliteApiClient::with_env_cassette(&config.base_url, "daylite-search-projects.json")
-                .expect("project search cassette client should be created"),
-            stable_token_state.clone(),
-            &DayliteSearchInput {
-                search_term: config.project_no_match_search_term.clone(),
-                limit: Some(50),
-                statuses: Some(vec!["new_status".to_string(), "in_progress".to_string()]),
-                full_records: None,
-                start: None,
-                sort: Some(DayliteSearchSort::Name),
-            },
-        )
-        .await
-        .expect("no-match project search cassette should be recorded");
+    // Captures Daylite's real "no matches" response shape (a bare `{}` body),
+    // which the empty-search-result fix relies on. Mirrors the assignment
+    // picker's actual request shape (candidate pool + name sort + status filter).
+    search_projects_core(
+        &DayliteApiClient::with_env_cassette(&config.base_url, "daylite-search-projects.json")
+            .expect("project search cassette client should be created"),
+        stable_token_state.clone(),
+        &DayliteSearchInput {
+            search_term: config.project_no_match_search_term.clone(),
+            limit: Some(50),
+            statuses: Some(vec!["new_status".to_string(), "in_progress".to_string()]),
+            full_records: None,
+            start: None,
+            sort: Some(DayliteSearchSort::Name),
+        },
+    )
+    .await
+    .expect("no-match project search cassette should be recorded");
 
-        query_overdue_projects_core(
-            &DayliteApiClient::with_env_cassette(&config.base_url, "daylite-overdue-projects.json")
-                .expect("overdue project cassette client should be created"),
-            stable_token_state.clone(),
-        )
-        .await
-        .expect("overdue project cassette should be recorded");
+    query_overdue_projects_core(
+        &DayliteApiClient::with_env_cassette(&config.base_url, "daylite-overdue-projects.json")
+            .expect("overdue project cassette client should be created"),
+        stable_token_state.clone(),
+    )
+    .await
+    .expect("overdue project cassette should be recorded");
 
-        list_contacts_core(
-            &DayliteApiClient::with_env_cassette(&config.base_url, "daylite-list-contacts.json")
-                .expect("contact list cassette client should be created"),
-            stable_token_state.clone(),
-        )
-        .await
-        .expect("contact list cassette should be recorded");
+    list_contacts_core(
+        &DayliteApiClient::with_env_cassette(&config.base_url, "daylite-list-contacts.json")
+            .expect("contact list cassette client should be created"),
+        stable_token_state.clone(),
+    )
+    .await
+    .expect("contact list cassette should be recorded");
 
-        if let Some(update_contact_input) = &config.update_contact_input {
-            update_contact_ical_urls_core(
-                &DayliteApiClient::with_env_cassette(
-                    &config.base_url,
-                    "daylite-update-contact-ical-urls.json",
-                )
-                .expect("contact update cassette client should be created"),
-                stable_token_state,
-                &mut LocalStore::default(),
-                update_contact_input,
+    if let Some(update_contact_input) = &config.update_contact_input {
+        update_contact_ical_urls_core(
+            &DayliteApiClient::with_env_cassette(
+                &config.base_url,
+                "daylite-update-contact-ical-urls.json",
             )
-            .await
-            .expect("contact update cassette should be recorded");
-        }
-    });
+            .expect("contact update cassette client should be created"),
+            stable_token_state,
+            &mut LocalStore::default(),
+            update_contact_input,
+        )
+        .await
+        .expect("contact update cassette should be recorded");
+    }
 }
 
 fn required_env(key: &str) -> Result<String, String> {

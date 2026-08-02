@@ -47,6 +47,7 @@ pub(crate) fn classify_event(event: &RawVEvent) -> PendingEvent {
         start_time: event.start_time.clone(),
         end_time: event.end_time.clone(),
         href: event.href.clone(),
+        order_index: event.order_index,
     }
 }
 
@@ -54,98 +55,76 @@ pub(crate) fn classify_event(event: &RawVEvent) -> PendingEvent {
 mod tests {
     use super::*;
 
-    #[test]
-    fn classifies_lkr_planner_event_with_daylite_description() {
-        let event = RawVEvent {
+    fn event(description: &str) -> RawVEvent {
+        RawVEvent {
             uid: "uid-1".to_string(),
             summary: "Projekt Nord".to_string(),
-            description: "daylite:/v1/projects/3001".to_string(),
+            description: description.to_string(),
             dtstart: "2026-01-26".to_string(),
             ..Default::default()
-        };
+        }
+    }
 
-        let pending = classify_event(&event);
+    #[test]
+    fn project_ref_is_read_from_the_first_description_line() {
+        let cases: &[(&str, Option<&str>, &str)] = &[
+            (
+                "daylite:/v1/projects/3001",
+                Some("/v1/projects/3001"),
+                "plain daylite reference",
+            ),
+            (
+                "daylite:/v1/projects/4001\nZusätzliche Notizen hier",
+                Some("/v1/projects/4001"),
+                "only the first line is read",
+            ),
+            (
+                "\u{feff}daylite:/v1/projects/5001",
+                Some("/v1/projects/5001"),
+                "BOM prefix is stripped",
+            ),
+            ("Bitte Auto abholen", None, "unrelated description is bare"),
+            ("", None, "empty description is bare"),
+            ("daylite:", None, "reference without a path is bare"),
+        ];
 
-        assert_eq!(pending.project_ref, Some("/v1/projects/3001".to_string()));
+        for (description, expected, label) in cases {
+            let pending = classify_event(&event(description));
+
+            assert_eq!(pending.project_ref.as_deref(), *expected, "case: {label}");
+        }
+    }
+
+    #[test]
+    fn carries_summary_and_date_through_unchanged() {
+        let pending = classify_event(&event("daylite:/v1/projects/3001"));
+
         assert_eq!(pending.date, "2026-01-26");
         assert_eq!(pending.summary, "Projekt Nord");
     }
 
+    /// The order index is what the reordering feature persists, so classification
+    /// must carry it through untouched.
     #[test]
-    fn classifies_bare_event_without_daylite_description() {
-        let event = RawVEvent {
-            uid: "uid-2".to_string(),
-            summary: "Auto Werkstatt".to_string(),
-            description: "Bitte Auto abholen".to_string(),
-            dtstart: "2026-01-27".to_string(),
-            ..Default::default()
-        };
+    fn carries_the_order_index_through_classification() {
+        let pending = classify_event(&RawVEvent {
+            order_index: Some(2),
+            ..event("daylite:/v1/projects/3001")
+        });
 
-        let pending = classify_event(&event);
-
-        assert_eq!(pending.project_ref, None);
-        assert_eq!(pending.summary, "Auto Werkstatt");
-    }
-
-    #[test]
-    fn classifies_bare_event_with_empty_description() {
-        let event = RawVEvent {
-            uid: "uid-3".to_string(),
-            summary: "Blockertermin".to_string(),
-            description: String::new(),
-            dtstart: "2026-01-28".to_string(),
-            ..Default::default()
-        };
-
-        let pending = classify_event(&event);
-
-        assert_eq!(pending.project_ref, None);
-    }
-
-    #[test]
-    fn classifies_event_with_multiline_description_using_first_line_only() {
-        let event = RawVEvent {
-            uid: "uid-4".to_string(),
-            summary: "Projekt Süd".to_string(),
-            description: "daylite:/v1/projects/4001\nZusätzliche Notizen hier".to_string(),
-            dtstart: "2026-01-29".to_string(),
-            ..Default::default()
-        };
-
-        let pending = classify_event(&event);
-
-        assert_eq!(pending.project_ref, Some("/v1/projects/4001".to_string()));
+        assert_eq!(pending.order_index, Some(2));
     }
 
     #[test]
     fn synthesises_uid_for_event_without_uid() {
-        let event = RawVEvent {
+        let pending = classify_event(&RawVEvent {
             uid: String::new(),
             summary: "Ohne UID".to_string(),
-            description: String::new(),
             dtstart: "2026-01-26".to_string(),
             ..Default::default()
-        };
+        });
 
-        let pending = classify_event(&event);
-
-        assert!(!pending.uid.is_empty());
         assert!(pending.uid.starts_with("synthetic-"));
-    }
-
-    #[test]
-    fn classifies_event_with_bom_prefixed_daylite_description() {
-        let event = RawVEvent {
-            uid: "uid-bom".to_string(),
-            summary: "Projekt BOM".to_string(),
-            description: "\u{feff}daylite:/v1/projects/5001".to_string(),
-            dtstart: "2026-01-26".to_string(),
-            ..Default::default()
-        };
-
-        let pending = classify_event(&event);
-
-        assert_eq!(pending.project_ref, Some("/v1/projects/5001".to_string()));
     }
 
     #[test]

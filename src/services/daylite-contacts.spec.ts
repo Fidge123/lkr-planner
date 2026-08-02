@@ -1,10 +1,9 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
 import {
-  DEFAULT_DAYLITE_CONTACT_CACHE_TTL_MS,
   loadCachedDayliteContacts,
   loadDayliteContacts,
+  preloadDayliteContactsFromDisk,
   test_resetDayliteContactCache,
-  test_setDayliteContactCacheTtlMs,
   updateDayliteContactIcalUrls,
 } from "./daylite-contacts";
 
@@ -30,7 +29,6 @@ describe("daylite contact service", () => {
     mockDayliteListCachedContacts.mockClear();
     mockDayliteUpdateContactIcalUrls.mockClear();
     test_resetDayliteContactCache();
-    test_setDayliteContactCacheTtlMs(DEFAULT_DAYLITE_CONTACT_CACHE_TTL_MS);
   });
 
   it("returns planning contacts from backend command", async () => {
@@ -51,11 +49,11 @@ describe("daylite contact service", () => {
       ],
     });
 
-    const result = await loadDayliteContacts({ nowMs: 1_000 });
+    const result = await loadDayliteContacts();
 
     expect(result.source).toBe("network");
     expect(result.errorMessage).toBeUndefined();
-    expect(result.contacts).toEqual([
+    expect(result.data).toEqual([
       {
         self: "/v1/contacts/1001",
         full_name: "Max Mustermann",
@@ -91,44 +89,14 @@ describe("daylite contact service", () => {
       ],
     });
 
-    const result = await loadDayliteContacts({ nowMs: 2_000 });
+    const result = await loadDayliteContacts();
 
     expect(result.source).toBe("disk-cache");
     expect(result.errorMessage).toBe(
       "Die Daten konnten nicht von Daylite geladen werden.",
     );
-    expect(result.contacts[0]?.self).toBe("/v1/contacts/2001");
+    expect(result.data[0]?.self).toBe("/v1/contacts/2001");
     expect(mockDayliteListCachedContacts).toHaveBeenCalledTimes(1);
-  });
-
-  it("returns stale in-memory cache on backend failure", async () => {
-    mockDayliteListContacts
-      .mockResolvedValueOnce({
-        status: "ok",
-        data: [
-          {
-            self: "/v1/contacts/3001",
-            full_name: "Moritz Monteur",
-            category: "Monteur",
-            urls: [],
-          },
-        ],
-      })
-      .mockResolvedValueOnce({
-        status: "error",
-        error: {
-          userMessage: "Die Daten konnten nicht von Daylite geladen werden.",
-        },
-      });
-
-    await loadDayliteContacts({ nowMs: 1_000 });
-    const staleFallback = await loadDayliteContacts({ nowMs: 45_000 });
-
-    expect(staleFallback.source).toBe("stale-cache");
-    expect(staleFallback.contacts[0]?.self).toBe("/v1/contacts/3001");
-    expect(staleFallback.errorMessage).toBe(
-      "Die Daten konnten nicht von Daylite geladen werden.",
-    );
   });
 
   it("updates in-memory cache when contact urls are updated", async () => {
@@ -143,7 +111,7 @@ describe("daylite contact service", () => {
         },
       ],
     });
-    await loadDayliteContacts({ nowMs: 1_000 });
+    await loadDayliteContacts();
 
     mockDayliteUpdateContactIcalUrls.mockResolvedValue({
       status: "ok",
@@ -172,9 +140,36 @@ describe("daylite contact service", () => {
 
     expect(updated.full_name).toBe("Mira Monteur (Aktualisiert)");
 
-    const cached = await loadDayliteContacts({ nowMs: 1_001 });
+    const cached = await loadDayliteContacts();
     expect(cached.source).toBe("cache");
-    expect(cached.contacts[0]?.full_name).toBe("Mira Monteur (Aktualisiert)");
+    expect(cached.data[0]?.full_name).toBe("Mira Monteur (Aktualisiert)");
+  });
+
+  it("reads the on-disk store once when the preload already served it", async () => {
+    mockDayliteListCachedContacts.mockResolvedValue({
+      status: "ok",
+      data: [
+        {
+          self: "/v1/contacts/5001",
+          full_name: "Malte Monteur",
+          category: "Monteur",
+          urls: [],
+        },
+      ],
+    });
+    mockDayliteListContacts.mockResolvedValue({
+      status: "error",
+      error: {
+        userMessage: "Die Daten konnten nicht von Daylite geladen werden.",
+      },
+    });
+
+    await preloadDayliteContactsFromDisk();
+    const result = await loadDayliteContacts();
+
+    expect(result.source).toBe("stale-cache");
+    expect(result.data[0]?.self).toBe("/v1/contacts/5001");
+    expect(mockDayliteListCachedContacts).toHaveBeenCalledTimes(1);
   });
 
   it("returns an empty list when cached contacts command fails", async () => {

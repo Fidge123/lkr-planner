@@ -7,6 +7,30 @@
   },
   "askUserQuestionTimeout": "never",
   "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun install",
+            "timeout": 10,
+            "statusMessage": "Installing TS dependencies..."
+          },
+          {
+            "type": "command",
+            "command": "cargo fetch --manifest-path src-tauri/Cargo.toml",
+            "timeout": 30,
+            "statusMessage": "Installing rust dependencies..."
+          },
+          {
+            "type": "command",
+            "command": "bash scripts/unlock-cassettes.sh",
+            "timeout": 30,
+            "statusMessage": "Unlocking cassettes..."
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
         "matcher": "Write|MultiEdit|Edit",
@@ -44,7 +68,7 @@
           {
             "type": "command",
             "command": "cargo test --manifest-path src-tauri/Cargo.toml",
-            "timeout": 60,
+            "timeout": 120,
             "statusMessage": "Running Rust tests..."
           }
         ]

@@ -14,9 +14,10 @@ Don't break sentences across multiple lines.
 
 ### Screenshots / evidence of successful implementation
 <!-- optional, remove this section if not needed -->
+<!-- commit and push images to repository Fidge123/pr-images then link here -->
 
 ## Reviewer checklist
-<!-- A checklist of manual steps the reviewer should do to verify the PR. -->
+<!-- mandatory, checklist of steps the reviewer should execute -->
 
 - [ ]
 - [ ]

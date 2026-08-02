@@ -18,6 +18,7 @@ pub(crate) fn resolve_event(
         start_time,
         end_time,
         href,
+        order_index,
     } = pending;
 
     let href = if href.is_empty() { None } else { Some(href) };
@@ -34,6 +35,7 @@ pub(crate) fn resolve_event(
             start_time,
             end_time,
             href,
+            order_index,
         };
     };
 
@@ -49,6 +51,7 @@ pub(crate) fn resolve_event(
             start_time,
             end_time,
             href,
+            order_index,
         };
     }
 
@@ -64,6 +67,7 @@ pub(crate) fn resolve_event(
             start_time,
             end_time,
             href,
+            order_index,
         };
     }
 
@@ -78,6 +82,7 @@ pub(crate) fn resolve_event(
         start_time,
         end_time,
         href,
+        order_index,
     }
 }
 
@@ -110,6 +115,19 @@ mod tests {
         }
     }
 
+    fn pending(summary: &str, project_ref: Option<&str>) -> PendingEvent {
+        PendingEvent {
+            uid: "uid-1".to_string(),
+            date: "2026-01-26".to_string(),
+            summary: summary.to_string(),
+            project_ref: project_ref.map(str::to_string),
+            start_time: None,
+            end_time: None,
+            href: String::new(),
+            order_index: None,
+        }
+    }
+
     fn category_colors(pairs: &[(&str, &str)]) -> HashMap<String, String> {
         pairs
             .iter()
@@ -119,15 +137,7 @@ mod tests {
 
     #[test]
     fn resolves_assignment_event_from_cache() {
-        let pending = PendingEvent {
-            uid: "uid-1".to_string(),
-            date: "2026-01-26".to_string(),
-            summary: "Projekt Nord".to_string(),
-            project_ref: Some("/v1/projects/3001".to_string()),
-            start_time: None,
-            end_time: None,
-            href: String::new(),
-        };
+        let pending = pending("Projekt Nord", Some("/v1/projects/3001"));
         let cache = cache_with_project(None);
         let api_results = HashMap::new();
 
@@ -141,15 +151,7 @@ mod tests {
 
     #[test]
     fn resolves_category_color_from_cache() {
-        let pending = PendingEvent {
-            uid: "uid-1".to_string(),
-            date: "2026-01-26".to_string(),
-            summary: "Projekt Nord".to_string(),
-            project_ref: Some("/v1/projects/3001".to_string()),
-            start_time: None,
-            end_time: None,
-            href: String::new(),
-        };
+        let pending = pending("Projekt Nord", Some("/v1/projects/3001"));
         let cache = cache_with_project(Some("Bau"));
 
         let event = resolve_event(
@@ -164,15 +166,7 @@ mod tests {
 
     #[test]
     fn leaves_category_color_unset_when_the_category_has_no_color() {
-        let pending = PendingEvent {
-            uid: "uid-1".to_string(),
-            date: "2026-01-26".to_string(),
-            summary: "Projekt Nord".to_string(),
-            project_ref: Some("/v1/projects/3001".to_string()),
-            start_time: None,
-            end_time: None,
-            href: String::new(),
-        };
+        let pending = pending("Projekt Nord", Some("/v1/projects/3001"));
         let cache = cache_with_project(Some("Ohne Farbe"));
 
         let event = resolve_event(
@@ -187,15 +181,7 @@ mod tests {
 
     #[test]
     fn resolves_assignment_event_from_api_result() {
-        let pending = PendingEvent {
-            uid: "uid-2".to_string(),
-            date: "2026-01-27".to_string(),
-            summary: "Projekt Süd".to_string(),
-            project_ref: Some("/v1/projects/4001".to_string()),
-            start_time: None,
-            end_time: None,
-            href: String::new(),
-        };
+        let pending = pending("Projekt Süd", Some("/v1/projects/4001"));
         let cache = DayliteCache::default();
         let mut api_results = HashMap::new();
         api_results.insert(
@@ -217,15 +203,7 @@ mod tests {
 
     #[test]
     fn resolves_category_color_from_api_result() {
-        let pending = PendingEvent {
-            uid: "uid-2".to_string(),
-            date: "2026-01-27".to_string(),
-            summary: "Projekt Süd".to_string(),
-            project_ref: Some("/v1/projects/4001".to_string()),
-            start_time: None,
-            end_time: None,
-            href: String::new(),
-        };
+        let pending = pending("Projekt Süd", Some("/v1/projects/4001"));
         let cache = DayliteCache::default();
         let mut api_results = HashMap::new();
         api_results.insert(
@@ -249,15 +227,7 @@ mod tests {
 
     #[test]
     fn shows_placeholder_when_project_not_resolvable() {
-        let pending = PendingEvent {
-            uid: "uid-3".to_string(),
-            date: "2026-01-28".to_string(),
-            summary: "Unbekanntes Projekt".to_string(),
-            project_ref: Some("/v1/projects/9999".to_string()),
-            start_time: None,
-            end_time: None,
-            href: String::new(),
-        };
+        let pending = pending("Unbekanntes Projekt", Some("/v1/projects/9999"));
         let cache = DayliteCache::default();
         let mut api_results = HashMap::new();
         api_results.insert("/v1/projects/9999".to_string(), None);
@@ -279,15 +249,7 @@ mod tests {
 
     #[test]
     fn resolves_bare_event() {
-        let pending = PendingEvent {
-            uid: "uid-4".to_string(),
-            date: "2026-01-29".to_string(),
-            summary: "Auto Werkstatt".to_string(),
-            project_ref: None,
-            start_time: None,
-            end_time: None,
-            href: String::new(),
-        };
+        let pending = pending("Auto Werkstatt", None);
         let cache = DayliteCache::default();
         let api_results = HashMap::new();
 
@@ -338,5 +300,26 @@ mod tests {
             cell_event.href,
             Some("/calendars/user/cal/uid-href.ics".to_string())
         );
+    }
+
+    #[test]
+    fn order_index_propagates_through_classify_and_resolve_to_cell_event() {
+        let event = RawVEvent {
+            uid: "uid-order".to_string(),
+            summary: "Projekt Nord".to_string(),
+            description: "daylite:/v1/projects/3001".to_string(),
+            dtstart: "2026-05-05".to_string(),
+            order_index: Some(1),
+            ..Default::default()
+        };
+
+        let cell_event = resolve_event(
+            classify_event(&event),
+            &DayliteCache::default(),
+            &HashMap::new(),
+            &HashMap::new(),
+        );
+
+        assert_eq!(cell_event.order_index, Some(1));
     }
 }

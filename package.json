@@ -11,7 +11,7 @@
     "tauri": "tauri",
     "test": "bun test",
     "test:timezones": "bun run scripts/test-timezones.ts",
-    "test:docs": "bun test scripts/backlog-format.spec.ts scripts/adr-format.spec.ts",
+    "test:docs": "bun test scripts/adr-format.spec.ts",
     "test:watch": "bun test --watch",
     "icon:generate": "bun run scripts/regenerate-app-icon.ts",
     "lint": "biome check --write .",

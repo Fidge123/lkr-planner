@@ -5,7 +5,6 @@ pub mod secret_manager;
 
 fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
     tauri_specta::Builder::<tauri::Wry>::new().commands(tauri_specta::collect_commands![
-        integrations::health::check_health,
         integrations::local_store::load_local_store,
         integrations::local_store::save_local_store,
         integrations::calendar::commands::load_week_events,
@@ -26,6 +25,7 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         integrations::calendar::commands::create_assignment,
         integrations::calendar::commands::update_assignment,
         integrations::calendar::commands::move_assignment,
+        integrations::calendar::commands::reorder_assignment,
         integrations::calendar::commands::delete_assignment,
         integrations::zep::commands::zep_save_credentials,
         integrations::zep::commands::zep_load_credentials,

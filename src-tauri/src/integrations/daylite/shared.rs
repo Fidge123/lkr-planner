@@ -322,6 +322,21 @@ pub(super) fn current_epoch_ms() -> Result<u64, DayliteApiError> {
     })
 }
 
+/// Daylite returns padded strings and uses "" where it means "absent", so every
+/// mapped field is trimmed and an empty result collapses to None.
+pub(super) fn trimmed_or_none(value: Option<String>) -> Option<String> {
+    let trimmed = value?.trim().to_string();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed)
+    }
+}
+
+pub(super) fn trimmed(value: String) -> String {
+    value.trim().to_string()
+}
+
 pub(super) fn truncate_for_log(value: &str) -> String {
     let limit = 400;
     if value.chars().count() <= limit {

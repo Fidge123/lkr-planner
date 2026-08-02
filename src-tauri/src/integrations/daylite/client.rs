@@ -26,9 +26,14 @@ impl DayliteApiClient {
         Self { transport }
     }
 
+    /// Points at a port nothing listens on, so a cassette miss fails fast instead
+    /// of reaching the live API.
     #[cfg(test)]
     pub(super) fn with_replay_cassette(cassette_file_name: &str) -> Result<Self, DayliteApiError> {
-        Self::with_cassette("http://127.0.0.1:9", cassette_file_name, VcrMode::Replay)
+        Self::with_record_replay(
+            "http://127.0.0.1:9",
+            RecordReplayConfig::new(cassette_path_for_test(cassette_file_name), VcrMode::Replay),
+        )
     }
 
     #[cfg(test)]
@@ -36,14 +41,10 @@ impl DayliteApiClient {
         base_url: &str,
         cassette_file_name: &str,
     ) -> Result<Self, DayliteApiError> {
-        let transport = ReqwestTransport::new_with_record_replay(
+        Self::with_record_replay(
             base_url,
             RecordReplayConfig::from_env(cassette_path_for_test(cassette_file_name)),
-        )?;
-
-        Ok(Self {
-            transport: Box::new(transport),
-        })
+        )
     }
 
     pub(super) async fn send_request(
@@ -54,18 +55,12 @@ impl DayliteApiClient {
     }
 
     #[cfg(test)]
-    fn with_cassette(
+    fn with_record_replay(
         base_url: &str,
-        cassette_file_name: &str,
-        mode: VcrMode,
+        config: RecordReplayConfig,
     ) -> Result<Self, DayliteApiError> {
-        let transport = ReqwestTransport::new_with_record_replay(
-            base_url,
-            RecordReplayConfig::new(cassette_path_for_test(cassette_file_name), mode),
-        )?;
-
         Ok(Self {
-            transport: Box::new(transport),
+            transport: Box::new(ReqwestTransport::new_with_record_replay(base_url, config)?),
         })
     }
 }
@@ -375,20 +370,25 @@ mod tests {
         }
     }
 
-    #[test]
-    fn replays_recorded_response_without_network_call() {
-        let _guard = env_lock()
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let cassette_path = cassette_path("daylite-client-replay.json");
-        unsafe {
-            std::env::remove_var("VCR_MODE");
-        }
-        let transport = ReqwestTransport::new_with_record_replay(
-            "http://127.0.0.1:9",
-            RecordReplayConfig::from_env(cassette_path),
-        )
-        .expect("replay transport should be created");
+    #[tokio::test]
+    async fn replays_recorded_response_without_network_call() {
+        // The env lock guards only the VCR_MODE mutation and the read that follows it;
+        // once the config is captured the replay touches no shared state, so the guard
+        // is dropped before the awaits rather than held across them.
+        let transport = {
+            let _guard = env_lock()
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let cassette_path = cassette_path("daylite-client-replay.json");
+            unsafe {
+                std::env::remove_var("VCR_MODE");
+            }
+            ReqwestTransport::new_with_record_replay(
+                "http://127.0.0.1:9",
+                RecordReplayConfig::from_env(cassette_path),
+            )
+            .expect("replay transport should be created")
+        };
         let request = DayliteHttpRequest {
             method: DayliteHttpMethod::Get,
             path: "/projects".to_string(),
@@ -398,9 +398,13 @@ mod tests {
         };
 
         let started_at = Instant::now();
-        let first = tauri::async_runtime::block_on(async { transport.send(request.clone()).await })
+        let first = transport
+            .send(request.clone())
+            .await
             .expect("first replay should succeed");
-        let second = tauri::async_runtime::block_on(async { transport.send(request).await })
+        let second = transport
+            .send(request)
+            .await
             .expect("second replay should succeed");
 
         assert_eq!(first.status, 200);

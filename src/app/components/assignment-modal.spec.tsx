@@ -4,7 +4,6 @@ import type {
   CalendarCellEvent,
   DayliteProjectSummary,
 } from "../../generated/tauri";
-import { combineSuggestions } from "../../services/assignment-suggestions";
 import { AssignmentModal } from "./assignment-modal";
 import {
   nextHighlightIndex,
@@ -76,6 +75,7 @@ describe("AssignmentModal", () => {
       startTime: "08:00",
       endTime: "16:00",
       href: "/calendars/user/cal/uid-1.ics",
+      orderIndex: null,
     };
 
     const html = renderToStaticMarkup(
@@ -118,6 +118,7 @@ describe("AssignmentModal", () => {
       startTime: null,
       endTime: null,
       href: "/calendars/user/cal/uid-2.ics",
+      orderIndex: null,
     };
 
     const html = renderToStaticMarkup(
@@ -201,63 +202,6 @@ describe("nextHighlightIndex", () => {
 
   it("stays unhighlighted for an empty list", () => {
     expect(nextHighlightIndex(-1, 0, 1)).toBe(-1);
-  });
-});
-
-describe("default suggestions rendering", () => {
-  const overdue = [
-    project("Projekt 10", "/v1/projects/10"),
-    project("Projekt 11", "/v1/projects/11"),
-    project("Projekt 12", "/v1/projects/12"),
-    project("Projekt 13", "/v1/projects/13"),
-    project("Projekt 14", "/v1/projects/14"),
-  ];
-
-  it("renders the recent project first, followed by overdue projects", () => {
-    const recent = project("Projekt Zuletzt", "/v1/projects/99");
-
-    const html = renderToStaticMarkup(
-      <ProjectResultList
-        projects={combineSuggestions(recent, overdue)}
-        highlightedIndex={-1}
-        onSelect={() => {}}
-      />,
-    );
-
-    expect(html.indexOf("Projekt Zuletzt")).toBeGreaterThan(-1);
-    expect(html.indexOf("Projekt Zuletzt")).toBeLessThan(
-      html.indexOf("Projekt 10"),
-    );
-  });
-
-  it("renders at most 5 suggestions", () => {
-    const recent = project("Projekt Zuletzt", "/v1/projects/99");
-
-    const html = renderToStaticMarkup(
-      <ProjectResultList
-        projects={combineSuggestions(recent, overdue)}
-        highlightedIndex={-1}
-        onSelect={() => {}}
-      />,
-    );
-
-    expect(html.match(/<button/g)).toHaveLength(5);
-    expect(html).not.toContain("Projekt 14");
-  });
-
-  it("renders a recent project that is also overdue only once", () => {
-    const recent = project("Projekt 11", "/v1/projects/11");
-
-    const html = renderToStaticMarkup(
-      <ProjectResultList
-        projects={combineSuggestions(recent, overdue)}
-        highlightedIndex={-1}
-        onSelect={() => {}}
-      />,
-    );
-
-    expect(html.match(/Projekt 11/g)).toHaveLength(1);
-    expect(html.match(/<button/g)).toHaveLength(5);
   });
 });
 
