@@ -39,5 +39,5 @@
 
 - [x] 5.1 Add a grid-level test covering reorder-within-day and precise cross-employee placement (mocked commands)
 - [x] 5.2 Cover an assignment that is excluded from re-slotting: it keeps its order position but its times are not rewritten
-- [ ] 5.3 Manually verify intra-day reorder, before/after landing, and that allocated times follow the visual order
+- [x] 5.3 Manually verify intra-day reorder, before/after landing, and that allocated times follow the visual order
 - [x] 5.4 Run `bun lint`, `bun format`, `bun test`, and `cargo test`; fix issues until all green
