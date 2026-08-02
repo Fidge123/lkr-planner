@@ -24,9 +24,15 @@
 - [x] 4.2 Update `src/app/components/assignment-modal.tsx` to look up the project's category from the Daylite project cache and disable save/delete with a notice, satisfying the tests
 - [x] 4.3 Add `bun test` coverage for surfacing the backend's German rejection message if a stale edit/delete is submitted anyway
 
-## 5. Verification
+## 5. Protect the day rather than the event
 
-- [x] 5.1 Run `cargo test` and confirm all new and existing tests pass
-- [x] 5.2 Run `bun test` and confirm all new and existing tests pass
-- [x] 5.3 Run `bun lint` and fix any issues
-- [ ] 5.4 Manually verify in the running app: an assignment linked to a "Termin FIX geplant" project shows disabled edit/delete controls with a German notice, and a direct backend call to update/delete it is rejected
+- [x] 5.1 Write failing `cargo test`s for the move guard: protected event moved to another day is refused, moved within its day is allowed, unprotected event moved to another day is allowed
+- [x] 5.2 Add `refuse_protected_day_change` in `protection.rs` and wire it into `move_assignment`, satisfying the tests
+- [x] 5.3 Leave `reorder_assignment` and day re-slotting unguarded, and record the day-scoped rule in the specs
+
+## 6. Verification
+
+- [x] 6.1 Run `cargo test` and confirm all new and existing tests pass
+- [x] 6.2 Run `bun test` and confirm all new and existing tests pass
+- [x] 6.3 Run `bun lint` and fix any issues
+- [ ] 6.4 Manually verify in the running app: an assignment linked to a "Termin FIX geplant" project shows disabled edit/delete controls with a German notice, and a direct backend call to update/delete it is rejected

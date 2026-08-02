@@ -15,6 +15,13 @@ The user confirmed the category source is the Daylite project the event is linke
 - Make the guard authoritative: derive the current project link from the event itself (via CalDAV), not from a client-supplied parameter.
 - Give the user an immediate, non-error-feeling UI cue (disabled controls) in the common case, with the backend guard as the enforcement backstop.
 
+### The protected unit is the day, not the event
+
+`update_assignment` and `delete_assignment` are rejected outright for a protected event, but `move_assignment` is only rejected when the target date differs from the event's current date, and `reorder_assignment` is not guarded at all.
+Reassigning a fixed appointment to a colleague or resequencing it within its day does not break the commitment made outside the app; changing its day or removing it does.
+Alternative considered: guard every write path unconditionally.
+Rejected because it would freeze a fixed appointment against the ordinary planning the grid exists for, including the day re-slotting that any neighbouring write triggers.
+
 **Non-Goals:**
 - No change to `create_assignment` — creating new assignments is not restricted by this change.
 - No configurable/multi-category protection list — a single fixed category string for this change (YAGNI; extend later if more categories need protection).

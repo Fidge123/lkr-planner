@@ -33,14 +33,12 @@ fn parent_collection_url(resource_url: &str) -> &str {
         .unwrap_or(resource_url)
 }
 
-pub(crate) async fn fetch_event_description(
+pub(crate) async fn fetch_event_by_href(
     session: &CaldavSession,
     href: &str,
-) -> Result<Option<String>, String> {
+) -> Result<Option<RawVEvent>, String> {
     let resource_url = resolve_href(href, &session.base_url)?;
-    Ok(fetch_event(session, &resource_url)
-        .await?
-        .map(|event| event.description))
+    fetch_event(session, &resource_url).await
 }
 
 async fn fetch_event_date(

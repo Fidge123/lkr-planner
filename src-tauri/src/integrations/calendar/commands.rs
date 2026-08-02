@@ -12,7 +12,7 @@ use super::caldav::{
 use super::events::{
     classify_event, map_absence_raw_events_for_week, resolve_event, sort_events_absences_first,
 };
-use super::protection::refuse_protected_event;
+use super::protection::{refuse_protected_day_change, refuse_protected_event};
 use super::types::{CalendarCellEvent, EmployeeWeekEvents, MoveAssignmentResult, PendingEvent};
 use crate::integrations::daylite::projects::ResolvedProject;
 use crate::integrations::local_store::{DayliteCache, LocalStore};
@@ -346,12 +346,14 @@ pub async fn move_assignment(
     project_name: String,
     order_index: Option<u32>,
 ) -> Result<MoveAssignmentResult, String> {
-    let store =
-        crate::integrations::local_store::load_local_store(app).map_err(|e| e.user_message)?;
+    let store = crate::integrations::local_store::load_local_store(app.clone())
+        .map_err(|e| e.user_message)?;
 
     let target_calendar_url = resolve_employee_calendar_url(&store, &target_employee_reference)?;
 
     let session = load_caldav_session(&store)?;
+
+    refuse_protected_day_change(app, &session, &href, &date).await?;
 
     move_assignment_core(
         &session,
