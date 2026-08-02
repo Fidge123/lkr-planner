@@ -6,6 +6,8 @@ import {
 } from "../../generated/tauri";
 import { recordLastAssignedProject } from "../../services/assignment-suggestions";
 import {
+  commandErrorMessage,
+  isProtectedAssignment,
   nextHighlightIndex,
   resolveDisplayedProjects,
   resolveEscapeAction,
@@ -15,6 +17,7 @@ import {
 import type { ModalSaveAction } from "../next-day-quick-add";
 import { useAssignmentDefaultSuggestions } from "./use-assignment-default-suggestions";
 import { useAssignmentProjectSearch } from "./use-assignment-project-search";
+import { usePlanningProjects } from "./use-planning-projects";
 
 const missingHrefMessage =
   "Dieser Einsatz kann nicht bearbeitet werden, da er keine Kalender-Adresse hat. Bitte die Ansicht neu laden.";
@@ -49,6 +52,10 @@ export function useAssignmentModal({
   );
   const [isDirty, setIsDirty] = useState(false);
   const filterInputRef = useRef<HTMLInputElement>(null);
+
+  const { projects } = usePlanningProjects();
+  const isProtected =
+    isEditMode && isProtectedAssignment(assignment.projectRef, projects);
 
   const { results, errorMessage: searchError } =
     useAssignmentProjectSearch(filter);
@@ -177,8 +184,9 @@ export function useAssignmentModal({
           projectName,
         });
 
-    if (result.status === "error") {
-      setErrorMessage((result as { status: "error"; error: string }).error);
+    const writeError = commandErrorMessage(result);
+    if (writeError) {
+      setErrorMessage(writeError);
       setIsSaving(false);
       return;
     }
@@ -201,8 +209,9 @@ export function useAssignmentModal({
     setIsSaving(true);
     setErrorMessage(null);
     const result = await commands.deleteAssignment(assignment.href);
-    if (result.status === "error") {
-      setErrorMessage(result.error);
+    const deleteError = commandErrorMessage(result);
+    if (deleteError) {
+      setErrorMessage(deleteError);
       setIsSaving(false);
       return;
     }
@@ -211,6 +220,7 @@ export function useAssignmentModal({
 
   return {
     isEditMode,
+    isProtected,
     dialogRef,
     filterInputRef,
     filter,

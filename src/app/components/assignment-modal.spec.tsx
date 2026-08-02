@@ -3,15 +3,19 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type {
   CalendarCellEvent,
   DayliteProjectSummary,
+  PlanningProjectRecord,
 } from "../../generated/tauri";
 import { AssignmentModal } from "./assignment-modal";
 import {
+  commandErrorMessage,
+  isProtectedAssignment,
   nextHighlightIndex,
   resolveDisplayedProjects,
   resolveEscapeAction,
   resolveSaveAction,
   resolveWriteIntent,
 } from "./assignment-modal-logic";
+import { DeleteConfirmDialog } from "./delete-confirm-dialog";
 import { ProjectResultList, SuggestionEmptyState } from "./project-result-list";
 
 mock.module("../../generated/tauri", () => ({
@@ -20,6 +24,29 @@ mock.module("../../generated/tauri", () => ({
     updateAssignment: mock(() => Promise.resolve({ status: "ok", data: null })),
     deleteAssignment: mock(() => Promise.resolve({ status: "ok", data: null })),
   },
+}));
+
+const fixedProject: PlanningProjectRecord = {
+  self: "/v1/projects/9",
+  name: "Projekt Fix",
+  status: "in_progress",
+  category: "Termin FIX geplant",
+};
+
+const plannableProject: PlanningProjectRecord = {
+  self: "/v1/projects/1",
+  name: "Projekt Alpha",
+  status: "in_progress",
+  category: "Liefertermin bekannt",
+};
+
+mock.module("../hooks/use-planning-projects", () => ({
+  usePlanningProjects: () => ({
+    projects: [fixedProject, plannableProject],
+    isLoading: false,
+    errorMessage: null,
+    reloadProjects: () => {},
+  }),
 }));
 
 const baseProps = {
@@ -89,6 +116,55 @@ describe("AssignmentModal", () => {
     expect(html).toContain("Projekt Alpha");
     expect(html).toContain("Speichern");
     expect(html).toContain("Löschen");
+  });
+
+  it("edit mode: disables save and delete with a notice for a fixed appointment", () => {
+    const fixedAssignment: CalendarCellEvent = {
+      uid: "uid-9",
+      kind: "assignment",
+      title: "Projekt Fix",
+      projectStatus: "in_progress",
+      categoryColor: null,
+      projectRef: "/v1/projects/9",
+      date: "2026-05-06",
+      startTime: "08:00",
+      endTime: "16:00",
+      href: "/calendars/user/cal/uid-9.ics",
+      orderIndex: null,
+    };
+
+    const html = renderToStaticMarkup(
+      <AssignmentModal {...baseProps} isOpen assignment={fixedAssignment} />,
+    );
+
+    expect(html).toContain("Termin FIX geplant");
+    expect(html).toContain("kann nicht bearbeitet oder gelöscht werden");
+    expect(html.match(/<button[^>]*disabled[^>]*>Löschen/)).not.toBeNull();
+    expect(html.match(/<button[^>]*disabled[^>]*>Speichern/)).not.toBeNull();
+  });
+
+  it("edit mode: keeps save and delete enabled for a plannable assignment", () => {
+    const assignment: CalendarCellEvent = {
+      uid: "uid-1",
+      kind: "assignment",
+      title: "Projekt Alpha",
+      projectStatus: "in_progress",
+      categoryColor: null,
+      projectRef: "/v1/projects/1",
+      date: "2026-05-06",
+      startTime: "08:00",
+      endTime: "16:00",
+      href: "/calendars/user/cal/uid-1.ics",
+      orderIndex: null,
+    };
+
+    const html = renderToStaticMarkup(
+      <AssignmentModal {...baseProps} isOpen assignment={assignment} />,
+    );
+
+    expect(html).not.toContain("Termin FIX geplant");
+    expect(html.match(/<button[^>]*disabled[^>]*>Löschen/)).toBeNull();
+    expect(html.match(/<button[^>]*disabled[^>]*>Speichern/)).toBeNull();
   });
 
   it("unsaved changes dialog renders when closing modal with dirty state", () => {
@@ -299,6 +375,60 @@ describe("resolveSaveAction", () => {
     expect(
       resolveSaveAction(true, "2026-05-06", "/v1/projects/1", "Projekt Nord"),
     ).toEqual({ kind: "edit" });
+  });
+});
+
+describe("isProtectedAssignment", () => {
+  const projects = [fixedProject, plannableProject];
+
+  it("protects an assignment whose project is a fixed appointment", () => {
+    expect(isProtectedAssignment("/v1/projects/9", projects)).toBe(true);
+  });
+
+  it("leaves an assignment of any other project category plannable", () => {
+    expect(isProtectedAssignment("/v1/projects/1", projects)).toBe(false);
+  });
+
+  it("protects a bare event, which was created outside the planner", () => {
+    expect(isProtectedAssignment(null, projects)).toBe(true);
+  });
+
+  it("leaves an assignment plannable while its project is unknown", () => {
+    expect(isProtectedAssignment("/v1/projects/9", [])).toBe(false);
+  });
+});
+
+describe("commandErrorMessage", () => {
+  it("surfaces the backend's German rejection message", () => {
+    const rejection =
+      "Dieser Termin ist als 'Termin FIX geplant' gesperrt und kann nicht geändert oder gelöscht werden.";
+
+    expect(commandErrorMessage({ status: "error", error: rejection })).toBe(
+      rejection,
+    );
+  });
+
+  it("reports no error for a successful write", () => {
+    expect(commandErrorMessage({ status: "ok" })).toBeNull();
+  });
+});
+
+describe("DeleteConfirmDialog", () => {
+  it("shows the backend's rejection message for a stale delete attempt", () => {
+    const rejection =
+      "Dieser Termin ist als 'Termin FIX geplant' gesperrt und kann nicht geändert oder gelöscht werden.";
+
+    const html = renderToStaticMarkup(
+      <DeleteConfirmDialog
+        isDeleting={false}
+        errorMessage={rejection}
+        onCancel={() => {}}
+        onConfirm={() => {}}
+        onRequestClose={() => {}}
+      />,
+    );
+
+    expect(html).toContain("Termin FIX geplant");
   });
 });
 

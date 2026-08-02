@@ -1,5 +1,31 @@
-import type { DayliteProjectSummary } from "../../generated/tauri";
+import type {
+  DayliteProjectSummary,
+  PlanningProjectRecord,
+} from "../../generated/tauri";
 import type { ModalSaveAction } from "../next-day-quick-add";
+
+const fixedAppointmentCategory = "Termin FIX geplant";
+
+export const fixedAppointmentNotice =
+  "Dieser Termin ist als „Termin FIX geplant“ gesperrt und kann nicht bearbeitet oder gelöscht werden.";
+
+// The backend enforces this independently; the cache can be stale, so this only
+// hides the affordances instead of deciding the write.
+export function isProtectedAssignment(
+  projectRef: string | null | undefined,
+  projects: PlanningProjectRecord[],
+): boolean {
+  if (!projectRef) return true;
+  const project = projects.find((p) => p.self === projectRef);
+  return project?.category === fixedAppointmentCategory;
+}
+
+export function commandErrorMessage(result: {
+  status: string;
+  error?: string;
+}): string | null {
+  return result.status === "error" ? (result.error ?? null) : null;
+}
 
 export function resolveDisplayedProjects(
   filter: string,

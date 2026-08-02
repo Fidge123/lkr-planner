@@ -4,7 +4,7 @@ use uuid::Uuid;
 
 use super::super::ical::{build_ical_payload, parse_ical_events};
 use super::super::slots::{full_window, plan_slot_updates, DayPlacement, DayPlan, SlotUpdate};
-use super::super::types::MoveAssignmentResult;
+use super::super::types::{MoveAssignmentResult, RawVEvent};
 use super::report::fetch_events_in_range;
 
 const MAX_REALLOCATE_ATTEMPTS: u32 = 3;
@@ -33,11 +33,30 @@ fn parent_collection_url(resource_url: &str) -> &str {
         .unwrap_or(resource_url)
 }
 
-/// lkr-planner writes one VEVENT per resource, so the first component is authoritative.
+pub(crate) async fn fetch_event_description(
+    session: &CaldavSession,
+    href: &str,
+) -> Result<Option<String>, String> {
+    let resource_url = resolve_href(href, &session.base_url)?;
+    Ok(fetch_event(session, &resource_url)
+        .await?
+        .map(|event| event.description))
+}
+
 async fn fetch_event_date(
     session: &CaldavSession,
     resource_url: &str,
 ) -> Result<Option<String>, String> {
+    Ok(fetch_event(session, resource_url)
+        .await?
+        .map(|event| event.dtstart))
+}
+
+/// lkr-planner writes one VEVENT per resource, so the first component is authoritative.
+async fn fetch_event(
+    session: &CaldavSession,
+    resource_url: &str,
+) -> Result<Option<RawVEvent>, String> {
     let response = session
         .client
         .get(resource_url)
@@ -63,7 +82,7 @@ async fn fetch_event_date(
         eprintln!("calendar: {resource_url} contained no readable VEVENT");
         return Ok(None);
     };
-    Ok(Some(event.dtstart))
+    Ok(Some(event))
 }
 
 /// Re-plans and re-PUTs the day until no PUT is rejected with 412, so a plan that raced a
@@ -637,6 +656,29 @@ mod tests {
             *writes[1],
             ("DELETE".to_string(), "/source/old-uid.ics".to_string())
         );
+    }
+
+    /// The fixed-appointment guard protects existing events, which it identifies by
+    /// reading them first. Creating an assignment reads no event, so it stays unguarded.
+    #[tokio::test]
+    async fn create_assignment_core_writes_without_reading_an_existing_event() {
+        let server = TestServer::spawn(vec![("PUT", "/target/", 201)]).await;
+        let target_calendar = format!("{}/target", server.base_url);
+
+        create_assignment_core(
+            &move_session(&server.base_url, vec![]),
+            &target_calendar,
+            &move_write(),
+        )
+        .await
+        .expect("create should succeed");
+
+        let requests = server.requests();
+        assert!(
+            requests.iter().all(|(method, _)| method != "GET"),
+            "creating an assignment must not read an event: {requests:?}"
+        );
+        assert!(requests.iter().any(|(method, _)| method == "PUT"));
     }
 
     #[tokio::test]
