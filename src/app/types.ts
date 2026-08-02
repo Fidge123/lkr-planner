@@ -31,7 +31,7 @@ const absenceCodeColors: Record<string, string> = {
 
 const defaultAbsenceColor = "bg-info/30";
 
-const assignmentSurfaceColor = "bg-base-200";
+const neutralSurfaceColor = "bg-base-200";
 
 function absenceCategoryColor(title: string): string {
   const code = title.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
@@ -51,9 +51,7 @@ export function toCellEvent(event: CalendarCellEvent): CellEvent {
   const color =
     event.kind === "absence"
       ? absenceCategoryColor(event.title)
-      : event.kind === "bare"
-        ? "bg-base-200"
-        : assignmentSurfaceColor;
+      : neutralSurfaceColor;
   return {
     uid: event.uid,
     kind: event.kind,

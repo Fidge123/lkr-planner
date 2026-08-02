@@ -17,109 +17,50 @@ pub(crate) fn sort_events_absences_first(events: &mut [CalendarCellEvent]) {
 mod tests {
     use super::*;
 
-    #[test]
-    fn absence_sorted_before_assignment_on_same_day() {
-        let mut events = vec![
-            CalendarCellEvent {
-                uid: "assignment-1".to_string(),
-                kind: CalendarEventKind::Assignment,
-                title: "Projekt".to_string(),
-                project_status: Some("in_progress".to_string()),
-                category_color: None,
-                project_ref: Some("/v1/projects/1".to_string()),
-                date: "2026-04-28".to_string(),
-                start_time: Some("09:00".to_string()),
-                end_time: Some("17:00".to_string()),
-                href: None,
-                order_index: Some(0),
-            },
-            CalendarCellEvent {
-                uid: "absence-1".to_string(),
-                kind: CalendarEventKind::Absence,
-                title: "Urlaub".to_string(),
-                project_status: None,
-                category_color: None,
-                project_ref: None,
-                date: "2026-04-28".to_string(),
-                start_time: None,
-                end_time: None,
-                href: None,
-                order_index: None,
-            },
-        ];
-
-        sort_events_absences_first(&mut events);
-
-        assert_eq!(events[0].kind, CalendarEventKind::Absence);
-        assert_eq!(events[1].kind, CalendarEventKind::Assignment);
+    fn event(uid: &str, kind: CalendarEventKind, date: &str) -> CalendarCellEvent {
+        CalendarCellEvent {
+            uid: uid.to_string(),
+            kind,
+            title: "Termin".to_string(),
+            project_status: None,
+            category_color: None,
+            project_ref: None,
+            date: date.to_string(),
+            start_time: None,
+            end_time: None,
+            href: None,
+            order_index: None,
+        }
     }
 
     #[test]
-    fn absence_sorted_before_bare_event_on_same_day() {
-        let mut events = vec![
-            CalendarCellEvent {
-                uid: "bare-1".to_string(),
-                kind: CalendarEventKind::Bare,
-                title: "Blocker".to_string(),
-                project_status: None,
-                category_color: None,
-                project_ref: None,
-                date: "2026-04-28".to_string(),
-                start_time: Some("10:00".to_string()),
-                end_time: None,
-                href: None,
-                order_index: None,
-            },
-            CalendarCellEvent {
-                uid: "absence-1".to_string(),
-                kind: CalendarEventKind::Absence,
-                title: "Urlaub".to_string(),
-                project_status: None,
-                category_color: None,
-                project_ref: None,
-                date: "2026-04-28".to_string(),
-                start_time: None,
-                end_time: None,
-                href: None,
-                order_index: None,
-            },
-        ];
+    fn absence_sorted_before_other_kinds_on_same_day() {
+        for other in [CalendarEventKind::Assignment, CalendarEventKind::Bare] {
+            let mut events = vec![
+                event("other-1", other.clone(), "2026-04-28"),
+                event("absence-1", CalendarEventKind::Absence, "2026-04-28"),
+            ];
 
-        sort_events_absences_first(&mut events);
+            sort_events_absences_first(&mut events);
 
-        assert_eq!(events[0].kind, CalendarEventKind::Absence);
-        assert_eq!(events[1].kind, CalendarEventKind::Bare);
+            assert_eq!(
+                events[0].kind,
+                CalendarEventKind::Absence,
+                "other={other:?}"
+            );
+            assert_eq!(events[1].kind, other);
+        }
     }
 
     #[test]
     fn absence_on_different_day_does_not_reorder_other_days() {
         let mut events = vec![
-            CalendarCellEvent {
-                uid: "assignment-mon".to_string(),
-                kind: CalendarEventKind::Assignment,
-                title: "Projekt".to_string(),
-                project_status: Some("in_progress".to_string()),
-                category_color: None,
-                project_ref: Some("/v1/projects/1".to_string()),
-                date: "2026-04-27".to_string(),
-                start_time: Some("09:00".to_string()),
-                end_time: None,
-                href: None,
-                order_index: Some(0),
-            },
-            CalendarCellEvent {
-                uid: "absence-tue".to_string(),
-                kind: CalendarEventKind::Absence,
-                title: "Urlaub".to_string(),
-                project_status: None,
-                category_color: None,
-                project_ref: None,
-                date: "2026-04-28".to_string(),
-                start_time: None,
-                end_time: None,
-                href: None,
-                order_index: None,
-            },
+            event(
+                "assignment-mon",
+                CalendarEventKind::Assignment,
+                "2026-04-27",
+            ),
+            event("absence-tue", CalendarEventKind::Absence, "2026-04-28"),
         ];
 
         sort_events_absences_first(&mut events);

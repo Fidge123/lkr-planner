@@ -5,7 +5,6 @@ pub mod secret_manager;
 
 fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
     tauri_specta::Builder::<tauri::Wry>::new().commands(tauri_specta::collect_commands![
-        integrations::health::check_health,
         integrations::local_store::load_local_store,
         integrations::local_store::save_local_store,
         integrations::calendar::commands::load_week_events,

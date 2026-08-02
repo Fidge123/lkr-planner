@@ -42,4 +42,3 @@ This project uses [OpenSpec](https://github.com/Fission-AI/OpenSpec/).
 Use the openspec CLI with `bunx openspec` (if that fails, use `bunx --package @fission-ai/openspec openspec`).
 
 Document new architecture decisions as ADRs in `docs/adr`.
-Whenever files in `docs/adr/` are modified, always run: `bun run test:docs`

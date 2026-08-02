@@ -3,8 +3,8 @@ use super::client::DayliteApiClient;
 use super::client::DayliteHttpMethod;
 use super::client::DayliteHttpRequest;
 use super::shared::{
-    build_limit_query, run_daylite_command, with_token_refresh_lock, DayliteApiError,
-    DayliteSearchInput, DayliteSearchResult, DayliteSearchSort, DayliteTokenState,
+    build_limit_query, run_daylite_command, trimmed, trimmed_or_none, with_token_refresh_lock,
+    DayliteApiError, DayliteSearchInput, DayliteSearchResult, DayliteSearchSort, DayliteTokenState,
 };
 use chrono::{DateTime, NaiveDate, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
@@ -263,7 +263,7 @@ pub(super) async fn search_projects_core(
     Ok((
         DayliteSearchResult {
             results,
-            next: normalize_optional_string(search_result.next),
+            next: trimmed_or_none(search_result.next),
         },
         token_state,
     ))
@@ -296,11 +296,16 @@ fn map_daylite_project_summary(project: DayliteProjectSummaryDto) -> PlanningPro
 
 fn normalize_project_summary(project: DayliteProjectSummaryDto) -> DayliteProjectSummary {
     DayliteProjectSummary {
-        reference: normalize_required_string(project.reference),
-        name: normalize_required_string(project.name),
-        status: normalize_optional_string(project.status),
-        category: normalize_optional_string(project.category),
-        keywords: normalize_keywords(project.keywords),
+        reference: trimmed(project.reference),
+        name: trimmed(project.name),
+        status: trimmed_or_none(project.status),
+        category: trimmed_or_none(project.category),
+        keywords: project
+            .keywords
+            .into_iter()
+            .map(trimmed)
+            .filter(|keyword| !keyword.is_empty())
+            .collect(),
         due: normalize_optional_date(project.due),
         started: normalize_optional_date(project.started),
         completed: normalize_optional_date(project.completed),
@@ -309,37 +314,8 @@ fn normalize_project_summary(project: DayliteProjectSummaryDto) -> DayliteProjec
     }
 }
 
-fn normalize_required_string(value: String) -> String {
-    value.trim().to_string()
-}
-
-fn normalize_optional_string(value: Option<String>) -> Option<String> {
-    value.and_then(|candidate| {
-        let normalized = candidate.trim();
-        if normalized.is_empty() {
-            None
-        } else {
-            Some(normalized.to_string())
-        }
-    })
-}
-
-fn normalize_keywords(values: Vec<String>) -> Vec<String> {
-    values
-        .into_iter()
-        .filter_map(|value| {
-            let normalized = value.trim();
-            if normalized.is_empty() {
-                None
-            } else {
-                Some(normalized.to_string())
-            }
-        })
-        .collect()
-}
-
 fn normalize_optional_date(value: Option<String>) -> Option<String> {
-    let raw_value = normalize_optional_string(value)?;
+    let raw_value = trimmed_or_none(value)?;
 
     if let Ok(parsed_date_time) = DateTime::parse_from_rfc3339(&raw_value) {
         return Some(
@@ -359,30 +335,18 @@ fn normalize_optional_date(value: Option<String>) -> Option<String> {
 }
 
 fn map_project_status(status: Option<String>) -> PlanningProjectStatus {
-    let normalized = normalize_optional_string(status)
+    let normalized = trimmed_or_none(status)
         .map(|value| value.to_lowercase())
         .unwrap_or_default();
 
-    if normalized == "in_progress" {
-        return PlanningProjectStatus::InProgress;
+    match normalized.as_str() {
+        "in_progress" => PlanningProjectStatus::InProgress,
+        "done" => PlanningProjectStatus::Done,
+        "abandoned" => PlanningProjectStatus::Abandoned,
+        "cancelled" => PlanningProjectStatus::Cancelled,
+        "deferred" => PlanningProjectStatus::Deferred,
+        _ => PlanningProjectStatus::NewStatus,
     }
-    if normalized == "done" {
-        return PlanningProjectStatus::Done;
-    }
-    if normalized == "abandoned" {
-        return PlanningProjectStatus::Abandoned;
-    }
-    if normalized == "cancelled" {
-        return PlanningProjectStatus::Cancelled;
-    }
-    if normalized == "deferred" {
-        return PlanningProjectStatus::Deferred;
-    }
-    if normalized == "new" || normalized == "new_status" {
-        return PlanningProjectStatus::NewStatus;
-    }
-
-    PlanningProjectStatus::NewStatus
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -446,11 +410,11 @@ mod tests {
     use crate::integrations::daylite::client::DayliteApiClient;
     use crate::integrations::daylite::client::DayliteHttpMethod;
     use crate::integrations::daylite::shared::{
-        DayliteApiError, DayliteApiErrorCode, DayliteSearchInput, DayliteSearchSort,
-        DayliteTokenState,
+        DayliteApiError, DayliteApiErrorCode, DayliteSearchInput, DayliteSearchResult,
+        DayliteSearchSort, DayliteTokenState,
     };
     use crate::integrations::daylite::test_support::{
-        mock_response, token_state, valid_token_state, MockTransport,
+        mock_client, mock_response, token_state, valid_token_state,
     };
 
     #[test]
@@ -496,302 +460,231 @@ mod tests {
         assert_eq!(mapped_status, PlanningProjectStatus::NewStatus);
     }
 
-    #[test]
-    fn list_projects_sends_search_request_and_maps_results() {
-        tauri::async_runtime::block_on(async {
-            let transport = MockTransport::new(vec![Ok(mock_response(
-                200,
-                r#"{"results":[{"self":"/v1/projects/1","name":"Projekt A","status":"in_progress"},{"self":"/v1/projects/2","name":"Projekt B"}],"next":null}"#,
-            ))]);
-            let client = DayliteApiClient::with_transport(Box::new(transport.clone()));
+    #[tokio::test]
+    async fn list_projects_sends_search_request_and_maps_results() {
+        let (client, transport) = mock_client(vec![Ok(mock_response(
+            200,
+            r#"{"results":[{"self":"/v1/projects/1","name":"Projekt A","status":"in_progress"},{"self":"/v1/projects/2","name":"Projekt B"}],"next":null}"#,
+        ))]);
 
-            let (projects, token_state) = list_projects_core(&client, valid_token_state())
-                .await
-                .expect("list should succeed");
-
-            assert_eq!(projects.len(), 2);
-            assert_eq!(projects[0].name, "Projekt A");
-            assert_eq!(projects[0].status, PlanningProjectStatus::InProgress);
-            assert_eq!(projects[1].name, "Projekt B");
-            assert_eq!(projects[1].status, PlanningProjectStatus::NewStatus);
-            assert_eq!(token_state.access_token, "at");
-
-            let requests = transport.requests();
-            assert_eq!(requests.len(), 1);
-            assert_eq!(requests[0].path, "/projects/_search");
-            assert_eq!(requests[0].method, DayliteHttpMethod::Post);
-            assert_eq!(
-                requests[0].query,
-                vec![("full-records".to_string(), "true".to_string())]
-            );
-            assert!(requests[0].body.is_some());
-        });
-    }
-
-    #[test]
-    fn search_projects_sends_correct_body_and_query() {
-        tauri::async_runtime::block_on(async {
-            let transport = MockTransport::new(vec![Ok(mock_response(
-                200,
-                r#"{"results":[{"self":" /v1/projects/10 ","name":" Projekt Nord ","category":" Bau ","keywords":[" Aufträge ",""],"due":"2026-02-15"}],"next":" /v1/projects/_search?offset=5 "}"#,
-            ))]);
-            let client = DayliteApiClient::with_transport(Box::new(transport.clone()));
-
-            let (result, _) = search_projects_core(
-                &client,
-                valid_token_state(),
-                &DayliteSearchInput {
-                    search_term: "Nord".to_string(),
-                    limit: Some(5),
-                    ..Default::default()
-                },
-            )
+        let (projects, token_state) = list_projects_core(&client, valid_token_state())
             .await
-            .expect("search should succeed");
+            .expect("list should succeed");
 
-            assert_eq!(result.results.len(), 1);
-            assert_eq!(result.results[0].reference, "/v1/projects/10");
-            assert_eq!(result.results[0].name, "Projekt Nord");
-            assert_eq!(result.results[0].category, Some("Bau".to_string()));
-            assert_eq!(result.results[0].keywords, vec!["Aufträge".to_string()]);
-            assert_eq!(
-                result.results[0].due,
-                Some("2026-02-15T00:00:00.000Z".to_string())
-            );
-            assert_eq!(
-                result.next,
-                Some("/v1/projects/_search?offset=5".to_string())
-            );
+        assert_eq!(projects.len(), 2);
+        assert_eq!(projects[0].name, "Projekt A");
+        assert_eq!(projects[0].status, PlanningProjectStatus::InProgress);
+        assert_eq!(projects[1].name, "Projekt B");
+        assert_eq!(projects[1].status, PlanningProjectStatus::NewStatus);
+        assert_eq!(token_state.access_token, "at");
 
-            let requests = transport.requests();
-            assert_eq!(requests.len(), 1);
-            assert_eq!(
-                requests[0].query,
-                vec![("limit".to_string(), "5".to_string())]
-            );
-            let body = requests[0].body.as_ref().expect("should have body");
-            assert_eq!(body["name"]["contains"], "Nord");
-        });
+        let requests = transport.requests();
+        assert_eq!(requests.len(), 1);
+        assert_eq!(requests[0].path, "/projects/_search");
+        assert_eq!(requests[0].method, DayliteHttpMethod::Post);
+        assert_eq!(
+            requests[0].query,
+            vec![("full-records".to_string(), "true".to_string())]
+        );
+        assert!(requests[0].body.is_some());
     }
 
-    #[test]
-    fn search_results_are_sorted_by_numeric_id_ascending() {
-        tauri::async_runtime::block_on(async {
-            let transport = MockTransport::new(vec![Ok(mock_response(
-                200,
-                r#"{"results":[
-                {"self":"/v1/projects/100","name":"Hundert"},
-                {"self":"/v1/projects/20","name":"Zwanzig"},
-                {"self":"/v1/projects/3","name":"Drei"}
-            ],"next":null}"#,
-            ))]);
-            let client = DayliteApiClient::with_transport(Box::new(transport));
+    #[tokio::test]
+    async fn search_projects_sends_correct_body_and_query() {
+        let (client, transport) = mock_client(vec![Ok(mock_response(
+            200,
+            r#"{"results":[{"self":" /v1/projects/10 ","name":" Projekt Nord ","category":" Bau ","keywords":[" Aufträge ",""],"due":"2026-02-15"}],"next":" /v1/projects/_search?offset=5 "}"#,
+        ))]);
 
-            let (result, _) =
-                search_projects_core(&client, valid_token_state(), &DayliteSearchInput::default())
-                    .await
-                    .expect("search should succeed");
+        let (result, _) = search_projects_core(
+            &client,
+            valid_token_state(),
+            &DayliteSearchInput {
+                search_term: "Nord".to_string(),
+                limit: Some(5),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("search should succeed");
 
-            assert_eq!(result.results[0].reference, "/v1/projects/3");
-            assert_eq!(result.results[1].reference, "/v1/projects/20");
-            assert_eq!(result.results[2].reference, "/v1/projects/100");
-        });
+        assert_eq!(result.results.len(), 1);
+        assert_eq!(result.results[0].reference, "/v1/projects/10");
+        assert_eq!(result.results[0].name, "Projekt Nord");
+        assert_eq!(result.results[0].category, Some("Bau".to_string()));
+        assert_eq!(result.results[0].keywords, vec!["Aufträge".to_string()]);
+        assert_eq!(
+            result.results[0].due,
+            Some("2026-02-15T00:00:00.000Z".to_string())
+        );
+        assert_eq!(
+            result.next,
+            Some("/v1/projects/_search?offset=5".to_string())
+        );
+
+        let requests = transport.requests();
+        assert_eq!(requests.len(), 1);
+        assert_eq!(
+            requests[0].query,
+            vec![("limit".to_string(), "5".to_string())]
+        );
+        let body = requests[0].body.as_ref().expect("should have body");
+        assert_eq!(body["name"]["contains"], "Nord");
     }
 
-    #[test]
-    fn search_treats_empty_object_response_as_no_results() {
-        tauri::async_runtime::block_on(async {
-            let transport = MockTransport::new(vec![Ok(mock_response(200, r#"{}"#))]);
-            let client = DayliteApiClient::with_transport(Box::new(transport));
+    #[tokio::test]
+    async fn search_results_are_sorted_by_numeric_id_ascending() {
+        let (client, _) = mock_client(vec![Ok(mock_response(
+            200,
+            r#"{"results":[
+            {"self":"/v1/projects/100","name":"Hundert"},
+            {"self":"/v1/projects/20","name":"Zwanzig"},
+            {"self":"/v1/projects/3","name":"Drei"}
+        ],"next":null}"#,
+        ))]);
 
-            let (result, _) = search_projects_core(
-                &client,
-                valid_token_state(),
-                &DayliteSearchInput {
-                    search_term: "Nord".to_string(),
-                    limit: Some(5),
-                    ..Default::default()
-                },
-            )
-            .await
-            .expect("empty object response should be treated as no results");
-
-            assert!(result.results.is_empty());
-            assert_eq!(result.next, None);
-        });
-    }
-
-    #[test]
-    fn search_sorts_by_name_when_sort_is_name() {
-        tauri::async_runtime::block_on(async {
-            let transport = MockTransport::new(vec![Ok(mock_response(
-                200,
-                r#"{"results":[
-                {"self":"/v1/projects/1","name":"Zeta"},
-                {"self":"/v1/projects/2","name":"Alpha"},
-                {"self":"/v1/projects/3","name":"Mitte"}
-            ],"next":null}"#,
-            ))]);
-            let client = DayliteApiClient::with_transport(Box::new(transport));
-
-            let (result, _) = search_projects_core(
-                &client,
-                valid_token_state(),
-                &DayliteSearchInput {
-                    sort: Some(DayliteSearchSort::Name),
-                    ..Default::default()
-                },
-            )
-            .await
-            .expect("search should succeed");
-
-            assert_eq!(result.results[0].name, "Alpha");
-            assert_eq!(result.results[1].name, "Mitte");
-            assert_eq!(result.results[2].name, "Zeta");
-        });
-    }
-
-    #[test]
-    fn search_defaults_to_numeric_id_sort_when_sort_is_none() {
-        tauri::async_runtime::block_on(async {
-            let transport = MockTransport::new(vec![Ok(mock_response(
-                200,
-                r#"{"results":[
-                {"self":"/v1/projects/3","name":"Alpha"},
-                {"self":"/v1/projects/1","name":"Zeta"}
-            ],"next":null}"#,
-            ))]);
-            let client = DayliteApiClient::with_transport(Box::new(transport));
-
-            let (result, _) =
-                search_projects_core(&client, valid_token_state(), &DayliteSearchInput::default())
-                    .await
-                    .expect("search should succeed");
-
-            assert_eq!(result.results[0].reference, "/v1/projects/1");
-            assert_eq!(result.results[1].reference, "/v1/projects/3");
-        });
-    }
-
-    #[test]
-    fn search_limit_is_applied_after_sort() {
-        tauri::async_runtime::block_on(async {
-            let transport = MockTransport::new(vec![Ok(mock_response(
-                200,
-                r#"{"results":[
-                {"self":"/v1/projects/100","name":"Hundert"},
-                {"self":"/v1/projects/20","name":"Zwanzig"},
-                {"self":"/v1/projects/3","name":"Drei"}
-            ],"next":null}"#,
-            ))]);
-            let client = DayliteApiClient::with_transport(Box::new(transport));
-
-            let (result, _) = search_projects_core(
-                &client,
-                valid_token_state(),
-                &DayliteSearchInput {
-                    limit: Some(2),
-                    ..Default::default()
-                },
-            )
-            .await
-            .expect("search should succeed");
-
-            assert_eq!(result.results.len(), 2);
-            assert_eq!(result.results[0].reference, "/v1/projects/3");
-            assert_eq!(result.results[1].reference, "/v1/projects/20");
-        });
-    }
-
-    #[test]
-    fn overdue_query_sends_category_and_status_filter_in_a_single_call() {
-        tauri::async_runtime::block_on(async {
-            let transport = MockTransport::new(vec![Ok(mock_response(
-                200,
-                r#"{"results":[],"next":null}"#,
-            ))]);
-            let client = DayliteApiClient::with_transport(Box::new(transport.clone()));
-
-            query_overdue_projects_core(&client, valid_token_state())
+        let (result, _) =
+            search_projects_core(&client, valid_token_state(), &DayliteSearchInput::default())
                 .await
-                .expect("overdue query should succeed");
+                .expect("search should succeed");
 
-            let requests = transport.requests();
-            assert_eq!(requests.len(), 1, "overdue query must be a single call");
-            assert_eq!(requests[0].path, "/projects/_search");
-            assert_eq!(requests[0].method, DayliteHttpMethod::Post);
-            let body = requests[0].body.as_ref().expect("body should be present");
-            assert_eq!(
-                *body,
-                serde_json::json!([
-                    {
-                        "category": { "equal": "Überfällig" },
-                        "status": { "equal": "new_status" }
-                    },
-                    {
-                        "category": { "equal": "Überfällig" },
-                        "status": { "equal": "in_progress" }
-                    }
-                ]),
-                "body must pair the category filter with each allowed status as OR clauses"
-            );
-        });
+        assert_eq!(result.results[0].reference, "/v1/projects/3");
+        assert_eq!(result.results[1].reference, "/v1/projects/20");
+        assert_eq!(result.results[2].reference, "/v1/projects/100");
     }
 
     #[test]
-    fn overdue_results_are_sorted_by_numeric_id_and_limited_to_five() {
-        tauri::async_runtime::block_on(async {
-            let transport = MockTransport::new(vec![Ok(mock_response(
-                200,
-                r#"{"results":[
-                {"self":"/v1/projects/100","name":"Hundert"},
-                {"self":"/v1/projects/20","name":"Zwanzig"},
-                {"self":"/v1/projects/3","name":"Drei"},
-                {"self":"/v1/projects/50","name":"Fünfzig"},
-                {"self":"/v1/projects/7","name":"Sieben"},
-                {"self":"/v1/projects/9","name":"Neun"}
-            ],"next":null}"#,
-            ))]);
-            let client = DayliteApiClient::with_transport(Box::new(transport));
+    fn empty_object_response_deserializes_as_no_results() {
+        let result: DayliteSearchResult<DayliteProjectSummaryDto> =
+            serde_json::from_str(r#"{}"#).expect("a bare object is a valid empty search result");
 
-            let (results, _) = query_overdue_projects_core(&client, valid_token_state())
-                .await
-                .expect("overdue query should succeed");
-
-            assert_eq!(results.len(), 5);
-            let references: Vec<&str> = results
-                .iter()
-                .map(|project| project.reference.as_str())
-                .collect();
-            assert_eq!(
-                references,
-                vec![
-                    "/v1/projects/3",
-                    "/v1/projects/7",
-                    "/v1/projects/9",
-                    "/v1/projects/20",
-                    "/v1/projects/50"
-                ]
-            );
-        });
+        assert!(result.results.is_empty());
+        assert_eq!(result.next, None);
     }
 
-    #[test]
-    fn overdue_query_treats_empty_object_response_as_no_results() {
-        tauri::async_runtime::block_on(async {
-            let transport = MockTransport::new(vec![Ok(mock_response(200, r#"{}"#))]);
-            let client = DayliteApiClient::with_transport(Box::new(transport));
+    #[tokio::test]
+    async fn search_sorts_by_name_when_sort_is_name() {
+        let (client, _) = mock_client(vec![Ok(mock_response(
+            200,
+            r#"{"results":[
+            {"self":"/v1/projects/1","name":"Zeta"},
+            {"self":"/v1/projects/2","name":"Alpha"},
+            {"self":"/v1/projects/3","name":"Mitte"}
+        ],"next":null}"#,
+        ))]);
 
-            let (results, _) = query_overdue_projects_core(&client, valid_token_state())
-                .await
-                .expect("empty object response should be treated as no results");
+        let (result, _) = search_projects_core(
+            &client,
+            valid_token_state(),
+            &DayliteSearchInput {
+                sort: Some(DayliteSearchSort::Name),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("search should succeed");
 
-            assert!(results.is_empty());
-        });
+        assert_eq!(result.results[0].name, "Alpha");
+        assert_eq!(result.results[1].name, "Mitte");
+        assert_eq!(result.results[2].name, "Zeta");
     }
 
-    #[test]
-    fn query_overdue_projects_replays_vcr_cassette() {
+    #[tokio::test]
+    async fn search_limit_is_applied_after_sort() {
+        let (client, _) = mock_client(vec![Ok(mock_response(
+            200,
+            r#"{"results":[
+            {"self":"/v1/projects/100","name":"Hundert"},
+            {"self":"/v1/projects/20","name":"Zwanzig"},
+            {"self":"/v1/projects/3","name":"Drei"}
+        ],"next":null}"#,
+        ))]);
+
+        let (result, _) = search_projects_core(
+            &client,
+            valid_token_state(),
+            &DayliteSearchInput {
+                limit: Some(2),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("search should succeed");
+
+        assert_eq!(result.results.len(), 2);
+        assert_eq!(result.results[0].reference, "/v1/projects/3");
+        assert_eq!(result.results[1].reference, "/v1/projects/20");
+    }
+
+    #[tokio::test]
+    async fn overdue_query_sends_category_and_status_filter_in_a_single_call() {
+        let (client, transport) = mock_client(vec![Ok(mock_response(
+            200,
+            r#"{"results":[],"next":null}"#,
+        ))]);
+
+        query_overdue_projects_core(&client, valid_token_state())
+            .await
+            .expect("overdue query should succeed");
+
+        let requests = transport.requests();
+        assert_eq!(requests.len(), 1, "overdue query must be a single call");
+        assert_eq!(requests[0].path, "/projects/_search");
+        assert_eq!(requests[0].method, DayliteHttpMethod::Post);
+        let body = requests[0].body.as_ref().expect("body should be present");
+        assert_eq!(
+            *body,
+            serde_json::json!([
+                {
+                    "category": { "equal": "Überfällig" },
+                    "status": { "equal": "new_status" }
+                },
+                {
+                    "category": { "equal": "Überfällig" },
+                    "status": { "equal": "in_progress" }
+                }
+            ]),
+            "body must pair the category filter with each allowed status as OR clauses"
+        );
+    }
+
+    #[tokio::test]
+    async fn overdue_results_are_sorted_by_numeric_id_and_limited_to_five() {
+        let (client, _) = mock_client(vec![Ok(mock_response(
+            200,
+            r#"{"results":[
+            {"self":"/v1/projects/100","name":"Hundert"},
+            {"self":"/v1/projects/20","name":"Zwanzig"},
+            {"self":"/v1/projects/3","name":"Drei"},
+            {"self":"/v1/projects/50","name":"Fünfzig"},
+            {"self":"/v1/projects/7","name":"Sieben"},
+            {"self":"/v1/projects/9","name":"Neun"}
+        ],"next":null}"#,
+        ))]);
+
+        let (results, _) = query_overdue_projects_core(&client, valid_token_state())
+            .await
+            .expect("overdue query should succeed");
+
+        assert_eq!(results.len(), 5);
+        let references: Vec<&str> = results
+            .iter()
+            .map(|project| project.reference.as_str())
+            .collect();
+        assert_eq!(
+            references,
+            vec![
+                "/v1/projects/3",
+                "/v1/projects/7",
+                "/v1/projects/9",
+                "/v1/projects/20",
+                "/v1/projects/50"
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn query_overdue_projects_replays_vcr_cassette() {
         // The cassette is produced by the live recording harness
         // (`record_daylite_cassettes_from_live_api`), which needs real Daylite
         // credentials. Skip instead of failing until it has been recorded.
@@ -804,25 +697,23 @@ mod tests {
             return;
         }
 
-        tauri::async_runtime::block_on(async {
-            let client = DayliteApiClient::with_replay_cassette("daylite-overdue-projects.json")
-                .expect("replay client should be created");
+        let client = DayliteApiClient::with_replay_cassette("daylite-overdue-projects.json")
+            .expect("replay client should be created");
 
-            let (results, token_state) = query_overdue_projects_core(
-                &client,
-                token_state("replay-access-token", "replay-refresh-token"),
-            )
-            .await
-            .expect("overdue query should replay from cassette");
+        let (results, token_state) = query_overdue_projects_core(
+            &client,
+            token_state("replay-access-token", "replay-refresh-token"),
+        )
+        .await
+        .expect("overdue query should replay from cassette");
 
-            assert!(results.len() <= 5);
-            assert!(results.iter().all(|project| {
-                project.reference.starts_with("/v1/projects/")
-                    && !project.name.is_empty()
-                    && project.name == project.name.trim()
-            }));
-            assert_eq!(token_state.access_token, "replay-access-token");
-        });
+        assert!(results.len() <= 5);
+        assert!(results.iter().all(|project| {
+            project.reference.starts_with("/v1/projects/")
+                && !project.name.is_empty()
+                && project.name == project.name.trim()
+        }));
+        assert_eq!(token_state.access_token, "replay-access-token");
     }
 
     #[test]
@@ -838,375 +729,343 @@ mod tests {
         assert_eq!(super::extract_numeric_id(""), u64::MAX);
     }
 
-    #[test]
-    fn list_projects_returns_updated_token_state_after_refresh() {
-        tauri::async_runtime::block_on(async {
-            let transport = MockTransport::new(vec![
-                Ok(mock_response(
-                    200,
-                    r#"{"access_token":"new-at","refresh_token":"new-rt","expires_in":3600}"#,
-                )),
-                Ok(mock_response(200, r#"{"results":[],"next":null}"#)),
-            ]);
-            let client = DayliteApiClient::with_transport(Box::new(transport));
-
-            let (projects, token_state) = list_projects_core(
-                &client,
-                DayliteTokenState {
-                    access_token: String::new(),
-                    refresh_token: "old-rt".to_string(),
-                    access_token_expires_at_ms: None,
-                },
-            )
-            .await
-            .expect("list after refresh should succeed");
-
-            assert!(projects.is_empty());
-            assert_eq!(token_state.access_token, "new-at");
-            assert_eq!(token_state.refresh_token, "new-rt");
-            assert!(token_state.access_token_expires_at_ms.is_some());
-        });
-    }
-
-    #[test]
-    fn list_projects_replays_vcr_cassette() {
-        tauri::async_runtime::block_on(async {
-            let client = DayliteApiClient::with_replay_cassette("daylite-list-projects.json")
-                .expect("replay client should be created");
-
-            let (projects, token_state) = list_projects_core(
-                &client,
-                token_state("replay-access-token", "replay-refresh-token"),
-            )
-            .await
-            .expect("list should replay from cassette");
-
-            assert!(!projects.is_empty());
-            assert!(projects
-                .iter()
-                .all(|project| project.reference.starts_with("/v1/projects/")));
-            assert!(projects
-                .iter()
-                .all(|project| !project.name.is_empty() && project.name == project.name.trim()));
-            assert_eq!(token_state.access_token, "replay-access-token");
-        });
-    }
-
-    #[test]
-    fn search_projects_replays_vcr_cassette() {
-        tauri::async_runtime::block_on(async {
-            let client = DayliteApiClient::with_replay_cassette("daylite-search-projects.json")
-                .expect("replay client should be created");
-
-            let (search_result, token_state) = search_projects_core(
-                &client,
-                token_state("replay-access-token", "replay-refresh-token"),
-                &DayliteSearchInput {
-                    search_term: "Nord".to_string(),
-                    limit: Some(5),
-                    ..Default::default()
-                },
-            )
-            .await
-            .expect("search should replay from cassette");
-
-            assert!(!search_result.results.is_empty());
-            assert!(search_result.results.len() <= 5);
-            assert!(search_result.results.iter().all(|project| {
-                project.reference.starts_with("/v1/projects/")
-                    && !project.name.is_empty()
-                    && project.name == project.name.trim()
-                    && project.name.to_lowercase().contains("nord")
-            }));
-            assert!(search_result
-                .next
-                .as_deref()
-                .map(|next| next.starts_with("/v1/projects/_search"))
-                .unwrap_or(true));
-            assert_eq!(token_state.access_token, "replay-access-token");
-        });
-    }
-
-    #[test]
-    fn search_projects_with_status_filter_replays_vcr_cassette() {
-        tauri::async_runtime::block_on(async {
-            let client = DayliteApiClient::with_replay_cassette("daylite-search-projects.json")
-                .expect("status-filter cassette client should be created");
-
-            let (search_result, token_state) = search_projects_core(
-                &client,
-                token_state("test-token", "test-refresh"),
-                &DayliteSearchInput {
-                    search_term: "Nord".to_string(),
-                    limit: Some(5),
-                    full_records: Some(true),
-                    statuses: Some(vec!["new_status".to_string(), "in_progress".to_string()]),
-                    ..Default::default()
-                },
-            )
-            .await
-            .expect("search with status filter should replay from cassette");
-
-            assert!(
-                !search_result.results.is_empty(),
-                "cassette should contain results"
-            );
-            assert_eq!(token_state.access_token, "test-token");
-
-            for project in &search_result.results {
-                assert!(
-                    project.status.as_deref() == Some("new")
-                        || project.status.as_deref() == Some("in_progress"),
-                    "project {:?} has unexpected status",
-                    project.reference
-                );
-            }
-        });
-    }
-
-    #[test]
-    fn search_projects_no_match_replays_vcr_cassette() {
-        tauri::async_runtime::block_on(async {
-            let client = DayliteApiClient::with_replay_cassette("daylite-search-projects.json")
-                .expect("no-match cassette client should be created");
-
-            let (search_result, token_state) = search_projects_core(
-                &client,
-                token_state("test-token", "test-refresh"),
-                &DayliteSearchInput {
-                    search_term: "XXXXX".to_string(),
-                    limit: Some(50),
-                    statuses: Some(vec!["new_status".to_string(), "in_progress".to_string()]),
-                    sort: Some(DayliteSearchSort::Name),
-                    ..Default::default()
-                },
-            )
-            .await
-            .expect("no-match search should replay from cassette");
-
-            assert!(search_result.results.is_empty());
-            assert_eq!(token_state.access_token, "test-token");
-        });
-    }
-
-    #[test]
-    fn search_with_statuses_sends_array_body_with_or_clauses() {
-        tauri::async_runtime::block_on(async {
-            let transport = MockTransport::new(vec![Ok(mock_response(
+    #[tokio::test]
+    async fn list_projects_returns_updated_token_state_after_refresh() {
+        let (client, _) = mock_client(vec![
+            Ok(mock_response(
                 200,
-                r#"{"results":[],"next":null}"#,
-            ))]);
-            let client = DayliteApiClient::with_transport(Box::new(transport.clone()));
+                r#"{"access_token":"new-at","refresh_token":"new-rt","expires_in":3600}"#,
+            )),
+            Ok(mock_response(200, r#"{"results":[],"next":null}"#)),
+        ]);
 
-            search_projects_core(
-                &client,
-                valid_token_state(),
-                &DayliteSearchInput {
-                    search_term: "Nord".to_string(),
-                    limit: Some(5),
-                    statuses: Some(vec!["new_status".to_string(), "in_progress".to_string()]),
-                    ..Default::default()
-                },
-            )
-            .await
-            .expect("search should succeed");
+        let (projects, token_state) = list_projects_core(
+            &client,
+            DayliteTokenState {
+                access_token: String::new(),
+                refresh_token: "old-rt".to_string(),
+                access_token_expires_at_ms: None,
+            },
+        )
+        .await
+        .expect("list after refresh should succeed");
 
-            let requests = transport.requests();
-            assert_eq!(requests.len(), 1);
-            let body = requests[0].body.as_ref().expect("body should be present");
-            assert!(body.is_array(), "body should be an array for OR conditions");
-            let items = body.as_array().unwrap();
-            assert_eq!(items.len(), 2);
-            assert_eq!(items[0]["name"]["contains"], "Nord");
-            assert_eq!(items[0]["status"]["equal"], "new_status");
-            assert_eq!(items[1]["name"]["contains"], "Nord");
-            assert_eq!(items[1]["status"]["equal"], "in_progress");
-        });
+        assert!(projects.is_empty());
+        assert_eq!(token_state.access_token, "new-at");
+        assert_eq!(token_state.refresh_token, "new-rt");
+        assert!(token_state.access_token_expires_at_ms.is_some());
     }
 
-    #[test]
-    fn search_without_statuses_sends_plain_object_body() {
-        tauri::async_runtime::block_on(async {
-            let transport = MockTransport::new(vec![Ok(mock_response(
-                200,
-                r#"{"results":[],"next":null}"#,
-            ))]);
-            let client = DayliteApiClient::with_transport(Box::new(transport.clone()));
+    #[tokio::test]
+    async fn list_projects_replays_vcr_cassette() {
+        let client = DayliteApiClient::with_replay_cassette("daylite-list-projects.json")
+            .expect("replay client should be created");
 
-            search_projects_core(
-                &client,
-                valid_token_state(),
-                &DayliteSearchInput {
-                    search_term: "Nord".to_string(),
-                    limit: Some(5),
-                    ..Default::default()
-                },
-            )
-            .await
-            .expect("search should succeed");
+        let (projects, token_state) = list_projects_core(
+            &client,
+            token_state("replay-access-token", "replay-refresh-token"),
+        )
+        .await
+        .expect("list should replay from cassette");
 
-            let requests = transport.requests();
-            assert_eq!(requests.len(), 1);
-            let body = requests[0].body.as_ref().expect("body should be present");
-            assert!(
-                body.is_object(),
-                "body should be a plain object when no statuses"
-            );
-            assert_eq!(body["name"]["contains"], "Nord");
-            assert!(
-                body.get("status").is_none(),
-                "no status key when statuses is None"
-            );
-        });
+        assert!(!projects.is_empty());
+        assert!(projects
+            .iter()
+            .all(|project| project.reference.starts_with("/v1/projects/")));
+        assert!(projects
+            .iter()
+            .all(|project| !project.name.is_empty() && project.name == project.name.trim()));
+        assert_eq!(token_state.access_token, "replay-access-token");
     }
 
-    #[test]
-    fn search_with_full_records_sends_query_param() {
-        tauri::async_runtime::block_on(async {
-            let transport = MockTransport::new(vec![Ok(mock_response(
-                200,
-                r#"{"results":[],"next":null}"#,
-            ))]);
-            let client = DayliteApiClient::with_transport(Box::new(transport.clone()));
+    #[tokio::test]
+    async fn search_projects_replays_vcr_cassette() {
+        let client = DayliteApiClient::with_replay_cassette("daylite-search-projects.json")
+            .expect("replay client should be created");
 
-            search_projects_core(
-                &client,
-                valid_token_state(),
-                &DayliteSearchInput {
-                    search_term: "Nord".to_string(),
-                    limit: Some(5),
-                    full_records: Some(true),
-                    ..Default::default()
-                },
-            )
-            .await
-            .expect("search should succeed");
+        let (search_result, token_state) = search_projects_core(
+            &client,
+            token_state("replay-access-token", "replay-refresh-token"),
+            &DayliteSearchInput {
+                search_term: "Nord".to_string(),
+                limit: Some(5),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("search should replay from cassette");
 
-            let requests = transport.requests();
-            assert!(
-                requests[0]
-                    .query
-                    .contains(&("full-records".to_string(), "true".to_string())),
-                "query should include full-records=true, got {:?}",
-                requests[0].query
-            );
-        });
+        assert!(!search_result.results.is_empty());
+        assert!(search_result.results.len() <= 5);
+        assert!(search_result.results.iter().all(|project| {
+            project.reference.starts_with("/v1/projects/")
+                && !project.name.is_empty()
+                && project.name == project.name.trim()
+                && project.name.to_lowercase().contains("nord")
+        }));
+        assert!(search_result
+            .next
+            .as_deref()
+            .map(|next| next.starts_with("/v1/projects/_search"))
+            .unwrap_or(true));
+        assert_eq!(token_state.access_token, "replay-access-token");
     }
 
-    #[test]
-    fn search_without_full_records_omits_query_param() {
-        tauri::async_runtime::block_on(async {
-            let transport = MockTransport::new(vec![Ok(mock_response(
-                200,
-                r#"{"results":[],"next":null}"#,
-            ))]);
-            let client = DayliteApiClient::with_transport(Box::new(transport.clone()));
+    #[tokio::test]
+    async fn search_projects_with_status_filter_replays_vcr_cassette() {
+        let client = DayliteApiClient::with_replay_cassette("daylite-search-projects.json")
+            .expect("status-filter cassette client should be created");
 
-            search_projects_core(
-                &client,
-                valid_token_state(),
-                &DayliteSearchInput {
-                    search_term: "Nord".to_string(),
-                    ..Default::default()
-                },
-            )
-            .await
-            .expect("search should succeed");
+        let (search_result, token_state) = search_projects_core(
+            &client,
+            token_state("test-token", "test-refresh"),
+            &DayliteSearchInput {
+                search_term: "Nord".to_string(),
+                limit: Some(5),
+                full_records: Some(true),
+                statuses: Some(vec!["new_status".to_string(), "in_progress".to_string()]),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("search with status filter should replay from cassette");
 
-            let requests = transport.requests();
+        assert!(
+            !search_result.results.is_empty(),
+            "cassette should contain results"
+        );
+        assert_eq!(token_state.access_token, "test-token");
+
+        for project in &search_result.results {
             assert!(
-                !requests[0].query.iter().any(|(k, _)| k == "full-records"),
-                "query should not include full-records when None, got {:?}",
-                requests[0].query
+                project.status.as_deref() == Some("new")
+                    || project.status.as_deref() == Some("in_progress"),
+                "project {:?} has unexpected status",
+                project.reference
             );
-        });
+        }
     }
 
-    #[test]
-    fn search_with_start_sends_query_param() {
-        tauri::async_runtime::block_on(async {
-            let transport = MockTransport::new(vec![Ok(mock_response(
-                200,
-                r#"{"results":[],"next":null}"#,
-            ))]);
-            let client = DayliteApiClient::with_transport(Box::new(transport.clone()));
+    #[tokio::test]
+    async fn search_projects_no_match_replays_vcr_cassette() {
+        let client = DayliteApiClient::with_replay_cassette("daylite-search-projects.json")
+            .expect("no-match cassette client should be created");
 
-            search_projects_core(
-                &client,
-                valid_token_state(),
-                &DayliteSearchInput {
-                    search_term: "Nord".to_string(),
-                    start: Some("3001".to_string()),
-                    ..Default::default()
-                },
-            )
-            .await
-            .expect("search should succeed");
+        let (search_result, token_state) = search_projects_core(
+            &client,
+            token_state("test-token", "test-refresh"),
+            &DayliteSearchInput {
+                search_term: "XXXXX".to_string(),
+                limit: Some(50),
+                statuses: Some(vec!["new_status".to_string(), "in_progress".to_string()]),
+                sort: Some(DayliteSearchSort::Name),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("no-match search should replay from cassette");
 
-            let requests = transport.requests();
-            assert!(
-                requests[0]
-                    .query
-                    .contains(&("start".to_string(), "3001".to_string())),
-                "query should include start=3001, got {:?}",
-                requests[0].query
-            );
-        });
+        assert!(search_result.results.is_empty());
+        assert_eq!(token_state.access_token, "test-token");
     }
 
-    #[test]
-    fn malformed_response_returns_invalid_response_with_german_message() {
-        tauri::async_runtime::block_on(async {
-            let transport = MockTransport::new(vec![Ok(mock_response(200, "not valid json {{{"))]);
-            let client = DayliteApiClient::with_transport(Box::new(transport));
+    #[tokio::test]
+    async fn search_with_statuses_sends_array_body_with_or_clauses() {
+        let (client, transport) = mock_client(vec![Ok(mock_response(
+            200,
+            r#"{"results":[],"next":null}"#,
+        ))]);
 
-            let result = search_projects_core(
-                &client,
-                valid_token_state(),
-                &DayliteSearchInput {
-                    search_term: "Nord".to_string(),
-                    ..Default::default()
-                },
-            )
-            .await;
+        search_projects_core(
+            &client,
+            valid_token_state(),
+            &DayliteSearchInput {
+                search_term: "Nord".to_string(),
+                limit: Some(5),
+                statuses: Some(vec!["new_status".to_string(), "in_progress".to_string()]),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("search should succeed");
 
-            let err = result.expect_err("malformed response should return error");
-            assert_eq!(err.code, DayliteApiErrorCode::InvalidResponse);
-            assert!(
-                err.user_message.contains("Daylite"),
-                "error message should mention Daylite: {}",
-                err.user_message
-            );
-        });
+        let requests = transport.requests();
+        assert_eq!(requests.len(), 1);
+        let body = requests[0].body.as_ref().expect("body should be present");
+        assert!(body.is_array(), "body should be an array for OR conditions");
+        let items = body.as_array().unwrap();
+        assert_eq!(items.len(), 2);
+        assert_eq!(items[0]["name"]["contains"], "Nord");
+        assert_eq!(items[0]["status"]["equal"], "new_status");
+        assert_eq!(items[1]["name"]["contains"], "Nord");
+        assert_eq!(items[1]["status"]["equal"], "in_progress");
     }
 
-    #[test]
-    fn timeout_error_propagates_from_transport() {
-        tauri::async_runtime::block_on(async {
-            let transport = MockTransport::new(vec![Err(DayliteApiError {
-                code: DayliteApiErrorCode::Timeout,
-                http_status: None,
-                user_message: "Zeitüberschreitung bei der Daylite-Anfrage.".to_string(),
-                technical_message: "request timed out".to_string(),
-            })]);
-            let client = DayliteApiClient::with_transport(Box::new(transport));
+    #[tokio::test]
+    async fn search_without_statuses_sends_plain_object_body() {
+        let (client, transport) = mock_client(vec![Ok(mock_response(
+            200,
+            r#"{"results":[],"next":null}"#,
+        ))]);
 
-            let result = search_projects_core(
-                &client,
-                valid_token_state(),
-                &DayliteSearchInput {
-                    search_term: "Nord".to_string(),
-                    ..Default::default()
-                },
-            )
-            .await;
+        search_projects_core(
+            &client,
+            valid_token_state(),
+            &DayliteSearchInput {
+                search_term: "Nord".to_string(),
+                limit: Some(5),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("search should succeed");
 
-            let err = result.expect_err("timeout from transport should propagate as error");
-            assert_eq!(err.code, DayliteApiErrorCode::Timeout);
-            assert_eq!(
-                err.user_message,
-                "Zeitüberschreitung bei der Daylite-Anfrage."
-            );
-        });
+        let requests = transport.requests();
+        assert_eq!(requests.len(), 1);
+        let body = requests[0].body.as_ref().expect("body should be present");
+        assert!(
+            body.is_object(),
+            "body should be a plain object when no statuses"
+        );
+        assert_eq!(body["name"]["contains"], "Nord");
+        assert!(
+            body.get("status").is_none(),
+            "no status key when statuses is None"
+        );
+    }
+
+    #[tokio::test]
+    async fn search_with_full_records_sends_query_param() {
+        let (client, transport) = mock_client(vec![Ok(mock_response(
+            200,
+            r#"{"results":[],"next":null}"#,
+        ))]);
+
+        search_projects_core(
+            &client,
+            valid_token_state(),
+            &DayliteSearchInput {
+                search_term: "Nord".to_string(),
+                limit: Some(5),
+                full_records: Some(true),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("search should succeed");
+
+        let requests = transport.requests();
+        assert!(
+            requests[0]
+                .query
+                .contains(&("full-records".to_string(), "true".to_string())),
+            "query should include full-records=true, got {:?}",
+            requests[0].query
+        );
+    }
+
+    #[tokio::test]
+    async fn search_without_full_records_omits_query_param() {
+        let (client, transport) = mock_client(vec![Ok(mock_response(
+            200,
+            r#"{"results":[],"next":null}"#,
+        ))]);
+
+        search_projects_core(
+            &client,
+            valid_token_state(),
+            &DayliteSearchInput {
+                search_term: "Nord".to_string(),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("search should succeed");
+
+        let requests = transport.requests();
+        assert!(
+            !requests[0].query.iter().any(|(k, _)| k == "full-records"),
+            "query should not include full-records when None, got {:?}",
+            requests[0].query
+        );
+    }
+
+    #[tokio::test]
+    async fn search_with_start_sends_query_param() {
+        let (client, transport) = mock_client(vec![Ok(mock_response(
+            200,
+            r#"{"results":[],"next":null}"#,
+        ))]);
+
+        search_projects_core(
+            &client,
+            valid_token_state(),
+            &DayliteSearchInput {
+                search_term: "Nord".to_string(),
+                start: Some("3001".to_string()),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("search should succeed");
+
+        let requests = transport.requests();
+        assert!(
+            requests[0]
+                .query
+                .contains(&("start".to_string(), "3001".to_string())),
+            "query should include start=3001, got {:?}",
+            requests[0].query
+        );
+    }
+
+    #[tokio::test]
+    async fn malformed_response_returns_invalid_response_with_german_message() {
+        let (client, _) = mock_client(vec![Ok(mock_response(200, "not valid json {{{"))]);
+
+        let result = search_projects_core(
+            &client,
+            valid_token_state(),
+            &DayliteSearchInput {
+                search_term: "Nord".to_string(),
+                ..Default::default()
+            },
+        )
+        .await;
+
+        let err = result.expect_err("malformed response should return error");
+        assert_eq!(err.code, DayliteApiErrorCode::InvalidResponse);
+        assert!(
+            err.user_message.contains("Daylite"),
+            "error message should mention Daylite: {}",
+            err.user_message
+        );
+    }
+
+    #[tokio::test]
+    async fn timeout_error_propagates_from_transport() {
+        let (client, _) = mock_client(vec![Err(DayliteApiError {
+            code: DayliteApiErrorCode::Timeout,
+            http_status: None,
+            user_message: "Zeitüberschreitung bei der Daylite-Anfrage.".to_string(),
+            technical_message: "request timed out".to_string(),
+        })]);
+
+        let result = search_projects_core(
+            &client,
+            valid_token_state(),
+            &DayliteSearchInput {
+                search_term: "Nord".to_string(),
+                ..Default::default()
+            },
+        )
+        .await;
+
+        let err = result.expect_err("timeout from transport should propagate as error");
+        assert_eq!(err.code, DayliteApiErrorCode::Timeout);
+        assert_eq!(
+            err.user_message,
+            "Zeitüberschreitung bei der Daylite-Anfrage."
+        );
     }
 }

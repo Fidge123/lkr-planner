@@ -1,25 +1,26 @@
+use super::super::shared::{trimmed, trimmed_or_none};
 use super::types::{DayliteContactSummary, PlanningContactRecord};
 use crate::integrations::local_store::{DayliteContactCacheEntry, DayliteContactUrl};
 
 pub(super) fn map_daylite_contact_summary(contact: DayliteContactSummary) -> PlanningContactRecord {
-    let full_name = normalize_string_option(contact.full_name)
+    let full_name = trimmed_or_none(contact.full_name)
         .or_else(|| join_name(&contact.first_name, &contact.last_name));
 
     PlanningContactRecord {
-        reference: normalize_string(contact.reference),
+        reference: trimmed(contact.reference),
         full_name,
-        nickname: normalize_string_option(contact.nickname),
-        category: normalize_string_option(contact.category),
+        nickname: trimmed_or_none(contact.nickname),
+        category: trimmed_or_none(contact.category),
         urls: normalize_contact_urls(contact.urls),
     }
 }
 
 pub(super) fn map_cached_contact(contact: DayliteContactCacheEntry) -> PlanningContactRecord {
     PlanningContactRecord {
-        reference: normalize_string(contact.reference),
-        full_name: normalize_string_option(contact.full_name),
-        nickname: normalize_string_option(contact.nickname),
-        category: normalize_string_option(contact.category),
+        reference: trimmed(contact.reference),
+        full_name: trimmed_or_none(contact.full_name),
+        nickname: trimmed_or_none(contact.nickname),
+        category: trimmed_or_none(contact.category),
         urls: normalize_contact_urls(contact.urls),
     }
 }
@@ -46,7 +47,7 @@ pub(super) fn filter_planning_contacts(
 }
 
 pub(super) fn is_planning_contact(contact: &PlanningContactRecord) -> bool {
-    normalize_string_option(contact.category.clone())
+    trimmed_or_none(contact.category.clone())
         .map(|category| {
             let category = category.to_lowercase();
             category == "monteur" || category == "test"
@@ -66,11 +67,11 @@ pub(super) fn sort_contacts(
 }
 
 pub(super) fn contact_display_name(contact: &PlanningContactRecord) -> String {
-    if let Some(nickname) = normalize_string_option(contact.nickname.clone()) {
+    if let Some(nickname) = trimmed_or_none(contact.nickname.clone()) {
         return nickname;
     }
 
-    if let Some(full_name) = normalize_string_option(contact.full_name.clone()) {
+    if let Some(full_name) = trimmed_or_none(contact.full_name.clone()) {
         return full_name;
     }
 
@@ -81,9 +82,9 @@ fn normalize_contact_urls(urls: Vec<DayliteContactUrl>) -> Vec<DayliteContactUrl
     urls.into_iter()
         .filter_map(|url| {
             let normalized_url = DayliteContactUrl {
-                label: normalize_string_option(url.label),
-                url: normalize_string_option(url.url),
-                note: normalize_string_option(url.note),
+                label: trimmed_or_none(url.label),
+                url: trimmed_or_none(url.url),
+                note: trimmed_or_none(url.note),
             };
 
             if normalized_url.label.is_none()
@@ -96,21 +97,6 @@ fn normalize_contact_urls(urls: Vec<DayliteContactUrl>) -> Vec<DayliteContactUrl
             }
         })
         .collect()
-}
-
-fn normalize_string(value: String) -> String {
-    value.trim().to_string()
-}
-
-fn normalize_string_option(value: Option<String>) -> Option<String> {
-    value.and_then(|candidate| {
-        let normalized = candidate.trim();
-        if normalized.is_empty() {
-            None
-        } else {
-            Some(normalized.to_string())
-        }
-    })
 }
 
 fn join_name(first_name: &str, last_name: &str) -> Option<String> {

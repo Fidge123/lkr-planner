@@ -118,16 +118,6 @@ mod tests {
     }
 
     #[test]
-    fn absence_fetch_failure_produces_no_absence_events() {
-        let raw: Vec<RawVEvent> = Vec::new();
-        let week_start = NaiveDate::from_ymd_opt(2026, 4, 27).unwrap();
-
-        let events = map_absence_raw_events_for_week(raw, week_start);
-
-        assert!(events.is_empty());
-    }
-
-    #[test]
     fn multi_day_absence_expands_into_one_event_per_day_in_week() {
         let raw = vec![RawVEvent {
             uid: "abs-1".to_string(),
