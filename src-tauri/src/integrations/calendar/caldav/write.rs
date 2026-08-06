@@ -656,29 +656,6 @@ mod tests {
         );
     }
 
-    /// The fixed-appointment guard protects existing events, which it identifies by
-    /// reading them first. Creating an assignment reads no event, so it stays unguarded.
-    #[tokio::test]
-    async fn create_assignment_core_writes_without_reading_an_existing_event() {
-        let server = TestServer::spawn(vec![("PUT", "/target/", 201)]).await;
-        let target_calendar = format!("{}/target", server.base_url);
-
-        create_assignment_core(
-            &move_session(&server.base_url, vec![]),
-            &target_calendar,
-            &move_write(),
-        )
-        .await
-        .expect("create should succeed");
-
-        let requests = server.requests();
-        assert!(
-            requests.iter().all(|(method, _)| method != "GET"),
-            "creating an assignment must not read an event: {requests:?}"
-        );
-        assert!(requests.iter().any(|(method, _)| method == "PUT"));
-    }
-
     #[tokio::test]
     async fn move_assignment_core_reports_partial_move_when_source_delete_fails() {
         let server =

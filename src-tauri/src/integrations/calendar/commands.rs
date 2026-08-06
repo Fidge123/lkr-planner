@@ -236,6 +236,8 @@ pub struct UpdateAssignmentInput {
     pub project_name: String,
     /// Position among the target day's assignments. None keeps the assignment where it is.
     pub order_index: Option<u32>,
+    /// Set when the user deliberately unlocked a fixed appointment in the modal.
+    pub override_protection: bool,
 }
 
 #[tauri::command]
@@ -319,7 +321,9 @@ pub async fn update_assignment(
         .map_err(|e| e.user_message)?;
     let session = load_caldav_session(&store)?;
 
-    refuse_protected_event(app, &session, &input.href).await?;
+    if !input.override_protection {
+        refuse_protected_event(app, &session, &input.href).await?;
+    }
 
     update_assignment_core(
         &session,
@@ -387,12 +391,18 @@ pub async fn reorder_assignment(
 
 #[tauri::command]
 #[specta::specta]
-pub async fn delete_assignment(app: tauri::AppHandle, href: String) -> Result<(), String> {
+pub async fn delete_assignment(
+    app: tauri::AppHandle,
+    href: String,
+    override_protection: bool,
+) -> Result<(), String> {
     let store = crate::integrations::local_store::load_local_store(app.clone())
         .map_err(|e| e.user_message)?;
     let session = load_caldav_session(&store)?;
 
-    refuse_protected_event(app, &session, &href).await?;
+    if !override_protection {
+        refuse_protected_event(app, &session, &href).await?;
+    }
 
     delete_assignment_core(&session, &href).await
 }

@@ -22,8 +22,11 @@ export function MoveReconciliationDialog({
     setPendingChoice(choice);
     setErrorMessage(null);
     try {
+      // Reconciling a half-finished move must always be able to drop the
+      // duplicate, even when the appointment is a protected one.
       const result = await commands.deleteAssignment(
         hrefToDelete(choice, reconciliation),
+        true,
       );
       if (result.status === "error") {
         setErrorMessage(result.error);

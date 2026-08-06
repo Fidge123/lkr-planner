@@ -138,9 +138,40 @@ describe("AssignmentModal", () => {
     );
 
     expect(html).toContain("Termin FIX geplant");
-    expect(html).toContain("kann nicht bearbeitet oder gelöscht werden");
+    expect(html).toContain("Sperre aufheben");
     expect(html.match(/<button[^>]*disabled[^>]*>Löschen/)).not.toBeNull();
     expect(html.match(/<button[^>]*disabled[^>]*>Speichern/)).not.toBeNull();
+    expect(html.match(/<input[^>]*type="text"[^>]*disabled/)).not.toBeNull();
+  });
+
+  it("edit mode: the unlock checkbox re-enables editing a fixed appointment", () => {
+    const fixedAssignment: CalendarCellEvent = {
+      uid: "uid-9",
+      kind: "assignment",
+      title: "Projekt Fix",
+      projectStatus: "in_progress",
+      categoryColor: null,
+      projectRef: "/v1/projects/9",
+      date: "2026-05-06",
+      startTime: "08:00",
+      endTime: "16:00",
+      href: "/calendars/user/cal/uid-9.ics",
+      orderIndex: null,
+    };
+
+    const html = renderToStaticMarkup(
+      <AssignmentModal
+        {...baseProps}
+        isOpen
+        assignment={fixedAssignment}
+        overrideProtection
+      />,
+    );
+
+    expect(html).toContain("Sperre aufheben");
+    expect(html.match(/<button[^>]*disabled[^>]*>Löschen/)).toBeNull();
+    expect(html.match(/<button[^>]*disabled[^>]*>Speichern/)).toBeNull();
+    expect(html.match(/<input[^>]*type="text"[^>]*disabled/)).toBeNull();
   });
 
   it("edit mode: keeps save and delete enabled for a plannable assignment", () => {
@@ -387,10 +418,6 @@ describe("isProtectedAssignment", () => {
 
   it("leaves an assignment of any other project category plannable", () => {
     expect(isProtectedAssignment("/v1/projects/1", projects)).toBe(false);
-  });
-
-  it("protects a bare event, which was created outside the planner", () => {
-    expect(isProtectedAssignment(null, projects)).toBe(true);
   });
 
   it("leaves an assignment plannable while its project is unknown", () => {

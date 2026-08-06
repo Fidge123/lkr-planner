@@ -424,6 +424,7 @@ export function useAppointmentDrag({
             projectRef,
             projectName,
             orderIndex,
+            overrideProtection: false,
           }),
         reorderAssignment: commands.reorderAssignment,
         moveAssignment: commands.moveAssignment,
