@@ -3,8 +3,8 @@ use icalendar::{Calendar, CalendarComponent, CalendarDateTime, Component, DatePe
 
 use super::types::RawVEvent;
 
-/// X-property carrying the assignment's position among its same-day siblings. It survives
-/// re-slotting because `patch_event_slot` copies every line it does not rewrite.
+/// X-property carrying the assignment's position among its same-day siblings.
+/// It survives re-slotting because `patch_event_slot` copies every line it does not rewrite.
 pub(super) const ORDER_PROPERTY: &str = "X-LKR-ORDER";
 
 pub(crate) fn build_ical_payload(

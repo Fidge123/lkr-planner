@@ -32,8 +32,7 @@ import type { PlanningAssignmentsState } from "./hooks/use-planning-assignments"
 import { usePlanningEmployees } from "./hooks/use-planning-employees";
 import { getWeekDays, toLocalISODate } from "./util";
 
-// The pointer, not the dragged card's box, picks the target cell: the position inside a cell
-// is derived from the pointer too, so both halves of the drop agree on one cursor.
+// The pointer, not the dragged card's box, picks the target cell and the position within the cell
 const collisionDetection: CollisionDetection = (args) => {
   const pointerCollisions = pointerWithin(args);
   return pointerCollisions.length > 0
@@ -41,11 +40,8 @@ const collisionDetection: CollisionDetection = (args) => {
     : rectIntersection(args);
 };
 
-// dnd-kit refreshes a droppable's rect from a per-cell ResizeObserver, which
-// fires only when that cell's own box resizes, and from a timer that only
-// re-schedules while the pointer moves. Neither catches a cell shifting because
-// an earlier row grew under a still pointer, which leaves the drop landing where
-// the cell used to be.
+// dnd-kit refreshes droppable's rect from per-cell ResizeObserver (fires only when that cell resizes) and by timer (while the pointer moves).
+// Neither catches a cell shifting because an earlier row grew under a still pointer, which leaves the drop landing where the cell used to be.
 function DropzoneMeasurementTicker() {
   const { active, measureDroppableContainers } = useDndContext();
   useEffect(() => {
@@ -56,11 +52,9 @@ function DropzoneMeasurementTicker() {
   return null;
 }
 
-// A reload landing mid-drag would resize rows and shift every cell under the
-// pointer, so the drop lands on whatever moved into place. Freezing waits for
-// `loadedKey` to reach `key`, because edge-hover navigation changes `key`
-// mid-drag and freezing before the new week arrives pins the empty grid there
-// for the rest of the drag.
+// A reload landing mid-drag would resize rows and shift every cell under the pointer, so the drop lands on whatever moved into place.
+// Freezing waits for `loadedKey` to reach `key`, because edge-hover navigation changes `key` mid-drag
+// and freezing before the new week arrives pins the empty grid there for the rest of the drag.
 function useFrozenDuringDrag<T>(
   value: T,
   isDragActive: boolean,
@@ -70,9 +64,8 @@ function useFrozenDuringDrag<T>(
   const tracked = useRef({ key, frozen: value, isFrozen: false });
   const shouldFreeze = isDragActive && loadedKey === key;
 
-  // The render that starts freezing must still pass its own value through and
-  // keep it: it is the render the week's data arrived on, and freezing one
-  // render earlier would pin the grid to the empty state that preceded it.
+  // The render that starts freezing must still pass its own value through and keep it:
+  // it is the render the week's data arrived on, and freezing one render earlier would pin the grid to the empty state that preceded it.
   if (
     !shouldFreeze ||
     !tracked.current.isFrozen ||
@@ -168,11 +161,8 @@ export function PlanningGridTable({
     assignmentState.loadedWeekStart,
   );
 
-  // WKWebView can leave a card's previous pixels behind when a reload rewrites
-  // the cells, so a re-slotted card renders torn or overlapped until something
-  // forces a native repaint, which is why hovering one clears it. Promoting the
-  // grid to its own compositing layer and releasing it on the next frame
-  // re-rasterizes every cell without affecting layout.
+  // WKWebView can leave a card's previous pixels when a reload rewrites the cells, so a re-slotted card renders torn until a repaint clears it.
+  // Promoting the grid to its own compositing layer and releasing it on the next frame re-rasterizes every cell without affecting layout.
   const gridRef = useRef<HTMLTableElement>(null);
   // biome-ignore lint/correctness/useExhaustiveDependencies: eventsByEmployee is the repaint trigger, not a value the effect body reads.
   useEffect(() => {
@@ -292,8 +282,7 @@ export function PlanningGridTable({
   );
 }
 
-// Spelled out rather than interpolated so the class names survive Tailwind's
-// static scan of the source.
+// Spelled out rather than interpolated so the class names survive Tailwind's static scan of the source.
 const alertVariantClass = {
   error: "alert-error",
   warning: "alert-warning",

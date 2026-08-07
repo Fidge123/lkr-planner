@@ -69,6 +69,7 @@ function cellEvent(overrides: Partial<CalendarCellEvent>): CalendarCellEvent {
     title: "Projekt Nord",
     projectStatus: "in_progress",
     categoryColor: null,
+    projectCategory: null,
     projectRef: "/v1/projects/1",
     date: "2026-01-26",
     startTime: null,

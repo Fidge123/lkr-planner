@@ -6,6 +6,8 @@ import {
 } from "../../generated/tauri";
 import { recordLastAssignedProject } from "../../services/assignment-suggestions";
 import {
+  commandErrorMessage,
+  isProtectedAssignment,
   nextHighlightIndex,
   resolveDisplayedProjects,
   resolveEscapeAction,
@@ -54,6 +56,9 @@ export function useAssignmentModal({
   const [isDirty, setIsDirty] = useState(false);
   const filterInputRef = useRef<HTMLInputElement>(null);
 
+  const isProtected =
+    isEditMode && isProtectedAssignment(assignment.projectCategory);
+
   const { results, errorMessage: searchError } =
     useAssignmentProjectSearch(filter);
   const { suggestions, suggestionsLoaded } =
@@ -86,10 +91,9 @@ export function useAssignmentModal({
     assignment?.title,
   ]);
 
-  // A callback ref, not an effect: the dialog element is remounted whenever the modal
-  // swaps to the delete or unsaved-changes dialog and back, so an effect keyed on `isOpen`
-  // would leave the listener detached after the swap. requestClose is read through a ref
-  // because the listener outlives the render that attached it.
+  // A callback ref, not an effect: the dialog element is remounted whenever the modal swaps to the delete or unsaved-changes dialog and back,
+  // so an effect keyed on `isOpen` would leave the listener detached after the swap.
+  // requestClose is read through a ref because the listener outlives the render that attached it.
   const requestCloseRef = useRef<() => void>(() => {});
   const dialogRef = useCallback((dialog: HTMLDialogElement | null) => {
     if (!dialog) return;
@@ -184,8 +188,9 @@ export function useAssignmentModal({
           projectName,
         });
 
-    if (result.status === "error") {
-      setErrorMessage((result as { status: "error"; error: string }).error);
+    const writeError = commandErrorMessage(result);
+    if (writeError) {
+      setErrorMessage(writeError);
       setIsSaving(false);
       return;
     }
@@ -209,8 +214,9 @@ export function useAssignmentModal({
     setIsSaving(true);
     setErrorMessage(null);
     const result = await commands.deleteAssignment(assignment.href);
-    if (result.status === "error") {
-      setErrorMessage(result.error);
+    const deleteError = commandErrorMessage(result);
+    if (deleteError) {
+      setErrorMessage(deleteError);
       setIsSaving(false);
       return;
     }
@@ -219,6 +225,7 @@ export function useAssignmentModal({
 
   return {
     isEditMode,
+    isProtected,
     dialogRef,
     filterInputRef,
     filter,

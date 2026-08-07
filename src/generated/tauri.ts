@@ -50,6 +50,7 @@ export type CalendarCellEvent = {
 	title: string,
 	projectStatus: string | null,
 	categoryColor: string | null,
+	projectCategory: string | null,
 	date: string,
 	startTime: string | null,
 	endTime: string | null,
@@ -191,10 +192,7 @@ export type LocalStore = {
 	holidayCache?: HolidayCacheEntry[],
 };
 
-/**
- *  CalDAV has no atomic cross-collection move, so the target copy is created
- *  first and the source deleted afterwards, which can leave a partial move.
- */
+/**  CalDAV has no atomic cross-collection move, so the target copy is created first and the source deleted afterwards, which can leave a partial move. */
 export type MoveAssignmentResult = { kind: "moved"; newHref: string } | 
 /**  The assignment now exists twice. */
 { kind: "sourceDeleteFailed"; newHref: string; sourceHref: string };

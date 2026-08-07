@@ -27,7 +27,7 @@ The system SHALL allow assignment cards (`kind: "assignment"`) in the planning g
 - **THEN** the edit modal opens as before
 
 ### Requirement: Drop targets for rescheduling and reassignment
-The system SHALL accept a dragged assignment card on any day cell of any employee and persist the resulting move with the standard assignment time window, matching how the edit modal writes events.
+The system SHALL accept a dragged assignment card on any day cell of any employee and persist the resulting move with the standard assignment time window, matching how the edit modal writes events, unless the drop would move a protected event to another day (see `fixed-appointment-protection`).
 
 #### Scenario: Drop on another day of the same employee
 - **WHEN** a dragged assignment is dropped on a different day cell of the same employee
@@ -40,6 +40,17 @@ The system SHALL accept a dragged assignment card on any day cell of any employe
 - **THEN** the assignment is moved to the target employee's calendar on the target date
 - **AND** it is written with the standard assignment time window
 - **AND** the grid reloads to show the card under the target employee
+
+#### Scenario: Drop a protected assignment on another employee on the same day
+- **WHEN** a dragged assignment whose linked Daylite project has category `"Termin FIX geplant"` is dropped on a cell of a different employee on its own date
+- **THEN** the assignment is moved to the target employee's calendar
+- **AND** the grid reloads to show the card under the target employee
+
+#### Scenario: Drop a protected assignment on another day
+- **WHEN** a dragged assignment whose linked Daylite project has category `"Termin FIX geplant"` is dropped on a cell of a different date
+- **THEN** the move is rejected before any CalDAV write
+- **AND** the German error message returned by the backend is shown
+- **AND** the assignment stays in its original place
 
 #### Scenario: Drop lands on the day cell without within-cell positioning
 - **WHEN** a dragged assignment is dropped onto a cell that already contains other cards

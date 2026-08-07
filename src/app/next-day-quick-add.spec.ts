@@ -25,6 +25,7 @@ function event(
     title: "Irrelevant",
     projectStatus: null,
     categoryColor: null,
+    projectCategory: null,
     projectRef: null,
     date,
     startTime: null,

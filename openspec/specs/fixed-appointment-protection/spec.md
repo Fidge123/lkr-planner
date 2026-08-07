@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Keep calendar entries that Daylite marks as fixed appointments from being changed, moved to another day or deleted by accident from the planning grid.
+
+## Requirements
 
 ### Requirement: Identify protected events by Daylite project category
 The system SHALL identify a CalDAV event as protected when the Daylite project it references has category `"Termin FIX geplant"`.
@@ -47,3 +51,25 @@ The system SHALL reject `delete_assignment` for a protected event before issuing
 #### Scenario: Delete allowed for non-protected event
 - **WHEN** `delete_assignment` is called for an event that is not protected
 - **THEN** the CalDAV DELETE proceeds as normal
+
+### Requirement: Allow replanning a protected event within its day
+The day is the committed part of a fixed appointment, so the system SHALL allow a protected event to be reassigned to another employee or reordered as long as it keeps its date.
+
+#### Scenario: Move to another employee on the same day
+- **WHEN** `move_assignment` is called for a protected event
+- **AND** the target date equals the event's current date
+- **THEN** the move proceeds as normal
+
+#### Scenario: Move to another day
+- **WHEN** `move_assignment` is called for a protected event
+- **AND** the target date differs from the event's current date
+- **THEN** the operation is rejected before any CalDAV write
+- **AND** a German error message explains the event is fixed and cannot be moved to another day
+
+#### Scenario: Reorder within the day
+- **WHEN** `reorder_assignment` is called for a protected event
+- **THEN** the reorder proceeds as normal
+
+#### Scenario: Re-slotting a day rewrites a protected event's times
+- **WHEN** an assignment is created, updated or deleted on a day that also holds a protected event
+- **THEN** the protected event's DTSTART and DTEND are re-slotted as normal
