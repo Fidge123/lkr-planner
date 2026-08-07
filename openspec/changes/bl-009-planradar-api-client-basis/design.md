@@ -28,9 +28,17 @@ The application needs to integrate with Planradar for project management. The Pl
 - This is the same "copy project" affordance offered in the Planradar UI, so it is preferred over a manual read-then-recreate
 - Blank creation uses `POST /api/v1/{customer_id}/projects` with `data.attributes` (name, street, zipcode, city, country, description, start/end dates)
 - The copy is server-side; field-level edits happen afterward via `PUT /api/v1/{customer_id}/projects/{project_id}` (see BL-037 hybrid flow)
-- Verified against a live recording: copy is **asynchronous**. It answers `202 Accepted` with `{"job_id": "<uuid>"}` and no project payload, so the client returns the job ID rather than a project ID
+- Verified against a live recording: copy is **asynchronous**. It answers `202 Accepted` with `{"job_id": "<uuid>"}` and no project payload
 - The Open API spec documents only the 404 and 406 responses for this endpoint, so the success shape was not discoverable from the spec alone
-- Resolving the job to the created project ID is therefore not possible synchronously and is left to the consuming feature (BL-037)
+
+### Resolving an asynchronous copy
+**Decision**: Poll the project list, because Planradar has no job-status endpoint
+- The `job_id` returned by the copy cannot be queried, so it is useful only as a diagnostic identifier
+- New projects appear at the end of the project list, so the poll walks forward to the last page and scans it from the back
+- The page cursor only moves forward across attempts, so after the first walk each poll costs a single request
+- Polling every 3 seconds, capped at 10 attempts (~30 seconds): a copy normally finishes within a second or two, and the cap prevents a stuck job from draining the 15 requests per minute budget
+- `planradar_copy_project` therefore blocks until the copy lands and returns the new project ID, keeping the asynchronous API detail out of callers
+- A copy that never surfaces returns a normalized timeout error carrying the job ID
 
 ### Project reactivation mechanism
 **Decision**: Reactivate via the archive-project endpoint, not a separate reopen endpoint

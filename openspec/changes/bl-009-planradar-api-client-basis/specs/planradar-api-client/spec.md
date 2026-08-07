@@ -35,6 +35,7 @@ The system SHALL provide functionality to create new Planradar projects, either 
 Blank creation uses the create-project endpoint with project attributes (name, address, dates, description) and completes synchronously.
 Copying uses the dedicated copy-project endpoint with a new name and per-aspect toggles for details, groups, ticket types (forms), users, and components (layers).
 Copying is performed asynchronously by Planradar: the endpoint answers `202 Accepted` with a job handle, so the copied project does not exist yet when the call returns.
+Planradar exposes no job-status endpoint, so the client observes completion by polling the project list, where new projects appear last.
 
 #### Scenario: Create a blank project
 - **WHEN** user creates a project without a source project
@@ -44,7 +45,13 @@ Copying is performed asynchronously by Planradar: the endpoint answers `202 Acce
 #### Scenario: Copy from a source project
 - **WHEN** user creates a project from a source project
 - **THEN** the source project is copied via the copy-project endpoint with the new name and selected aspect toggles
-- **AND** the copy job ID is returned, because the copy runs asynchronously and no project ID exists yet
+- **AND** the client polls the project list until the copied project appears
+- **AND** the new project ID is returned
+
+#### Scenario: Copy does not complete in time
+- **WHEN** the copied project has not appeared within the poll window
+- **THEN** a normalized timeout error is returned
+- **AND** the error carries the copy job ID so the copy can be traced in Planradar
 
 ### Requirement: Project status read
 The system SHALL provide functionality to read project status.

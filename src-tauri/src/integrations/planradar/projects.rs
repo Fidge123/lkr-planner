@@ -6,6 +6,15 @@ use super::shared::{
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 use specta::Type;
+use std::time::Duration;
+
+/// Poll cadence for the asynchronous copy. Planradar exposes no job-status endpoint, so the only
+/// way to observe completion is to watch the project list, where new projects appear last.
+/// A copy normally finishes within a second or two; the attempt cap keeps a stuck job from
+/// draining the client-side request budget (15 requests per minute).
+const COPY_POLL_INTERVAL: Duration = Duration::from_secs(3);
+const COPY_POLL_MAX_ATTEMPTS: u32 = 10;
+const COPY_POLL_PAGE_SIZE: u32 = 100;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Type, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -130,8 +139,9 @@ pub async fn planradar_create_project(
     create_project_core(&client, &token, &config.customer_id, &request).await
 }
 
-/// Returns a job ID, not a project ID: Planradar copies asynchronously, and the copied project
-/// only exists once that job finishes.
+/// Blocks until the copied project appears and returns its ID: Planradar copies asynchronously
+/// and offers no job-status endpoint, so completion is observed by polling the project list.
+/// Times out if the copy has not surfaced within the poll window.
 #[tauri::command]
 #[specta::specta]
 pub async fn planradar_copy_project(
@@ -140,7 +150,16 @@ pub async fn planradar_copy_project(
     options: PlanradarCopyProjectOptions,
 ) -> Result<String, PlanradarApiError> {
     let (client, token, config) = build_client(app)?;
-    copy_project_core(&client, &token, &config.customer_id, &project_id, &options).await
+    copy_project_and_await_core(
+        &client,
+        &token,
+        &config.customer_id,
+        &project_id,
+        &options,
+        COPY_POLL_INTERVAL,
+        COPY_POLL_MAX_ATTEMPTS,
+    )
+    .await
 }
 
 #[tauri::command]
@@ -279,6 +298,71 @@ pub(super) async fn copy_project_core(
 
     let value = parse_success_json_body::<Value>(response.status, &response.body, &path)?;
     extract_job_id(&value, &path)
+}
+
+/// Starts a copy and waits for the copied project to appear, returning its project ID.
+///
+/// Planradar copies asynchronously and offers no job-status endpoint, so completion is observed
+/// by polling the project list. New projects are appended at the end of the list, so the poll
+/// walks forward to the last page and scans it from the back. The page cursor only ever moves
+/// forward across attempts, keeping later polls to a single request.
+pub(super) async fn copy_project_and_await_core(
+    client: &PlanradarApiClient,
+    api_key: &str,
+    customer_id: &str,
+    project_id: &str,
+    options: &PlanradarCopyProjectOptions,
+    interval: Duration,
+    max_attempts: u32,
+) -> Result<String, PlanradarApiError> {
+    let job_id = copy_project_core(client, api_key, customer_id, project_id, options).await?;
+
+    let mut page = 1;
+    for attempt in 0..max_attempts {
+        if attempt > 0 && !interval.is_zero() {
+            tokio::time::sleep(interval).await;
+        }
+
+        loop {
+            let projects = list_projects_core(
+                client,
+                api_key,
+                customer_id,
+                &PlanradarListProjectsInput {
+                    sort: None,
+                    page: Some(page),
+                    pagesize: Some(COPY_POLL_PAGE_SIZE),
+                },
+            )
+            .await?;
+
+            // Scan from the back: the copy is the newest project, so it lands last.
+            if let Some(found) = projects
+                .iter()
+                .rev()
+                .find(|project| project.name == options.name)
+            {
+                return Ok(found.id.clone());
+            }
+
+            // A full page means there may be another one; a short page is the last one.
+            if projects.len() as u32 == COPY_POLL_PAGE_SIZE {
+                page += 1;
+            } else {
+                break;
+            }
+        }
+    }
+
+    Err(PlanradarApiError::new(
+        PlanradarApiErrorCode::Timeout,
+        None,
+        "Das kopierte Planradar-Projekt ist nicht rechtzeitig erschienen. Bitte in Planradar prüfen.",
+        format!(
+            "Copy job {job_id} did not surface a project named {:?} within {max_attempts} polls",
+            options.name
+        ),
+    ))
 }
 
 pub(super) async fn reactivate_project_core(
@@ -646,6 +730,136 @@ mod tests {
             assert_eq!(attributes["drstart-date"], "2026-02-23T10:02:25.000Z");
             assert!(attributes.get("street").is_none());
             assert!(attributes.get("drend-date").is_none());
+        });
+    }
+
+    fn copy_accepted_response() -> PlanradarHttpResponse {
+        mock_response(202, r#"{"job_id":"f2f8a66e-39bb-4baa-a38c-0f09e4758e07"}"#)
+    }
+
+    fn copy_options(name: &str) -> PlanradarCopyProjectOptions {
+        PlanradarCopyProjectOptions {
+            name: name.to_string(),
+            ..PlanradarCopyProjectOptions::default()
+        }
+    }
+
+    #[test]
+    fn copy_awaits_the_project_appearing_in_a_later_poll() {
+        tauri::async_runtime::block_on(async {
+            // First poll does not contain the copy yet; the second one does.
+            let transport = MockTransport::new(vec![
+                Ok(copy_accepted_response()),
+                Ok(mock_response(
+                    200,
+                    r#"{"data":[{"id":"1","attributes":{"name":"Alt","status":1}}]}"#,
+                )),
+                Ok(mock_response(
+                    200,
+                    r#"{"data":[{"id":"1","attributes":{"name":"Alt","status":1}},{"id":"77","attributes":{"name":"Kopie","status":1}}]}"#,
+                )),
+            ]);
+            let client = PlanradarApiClient::with_transport(Box::new(transport.clone()));
+
+            let new_id = copy_project_and_await_core(
+                &client,
+                "t",
+                "1234",
+                "42",
+                &copy_options("Kopie"),
+                Duration::ZERO,
+                5,
+            )
+            .await
+            .expect("copy should resolve once the project appears");
+
+            assert_eq!(new_id, "77");
+            assert_eq!(transport.requests().len(), 3);
+        });
+    }
+
+    #[test]
+    fn copy_poll_walks_to_the_last_page_where_new_projects_appear() {
+        tauri::async_runtime::block_on(async {
+            // A full first page forces the poll onto page 2, where the copy sits last.
+            let full_page = format!(
+                r#"{{"data":[{}]}}"#,
+                (0..COPY_POLL_PAGE_SIZE)
+                    .map(|index| format!(
+                        r#"{{"id":"{index}","attributes":{{"name":"Projekt {index}","status":1}}}}"#
+                    ))
+                    .collect::<Vec<_>>()
+                    .join(",")
+            );
+            let transport = MockTransport::new(vec![
+                Ok(copy_accepted_response()),
+                Ok(mock_response(200, &full_page)),
+                Ok(mock_response(
+                    200,
+                    r#"{"data":[{"id":"9001","attributes":{"name":"Kopie","status":1}}]}"#,
+                )),
+            ]);
+            let client = PlanradarApiClient::with_transport(Box::new(transport.clone()));
+
+            let new_id = copy_project_and_await_core(
+                &client,
+                "t",
+                "1234",
+                "42",
+                &copy_options("Kopie"),
+                Duration::ZERO,
+                5,
+            )
+            .await
+            .expect("copy should be found on the last page");
+
+            assert_eq!(new_id, "9001");
+
+            let requests = transport.requests();
+            assert!(
+                requests[1]
+                    .query
+                    .contains(&("page".to_string(), "1".to_string())),
+                "first poll should start at page 1, got {:?}",
+                requests[1].query
+            );
+            assert!(
+                requests[2]
+                    .query
+                    .contains(&("page".to_string(), "2".to_string())),
+                "a full page should advance to the next one, got {:?}",
+                requests[2].query
+            );
+        });
+    }
+
+    #[test]
+    fn copy_times_out_when_the_project_never_appears() {
+        tauri::async_runtime::block_on(async {
+            let transport = MockTransport::new(vec![
+                Ok(copy_accepted_response()),
+                Ok(mock_response(200, r#"{"data":[]}"#)),
+                Ok(mock_response(200, r#"{"data":[]}"#)),
+            ]);
+            let client = PlanradarApiClient::with_transport(Box::new(transport));
+
+            let error = copy_project_and_await_core(
+                &client,
+                "t",
+                "1234",
+                "42",
+                &copy_options("Kopie"),
+                Duration::ZERO,
+                2,
+            )
+            .await
+            .expect_err("copy should time out when the project never shows up");
+
+            assert_eq!(error.code, PlanradarApiErrorCode::Timeout);
+            // The job ID belongs in the diagnostics so a stuck copy can be traced in Planradar.
+            assert!(error
+                .technical_message
+                .contains("f2f8a66e-39bb-4baa-a38c-0f09e4758e07"));
         });
     }
 

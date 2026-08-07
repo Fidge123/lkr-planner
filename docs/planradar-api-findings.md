@@ -47,7 +47,10 @@ The copy is performed server-side, so field-level edits happen afterward via pro
 Copying is asynchronous, confirmed by a live recording.
 The endpoint answers `202 Accepted` with a body of `{"job_id": "<uuid>"}` and no project payload, so the new project ID is not available when the call returns.
 The Swagger documents only the 404 and 406 responses for this endpoint, so this success shape cannot be derived from the spec.
-The client therefore returns the job ID; resolving it to the created project is left to the consuming feature.
+
+There is no job-status endpoint, so the returned `job_id` cannot be queried and serves only as a diagnostic identifier.
+Completion is observed by polling the project list, where newly created projects appear last.
+The client walks forward to the last page, scans it from the back for the copy's name, and polls every 3 seconds up to 10 times before returning a timeout error.
 
 ## Project read and list
 

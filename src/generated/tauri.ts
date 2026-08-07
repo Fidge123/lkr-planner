@@ -27,8 +27,9 @@ export const commands = {
 	planradarListProjects: (input: PlanradarListProjectsInput) => typedError<PlanradarProject[], PlanradarApiError>(__TAURI_INVOKE("planradar_list_projects", { input })),
 	planradarCreateProject: (request: PlanradarCreateProjectRequest) => typedError<string, PlanradarApiError>(__TAURI_INVOKE("planradar_create_project", { request })),
 	/**
-	 *  Returns a job ID, not a project ID: Planradar copies asynchronously, and the copied project
-	 *  only exists once that job finishes.
+	 *  Blocks until the copied project appears and returns its ID: Planradar copies asynchronously
+	 *  and offers no job-status endpoint, so completion is observed by polling the project list.
+	 *  Times out if the copy has not surfaced within the poll window.
 	 */
 	planradarCopyProject: (projectId: string, options: PlanradarCopyProjectOptions) => typedError<string, PlanradarApiError>(__TAURI_INVOKE("planradar_copy_project", { projectId, options })),
 	planradarReactivateProject: (projectId: string) => typedError<null, PlanradarApiError>(__TAURI_INVOKE("planradar_reactivate_project", { projectId })),
