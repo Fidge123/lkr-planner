@@ -3,8 +3,7 @@ use super::super::types::{PendingEvent, RawVEvent};
 const DAYLITE_DESCRIPTION_PREFIX: &str = "daylite:";
 
 pub(crate) fn parse_daylite_reference(description: &str) -> Option<String> {
-    // Strip ASCII whitespace, BOM (U+FEFF), and zero-width space (U+200B) that some
-    // calendar UIs prepend to the description field.
+    // Some calendar UIs prepend whitespace, a BOM (U+FEFF), or a zero-width space (U+200B).
     let first_line = description
         .lines()
         .next()
