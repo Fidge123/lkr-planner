@@ -12,8 +12,6 @@ export async function searchProjectsForAssignmentPicker(
       searchTerm,
       limit: CANDIDATE_LIMIT,
       statuses: ["new_status", "in_progress"],
-      // Minimal records carry only reference and name; the category drives the
-      // color strip on each result.
       fullRecords: true,
       start: null,
       sort: "name",

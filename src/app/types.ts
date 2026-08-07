@@ -38,15 +38,12 @@ function absenceCategoryColor(title: string): string {
   return absenceCodeColors[code] ?? defaultAbsenceColor;
 }
 
-/**
- * A resolved assignment always carries its project's status, so a missing status is
- * how a Daylite reference that could not be read shows up in the grid.
- */
+/** The backend leaves the status unset exactly when it could not read the project. */
 export function isUnresolvedAssignment(event: CellEvent): boolean {
   return event.projectRef !== null && !event.projectStatus;
 }
 
-/** An absence without a start time covers the whole day, so nothing can be planned into it. */
+/** The backend expands a multi-day absence into per-day events without a start time. */
 export function hasAllDayAbsence(events: CellEvent[]): boolean {
   return events.some(
     (event) => event.kind === "absence" && event.startTime === null,

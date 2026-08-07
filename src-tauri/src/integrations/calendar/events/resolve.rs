@@ -71,9 +71,8 @@ pub(crate) fn resolve_event(
         };
     }
 
-    // The calendar summary stands in for the project name; an assignment whose
-    // reference did not resolve is the one case where a card carries no project
-    // status, which is how the frontend marks it as unresolved.
+    // An assignment without a project status is how the frontend detects a
+    // reference it must not treat as a project name.
     CalendarCellEvent {
         uid,
         kind: CalendarEventKind::Assignment,

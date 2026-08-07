@@ -4,10 +4,7 @@ export type ProjectCategoryColors = Record<string, string>;
 
 let inFlight: Promise<ProjectCategoryColors> | null = null;
 
-/**
- * Category colors change far more rarely than projects do, so they are held for the
- * whole session and only dropped when the user asks for fresh data.
- */
+/** Held for the whole session, unlike the TTL-cached project and contact reads. */
 export function loadProjectCategoryColors(): Promise<ProjectCategoryColors> {
   inFlight ??= fetchProjectCategoryColors();
   return inFlight;

@@ -267,7 +267,6 @@ interface BodyProps {
   startTime: string | null;
   endTime: string | null;
   title: string;
-  /** Wraps the calendar summary in the German "could not be read" note. */
   isUnresolved?: boolean;
 }
 

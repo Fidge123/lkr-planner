@@ -6,7 +6,7 @@ mod integrations;
 pub mod secret_manager;
 
 const RELOAD_DATA_MENU_ID: &str = "reload-data";
-/// Listened for in the frontend, which owns the calendar and Daylite caches.
+/// Matched by the frontend listener in `use-reload-data-menu.ts`.
 const RELOAD_DATA_EVENT: &str = "reload-data";
 
 fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
@@ -95,8 +95,7 @@ fn install_reload_data_menu(app: &tauri::AppHandle) -> tauri::Result<()> {
 
     match file_submenu(&menu)? {
         Some(file) => file.prepend(&reload)?,
-        // The default menu carries a File submenu on every desktop platform Tauri
-        // builds; the fallback keeps the item reachable if a platform ever drops it.
+        // Only reachable if a platform's default menu ever ships without a File submenu.
         None => menu.insert(&Submenu::with_items(app, "File", true, &[&reload])?, 1)?,
     }
 

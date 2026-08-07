@@ -22,7 +22,6 @@ export function subscribeToReloadDataMenu(
   };
 }
 
-/** Runs `onReload` when the "Daten neu laden" menu item is chosen. */
 export function useReloadDataMenu(onReload: () => void): void {
   const onReloadRef = useRef(onReload);
   onReloadRef.current = onReload;

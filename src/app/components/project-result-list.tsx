@@ -57,10 +57,6 @@ export function ProjectResultList({
 /** Matches the suggestion limit in `assignment-suggestions`. */
 const placeholderRows = [0, 1, 2, 3, 4];
 
-/**
- * Holds the height of a full suggestion list before it arrives, so the dialog does
- * not jump once the default suggestions land.
- */
 export function ProjectResultPlaceholder() {
   return (
     <ul className={`${resultListClass} pointer-events-none`} aria-hidden="true">
@@ -76,13 +72,11 @@ export function ProjectResultPlaceholder() {
 
 interface ProjectResultListProps {
   projects: DayliteProjectSummary[];
-  /** Daylite category name to color, so a result carries its category at a glance. */
   categoryColors?: ProjectCategoryColors;
   highlightedIndex: number;
   onSelect: (project: DayliteProjectSummary) => void;
 }
 
-/** Keeps its own color on a selected row, where the row's text turns inverted. */
 function CategoryDot({ color }: { color: string | null }) {
   return (
     <span
