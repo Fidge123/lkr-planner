@@ -14,29 +14,26 @@ import { createPortal } from "react-dom";
 import type {
   EmployeeSetting,
   PlanningContactRecord,
-  PlanningProjectRecord,
 } from "../generated/tauri";
 import { MoveReconciliationDialog } from "./components/move-reconciliation-dialog";
-import { ProjectTable } from "./components/project-table";
 import {
   AssignmentCardBody,
   assignmentCardClass,
   assignmentStripClass,
   categoryStrip,
 } from "./components/timetable-cell";
-import { TimetableHeader } from "./components/timetable-header";
-import { TimetableRow } from "./components/timetable-row";
+import { WeekTable } from "./components/week-table";
 import { filterVisibleEmployees } from "./employee-visibility";
 import type { AppointmentDragPayload } from "./hooks/use-appointment-drag";
 import { useAppointmentDrag } from "./hooks/use-appointment-drag";
 import { type HolidaysState, useHolidays } from "./hooks/use-holidays";
 import type { PlanningAssignmentsState } from "./hooks/use-planning-assignments";
 import { usePlanningEmployees } from "./hooks/use-planning-employees";
-import { usePlanningProjects } from "./hooks/use-planning-projects";
-import { getWeekDays, toLocalISODate } from "./util";
+import { useWeekSwipe } from "./hooks/use-week-swipe";
+import { getWeekDays, shiftWeekDays, toLocalISODate } from "./util";
+import { swipeSettleMs } from "./week-swipe";
 
-// The pointer, not the dragged card's box, picks the target cell: the position inside a cell
-// is derived from the pointer too, so both halves of the drop agree on one cursor.
+// The pointer, not the dragged card's box, picks the target cell and the position within the cell
 const collisionDetection: CollisionDetection = (args) => {
   const pointerCollisions = pointerWithin(args);
   return pointerCollisions.length > 0
@@ -44,11 +41,8 @@ const collisionDetection: CollisionDetection = (args) => {
     : rectIntersection(args);
 };
 
-// dnd-kit refreshes a droppable's rect from a per-cell ResizeObserver, which
-// fires only when that cell's own box resizes, and from a timer that only
-// re-schedules while the pointer moves. Neither catches a cell shifting because
-// an earlier row grew under a still pointer, which leaves the drop landing where
-// the cell used to be.
+// dnd-kit refreshes droppable's rect from per-cell ResizeObserver (fires only when that cell resizes) and by timer (while the pointer moves).
+// Neither catches a cell shifting because an earlier row grew under a still pointer, which leaves the drop landing where the cell used to be.
 function DropzoneMeasurementTicker() {
   const { active, measureDroppableContainers } = useDndContext();
   useEffect(() => {
@@ -59,11 +53,9 @@ function DropzoneMeasurementTicker() {
   return null;
 }
 
-// A reload landing mid-drag would resize rows and shift every cell under the
-// pointer, so the drop lands on whatever moved into place. Freezing waits for
-// `loadedKey` to reach `key`, because edge-hover navigation changes `key`
-// mid-drag and freezing before the new week arrives pins the empty grid there
-// for the rest of the drag.
+// A reload landing mid-drag would resize rows and shift every cell under the pointer, so the drop lands on whatever moved into place.
+// Freezing waits for `loadedKey` to reach `key`, because edge-hover navigation changes `key` mid-drag
+// and freezing before the new week arrives pins the empty grid there for the rest of the drag.
 function useFrozenDuringDrag<T>(
   value: T,
   isDragActive: boolean,
@@ -73,9 +65,8 @@ function useFrozenDuringDrag<T>(
   const tracked = useRef({ key, frozen: value, isFrozen: false });
   const shouldFreeze = isDragActive && loadedKey === key;
 
-  // The render that starts freezing must still pass its own value through and
-  // keep it: it is the render the week's data arrived on, and freezing one
-  // render earlier would pin the grid to the empty state that preceded it.
+  // The render that starts freezing must still pass its own value through and keep it:
+  // it is the render the week's data arrived on, and freezing one render earlier would pin the grid to the empty state that preceded it.
   if (
     !shouldFreeze ||
     !tracked.current.isFrozen ||
@@ -91,7 +82,6 @@ function useFrozenDuringDrag<T>(
 export function PlanningGrid({
   weekOffset,
   showWeekend = false,
-  projectState,
   employeeState,
   assignmentState,
   employeeSettings = [],
@@ -103,14 +93,12 @@ export function PlanningGrid({
   const weekDays = getWeekDays(weekOffset, showWeekend);
   const weekStart = toLocalISODate(weekDays[0]);
 
-  const fallbackProjectsState = usePlanningProjects();
   const fallbackEmployeesState = usePlanningEmployees();
   const fallbackHolidaysState = useHolidays(weekStart);
 
   return (
     <PlanningGridTable
       weekDays={weekDays}
-      projectState={projectState ?? fallbackProjectsState}
       employeeState={employeeState ?? fallbackEmployeesState}
       assignmentState={assignmentState}
       employeeSettings={employeeSettings}
@@ -124,7 +112,6 @@ export function PlanningGrid({
 
 export function PlanningGridTable({
   weekDays,
-  projectState,
   employeeState,
   assignmentState,
   employeeSettings,
@@ -133,7 +120,6 @@ export function PlanningGridTable({
   onOpenIcalDialog,
   onNavigateWeek,
 }: PlanningGridTableProps) {
-  const { projects, isLoading, errorMessage, reloadProjects } = projectState;
   const {
     employees,
     isLoading: isEmployeeLoading,
@@ -146,8 +132,6 @@ export function PlanningGridTable({
     errorMessage: holidayErrorMessage,
     reloadHolidays,
   } = holidaysState;
-  const holidayByDate = new Map(holidays.map((h) => [h.date, h.name]));
-  const holidayDates = new Set(holidays.map((h) => h.date));
   const visibleEmployees = filterVisibleEmployees(
     employees,
     employeeSettings,
@@ -168,7 +152,6 @@ export function PlanningGridTable({
   const {
     eventsByEmployee,
     errorsByEmployee,
-    isLoading: isAssignmentsLoading,
     errorMessage: assignmentErrorMessage,
   } = useFrozenDuringDrag(
     assignmentState,
@@ -177,140 +160,134 @@ export function PlanningGridTable({
     assignmentState.loadedWeekStart,
   );
 
-  // WKWebView can leave a card's previous pixels behind when a reload rewrites
-  // the cells, so a re-slotted card renders torn or overlapped until something
-  // forces a native repaint, which is why hovering one clears it. Promoting the
-  // grid to its own compositing layer and releasing it on the next frame
-  // re-rasterizes every cell without affecting layout.
-  const gridRef = useRef<HTMLTableElement>(null);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: eventsByEmployee is the repaint trigger, not a value the effect body reads.
+  const scrollRef = useRef<HTMLElement>(null);
+  const swipe = useWeekSwipe({
+    containerRef: scrollRef,
+    onNavigate: onNavigateWeek ?? (() => {}),
+    isDisabled: !onNavigateWeek || isDragActive,
+  });
+  const incomingDays = swipe ? shiftWeekDays(weekDays, swipe.direction) : null;
+  const incomingWeek = incomingDays
+    ? assignmentState.getCachedWeek(toLocalISODate(incomingDays[0]))
+    : null;
+
+  // A gesture can only start at a scroll edge, so a grid too wide for the window is parked
+  // to one side; the incoming week has to arrive at the same offset or the columns jump on handover.
+  const incomingRef = useRef<HTMLElement>(null);
+  const hasIncoming = incomingDays !== null;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: hasIncoming marks the mount of the incoming week, not a value the effect body reads.
   useEffect(() => {
-    const grid = gridRef.current;
-    if (!grid) return;
-    grid.style.transform = "translateZ(0)";
-    const frame = requestAnimationFrame(() => {
-      grid.style.transform = "";
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [eventsByEmployee]);
+    if (incomingRef.current && scrollRef.current) {
+      incomingRef.current.scrollLeft = scrollRef.current.scrollLeft;
+    }
+  }, [hasIncoming]);
 
   return (
-    <section className="w-full h-full overflow-auto">
-      <ReloadableAlert message={errorMessage} onReload={reloadProjects} />
-      <ReloadableAlert
-        message={employeeErrorMessage}
-        onReload={reloadEmployees}
-      />
-      <ReloadableAlert
-        message={assignmentErrorMessage}
-        onReload={reloadAssignments}
-      />
-      <ReloadableAlert
-        message={holidayErrorMessage}
-        onReload={reloadHolidays}
-        variant="warning"
-      />
-      {isAssignmentsLoading ? (
-        <p className="px-4 py-2 text-base-content/70">
-          Einsätze werden geladen...
-        </p>
-      ) : null}
-      {drag.errorMessage ? (
-        <section className="toast toast-top toast-center z-50">
-          <section className="alert alert-error">
-            <span>{drag.errorMessage}</span>
-            <button
-              type="button"
-              className="btn btn-sm"
-              onClick={drag.clearError}
-            >
-              Schließen
-            </button>
+    <section className="w-full h-full relative overflow-hidden">
+      <section ref={scrollRef} className="w-full h-full overflow-auto">
+        <ReloadableAlert
+          message={employeeErrorMessage}
+          onReload={reloadEmployees}
+        />
+        <ReloadableAlert
+          message={assignmentErrorMessage}
+          onReload={reloadAssignments}
+        />
+        <ReloadableAlert
+          message={holidayErrorMessage}
+          onReload={reloadHolidays}
+          variant="warning"
+        />
+        {drag.errorMessage ? (
+          <section className="toast toast-top toast-center z-50">
+            <section className="alert alert-error">
+              <span>{drag.errorMessage}</span>
+              <button
+                type="button"
+                className="btn btn-sm"
+                onClick={drag.clearError}
+              >
+                Schließen
+              </button>
+            </section>
           </section>
-        </section>
+        ) : null}
+        <DndContext
+          sensors={dragSensors}
+          collisionDetection={collisionDetection}
+          onDragStart={drag.onDragStart}
+          onDragMove={drag.onDragMove}
+          onDragEnd={drag.onDragEnd}
+          onDragCancel={drag.onDragCancel}
+        >
+          <DropzoneMeasurementTicker />
+          <WeekTable
+            weekDays={weekDays}
+            employees={visibleEmployees}
+            employeeSettings={employeeSettings}
+            eventsByEmployee={eventsByEmployee}
+            errorsByEmployee={errorsByEmployee}
+            holidays={holidays}
+            isEmployeeLoading={isEmployeeLoading}
+            dropPreview={drag.dropPreview}
+            draggedUid={drag.activePayload?.uid ?? null}
+            onOpenIcalDialog={onOpenIcalDialog}
+            onReloadAssignments={reloadAssignments}
+          />
+          {/* The document guard is not about Tauri: bun tests render this grid
+              through react-dom/server, where portals and `document` do not exist. */}
+          {typeof document === "undefined"
+            ? null
+            : createPortal(
+                <DragOverlay style={{ pointerEvents: "none" }}>
+                  {drag.activePayload ? (
+                    <DragPreviewCard payload={drag.activePayload} />
+                  ) : null}
+                </DragOverlay>,
+                document.body,
+              )}
+        </DndContext>
+      </section>
+
+      {swipe && incomingDays ? (
+        <aside
+          ref={incomingRef}
+          inert
+          // Without pointer-events-none the covering week swallows the wheel events that drive the gesture.
+          className="absolute inset-0 overflow-hidden bg-base-100 shadow-2xl pointer-events-none"
+          style={{
+            transform: `translateX(${swipe.translatePercent}%)`,
+            transition: swipe.isAnimating
+              ? `transform ${swipeSettleMs}ms ease-out`
+              : "none",
+          }}
+        >
+          {/* Its own context keeps the incoming week's cells out of the running drag's drop targets. */}
+          <DndContext>
+            <WeekTable
+              weekDays={incomingDays}
+              employees={visibleEmployees}
+              employeeSettings={employeeSettings}
+              eventsByEmployee={incomingWeek?.eventsByEmployee ?? {}}
+              errorsByEmployee={incomingWeek?.errorsByEmployee ?? {}}
+              holidays={holidays}
+              isEmployeeLoading={isEmployeeLoading}
+              onOpenIcalDialog={onOpenIcalDialog}
+              onReloadAssignments={reloadAssignments}
+            />
+          </DndContext>
+        </aside>
       ) : null}
-      <DndContext
-        sensors={dragSensors}
-        collisionDetection={collisionDetection}
-        onDragStart={drag.onDragStart}
-        onDragMove={drag.onDragMove}
-        onDragEnd={drag.onDragEnd}
-        onDragCancel={drag.onDragCancel}
-      >
-        <DropzoneMeasurementTicker />
-        <table ref={gridRef} className="table table-fixed border-collapse">
-          <thead className="text-base-content">
-            <tr>
-              <th className="w-40 p-4 font-bold">Mitarbeiter</th>
-              {weekDays.map((day) => {
-                const isoDay = toLocalISODate(day);
-                return (
-                  <TimetableHeader
-                    key={day.getTime()}
-                    day={day}
-                    holiday={holidayByDate.get(isoDay)}
-                  />
-                );
-              })}
-            </tr>
-          </thead>
-          <tbody>
-            {visibleEmployees.map((employee, index) => (
-              <TimetableRow
-                key={employee.self || `employee-${index}`}
-                employee={employee}
-                calendarEvents={eventsByEmployee[employee.self] ?? []}
-                calendarError={errorsByEmployee[employee.self] ?? null}
-                week={{ days: weekDays, holidayDates }}
-                employeeSetting={
-                  employeeSettings.find(
-                    (s) => s.dayliteContactReference === employee.self,
-                  ) ?? null
-                }
-                dropPreview={drag.dropPreview}
-                draggedUid={drag.activePayload?.uid ?? null}
-                onOpenIcalDialog={onOpenIcalDialog}
-                onReloadAssignments={reloadAssignments}
-              />
-            ))}
-            {!isEmployeeLoading && visibleEmployees.length === 0 ? (
-              <tr key="no-employees-row">
-                <td
-                  className="p-4 text-base-content/70"
-                  colSpan={weekDays.length + 1}
-                >
-                  Keine Mitarbeiter gefunden
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
-        {/* The document guard is not about Tauri: bun tests render this grid
-            through react-dom/server, where portals and `document` do not exist. */}
-        {typeof document === "undefined"
-          ? null
-          : createPortal(
-              <DragOverlay style={{ pointerEvents: "none" }}>
-                {drag.activePayload ? (
-                  <DragPreviewCard payload={drag.activePayload} />
-                ) : null}
-              </DragOverlay>,
-              document.body,
-            )}
-      </DndContext>
 
       <MoveReconciliationDialog
         reconciliation={drag.reconciliation}
         onResolved={drag.resolveReconciliation}
       />
-
-      <ProjectTable projects={projects} isLoading={isLoading} />
     </section>
   );
 }
 
-// Spelled out rather than interpolated so the class names survive Tailwind's
-// static scan of the source.
+// Spelled out rather than interpolated so the class names survive Tailwind's static scan of the source.
 const alertVariantClass = {
   error: "alert-error",
   warning: "alert-warning",
@@ -356,7 +333,6 @@ function DragPreviewCard({ payload }: { payload: AppointmentDragPayload }) {
 interface Props {
   weekOffset: number;
   showWeekend?: boolean;
-  projectState?: PlanningGridProjectsState;
   employeeState?: PlanningGridEmployeesState;
   assignmentState: PlanningGridAssignmentState;
   employeeSettings?: EmployeeSetting[];
@@ -368,7 +344,6 @@ interface Props {
 
 export interface PlanningGridTableProps {
   weekDays: Date[];
-  projectState: PlanningGridProjectsState;
   employeeState: PlanningGridEmployeesState;
   assignmentState: PlanningGridAssignmentState;
   employeeSettings: EmployeeSetting[];
@@ -376,13 +351,6 @@ export interface PlanningGridTableProps {
   holidaysState: HolidaysState;
   onOpenIcalDialog: (employee: PlanningContactRecord) => void;
   onNavigateWeek?: (direction: -1 | 1) => void;
-}
-
-export interface PlanningGridProjectsState {
-  projects: PlanningProjectRecord[];
-  isLoading: boolean;
-  errorMessage: string | null;
-  reloadProjects: () => void;
 }
 
 export interface PlanningGridEmployeesState {

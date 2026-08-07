@@ -13,6 +13,7 @@ export const commands = {
 	dayliteListProjects: () => typedError<PlanningProjectRecord[], DayliteApiError>(__TAURI_INVOKE("daylite_list_projects")),
 	dayliteSearchProjects: (input: DayliteSearchInput) => typedError<DayliteSearchResult<DayliteProjectSummary>, DayliteApiError>(__TAURI_INVOKE("daylite_search_projects", { input })),
 	dayliteQueryOverdueProjects: () => typedError<DayliteProjectSummary[], DayliteApiError>(__TAURI_INVOKE("daylite_query_overdue_projects")),
+	dayliteProjectCategoryColors: () => typedError<{ [key in string]: string }, DayliteApiError>(__TAURI_INVOKE("daylite_project_category_colors")),
 	dayliteListContacts: () => typedError<PlanningContactRecord[], DayliteApiError>(__TAURI_INVOKE("daylite_list_contacts")),
 	dayliteListCachedContacts: () => typedError<PlanningContactRecord[], DayliteApiError>(__TAURI_INVOKE("daylite_list_cached_contacts")),
 	dayliteUpdateContactIcalUrls: (input: DayliteUpdateContactIcalUrlsInput) => typedError<PlanningContactRecord, DayliteApiError>(__TAURI_INVOKE("daylite_update_contact_ical_urls", { input })),
@@ -74,6 +75,7 @@ export type CalendarCellEvent = {
 	title: string,
 	projectStatus: string | null,
 	categoryColor: string | null,
+	projectCategory: string | null,
 	date: string,
 	startTime: string | null,
 	endTime: string | null,
@@ -215,10 +217,7 @@ export type LocalStore = {
 	holidayCache?: HolidayCacheEntry[],
 };
 
-/**
- *  CalDAV has no atomic cross-collection move, so the target copy is created
- *  first and the source deleted afterwards, which can leave a partial move.
- */
+/**  CalDAV has no atomic cross-collection move, so the target copy is created first and the source deleted afterwards, which can leave a partial move. */
 export type MoveAssignmentResult = { kind: "moved"; newHref: string } | 
 /**  The assignment now exists twice. */
 { kind: "sourceDeleteFailed"; newHref: string; sourceHref: string };

@@ -1,8 +1,14 @@
+import { Lock } from "lucide-react";
 import type { CalendarCellEvent } from "../../generated/tauri";
 import { useAssignmentModal } from "../hooks/use-assignment-modal";
 import type { ModalSaveAction } from "../next-day-quick-add";
+import { fixedAppointmentNotice } from "./assignment-modal-logic";
 import { DeleteConfirmDialog } from "./delete-confirm-dialog";
-import { ProjectResultList, SuggestionEmptyState } from "./project-result-list";
+import {
+  ProjectResultList,
+  ProjectResultPlaceholder,
+  SuggestionEmptyState,
+} from "./project-result-list";
 import { UnsavedChangesDialog } from "./unsaved-changes-dialog";
 
 export function AssignmentModal({
@@ -65,6 +71,13 @@ export function AssignmentModal({
           <p className="mt-3 text-sm text-error">{modal.errorMessage}</p>
         ) : null}
 
+        {modal.isProtected ? (
+          <p className="alert alert-warning mt-3 text-sm">
+            <Lock className="size-4 shrink-0" aria-hidden="true" />
+            {fixedAppointmentNotice}
+          </p>
+        ) : null}
+
         <section className="mt-4 flex flex-col gap-3">
           <label className="form-control w-full">
             <span className="label-text mb-1">Projekt</span>
@@ -90,11 +103,16 @@ export function AssignmentModal({
           {modal.searchError ? (
             <p className="text-sm text-error">{modal.searchError}</p>
           ) : null}
-          <ProjectResultList
-            projects={modal.displayedProjects}
-            highlightedIndex={modal.highlightedIndex}
-            onSelect={modal.selectProject}
-          />
+          {modal.showSuggestionPlaceholder ? (
+            <ProjectResultPlaceholder />
+          ) : (
+            <ProjectResultList
+              projects={modal.displayedProjects}
+              categoryColors={modal.categoryColors}
+              highlightedIndex={modal.highlightedIndex}
+              onSelect={modal.selectProject}
+            />
+          )}
           <SuggestionEmptyState
             filter={modal.filter}
             suggestionsLoaded={modal.suggestionsLoaded}
@@ -108,7 +126,7 @@ export function AssignmentModal({
               type="button"
               className="btn btn-sm btn-error mr-auto"
               onClick={modal.openDeleteConfirm}
-              disabled={modal.isSaving}
+              disabled={modal.isSaving || modal.isProtected}
             >
               Löschen
             </button>
@@ -126,7 +144,9 @@ export function AssignmentModal({
             className="btn btn-sm btn-primary"
             onClick={modal.handleSave}
             disabled={
-              modal.isSaving || (!modal.isEditMode && !modal.selectedProjectRef)
+              modal.isSaving ||
+              modal.isProtected ||
+              (!modal.isEditMode && !modal.selectedProjectRef)
             }
           >
             {modal.isSaving ? "Speichere..." : "Speichern"}

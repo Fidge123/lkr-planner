@@ -9,7 +9,12 @@ import type {
   DropPreview,
 } from "../hooks/use-appointment-drag";
 import type { GhostSuggestion } from "../next-day-quick-add";
-import { type CellEvent, hasAbsenceConflict } from "../types";
+import {
+  type CellEvent,
+  hasAbsenceConflict,
+  hasAllDayAbsence,
+  isUnresolvedAssignment,
+} from "../types";
 
 export function TimetableCell({
   highlight = false,
@@ -95,10 +100,9 @@ export function TimetableCell({
           ) : (
             <li
               key={event.uid}
-              // Collapsed while in flight so the drop preview replaces the card instead of
-              // adding to the cell's height: a cell that grows mid-drag pushes the rows
-              // under it away from the pointer. The card itself stays laid out, because
-              // dnd-kit measures it to position the drag overlay.
+              // Collapsed while in flight so the drop preview replaces the card instead of adding to the cell's height:
+              // a cell that grows mid-drag pushes the rows under it away from the pointer.
+              // The card itself stays laid out, because dnd-kit measures it to position the drag overlay.
               className={
                 event.uid === draggedUid
                   ? "relative h-0 overflow-visible"
@@ -134,25 +138,26 @@ export function TimetableCell({
             </button>
           </li>
         ) : null}
-        <li>
-          <button
-            type="button"
-            className="btn btn-dash btn-block rounded-lg opacity-20 hover:opacity-80 transition-opacity"
-            aria-label="Aufgabe hinzufügen"
-            onClick={onAddClick}
-          >
-            +
-          </button>
-        </li>
+        {hasAllDayAbsence(events) ? null : (
+          <li>
+            <button
+              type="button"
+              className="btn btn-dash btn-block rounded-lg opacity-20 hover:opacity-80 transition-opacity"
+              aria-label="Aufgabe hinzufügen"
+              onClick={onAddClick}
+            >
+              +
+            </button>
+          </li>
+        )}
       </ul>
     </td>
   );
 }
 
 /**
- * Splices the drop preview into the cell's rendered items, before the first assignment that
- * already has `orderIndex` other assignments ahead of it. The dragged card is skipped in that
- * count because it does not occupy a position in the day it is being dropped into.
+ * Splices the drop preview into the cell's rendered items, before the first assignment that already has `orderIndex` other assignments ahead of it.
+ * The dragged card is skipped in that count because it does not occupy a position in the day it is being dropped into.
  */
 function withDropPreview(
   events: CellEvent[],
@@ -213,8 +218,7 @@ interface Props {
 export const assignmentCardClass =
   "flex items-center w-full gap-4 p-2 rounded-lg";
 
-/** Width and default color of the strip live in `assignmentStripClass`; the Daylite
- *  color is passed through verbatim so any CSS color notation it uses still works. */
+/** Width and default color of the strip live in `assignmentStripClass`; the Daylite color is passed through verbatim so any CSS color notation it uses still works. */
 export const assignmentStripClass = "border-l-4 border-base-content/30";
 
 export function categoryStrip(
@@ -223,11 +227,35 @@ export function categoryStrip(
   return categoryColor ? { borderLeftColor: categoryColor } : undefined;
 }
 
-export function AssignmentCardBody({ startTime, endTime, title }: BodyProps) {
+export function AssignmentCardBody({
+  startTime,
+  endTime,
+  title,
+  isUnresolved = false,
+}: BodyProps) {
   return (
     <>
       <EventTime startTime={startTime} endTime={endTime} />
-      <h4 className="flex-1 min-w-0 font-medium">{title}</h4>
+      {isUnresolved ? (
+        <TriangleAlert
+          className="size-4 shrink-0 text-error"
+          aria-hidden="true"
+        />
+      ) : null}
+      <h4 className="flex-1 min-w-0 font-medium">
+        {isUnresolved ? (
+          <>
+            <em className="font-normal opacity-70">Beschreibung für </em>
+            {title}
+            <em className="font-normal opacity-70">
+              {" "}
+              konnte nicht abgerufen werden
+            </em>
+          </>
+        ) : (
+          title
+        )}
+      </h4>
     </>
   );
 }
@@ -236,6 +264,7 @@ interface BodyProps {
   startTime: string | null;
   endTime: string | null;
   title: string;
+  isUnresolved?: boolean;
 }
 
 function DraggableAssignmentCard({
@@ -257,9 +286,7 @@ function DraggableAssignmentCard({
     categoryColor: event.categoryColor,
     position,
   };
-  // An unresolved project renders a German error placeholder as the title;
-  // dropping such a card would persist that placeholder as the event summary.
-  const unresolved = event.projectRef !== null && !event.projectStatus;
+  const unresolved = isUnresolvedAssignment(event);
   const canDrag = Boolean(event.href) && !unresolved;
   const { attributes, listeners, setNodeRef } = useDraggable({
     id: `assignment-${employeeRef}-${event.uid}`,
@@ -280,6 +307,7 @@ function DraggableAssignmentCard({
         startTime={event.startTime}
         endTime={event.endTime}
         title={event.title}
+        isUnresolved={unresolved}
       />
     </button>
   );

@@ -6,6 +6,8 @@ import {
 } from "../../generated/tauri";
 import { recordLastAssignedProject } from "../../services/assignment-suggestions";
 import {
+  commandErrorMessage,
+  isProtectedAssignment,
   nextHighlightIndex,
   resolveDisplayedProjects,
   resolveEscapeAction,
@@ -15,6 +17,7 @@ import {
 import type { ModalSaveAction } from "../next-day-quick-add";
 import { useAssignmentDefaultSuggestions } from "./use-assignment-default-suggestions";
 import { useAssignmentProjectSearch } from "./use-assignment-project-search";
+import { useProjectCategoryColors } from "./use-project-category-colors";
 
 const missingHrefMessage =
   "Dieser Einsatz kann nicht bearbeitet werden, da er keine Kalender-Adresse hat. Bitte die Ansicht neu laden.";
@@ -39,6 +42,9 @@ export function useAssignmentModal({
   const [selectedProjectName, setSelectedProjectName] = useState<string>(
     assignment?.title ?? "",
   );
+  const [selectedProjectCategory, setSelectedProjectCategory] = useState<
+    string | null
+  >(null);
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(
@@ -50,6 +56,9 @@ export function useAssignmentModal({
   const [isDirty, setIsDirty] = useState(false);
   const filterInputRef = useRef<HTMLInputElement>(null);
 
+  const isProtected =
+    isEditMode && isProtectedAssignment(assignment.projectCategory);
+
   const { results, errorMessage: searchError } =
     useAssignmentProjectSearch(filter);
   const { suggestions, suggestionsLoaded } =
@@ -59,6 +68,7 @@ export function useAssignmentModal({
     suggestions,
     results,
   );
+  const categoryColors = useProjectCategoryColors(isOpen);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -68,6 +78,7 @@ export function useAssignmentModal({
     setShowUnsavedConfirm(initialShowUnsavedConfirm);
     setSelectedProjectRef(assignment?.projectRef ?? "");
     setSelectedProjectName(assignment?.title ?? "");
+    setSelectedProjectCategory(null);
     setFilter("");
     setHighlightedIndex(-1);
     setIsDirty(false);
@@ -80,10 +91,9 @@ export function useAssignmentModal({
     assignment?.title,
   ]);
 
-  // A callback ref, not an effect: the dialog element is remounted whenever the modal
-  // swaps to the delete or unsaved-changes dialog and back, so an effect keyed on `isOpen`
-  // would leave the listener detached after the swap. requestClose is read through a ref
-  // because the listener outlives the render that attached it.
+  // A callback ref, not an effect: the dialog element is remounted whenever the modal swaps to the delete or unsaved-changes dialog and back,
+  // so an effect keyed on `isOpen` would leave the listener detached after the swap.
+  // requestClose is read through a ref because the listener outlives the render that attached it.
   const requestCloseRef = useRef<() => void>(() => {});
   const dialogRef = useCallback((dialog: HTMLDialogElement | null) => {
     if (!dialog) return;
@@ -108,6 +118,7 @@ export function useAssignmentModal({
   const selectProject = (project: DayliteProjectSummary) => {
     setSelectedProjectRef(project.self);
     setSelectedProjectName(project.name);
+    setSelectedProjectCategory(project.category ?? null);
     setIsDirty(true);
     setFilter("");
     setHighlightedIndex(-1);
@@ -177,8 +188,9 @@ export function useAssignmentModal({
           projectName,
         });
 
-    if (result.status === "error") {
-      setErrorMessage((result as { status: "error"; error: string }).error);
+    const writeError = commandErrorMessage(result);
+    if (writeError) {
+      setErrorMessage(writeError);
       setIsSaving(false);
       return;
     }
@@ -186,6 +198,7 @@ export function useAssignmentModal({
       recordLastAssignedProject({
         self: selectedProjectRef,
         name: projectName,
+        category: selectedProjectCategory,
       });
     }
     onSave(
@@ -201,8 +214,9 @@ export function useAssignmentModal({
     setIsSaving(true);
     setErrorMessage(null);
     const result = await commands.deleteAssignment(assignment.href);
-    if (result.status === "error") {
-      setErrorMessage(result.error);
+    const deleteError = commandErrorMessage(result);
+    if (deleteError) {
+      setErrorMessage(deleteError);
       setIsSaving(false);
       return;
     }
@@ -211,11 +225,13 @@ export function useAssignmentModal({
 
   return {
     isEditMode,
+    isProtected,
     dialogRef,
     filterInputRef,
     filter,
     highlightedIndex,
     displayedProjects,
+    categoryColors,
     selectedProjectRef,
     selectedProjectName,
     isSaving,
@@ -223,6 +239,7 @@ export function useAssignmentModal({
     searchError,
     suggestionsLoaded,
     suggestionCount: suggestions.length,
+    showSuggestionPlaceholder: filter.length === 0 && !suggestionsLoaded,
     showDeleteConfirm,
     showUnsavedConfirm,
     requestClose,

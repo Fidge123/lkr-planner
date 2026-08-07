@@ -9,17 +9,9 @@ import {
   PlanningGrid,
   type PlanningGridAssignmentState,
   type PlanningGridEmployeesState,
-  type PlanningGridProjectsState,
   PlanningGridTable,
 } from "./page";
 import { getWeekDays } from "./util";
-
-const defaultState: PlanningGridProjectsState = {
-  projects: [],
-  isLoading: false,
-  errorMessage: null,
-  reloadProjects: () => {},
-};
 
 const defaultEmployeeState: PlanningGridEmployeesState = {
   employees: [],
@@ -36,6 +28,7 @@ const defaultAssignmentState: PlanningGridAssignmentState = {
   loadedWeekStart: null,
   reloadAssignments: () => {},
   invalidateWeeksContaining: () => {},
+  getCachedWeek: () => null,
 };
 
 const defaultHolidaysState: HolidaysState = {
@@ -51,7 +44,6 @@ function renderGrid(
   return renderToStaticMarkup(
     <PlanningGrid
       weekOffset={0}
-      projectState={defaultState}
       employeeState={defaultEmployeeState}
       assignmentState={defaultAssignmentState}
       employeeSettings={[]}
@@ -78,6 +70,7 @@ function cellEvent(overrides: Partial<CalendarCellEvent>): CalendarCellEvent {
     title: "Projekt Nord",
     projectStatus: "in_progress",
     categoryColor: null,
+    projectCategory: null,
     projectRef: "/v1/projects/1",
     date: "2026-01-26",
     startTime: null,
@@ -99,100 +92,16 @@ function withEvents(events: CalendarCellEvent[]) {
   };
 }
 
-describe("planning grid project loading states", () => {
+describe("planning grid employee states", () => {
   beforeAll(() => {
     setSystemTime(new Date(2026, 0, 28, 9, 0, 0));
   });
 
-  it("shows initial german loading state when projects are loading", () => {
-    const html = renderGrid({
-      projectState: { ...defaultState, isLoading: true },
-    });
-
-    expect(html).toContain("Geladene Projekte");
-    expect(html).toContain("Projekte werden geladen...");
-  });
-
-  it("shows german error banner with retry action", () => {
-    const html = renderGrid({
-      projectState: {
-        ...defaultState,
-        errorMessage: "Die Daten konnten nicht von Daylite geladen werden.",
-      },
-    });
-
-    expect(html).toContain(
-      "Die Daten konnten nicht von Daylite geladen werden.",
-    );
-    expect(html).toContain("Erneut laden");
-  });
-
-  it("renders daylite-backed project names instead of dummy projects", () => {
-    const html = renderGrid({
-      projectState: {
-        ...defaultState,
-        projects: [
-          {
-            self: "/v1/projects/3001",
-            name: "Live Daylite Projekt",
-            status: "in_progress",
-            keywords: [],
-          },
-        ],
-      },
-    });
-
-    expect(html).toContain("Live Daylite Projekt");
-    expect(html).not.toContain("Kundenportal");
-  });
-
-  it("shows empty state when no projects are loaded", () => {
+  it("renders no loaded projects section below the grid", () => {
     const html = renderGrid();
 
-    const tableIndex = html.indexOf("</table>");
-    const sectionLabelIndex = html.indexOf("Geladene Projekte");
-    const emptyStateIndex = html.indexOf("Keine Projekte gefunden");
-
-    expect(tableIndex).toBeGreaterThan(-1);
-    expect(sectionLabelIndex).toBeGreaterThan(tableIndex);
-    expect(emptyStateIndex).toBeGreaterThan(sectionLabelIndex);
-  });
-
-  it("renders project status and due date in loaded projects section", () => {
-    const html = renderGrid({
-      projectState: {
-        ...defaultState,
-        projects: [
-          {
-            self: "/v1/projects/3001",
-            name: "Live Daylite Projekt",
-            status: "in_progress",
-            keywords: [],
-            due: "2026-02-20T00:00:00.000Z",
-          },
-        ],
-      },
-    });
-
-    expect(html).toContain("In Arbeit");
-    expect(html).toContain("20.02.2026");
-  });
-
-  it("does not crash when a project record is missing self", () => {
-    const html = renderGrid({
-      projectState: {
-        ...defaultState,
-        projects: [
-          {
-            name: "Projekt Ohne Self",
-            status: "in_progress",
-          } as unknown as PlanningGridProjectsState["projects"][number],
-        ],
-      },
-    });
-
-    expect(html).toContain("Projekt Ohne Self");
-    expect(html).toContain("In Arbeit");
+    expect(html).not.toContain("Geladene Projekte");
+    expect(html).not.toContain("Keine Projekte gefunden");
   });
 
   it("renders daylite-backed employee names instead of dummy employee names", () => {
@@ -253,12 +162,13 @@ describe("planning grid assignment states", () => {
     setSystemTime(new Date(2026, 0, 28, 9, 0, 0));
   });
 
-  it("shows german loading state when assignments are loading", () => {
+  it("shows no loading text above the grid while assignments load", () => {
     const html = renderGrid({
       assignmentState: { ...defaultAssignmentState, isLoading: true },
     });
 
-    expect(html).toContain("Einsätze werden geladen...");
+    expect(html).not.toContain("Einsätze werden geladen...");
+    expect(html).not.toContain("werden geladen");
   });
 
   it("shows german error banner with retry when assignment fetch fails", () => {
@@ -336,7 +246,6 @@ describe("planning grid drag-and-drop wiring", () => {
     renderToStaticMarkup(
       <PlanningGridTable
         weekDays={getWeekDays(0)}
-        projectState={defaultState}
         employeeSettings={[]}
         hideNonPlannableEmployees={false}
         holidaysState={defaultHolidaysState}

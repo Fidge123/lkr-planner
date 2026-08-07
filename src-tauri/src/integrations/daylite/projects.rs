@@ -104,6 +104,7 @@ pub async fn daylite_list_projects(
 }
 
 const OVERDUE_CATEGORY: &str = "Überfällig";
+pub(crate) const FIXED_APPOINTMENT_CATEGORY: &str = "Termin FIX geplant";
 // The Daylite API has no multi-value operator for scalar fields, so the overdue
 // query pairs the category filter with each status as OR clauses to stay a
 // single call.
@@ -191,6 +192,12 @@ pub(super) async fn query_overdue_projects_core(
         .results
         .into_iter()
         .map(normalize_project_summary)
+        // The search filters on the overdue category, so every result carries it even
+        // though Daylite omits the field from these records.
+        .map(|project| DayliteProjectSummary {
+            category: Some(OVERDUE_CATEGORY.to_string()),
+            ..project
+        })
         .collect();
     results.sort_by_key(|project| extract_numeric_id(&project.reference));
     results.truncate(OVERDUE_DISPLAY_LIMIT);
@@ -377,16 +384,19 @@ pub(crate) async fn fetch_project_by_reference(
             DayliteHttpRequest::new(DayliteHttpMethod::Get, path),
         )
         .await?;
-        let mapped = map_daylite_project_summary(summary);
-        let resolved = ResolvedProject {
-            name: mapped.name,
-            status: project_status_to_string(&mapped.status).to_string(),
-            category: mapped.category,
-        };
-        Ok((resolved, tokens))
+        Ok((resolve_project(summary), tokens))
     })
     .await
     .ok()
+}
+
+fn resolve_project(summary: DayliteProjectSummaryDto) -> ResolvedProject {
+    let mapped = map_daylite_project_summary(summary);
+    ResolvedProject {
+        name: mapped.name,
+        status: project_status_to_string(&mapped.status).to_string(),
+        category: mapped.category,
+    }
 }
 
 fn project_status_to_string(status: &PlanningProjectStatus) -> &'static str {
@@ -404,8 +414,8 @@ fn project_status_to_string(status: &PlanningProjectStatus) -> &'static str {
 mod tests {
     use super::{
         list_projects_core, map_daylite_project_summary, map_project_status,
-        query_overdue_projects_core, search_projects_core, DayliteProjectSummaryDto,
-        PlanningProjectStatus,
+        query_overdue_projects_core, resolve_project, search_projects_core,
+        DayliteProjectSummaryDto, PlanningProjectStatus, FIXED_APPOINTMENT_CATEGORY,
     };
     use crate::integrations::daylite::client::DayliteApiClient;
     use crate::integrations::daylite::client::DayliteHttpMethod;
@@ -416,6 +426,34 @@ mod tests {
     use crate::integrations::daylite::test_support::{
         mock_client, mock_response, token_state, valid_token_state,
     };
+
+    #[test]
+    fn resolved_project_carries_the_category_alongside_name_and_status() {
+        let cases: &[(Option<&str>, Option<&str>)] = &[
+            (Some(FIXED_APPOINTMENT_CATEGORY), Some("Termin FIX geplant")),
+            (Some("Liefertermin bekannt"), Some("Liefertermin bekannt")),
+            (None, None),
+        ];
+
+        for (category, expected) in cases {
+            let resolved = resolve_project(DayliteProjectSummaryDto {
+                reference: "/v1/projects/3001".to_string(),
+                name: "Projekt Nord".to_string(),
+                status: Some("in_progress".to_string()),
+                category: category.map(str::to_string),
+                keywords: vec![],
+                due: None,
+                started: None,
+                completed: None,
+                create_date: None,
+                modify_date: None,
+            });
+
+            assert_eq!(resolved.name, "Projekt Nord");
+            assert_eq!(resolved.status, "in_progress");
+            assert_eq!(resolved.category.as_deref(), *expected);
+        }
+    }
 
     #[test]
     fn maps_project_summary_to_planning_project_record() {
@@ -684,10 +722,23 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn overdue_results_carry_the_overdue_category() {
+        let (client, _) = mock_client(vec![Ok(mock_response(
+            200,
+            r#"{"results":[{"self":"/v1/projects/3","name":"Drei"}],"next":null}"#,
+        ))]);
+
+        let (results, _) = query_overdue_projects_core(&client, valid_token_state())
+            .await
+            .expect("overdue query should succeed");
+
+        assert_eq!(results[0].category.as_deref(), Some("Überfällig"));
+    }
+
+    #[tokio::test]
     async fn query_overdue_projects_replays_vcr_cassette() {
-        // The cassette is produced by the live recording harness
-        // (`record_daylite_cassettes_from_live_api`), which needs real Daylite
-        // credentials. Skip instead of failing until it has been recorded.
+        // The cassette is produced by the live recording harness (`record_daylite_cassettes_from_live_api`), which needs real Daylite credentials.
+        // Skip instead of failing until it has been recorded.
         let cassette_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../tests/cassettes/daylite-overdue-projects.json");
         if !cassette_path.exists() {

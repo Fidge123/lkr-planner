@@ -86,6 +86,15 @@ The system SHALL retrieve Daylite categories with their colors for coloring proj
 - **THEN** the category yields no color
 - **AND** events of projects in that category fall back to the neutral color
 
+#### Scenario: Category colors for the assignment modal
+- **WHEN** the frontend requests the project category colors
+- **THEN** the name-to-color map is returned as a typed command result
+- **AND** a failure yields no colors rather than a user-facing error
+
+#### Scenario: Overdue results carry their category
+- **WHEN** overdue projects are queried
+- **THEN** each result carries the category `"Überfällig"` the query filtered on, even though Daylite omits the field from these minimal records
+
 #### Scenario: Inactive categories keep their color
 - **WHEN** a category has `is_active` set to false
 - **AND** an existing project still references that category

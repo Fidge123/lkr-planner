@@ -2,12 +2,27 @@ use super::super::types::{PendingEvent, RawVEvent};
 
 const DAYLITE_DESCRIPTION_PREFIX: &str = "daylite:";
 
+pub(crate) fn parse_daylite_reference(description: &str) -> Option<String> {
+    // Some calendar UIs prepend whitespace, a BOM (U+FEFF), or a zero-width space (U+200B).
+    let first_line = description
+        .lines()
+        .next()
+        .unwrap_or("")
+        .trim_matches(|c: char| c.is_whitespace() || c == '\u{feff}' || c == '\u{200b}');
+
+    let raw_ref = first_line.strip_prefix(DAYLITE_DESCRIPTION_PREFIX)?.trim();
+    if raw_ref.is_empty() {
+        None
+    } else {
+        Some(raw_ref.to_string())
+    }
+}
+
 pub(crate) fn classify_event(event: &RawVEvent) -> PendingEvent {
     let date = event.dtstart.clone();
 
     let uid = if event.uid.is_empty() {
-        // Synthesise a stable-ish UID from event content. Summary is sanitized to alphanumeric
-        // and hyphens only, so the UID is safe to embed in keys or URLs.
+        // Synthesise a stable-ish UID from event content. Summary is sanitized to alphanumeric and hyphens only, so the UID is safe to embed in keys or URLs.
         let safe: String = event
             .summary
             .chars()
@@ -19,25 +34,7 @@ pub(crate) fn classify_event(event: &RawVEvent) -> PendingEvent {
         event.uid.clone()
     };
 
-    // Strip ASCII whitespace, BOM (U+FEFF), and zero-width space (U+200B) that some
-    // calendar UIs prepend to the description field.
-    let first_line = event
-        .description
-        .lines()
-        .next()
-        .unwrap_or("")
-        .trim_matches(|c: char| c.is_whitespace() || c == '\u{feff}' || c == '\u{200b}');
-
-    let project_ref = if let Some(stripped) = first_line.strip_prefix(DAYLITE_DESCRIPTION_PREFIX) {
-        let raw_ref = stripped.trim();
-        if raw_ref.is_empty() {
-            None
-        } else {
-            Some(raw_ref.to_string())
-        }
-    } else {
-        None
-    };
+    let project_ref = parse_daylite_reference(&event.description);
 
     PendingEvent {
         uid,
@@ -62,6 +59,32 @@ mod tests {
             description: description.to_string(),
             dtstart: "2026-01-26".to_string(),
             ..Default::default()
+        }
+    }
+
+    #[test]
+    fn parses_the_daylite_reference_out_of_a_bare_description() {
+        let cases: &[(&str, Option<&str>, &str)] = &[
+            (
+                "daylite:/v1/projects/3001",
+                Some("/v1/projects/3001"),
+                "plain daylite reference",
+            ),
+            (
+                "daylite:/v1/projects/4001\nZusätzliche Notizen hier",
+                Some("/v1/projects/4001"),
+                "only the first line is read",
+            ),
+            ("Bitte Auto abholen", None, "unrelated description is bare"),
+            ("", None, "empty description is bare"),
+        ];
+
+        for (description, expected, label) in cases {
+            assert_eq!(
+                parse_daylite_reference(description).as_deref(),
+                *expected,
+                "case: {label}"
+            );
         }
     }
 

@@ -6,7 +6,13 @@ import {
   it,
   setSystemTime,
 } from "bun:test";
-import { getWeekDays, getWeekStart, isToday, toLocalISODate } from "./util";
+import {
+  getWeekDays,
+  getWeekStart,
+  isToday,
+  shiftWeekDays,
+  toLocalISODate,
+} from "./util";
 
 describe("util", () => {
   beforeAll(() => {
@@ -132,6 +138,29 @@ describe("util", () => {
           }
         }
       }
+    });
+  });
+
+  describe("shiftWeekDays", () => {
+    it("moves every day one week forward", () => {
+      const shifted = shiftWeekDays(getWeekDays(0), 1);
+      expect(shifted.map(toLocalISODate)).toEqual(
+        getWeekDays(1).map(toLocalISODate),
+      );
+    });
+
+    it("moves every day one week back", () => {
+      const shifted = shiftWeekDays(getWeekDays(0), -1);
+      expect(shifted.map(toLocalISODate)).toEqual(
+        getWeekDays(-1).map(toLocalISODate),
+      );
+    });
+
+    it("keeps the days at local midnight across a DST switch", () => {
+      const beforeDst = [new Date(2026, 2, 23), new Date(2026, 2, 27)];
+      const shifted = shiftWeekDays(beforeDst, 1);
+      expect(shifted.map(toLocalISODate)).toEqual(["2026-03-30", "2026-04-03"]);
+      expect(shifted.every((day) => day.getHours() === 0)).toBe(true);
     });
   });
 

@@ -15,6 +15,13 @@ The user confirmed the category source is the Daylite project the event is linke
 - Make the guard authoritative: derive the current project link from the event itself (via CalDAV), not from a client-supplied parameter.
 - Give the user an immediate, non-error-feeling UI cue (disabled controls) in the common case, with the backend guard as the enforcement backstop.
 
+### The protected unit is the day, not the event
+
+`update_assignment` and `delete_assignment` are rejected outright for a protected event, but `move_assignment` is only rejected when the target date differs from the event's current date, and `reorder_assignment` is not guarded at all.
+Reassigning a fixed appointment to a colleague or resequencing it within its day does not break the commitment made outside the app; changing its day or removing it does.
+Alternative considered: guard every write path unconditionally.
+Rejected because it would freeze a fixed appointment against the ordinary planning the grid exists for, including the day re-slotting that any neighbouring write triggers.
+
 **Non-Goals:**
 - No change to `create_assignment` — creating new assignments is not restricted by this change.
 - No configurable/multi-category protection list — a single fixed category string for this change (YAGNI; extend later if more categories need protection).
@@ -37,10 +44,12 @@ Change its return type from `(name, status)` to include `category`, updating the
 Alternative considered: add a separate `fetch_project_category_by_reference` function.
 Rejected — it would duplicate the same HTTP call `fetch_project_by_reference` already makes for the same project.
 
-### Frontend disables affordances using the already-cached project category
-The assignment modal already resolves the linked project via the Daylite project cache (`daylite-projects.ts`) for status/color; that cached `PlanningProjectRecord` already includes `category`.
-Disable edit/delete controls when `category === "Termin FIX geplant"`, with a German explanatory notice.
-This is advisory only — the backend guard is the actual enforcement, since the cache could be stale or the category could differ from what the backend independently determines.
+### Frontend disables affordances using the category the backend already resolved
+`resolve_event` looks the linked project up per event and derives `category_color` from its category, so the category itself travels to the frontend as a new `project_category` field on `CalendarCellEvent`.
+Disable edit/delete controls when it equals `"Termin FIX geplant"`, with a German explanatory notice.
+Alternative considered: look the category up in a frontend cache of all Daylite projects.
+Rejected because that cache no longer exists (the planning view rework removed `daylite-projects.ts`), and a list-all lookup could miss a project the server paginated away, silently disabling the notice.
+This is advisory only — the backend guard is the actual enforcement, since the event data could be stale relative to what the backend independently determines per write.
 
 ### Error convention
 Reuse the "Absence calendar is never written" pattern: reject before the network write, return a German message, e.g. `"Dieser Termin ist als 'Termin FIX geplant' gesperrt und kann nicht geändert oder gelöscht werden."`
@@ -48,7 +57,7 @@ Reuse the "Absence calendar is never written" pattern: reject before the network
 ## Risks / Trade-offs
 
 - [Guard adds a CalDAV GET before every update/delete] → Accepted trade-off: correctness (cannot be bypassed) outweighs one extra round-trip on a low-frequency write path; the recently-proposed CalDAV event cache (see `caldav-caching-improvements`) may serve this GET from cache once implemented.
-- [Frontend cache and backend guard could disagree if the category changes between page load and save] → Mitigate by making the backend guard authoritative and always re-derived fresh; the frontend disabled-state is just a UX hint.
+- [The event's resolved category and the backend guard could disagree if the category changes between the week load and the save] → Mitigate by making the backend guard authoritative and always re-derived fresh; the frontend disabled-state is just a UX hint.
 - [Deleting a protected event that no longer resolves its project reference (e.g. project renamed/removed in Daylite)] → If the project lookup fails, treat as unprotected (fail open) so a broken Daylite link does not permanently lock an event; the user sees very obvious warnings so any changes are made knowing the risks.
 
 ## Migration Plan

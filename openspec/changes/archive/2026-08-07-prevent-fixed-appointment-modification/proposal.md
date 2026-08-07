@@ -8,9 +8,12 @@ These must not be accidentally moved, retitled, or deleted from the planning gri
 - Add a backend guard that rejects `update_assignment` and `delete_assignment` for any event linked to a Daylite project whose `category` is `"Termin FIX geplant"`, before the CalDAV write is issued.
 - The guard determines the event's current linked project by fetching the event via its `href` and parsing the `daylite:/<path>` reference from its DESCRIPTION, then looking up that project's category via the Daylite API — it does not trust a client-supplied project reference, so it cannot be bypassed by the frontend.
 - Extend the Daylite single-project lookup to also return `category` (it currently discards it).
-- Disable the edit and delete affordances in the assignment modal when the currently loaded assignment's project category is `"Termin FIX geplant"` (using the category already available in the frontend's Daylite project cache), and show a German explanation instead of the usual controls.
+- Carry the resolved project's category to the frontend as `project_category` on `CalendarCellEvent`, alongside the category color it already derives from it.
+- Disable the edit and delete affordances in the assignment modal when the loaded assignment's `projectCategory` is `"Termin FIX geplant"`, and show a German explanation instead of the usual controls.
 - If a write is attempted anyway (e.g. a stale UI state) and the backend rejects it, show the German error message returned by the backend.
+- Reject `move_assignment` only when the drop lands on a different day: the committed part of a fixed appointment is its date, so reassigning it to another employee or reordering it within its own day stays allowed.
 - `create_assignment` is unaffected — this only protects existing fixed appointments from being changed or removed.
+- Day re-slotting is unaffected: writing any assignment re-slots the whole day, which rewrites a protected event's DTSTART and DTEND without moving it off its day.
 
 ## Capabilities
 
@@ -19,6 +22,7 @@ These must not be accidentally moved, retitled, or deleted from the planning gri
 
 ### Modified Capabilities
 - `ical-assignment-sync`: "Update assignment in CalDAV" and "Delete assignment from CalDAV" requirements gain a precondition that the operation is rejected when the target event is protected.
+- `appointment-drag-drop`: "Drop targets for rescheduling and reassignment" gains a precondition that a drop moving a protected event to another day is rejected, while a same-day drop on another employee stays allowed.
 - `assignment-modal-crud`: "Edit existing assignment" and "Delete assignment" requirements gain a precondition that edit/delete affordances are disabled for protected assignments, with a German explanation shown instead.
 
 ## Impact

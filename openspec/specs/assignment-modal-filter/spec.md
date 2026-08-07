@@ -28,6 +28,24 @@ The result list starts empty; default content for the empty state is supplied by
 - **THEN** filtered results are hidden
 - **AND** the result list returns to its empty default state
 
+### Requirement: Category color on result items
+The system SHALL show a color dot on every item of the result list, filtered results and default suggestions alike, using the color of the project's Daylite category.
+Each item SHALL render its name on a single line, collapsing the hard line breaks Daylite project names carry.
+
+#### Scenario: Result of a project with a colored category
+- **WHEN** a result list item belongs to a project whose Daylite category has a color
+- **THEN** the item shows a dot in that category color
+- **AND** the dot keeps that color while the item is the highlighted one
+
+#### Scenario: Result without a category color
+- **WHEN** a result list item belongs to a project without a category, or to a category without a color
+- **THEN** the item shows a neutral dot
+
+#### Scenario: Category colors unavailable
+- **WHEN** the category colors cannot be loaded from Daylite
+- **THEN** every item shows a neutral dot
+- **AND** no error message is shown
+
 ### Requirement: Keyboard navigation
 The system SHALL support keyboard selection over whichever result list is currently displayed (filtered results or the empty-state default content).
 
