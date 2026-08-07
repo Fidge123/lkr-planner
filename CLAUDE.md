@@ -14,9 +14,12 @@ This is a desktop application which provides a planning view and integrates with
 - Display user-friendly error messages in German
 - Use red/green TDD
 - YAGNI (You Ain't Gonna Need It): Avoid code that is not required for the current scope
-- Comments are a code smell: only write a comment when it prevents future errors from something a skilled developer cannot see in the code (external API quirks, cross-file invariants, concurrency hazards); never narrate, restate, or reference history
-- Keep a comment terse, ideally one short line; state the fact in fewer words rather than wrapping it
-- Break a comment across lines only when it carries more than one fact, and break at sentence ends or semantic boundaries, never mid-sentence
+- Comments are a code smell
+  - Only write a comment when it prevents future errors a skilled developer would be surprised by
+  - Never narrate or restate the code, never reference previous changes or project history
+  - Keep comments terse, ideally one short line; state the fact in fewer words rather than wrapping it
+  - Break a comment across lines only when it carries more than one fact, and break at sentence ends or semantic boundaries, never mid-sentence
+  - Proactive improve or remove comments that do not follow these conventions
 - Naming:
   - **Files**: kebab-case
   - **Components**: PascalCase function components
