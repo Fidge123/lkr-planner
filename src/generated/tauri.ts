@@ -33,6 +33,11 @@ export const commands = {
 	planradarGetProjectStatus: (projectId: string) => typedError<PlanradarProject, PlanradarApiError>(__TAURI_INVOKE("planradar_get_project_status", { projectId })),
 	planradarListProjects: (input: PlanradarListProjectsInput) => typedError<PlanradarProject[], PlanradarApiError>(__TAURI_INVOKE("planradar_list_projects", { input })),
 	planradarCreateProject: (request: PlanradarCreateProjectRequest) => typedError<string, PlanradarApiError>(__TAURI_INVOKE("planradar_create_project", { request })),
+	/**
+	 *  Starts a server-side copy of `project_id` and returns the **job ID**, not a project ID:
+	 *  Planradar performs the copy asynchronously and answers `202 Accepted` with a job handle.
+	 *  The copied project only exists once that job finishes.
+	 */
 	planradarCopyProject: (projectId: string, options: PlanradarCopyProjectOptions) => typedError<string, PlanradarApiError>(__TAURI_INVOKE("planradar_copy_project", { projectId, options })),
 	planradarReactivateProject: (projectId: string) => typedError<null, PlanradarApiError>(__TAURI_INVOKE("planradar_reactivate_project", { projectId })),
 	createAssignment: (input: CreateAssignmentInput) => typedError<string, string>(__TAURI_INVOKE("create_assignment", { input })),
