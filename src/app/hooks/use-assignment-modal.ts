@@ -91,10 +91,9 @@ export function useAssignmentModal({
     assignment?.title,
   ]);
 
-  // A callback ref, not an effect: the dialog element is remounted whenever the modal
-  // swaps to the delete or unsaved-changes dialog and back, so an effect keyed on `isOpen`
-  // would leave the listener detached after the swap. requestClose is read through a ref
-  // because the listener outlives the render that attached it.
+  // A callback ref, not an effect: the dialog element is remounted whenever the modal swaps to the delete or unsaved-changes dialog and back,
+  // so an effect keyed on `isOpen` would leave the listener detached after the swap.
+  // requestClose is read through a ref because the listener outlives the render that attached it.
   const requestCloseRef = useRef<() => void>(() => {});
   const dialogRef = useCallback((dialog: HTMLDialogElement | null) => {
     if (!dialog) return;

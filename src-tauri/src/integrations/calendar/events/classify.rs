@@ -3,8 +3,7 @@ use super::super::types::{PendingEvent, RawVEvent};
 const DAYLITE_DESCRIPTION_PREFIX: &str = "daylite:";
 
 pub(crate) fn parse_daylite_reference(description: &str) -> Option<String> {
-    // Strip ASCII whitespace, BOM (U+FEFF), and zero-width space (U+200B) that some
-    // calendar UIs prepend to the description field.
+    // Strip ASCII whitespace, BOM (U+FEFF), and zero-width space (U+200B) that some calendar UIs prepend to the description field.
     let first_line = description
         .lines()
         .next()
@@ -23,8 +22,7 @@ pub(crate) fn classify_event(event: &RawVEvent) -> PendingEvent {
     let date = event.dtstart.clone();
 
     let uid = if event.uid.is_empty() {
-        // Synthesise a stable-ish UID from event content. Summary is sanitized to alphanumeric
-        // and hyphens only, so the UID is safe to embed in keys or URLs.
+        // Synthesise a stable-ish UID from event content. Summary is sanitized to alphanumeric and hyphens only, so the UID is safe to embed in keys or URLs.
         let safe: String = event
             .summary
             .chars()

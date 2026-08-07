@@ -302,18 +302,15 @@ export function useAppointmentDrag({
 }: UseAppointmentDragArgs): AppointmentDragState {
   const [activePayload, setActivePayload] =
     useState<AppointmentDragPayload | null>(null);
-  // Source of truth for the drop: dnd-kit's `active.data` is a mutable ref tied to the
-  // registered draggable, which unmounts when edge-hover navigation swaps the week, so
-  // the payload captured at drag start must be used instead of re-reading it on drop.
+  // Source of truth for the drop: dnd-kit's `active.data` is a mutable ref which unmounts when pulled to another week, so data captured at drag start must be used.
   const activePayloadRef = useRef<AppointmentDragPayload | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [dropPreview, setDropPreview] = useState<DropPreview | null>(null);
   const [reconciliation, setReconciliation] =
     useState<MoveReconciliation | null>(null);
 
-  // dnd-kit's `delta` is `scrollAdjustedTranslate`, i.e. the translation plus the scrolling
-  // that happened since the drag started, while card rects are viewport-relative. Deriving
-  // the cursor from it would count auto-scroll twice, so the real pointer is tracked instead.
+  // dnd-kit's `delta` is `scrollAdjustedTranslate`, while card rects are viewport-relative.
+  // Deriving the cursor from it would count auto-scroll twice, so the real pointer is tracked instead.
   const pointerRef = useRef<{ x: number; y: number } | null>(null);
   useEffect(() => {
     const track = (event: PointerEvent) => {
@@ -330,8 +327,7 @@ export function useAppointmentDrag({
   const invalidateWeeksContainingRef = useRef(invalidateWeeksContaining);
   invalidateWeeksContainingRef.current = invalidateWeeksContaining;
 
-  // Held for the reconciliation path, which reloads only once the user resolves
-  // the dialog, long after the drop cleared activePayloadRef.
+  // Held for the reconciliation path, which reloads only once the user resolves the dialog, long after the drop cleared activePayloadRef.
   const droppedUidRef = useRef<string | null>(null);
 
   const navigatorRef = useRef<EdgeHoverNavigator | null>(null);
