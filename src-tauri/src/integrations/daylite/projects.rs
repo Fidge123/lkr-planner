@@ -192,6 +192,12 @@ pub(super) async fn query_overdue_projects_core(
         .results
         .into_iter()
         .map(normalize_project_summary)
+        // The search filters on the overdue category, so every result carries it even
+        // though Daylite omits the field from these records.
+        .map(|project| DayliteProjectSummary {
+            category: Some(OVERDUE_CATEGORY.to_string()),
+            ..project
+        })
         .collect();
     results.sort_by_key(|project| extract_numeric_id(&project.reference));
     results.truncate(OVERDUE_DISPLAY_LIMIT);
@@ -713,6 +719,20 @@ mod tests {
                 "/v1/projects/50"
             ]
         );
+    }
+
+    #[tokio::test]
+    async fn overdue_results_carry_the_overdue_category() {
+        let (client, _) = mock_client(vec![Ok(mock_response(
+            200,
+            r#"{"results":[{"self":"/v1/projects/3","name":"Drei"}],"next":null}"#,
+        ))]);
+
+        let (results, _) = query_overdue_projects_core(&client, valid_token_state())
+            .await
+            .expect("overdue query should succeed");
+
+        assert_eq!(results[0].category.as_deref(), Some("Überfällig"));
     }
 
     #[tokio::test]

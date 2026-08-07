@@ -1,14 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import "./app.css";
 import { ChevronLeft, ChevronRight, Settings } from "lucide-react";
+import { DataLoadingIndicator } from "./app/components/data-loading-indicator";
 import { EmployeeIcalDialog } from "./app/components/employee-ical-dialog";
 import { SettingsDialog } from "./app/components/settings/settings-dialog";
 import { usePlanningAssignments } from "./app/hooks/use-planning-assignments";
+import { usePlanningEmployees } from "./app/hooks/use-planning-employees";
+import { useReloadDataMenu } from "./app/hooks/use-reload-data-menu";
 import { useZepCalendars } from "./app/hooks/use-zep-calendars";
 import { PlanningGrid } from "./app/page";
 import { getWeekStart } from "./app/util";
 import type { EmployeeSetting, PlanningContactRecord } from "./generated/tauri";
 import { commands } from "./generated/tauri";
+import { resetProjectCategoryColors } from "./services/daylite-categories";
 import { loadDayliteContacts } from "./services/daylite-contacts";
 
 function App() {
@@ -16,6 +20,7 @@ function App() {
   const [showWeekend, setShowWeekend] = useState(false);
   const weekStart = getWeekStart(weekOffset, showWeekend);
   const planningAssignmentsState = usePlanningAssignments(weekStart);
+  const planningEmployeesState = usePlanningEmployees();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [icalDialogEmployee, setIcalDialogEmployee] =
     useState<PlanningContactRecord | null>(null);
@@ -81,6 +86,19 @@ function App() {
     setWeekOffset((prev) => prev + direction);
   }, []);
 
+  const reloadData = useCallback(() => {
+    resetProjectCategoryColors();
+    void loadEmployeeSettings();
+    planningEmployeesState.reloadEmployees();
+    planningAssignmentsState.reloadAssignments();
+  }, [
+    loadEmployeeSettings,
+    planningEmployeesState.reloadEmployees,
+    planningAssignmentsState.reloadAssignments,
+  ]);
+
+  useReloadDataMenu(reloadData);
+
   const handleSettingsSaved = useCallback(() => {
     void loadEmployeeSettings();
     planningAssignmentsState.reloadAssignments();
@@ -99,6 +117,12 @@ function App() {
           >
             <Settings className="size-6 text-base-content/50" />
           </button>
+          <DataLoadingIndicator
+            isLoading={
+              planningAssignmentsState.isLoading ||
+              planningEmployeesState.isLoading
+            }
+          />
         </div>
         <nav className="navbar-end gap-2">
           <button
@@ -140,6 +164,7 @@ function App() {
           weekOffset={weekOffset}
           showWeekend={showWeekend}
           assignmentState={planningAssignmentsState}
+          employeeState={planningEmployeesState}
           employeeSettings={employeeSettings}
           hideNonPlannableEmployees={hideNonPlannableEmployees}
           onOpenIcalDialog={handleOpenIcalDialog}

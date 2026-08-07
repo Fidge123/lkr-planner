@@ -1,7 +1,7 @@
 ## 1. Confirm the modal actually detects protection
 
 - [ ] 1.1 Run the app against real data and confirm the German notice and the disabled controls appear for an assignment linked to a "Termin FIX geplant" project
-- [ ] 1.2 If they do not, establish whether `daylite_list_projects` returns the project at all, and fix the lookup before building the unlock on top of it
+- [ ] 1.2 If they do not, establish whether the event's `projectCategory` arrives populated, and fix the lookup before building the unlock on top of it
 
 ## 2. Backend override
 

@@ -21,7 +21,7 @@
 ## 4. Frontend disabled state
 
 - [x] 4.1 Write failing `bun test`s for the assignment modal: save/delete disabled and German notice shown when the loaded assignment's project category is `"Termin FIX geplant"`
-- [x] 4.2 Update `src/app/components/assignment-modal.tsx` to look up the project's category from the Daylite project cache and disable save/delete with a notice, satisfying the tests
+- [x] 4.2 Carry the resolved category to the frontend as `project_category` on `CalendarCellEvent` and update `src/app/components/assignment-modal.tsx` to disable save/delete with a notice, satisfying the tests
 - [x] 4.3 Add `bun test` coverage for surfacing the backend's German rejection message if a stale edit/delete is submitted anyway
 
 ## 5. Protect the day rather than the event

@@ -3,7 +3,6 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type {
   CalendarCellEvent,
   DayliteProjectSummary,
-  PlanningProjectRecord,
 } from "../../generated/tauri";
 import { AssignmentModal } from "./assignment-modal";
 import {
@@ -16,7 +15,11 @@ import {
   resolveWriteIntent,
 } from "./assignment-modal-logic";
 import { DeleteConfirmDialog } from "./delete-confirm-dialog";
-import { ProjectResultList, SuggestionEmptyState } from "./project-result-list";
+import {
+  ProjectResultList,
+  ProjectResultPlaceholder,
+  SuggestionEmptyState,
+} from "./project-result-list";
 
 mock.module("../../generated/tauri", () => ({
   commands: {
@@ -24,29 +27,6 @@ mock.module("../../generated/tauri", () => ({
     updateAssignment: mock(() => Promise.resolve({ status: "ok", data: null })),
     deleteAssignment: mock(() => Promise.resolve({ status: "ok", data: null })),
   },
-}));
-
-const fixedProject: PlanningProjectRecord = {
-  self: "/v1/projects/9",
-  name: "Projekt Fix",
-  status: "in_progress",
-  category: "Termin FIX geplant",
-};
-
-const plannableProject: PlanningProjectRecord = {
-  self: "/v1/projects/1",
-  name: "Projekt Alpha",
-  status: "in_progress",
-  category: "Liefertermin bekannt",
-};
-
-mock.module("../hooks/use-planning-projects", () => ({
-  usePlanningProjects: () => ({
-    projects: [fixedProject, plannableProject],
-    isLoading: false,
-    errorMessage: null,
-    reloadProjects: () => {},
-  }),
 }));
 
 const baseProps = {
@@ -90,6 +70,14 @@ describe("AssignmentModal", () => {
     expect(html).not.toContain('id="assignment-project-results"');
   });
 
+  it("reserves the suggestion rows until the suggestions are loaded", () => {
+    const html = renderToStaticMarkup(
+      <AssignmentModal {...baseProps} isOpen assignment={null} />,
+    );
+
+    expect(html.match(/skeleton/g)).toHaveLength(5);
+  });
+
   it("edit mode: shows the selected project and the delete button", () => {
     const existingAssignment: CalendarCellEvent = {
       uid: "uid-1",
@@ -97,6 +85,7 @@ describe("AssignmentModal", () => {
       title: "Projekt Alpha",
       projectStatus: "in_progress",
       categoryColor: null,
+      projectCategory: null,
       projectRef: "/v1/projects/1",
       date: "2026-05-06",
       startTime: "08:00",
@@ -125,6 +114,7 @@ describe("AssignmentModal", () => {
       title: "Projekt Fix",
       projectStatus: "in_progress",
       categoryColor: null,
+      projectCategory: "Termin FIX geplant",
       projectRef: "/v1/projects/9",
       date: "2026-05-06",
       startTime: "08:00",
@@ -150,6 +140,7 @@ describe("AssignmentModal", () => {
       title: "Projekt Alpha",
       projectStatus: "in_progress",
       categoryColor: null,
+      projectCategory: null,
       projectRef: "/v1/projects/1",
       date: "2026-05-06",
       startTime: "08:00",
@@ -189,6 +180,7 @@ describe("AssignmentModal", () => {
       title: "Projekt Beta",
       projectStatus: "new_status",
       categoryColor: null,
+      projectCategory: null,
       projectRef: "/v1/projects/2",
       date: "2026-05-06",
       startTime: null,
@@ -258,6 +250,70 @@ describe("ProjectResultList", () => {
     expect(html).toContain('aria-current="true"');
     expect(html).toContain('aria-current="false"');
     expect(html).toContain("bg-primary");
+  });
+
+  it("marks each result with a dot in its daylite category color", () => {
+    const html = renderToStaticMarkup(
+      <ProjectResultList
+        projects={[
+          { ...project("Projekt Nord", "/v1/projects/10"), category: "Bau" },
+          {
+            ...project("Projekt Süd", "/v1/projects/11"),
+            category: "Ohne Farbe",
+          },
+        ]}
+        categoryColors={{ Bau: "#8bc34a" }}
+        highlightedIndex={-1}
+        onSelect={() => {}}
+      />,
+    );
+
+    expect(html).toContain("background-color:#8bc34a");
+    expect(html.match(/rounded-full/g)).toHaveLength(2);
+    expect(html).toContain("bg-base-content/30");
+  });
+
+  it("keeps the category dot colored on the selected row", () => {
+    const html = renderToStaticMarkup(
+      <ProjectResultList
+        projects={[
+          { ...project("Projekt Nord", "/v1/projects/10"), category: "Bau" },
+        ]}
+        categoryColors={{ Bau: "#8bc34a" }}
+        highlightedIndex={0}
+        onSelect={() => {}}
+      />,
+    );
+
+    expect(html).toContain("bg-primary text-primary-content");
+    expect(html).toContain("background-color:#8bc34a");
+  });
+
+  it("reserves rows of the same height as the loaded results", () => {
+    const placeholder = renderToStaticMarkup(<ProjectResultPlaceholder />);
+    const loaded = renderToStaticMarkup(
+      <ProjectResultList
+        projects={[project("Projekt Nord", "/v1/projects/10")]}
+        highlightedIndex={-1}
+        onSelect={() => {}}
+      />,
+    );
+
+    expect(placeholder.match(/h-8/g)).toHaveLength(5);
+    expect(loaded).toContain("h-8");
+  });
+
+  it("renders a project name with hard line breaks as a single line", () => {
+    const html = renderToStaticMarkup(
+      <ProjectResultList
+        projects={[project("DARAMIC LLC,\n Norderstedt", "/v1/projects/10")]}
+        highlightedIndex={-1}
+        onSelect={() => {}}
+      />,
+    );
+
+    expect(html).toContain("DARAMIC LLC, Norderstedt");
+    expect(html).toContain("truncate");
   });
 });
 
@@ -379,18 +435,16 @@ describe("resolveSaveAction", () => {
 });
 
 describe("isProtectedAssignment", () => {
-  const projects = [fixedProject, plannableProject];
-
   it("protects an assignment whose project is a fixed appointment", () => {
-    expect(isProtectedAssignment("/v1/projects/9", projects)).toBe(true);
+    expect(isProtectedAssignment("Termin FIX geplant")).toBe(true);
   });
 
   it("leaves an assignment of any other project category plannable", () => {
-    expect(isProtectedAssignment("/v1/projects/1", projects)).toBe(false);
+    expect(isProtectedAssignment("Liefertermin bekannt")).toBe(false);
   });
 
-  it("leaves an assignment plannable while its project is unknown", () => {
-    expect(isProtectedAssignment("/v1/projects/9", [])).toBe(false);
+  it("leaves an assignment without a resolved category plannable", () => {
+    expect(isProtectedAssignment(null)).toBe(false);
   });
 });
 

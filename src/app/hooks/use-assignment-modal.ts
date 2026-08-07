@@ -17,7 +17,7 @@ import {
 import type { ModalSaveAction } from "../next-day-quick-add";
 import { useAssignmentDefaultSuggestions } from "./use-assignment-default-suggestions";
 import { useAssignmentProjectSearch } from "./use-assignment-project-search";
-import { usePlanningProjects } from "./use-planning-projects";
+import { useProjectCategoryColors } from "./use-project-category-colors";
 
 const missingHrefMessage =
   "Dieser Einsatz kann nicht bearbeitet werden, da er keine Kalender-Adresse hat. Bitte die Ansicht neu laden.";
@@ -42,6 +42,9 @@ export function useAssignmentModal({
   const [selectedProjectName, setSelectedProjectName] = useState<string>(
     assignment?.title ?? "",
   );
+  const [selectedProjectCategory, setSelectedProjectCategory] = useState<
+    string | null
+  >(null);
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(
@@ -53,9 +56,8 @@ export function useAssignmentModal({
   const [isDirty, setIsDirty] = useState(false);
   const filterInputRef = useRef<HTMLInputElement>(null);
 
-  const { projects } = usePlanningProjects();
   const isProtected =
-    isEditMode && isProtectedAssignment(assignment.projectRef, projects);
+    isEditMode && isProtectedAssignment(assignment.projectCategory);
 
   const { results, errorMessage: searchError } =
     useAssignmentProjectSearch(filter);
@@ -66,6 +68,7 @@ export function useAssignmentModal({
     suggestions,
     results,
   );
+  const categoryColors = useProjectCategoryColors(isOpen);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -75,6 +78,7 @@ export function useAssignmentModal({
     setShowUnsavedConfirm(initialShowUnsavedConfirm);
     setSelectedProjectRef(assignment?.projectRef ?? "");
     setSelectedProjectName(assignment?.title ?? "");
+    setSelectedProjectCategory(null);
     setFilter("");
     setHighlightedIndex(-1);
     setIsDirty(false);
@@ -115,6 +119,7 @@ export function useAssignmentModal({
   const selectProject = (project: DayliteProjectSummary) => {
     setSelectedProjectRef(project.self);
     setSelectedProjectName(project.name);
+    setSelectedProjectCategory(project.category ?? null);
     setIsDirty(true);
     setFilter("");
     setHighlightedIndex(-1);
@@ -194,6 +199,7 @@ export function useAssignmentModal({
       recordLastAssignedProject({
         self: selectedProjectRef,
         name: projectName,
+        category: selectedProjectCategory,
       });
     }
     onSave(
@@ -226,6 +232,7 @@ export function useAssignmentModal({
     filter,
     highlightedIndex,
     displayedProjects,
+    categoryColors,
     selectedProjectRef,
     selectedProjectName,
     isSaving,
@@ -233,6 +240,7 @@ export function useAssignmentModal({
     searchError,
     suggestionsLoaded,
     suggestionCount: suggestions.length,
+    showSuggestionPlaceholder: filter.length === 0 && !suggestionsLoaded,
     showDeleteConfirm,
     showUnsavedConfirm,
     requestClose,
