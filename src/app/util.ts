@@ -17,6 +17,17 @@ export function getWeekDays(weekOffset: number, showWeekend = false) {
   );
 }
 
+export function shiftWeekDays(days: Date[], weekOffset: number): Date[] {
+  return days.map(
+    (day) =>
+      new Date(
+        day.getFullYear(),
+        day.getMonth(),
+        day.getDate() + weekOffset * 7,
+      ),
+  );
+}
+
 export function isToday(day: Date) {
   const today = new Date();
   return day.toDateString() === today.toDateString();
