@@ -389,10 +389,6 @@ describe("isProtectedAssignment", () => {
     expect(isProtectedAssignment("/v1/projects/1", projects)).toBe(false);
   });
 
-  it("protects a bare event, which was created outside the planner", () => {
-    expect(isProtectedAssignment(null, projects)).toBe(true);
-  });
-
   it("leaves an assignment plannable while its project is unknown", () => {
     expect(isProtectedAssignment("/v1/projects/9", [])).toBe(false);
   });

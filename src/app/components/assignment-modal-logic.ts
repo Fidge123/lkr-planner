@@ -15,7 +15,6 @@ export function isProtectedAssignment(
   projectRef: string | null | undefined,
   projects: PlanningProjectRecord[],
 ): boolean {
-  if (!projectRef) return true;
   const project = projects.find((p) => p.self === projectRef);
   return project?.category === fixedAppointmentCategory;
 }
