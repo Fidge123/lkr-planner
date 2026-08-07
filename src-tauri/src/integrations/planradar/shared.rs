@@ -3,8 +3,6 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
-/// Keychain coordinates for the Planradar API token, mirroring the Daylite convention
-/// (`lkr-planner-daylite` / `LKR Planner Daylite Token`).
 pub(super) const PLANRADAR_KEYCHAIN_SERVICE: &str = "lkr-planner-planradar";
 pub(super) const PLANRADAR_KEYCHAIN_USERNAME: &str = "LKR Planner Planradar Token";
 
@@ -48,17 +46,14 @@ pub enum PlanradarApiErrorCode {
     Timeout,
 }
 
-/// Resolved, non-secret Planradar configuration (base URL plus Customer ID path segment).
-/// The API token is loaded separately from the keychain via [`load_api_token`].
+/// Non-secret configuration only; the API token lives in the keychain.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct PlanradarConfig {
     pub base_url: String,
     pub customer_id: String,
 }
 
-/// Normalizes the configured Planradar base URL to the scheme+host root the client expects.
-/// Request paths already carry the `/api/v1/...` prefix, so a base URL that the user pasted
-/// with a trailing `/api` (or `/`) is trimmed here to avoid building a doubled `/api/api/v1/...`.
+/// Request paths already carry `/api/v1/...`, so a pasted trailing `/api` is trimmed off here.
 pub(super) fn normalize_base_url(base_url: &str) -> Result<String, PlanradarApiError> {
     let trimmed = base_url.trim().trim_end_matches('/');
     let trimmed = trimmed.strip_suffix("/api").unwrap_or(trimmed);
@@ -74,13 +69,8 @@ pub(super) fn normalize_base_url(base_url: &str) -> Result<String, PlanradarApiE
     Ok(trimmed.to_string())
 }
 
-/// Validates a value that is interpolated into a request path (Customer ID, project ID).
-///
-/// Path segments are concatenated into the URL before parsing, and `Url::parse` resolves dot
-/// segments, so an unchecked value such as `../../9999/projects/5` would escape the configured
-/// customer scope while still carrying the account token. Planradar identifiers are numeric (or
-/// at most alphanumeric with dashes), so anything outside that set is rejected outright rather
-/// than escaped.
+/// `Url::parse` resolves dot segments, so an unvalidated `../../9999/projects/5` would escape the
+/// configured customer scope while still carrying the account token.
 pub(super) fn validate_path_segment(
     value: &str,
     label: &str,
@@ -103,9 +93,6 @@ fn is_safe_path_segment_char(candidate: char) -> bool {
     candidate.is_ascii_alphanumeric() || candidate == '-' || candidate == '_'
 }
 
-/// Reads the configured Planradar base URL and Customer ID from the local store, validating
-/// that both are present so callers fail fast with a German message instead of building an
-/// invalid request path.
 pub(super) fn load_config(store: &LocalStore) -> Result<PlanradarConfig, PlanradarApiError> {
     let base_url = normalize_base_url(&store.api_endpoints.planradar_base_url)?;
     let customer_id = store.api_endpoints.planradar_customer_id.trim().to_string();
@@ -160,33 +147,25 @@ pub(super) fn store_api_token(token: &str) -> Result<(), PlanradarApiError> {
     })
 }
 
-/// Snapshot of the token stored before a `planradar_connect` overwrites it, used to roll back if
-/// the connect later fails. A read error is kept distinct from "definitely nothing stored": only
-/// the latter may trigger a destructive rollback, because deleting on an unreadable keychain
-/// would wipe a token that was actually still there.
+/// `Unknown` is kept distinct from `Absent`: deleting on an unreadable keychain would wipe a
+/// token that is still there.
 pub(super) enum PreviousToken {
     Present(String),
     Absent,
     Unknown,
 }
 
-/// Returns the currently stored token, if any, without treating "not set" as an error. Used by
-/// `planradar_connect` to snapshot the previous token so it can be restored if the connect fails
-/// after the new token was written.
+/// Returns the currently stored token without treating "not set" as an error.
 pub(super) fn peek_api_token() -> PreviousToken {
     match crate::secret_manager::get_token(PLANRADAR_KEYCHAIN_SERVICE, PLANRADAR_KEYCHAIN_USERNAME)
     {
         Ok(token) if !token.trim().is_empty() => PreviousToken::Present(token),
         Ok(_) => PreviousToken::Absent,
         Err(crate::secret_manager::SecretError::NotFound) => PreviousToken::Absent,
-        // A transient read failure (e.g. AccessDenied): we cannot tell whether a token exists,
-        // so the caller must not delete anything.
         Err(_) => PreviousToken::Unknown,
     }
 }
 
-/// Removes the stored Planradar token. Used to roll back a partial `planradar_connect` so a
-/// token is never left in the keychain without its matching config in the store.
 pub(super) fn delete_api_token() -> Result<(), PlanradarApiError> {
     match crate::secret_manager::delete_token(
         PLANRADAR_KEYCHAIN_SERVICE,
@@ -316,8 +295,6 @@ mod tests {
 
     #[test]
     fn normalize_base_url_strips_trailing_api_segment() {
-        // Request paths already carry `/api/v1/...`, so a base URL pasted with `/api` must be
-        // trimmed to avoid a doubled `/api/api/v1/...` path.
         assert_eq!(
             normalize_base_url("https://www.planradar.com/api").expect("should normalize"),
             "https://www.planradar.com"

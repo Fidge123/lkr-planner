@@ -22,16 +22,9 @@ pub struct PlanradarConnectionStatus {
     pub customer_id: String,
 }
 
-/// Stores the user-provided Planradar credentials: the API token goes into the OS keychain
-/// (via the secret manager), while the non-secret base URL and Customer ID go into the local
-/// config store. There is no OAuth or token rotation; the token is used verbatim per request.
-///
-/// The credentials are verified against the live API with a lightweight authenticated probe
-/// (a one-record project list) before anything is persisted, so an invalid token or wrong
-/// Customer ID fails fast instead of silently succeeding here and erroring on the first real
-/// call. Persistence is ordered so the keychain and store never end up out of sync: the config
-/// store is loaded before the token is written, the previous token is snapshotted, and if the
-/// store write fails the previous token is restored (or removed if there was none).
+/// Stores the API token in the OS keychain and the non-secret base URL plus Customer ID in the
+/// local config store.
+/// The write order and rollback below keep those two stores from drifting apart.
 #[tauri::command]
 #[specta::specta]
 pub async fn planradar_connect(
@@ -59,10 +52,8 @@ pub async fn planradar_connect(
         ));
     }
 
-    // Verify the credentials before persisting anything: a single-record project list both
-    // authenticates the token and exercises the Customer ID path segment. Probe failures are
-    // remapped to a connect-specific message because a raw "project not found" (404) or
-    // "token invalid" (401) is confusing in a credentials dialog.
+    // Probe before persisting: a single-record list authenticates the token and exercises the
+    // Customer ID path segment.
     let client = PlanradarApiClient::new(&base_url)?;
     list_projects_core(
         &client,
@@ -76,8 +67,7 @@ pub async fn planradar_connect(
     .await
     .map_err(remap_probe_error)?;
 
-    // Load the store before touching the keychain so a store-read failure cannot leave an orphan
-    // token, and snapshot the current token so we can restore it if the store write fails.
+    // Load the store before touching the keychain so a store-read failure cannot orphan a token.
     let mut store = load_store_or_error(app.clone())?;
     let previous_token = peek_api_token();
 
@@ -86,10 +76,8 @@ pub async fn planradar_connect(
     store.api_endpoints.planradar_base_url = base_url;
     store.api_endpoints.planradar_customer_id = customer_id.clone();
     if let Err(error) = save_store_or_error(app, store) {
-        // Restore the previous token (or remove the new one) so a store-write failure cannot
-        // leave the keychain and config store out of sync. When the earlier read failed we do
-        // not know whether a token was stored, so we leave the keychain alone rather than risk
-        // deleting a token that is still valid.
+        // On an unknown previous token, leave the keychain alone rather than risk deleting a
+        // token that is still valid.
         let _ = match &previous_token {
             PreviousToken::Present(previous) => store_api_token(previous),
             PreviousToken::Absent => delete_api_token(),
@@ -99,16 +87,14 @@ pub async fn planradar_connect(
     }
 
     Ok(PlanradarConnectionStatus {
-        // The token was just written successfully, so it is present without re-querying the
-        // keychain (a transient read error there must not fail an already-persisted connect).
+        // Not re-read from the keychain: a transient read error must not fail a persisted connect.
         has_token: true,
         customer_id,
     })
 }
 
-/// Remaps probe failures during connect into a message that makes sense in a credentials dialog.
-/// An invalid token (401/403) or wrong Customer ID (often surfaced as 404) should point the user
-/// at their credentials rather than at a missing project or expired session.
+/// A raw "project not found" or "token invalid" is confusing in a credentials dialog; a wrong
+/// Customer ID also surfaces as a 404 there.
 fn remap_probe_error(error: PlanradarApiError) -> PlanradarApiError {
     match error.code {
         PlanradarApiErrorCode::Unauthorized

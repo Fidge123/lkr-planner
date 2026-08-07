@@ -90,8 +90,8 @@ fn record_planradar_cassettes_from_live_api() {
         .await
         .expect("copy cassette should be recorded");
 
-        // Reactivation is idempotent (sets status=1); re-activating an already active project is
-        // a safe no-op that still exercises the archive_project endpoint contract.
+        // Reactivating an already active project is a safe no-op that still records the
+        // archive_project contract.
         reactivate_project_core(
             &PlanradarApiClient::with_env_cassette(
                 &config.base_url,

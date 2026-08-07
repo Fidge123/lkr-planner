@@ -32,10 +32,8 @@ impl LocalStore {
 pub struct ApiEndpoints {
     pub daylite_base_url: String,
     pub planradar_base_url: String,
-    /// Non-secret Planradar Customer ID (Account ID from PlanRadar Settings > Account).
-    /// Used as the `{customer_id}` path segment on every Planradar request. The matching
-    /// API token is stored in the OS keychain, never here. Carries `#[serde(default)]`
-    /// so stores persisted before this field existed still load.
+    /// Account ID from PlanRadar Settings > Account, used as the `{customer_id}` path segment.
+    /// The matching API token belongs in the OS keychain, never here.
     #[serde(default)]
     pub planradar_customer_id: String,
     #[serde(default)]

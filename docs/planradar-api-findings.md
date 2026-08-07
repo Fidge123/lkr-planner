@@ -35,9 +35,8 @@ Unknown attribute keys are silently ignored by the API (a 2xx is still returned)
 ## Cassette recording and replay
 
 Cassette matching is exact on method, path, query, and body, so a replay test only matches a recorded interaction if it sends a byte-identical request.
-Both the recording harness and the replay tests build their requests from the shared `vcr_fixtures` helpers in `planradar/projects.rs`, so the request shapes cannot drift apart.
-Those helpers read the same `PLANRADAR_CUSTOMER_ID`, `PLANRADAR_VCR_PROJECT_ID`, and `PLANRADAR_VCR_NEW_PROJECT_NAME` variables the harness records with, falling back to fixed literals.
-This means the replay tests must run with the same environment that was used to record the cassettes; with those variables unset they only match cassettes recorded against the fallback values.
+The recording harness builds its requests from the `vcr_fixtures` helpers in `planradar/projects.rs`, which read the `PLANRADAR_CUSTOMER_ID`, `PLANRADAR_VCR_PROJECT_ID`, and `PLANRADAR_VCR_NEW_PROJECT_NAME` variables and fall back to fixed literals.
+The replay tests instead rebuild their inputs from the cassette they replay, so they pass on any machine without access to the account the cassettes were recorded against.
 
 Copying a source project uses `POST /api/v1/{customer_id}/projects/{project_id}/copy_project`.
 This is the same copy feature offered in the Planradar UI.

@@ -12,24 +12,17 @@ use std::time::{Duration, Instant};
 use tauri_plugin_http::reqwest;
 use tokio::sync::Mutex;
 
-/// Header carrying the static Planradar personal access token, per the Open API spec
-/// (`securityDefinitions.apiKey` → `X-PlanRadar-API-Key`).
 const PLANRADAR_API_KEY_HEADER: &str = "X-PlanRadar-API-Key";
 
-/// Conservative client-side request budget. Planradar enforces ~30 requests/minute and, once
-/// exceeded, imposes a long forced cooldown during which every request is rejected. We cap well
-/// below that because the same personal token may be used by other tools/sessions concurrently.
+/// Planradar allows ~30 requests/minute; we stay well under because the same personal token may
+/// be in use by other tools concurrently.
 const PLANRADAR_RATE_LIMIT_MAX_REQUESTS: usize = 15;
 const PLANRADAR_RATE_LIMIT_WINDOW: Duration = Duration::from_secs(60);
-/// How long to hold back all requests after Planradar itself returns a 429. Planradar does not
-/// send a `Retry-After` header, so we assume its forced cooldown is at least the rate window and
-/// back off for that long rather than hammering into the cooldown and prolonging it.
+/// Planradar sends no `Retry-After`, so a 429 is assumed to cost at least a full window.
 const PLANRADAR_RATE_LIMIT_COOLDOWN: Duration = Duration::from_secs(60);
-/// Upper bound on how long a single request may sit waiting for the budget before it gives up
-/// with a `RateLimited` error, so a burst of commands cannot hang a Tauri call indefinitely.
+/// Caps how long one request may wait for the budget, so a burst cannot hang a Tauri call.
 const PLANRADAR_RATE_LIMIT_MAX_WAIT: Duration = Duration::from_secs(120);
 
-/// Retry behavior for transient Planradar failures (rate limiting and 5xx/network errors).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct RetryPolicy {
     pub max_retries: u32,
@@ -37,7 +30,6 @@ pub(super) struct RetryPolicy {
 }
 
 impl RetryPolicy {
-    /// Production default: a handful of retries with exponential backoff (200ms, 400ms, 800ms).
     pub(super) fn standard() -> Self {
         Self {
             max_retries: 3,
@@ -62,16 +54,13 @@ impl RetryPolicy {
     }
 }
 
-/// Shared limiter state: the sliding window of recent request timestamps plus, when Planradar has
-/// signalled a 429, the instant until which all requests must be held back.
 #[derive(Default)]
 struct RateLimiterState {
     timestamps: VecDeque<Instant>,
     blocked_until: Option<Instant>,
 }
 
-/// Process-wide sliding-window rate limiter. A `None` inner is a disabled limiter (used by
-/// tests with mock/cassette transports so they never block on the shared budget).
+/// Sliding-window rate limiter. A `None` state disables it entirely.
 #[derive(Clone)]
 pub(super) struct RateLimiter {
     state: Option<Arc<Mutex<RateLimiterState>>>,
@@ -82,8 +71,7 @@ pub(super) struct RateLimiter {
 }
 
 impl RateLimiter {
-    /// The shared, process-wide limiter every production client uses, so the budget is enforced
-    /// across all commands (each command builds its own client) against the single account token.
+    /// Process-wide, because every command builds its own client but shares one account token.
     pub(super) fn global() -> Self {
         static GLOBAL: OnceLock<Arc<Mutex<RateLimiterState>>> = OnceLock::new();
         let state = GLOBAL
@@ -125,18 +113,14 @@ impl RateLimiter {
         }
     }
 
-    /// The deadline a whole `send_request` call (including all its retries) may spend waiting on
-    /// the budget. Computed once per request so retries share one bound instead of each getting a
+    /// Computed once per `send_request` so its retries share one bound instead of each getting a
     /// fresh `max_wait`.
     fn deadline(&self) -> Option<Instant> {
         self.state.as_ref().map(|_| Instant::now() + self.max_wait)
     }
 
-    /// Blocks until sending one more request stays within the window (and any 429 cooldown has
-    /// elapsed), then records it. A disabled limiter returns immediately. The lock is never held
-    /// across the sleep, so concurrent callers re-evaluate after each wait. Gives up with a
-    /// `RateLimited` error once `deadline` passes, so a Tauri command cannot hang indefinitely
-    /// under a burst — the deadline spans the request and all of its retries.
+    /// Blocks until one more request fits the window and any 429 cooldown has elapsed, then
+    /// records it. The lock is never held across the sleep, so concurrent callers re-evaluate.
     async fn acquire(&self, deadline: Option<Instant>) -> Result<(), PlanradarApiError> {
         let Some(state) = &self.state else {
             return Ok(());
@@ -147,7 +131,6 @@ impl RateLimiter {
                 let mut state = state.lock().await;
                 let now = Instant::now();
 
-                // Honor an active 429 cooldown before considering the sliding window.
                 match state.blocked_until {
                     Some(until) if until > now => until.saturating_duration_since(now),
                     _ => {
@@ -181,8 +164,6 @@ impl RateLimiter {
         }
     }
 
-    /// Records that Planradar returned a 429, holding back all further requests for the cooldown
-    /// so the client stops feeding a forced cooldown that would otherwise be prolonged.
     async fn record_rate_limit_hit(&self) {
         let Some(state) = &self.state else {
             return;
@@ -198,8 +179,8 @@ impl RateLimiter {
     }
 }
 
-/// Evicts timestamps older than the window, then returns how long to wait before another request
-/// fits. `Duration::ZERO` means a slot is free now (the caller should record the timestamp).
+/// Evicts expired timestamps, then returns the wait before another request fits.
+/// `Duration::ZERO` means a slot is free now and the caller must record the timestamp.
 fn compute_wait(
     timestamps: &mut VecDeque<Instant>,
     now: Instant,
@@ -294,8 +275,6 @@ impl PlanradarApiClient {
         })
     }
 
-    /// Sends a request, retrying transient failures (rate limiting, 5xx, and network errors)
-    /// with exponential backoff according to the configured [`RetryPolicy`].
     pub(super) async fn send_request(
         &self,
         method: PlanradarHttpMethod,
@@ -304,7 +283,6 @@ impl PlanradarApiClient {
         body: Option<Value>,
         api_key: Option<String>,
     ) -> Result<PlanradarHttpResponse, PlanradarApiError> {
-        // One budget deadline for the whole call, so retries cannot each restart the wait cap.
         let deadline = self.rate_limiter.deadline();
         let mut attempt = 0;
         loop {
@@ -316,14 +294,11 @@ impl PlanradarApiClient {
                 api_key: api_key.clone(),
             };
 
-            // Reserve a slot in the request budget before every network attempt; retries are real
-            // requests and must count too, so this sits inside the loop.
+            // Inside the loop: retries are real requests and must count against the budget.
             self.rate_limiter.acquire(deadline).await?;
 
             let result = self.transport.send(request).await;
 
-            // A 429 means we tripped Planradar's limit: engage the cooldown so subsequent requests
-            // hold back, and do not retry this one (retrying would only deepen the forced cooldown).
             if matches!(&result, Ok(response) if response.status == 429) {
                 self.rate_limiter.record_rate_limit_hit().await;
             }
@@ -345,16 +320,13 @@ impl PlanradarApiClient {
     }
 }
 
-/// Only idempotent requests are safe to auto-retry. A retried POST (create/copy project) that
-/// already succeeded server-side but whose response was lost (timeout, dropped connection, or a
-/// 5xx raised after the write committed) would create a duplicate project, so POSTs are never
-/// retried. GET and the PUT archive_project toggle are idempotent and safe.
+/// A retried POST whose first attempt succeeded server-side but lost its response would create a
+/// duplicate project, so POSTs are never retried.
 fn is_idempotent(method: PlanradarHttpMethod) -> bool {
     matches!(method, PlanradarHttpMethod::Get | PlanradarHttpMethod::Put)
 }
 
-/// 429 is deliberately excluded: a rate-limit response engages the cooldown and is surfaced
-/// immediately rather than retried, so we do not keep pushing into a forced cooldown.
+/// 429 is excluded on purpose: retrying only deepens Planradar's forced cooldown.
 fn is_retryable_status(status: u16) -> bool {
     (500..=599).contains(&status)
 }
@@ -612,7 +584,7 @@ fn to_recorded_request(request: &PlanradarHttpRequest) -> RecordedRequest {
 }
 
 #[cfg(test)]
-fn cassette_path_for_test(file_name: &str) -> std::path::PathBuf {
+pub(super) fn cassette_path_for_test(file_name: &str) -> std::path::PathBuf {
     std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../tests/cassettes")
         .join(file_name)
@@ -679,8 +651,6 @@ mod tests {
     #[test]
     fn send_request_does_not_retry_rate_limit() {
         tauri::async_runtime::block_on(async {
-            // A 429 must be surfaced immediately (not retried): retrying would only deepen
-            // Planradar's forced cooldown. The cooldown is engaged separately (see limiter tests).
             let transport = MockTransport::new(vec![Ok(mock_response(429, "rate limited"))]);
             let client = PlanradarApiClient::with_transport_and_retry(
                 Box::new(transport.clone()),
@@ -759,7 +729,6 @@ mod tests {
     #[test]
     fn compute_wait_evicts_expired_timestamps() {
         let now = Instant::now();
-        // Two entries older than the 60s window plus one inside it: only the recent one counts.
         let mut timestamps = VecDeque::from(vec![
             now - Duration::from_secs(120),
             now - Duration::from_secs(90),
@@ -775,7 +744,6 @@ mod tests {
     #[test]
     fn compute_wait_blocks_when_window_is_full() {
         let now = Instant::now();
-        // Window full (max 2): oldest is 50s old, so a slot frees in ~10s.
         let mut timestamps = VecDeque::from(vec![
             now - Duration::from_secs(50),
             now - Duration::from_secs(20),
@@ -792,9 +760,8 @@ mod tests {
     #[test]
     fn rate_limiter_throttles_once_the_window_is_full() {
         tauri::async_runtime::block_on(async {
-            // max 2 per 80ms window: the third acquire must wait for the window to slide.
-            // Only the lower bound is asserted: a sleep can always overshoot under load, but it
-            // can never finish early, so this stays deterministic on a busy CI machine.
+            // Only the lower bound is asserted: a sleep can overshoot under load but never
+            // finish early, so this stays deterministic on a busy CI machine.
             let limiter = RateLimiter::for_test(
                 2,
                 Duration::from_millis(80),
@@ -851,8 +818,6 @@ mod tests {
     #[test]
     fn rate_limiter_gives_up_after_max_wait() {
         tauri::async_runtime::block_on(async {
-            // Full window (max 1) with a long window but a tiny max wait: the second acquire must
-            // bail out with a RateLimited error instead of blocking for the full window.
             let limiter = RateLimiter::for_test(
                 1,
                 Duration::from_secs(30),
@@ -875,8 +840,6 @@ mod tests {
     #[test]
     fn rate_limit_deadline_spans_retries_of_one_request() {
         tauri::async_runtime::block_on(async {
-            // The deadline is computed once per send_request, so a retry cannot restart the wait
-            // budget: an already-expired deadline must fail immediately on a saturated window.
             let limiter = RateLimiter::for_test(
                 1,
                 Duration::from_secs(30),
@@ -890,7 +853,6 @@ mod tests {
                 .await
                 .expect("first acquire should pass");
 
-            // Reusing the same deadline (as retries do) must not grant a fresh budget.
             let error = limiter
                 .acquire(deadline)
                 .await
@@ -910,8 +872,6 @@ mod tests {
                     .await
                     .expect("disabled limiter never fails");
             }
-            // Generous bound: these are pure no-ops, so anything near a real sleep would mean the
-            // disabled limiter started blocking.
             assert!(started_at.elapsed() < Duration::from_secs(1));
         });
     }
@@ -919,8 +879,6 @@ mod tests {
     #[test]
     fn send_request_does_not_retry_non_idempotent_post() {
         tauri::async_runtime::block_on(async {
-            // A POST that fails transiently must NOT be retried: the server may have already
-            // created the resource, so a retry would duplicate it.
             let transport = MockTransport::new(vec![Ok(mock_response(503, "down"))]);
             let client = PlanradarApiClient::with_transport_and_retry(
                 Box::new(transport.clone()),

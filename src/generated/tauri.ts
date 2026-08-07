@@ -18,25 +18,17 @@ export const commands = {
 	dayliteListCachedContacts: () => typedError<PlanningContactRecord[], DayliteApiError>(__TAURI_INVOKE("daylite_list_cached_contacts")),
 	dayliteUpdateContactIcalUrls: (input: DayliteUpdateContactIcalUrlsInput) => typedError<PlanningContactRecord, DayliteApiError>(__TAURI_INVOKE("daylite_update_contact_ical_urls", { input })),
 	/**
-	 *  Stores the user-provided Planradar credentials: the API token goes into the OS keychain
-	 *  (via the secret manager), while the non-secret base URL and Customer ID go into the local
-	 *  config store. There is no OAuth or token rotation; the token is used verbatim per request.
-	 * 
-	 *  The credentials are verified against the live API with a lightweight authenticated probe
-	 *  (a one-record project list) before anything is persisted, so an invalid token or wrong
-	 *  Customer ID fails fast instead of silently succeeding here and erroring on the first real
-	 *  call. Persistence is ordered so the keychain and store never end up out of sync: the config
-	 *  store is loaded before the token is written, the previous token is snapshotted, and if the
-	 *  store write fails the previous token is restored (or removed if there was none).
+	 *  Stores the API token in the OS keychain and the non-secret base URL plus Customer ID in the
+	 *  local config store.
+	 *  The write order and rollback below keep those two stores from drifting apart.
 	 */
 	planradarConnect: (request: PlanradarConnectRequest) => typedError<PlanradarConnectionStatus, PlanradarApiError>(__TAURI_INVOKE("planradar_connect", { request })),
 	planradarGetProjectStatus: (projectId: string) => typedError<PlanradarProject, PlanradarApiError>(__TAURI_INVOKE("planradar_get_project_status", { projectId })),
 	planradarListProjects: (input: PlanradarListProjectsInput) => typedError<PlanradarProject[], PlanradarApiError>(__TAURI_INVOKE("planradar_list_projects", { input })),
 	planradarCreateProject: (request: PlanradarCreateProjectRequest) => typedError<string, PlanradarApiError>(__TAURI_INVOKE("planradar_create_project", { request })),
 	/**
-	 *  Starts a server-side copy of `project_id` and returns the **job ID**, not a project ID:
-	 *  Planradar performs the copy asynchronously and answers `202 Accepted` with a job handle.
-	 *  The copied project only exists once that job finishes.
+	 *  Returns a job ID, not a project ID: Planradar copies asynchronously, and the copied project
+	 *  only exists once that job finishes.
 	 */
 	planradarCopyProject: (projectId: string, options: PlanradarCopyProjectOptions) => typedError<string, PlanradarApiError>(__TAURI_INVOKE("planradar_copy_project", { projectId, options })),
 	planradarReactivateProject: (projectId: string) => typedError<null, PlanradarApiError>(__TAURI_INVOKE("planradar_reactivate_project", { projectId })),
@@ -60,10 +52,8 @@ export type ApiEndpoints = {
 	dayliteBaseUrl: string,
 	planradarBaseUrl: string,
 	/**
-	 *  Non-secret Planradar Customer ID (Account ID from PlanRadar Settings > Account).
-	 *  Used as the `{customer_id}` path segment on every Planradar request. The matching
-	 *  API token is stored in the OS keychain, never here. Carries `#[serde(default)]`
-	 *  so stores persisted before this field existed still load.
+	 *  Account ID from PlanRadar Settings > Account, used as the `{customer_id}` path segment.
+	 *  The matching API token belongs in the OS keychain, never here.
 	 */
 	planradarCustomerId?: string,
 	zepCaldavRootUrl?: string,
@@ -270,7 +260,6 @@ export type PlanradarConnectionStatus = {
 	customerId: string,
 };
 
-/**  Per-aspect toggles for copying a source project (`POST .../copy_project`). */
 export type PlanradarCopyProjectOptions = {
 	name: string,
 	details?: boolean,
@@ -282,7 +271,6 @@ export type PlanradarCopyProjectOptions = {
 	components?: boolean,
 };
 
-/**  Attributes for creating a blank project (`POST .../projects`). */
 export type PlanradarCreateProjectRequest = {
 	name: string,
 	street?: string | null,
@@ -294,24 +282,18 @@ export type PlanradarCreateProjectRequest = {
 	endDate?: string | null,
 };
 
-/**  Pagination and sorting options for listing projects (`GET .../projects`). */
 export type PlanradarListProjectsInput = {
 	sort?: string | null,
 	page?: number | null,
 	pagesize?: number | null,
 };
 
-/**  Frontend-facing Planradar project summary, normalized from the JSON:API `data` object. */
 export type PlanradarProject = {
 	id: string,
 	name: string,
 	status: PlanradarProjectStatus,
 };
 
-/**
- *  Planradar project lifecycle status. The API encodes status as an integer where `1` is an
- *  active project and `9` is an archived one (see the archive-project endpoint).
- */
 export type PlanradarProjectStatus = "active" | "archived";
 
 export type StoreError = {
