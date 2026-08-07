@@ -6,11 +6,12 @@
 
 ## 2. Title override and note in the backend
 
-- [ ] 2.1 Extend `build_ical_payload` with an optional title override, writing it to both `SUMMARY` and `X-LKR-TITLE`, and writing the project name to `SUMMARY` alone when there is none
+- [ ] 2.1 Extend `build_ical_payload` with an optional title override, writing it to `SUMMARY` and the title it replaced to `X-LKR-TITLE`, and writing the project name to `SUMMARY` with no `X-LKR-TITLE` when there is no override
 - [ ] 2.2 Extend `build_ical_payload` with the note, written as `daylite:<ref>`, a blank line, then the note, escaped as text
-- [ ] 2.3 Parse `X-LKR-TITLE` and the note in `parse_ical_events` and carry both through `RawVEvent`, `classify_event`, and `PendingEvent`
-- [ ] 2.4 Prefer the title override over the resolved project name in `resolve_event`, including on the failed-resolution path, and add the note and title override to `CalendarCellEvent`
-- [ ] 2.5 Add round-trip tests: note with commas, semicolons, backslashes and line breaks; a note written below the reference line by another client; an event with a note still classified as an assignment
+- [ ] 2.3 Parse `X-LKR-TITLE` and the note in `parse_ical_events` and carry them through `RawVEvent`, `classify_event`, and `PendingEvent`, treating the presence of `X-LKR-TITLE` as the marker that `SUMMARY` holds a custom title
+- [ ] 2.4 In `resolve_event`, use `SUMMARY` as the card title when the marker is present and the resolved project name when it is not, on the failed-resolution path too, and add the note and the custom-title marker to `CalendarCellEvent`
+- [ ] 2.5 Add tests that an assignment with no marker follows a renamed project, that one with a marker keeps its `SUMMARY`, and that dropping the override removes `X-LKR-TITLE` and returns the card to the project's current name
+- [ ] 2.6 Add round-trip tests: note with commas, semicolons, backslashes and line breaks; a note written below the reference line by another client; an event with a note still classified as an assignment
 
 ## 3. Attachments in the backend
 
@@ -22,7 +23,7 @@
 
 ## 4. Write paths carry the new fields
 
-- [ ] 4.1 Grow `AssignmentWrite` with `title_override`, `note`, and `attachments`, and fix every construction site the compiler flags
+- [ ] 4.1 Grow `AssignmentWrite` with `title_override` carrying both the custom title and the title it replaced, plus `note` and `attachments`, and fix every construction site the compiler flags
 - [ ] 4.2 Extend `CreateAssignmentInput` and `UpdateAssignmentInput` with the new fields and thread them through `create_assignment` and `update_assignment`
 - [ ] 4.3 Make `move_assignment` re-read the source event and carry its title override, note, and attachments onto the target calendar before deleting the source
 - [ ] 4.4 Add a test that a reorder through `patch_event_slot` leaves an event's attachment, note, and title override intact
@@ -31,9 +32,9 @@
 
 ## 5. Modal: date, title, and note
 
-- [ ] 5.1 Add `titleOverride` and `note` to `CellEvent` and `toCellEvent`, plus the attachment metadata list
+- [ ] 5.1 Add the custom-title marker with the replaced title, `note`, and the attachment metadata list to `CellEvent` and `toCellEvent`, leaving `title` as the value to display
 - [ ] 5.2 Add date state to `use-assignment-modal`, initialised from the cell's day, validated on save with a German error, and passed to the write
-- [ ] 5.3 Add title state, initialised from the override or the resolved project name, following a newly picked project only while it has not been edited by hand, and cleared back to no override when emptied
+- [ ] 5.3 Add title state, initialised from the card's title, following a newly picked project only while it has not been edited by hand, recording the project name it replaces when the planner types over it, and dropping the override when emptied
 - [ ] 5.4 Add note state, initialised from the event and passed to the write
 - [ ] 5.5 Extend the dirty tracking so date, title, note, and attachment edits all trigger the unsaved-changes dialog
 - [ ] 5.6 Render the date, title, and note fields in `assignment-modal.tsx` with German labels, DaisyUI form controls, and no nested `div`/`span`
@@ -49,7 +50,7 @@
 
 ## 7. Drag paths
 
-- [ ] 7.1 Pass the dragged card's title override and note into the reschedule write in `use-appointment-drag`, and its attachment metadata into the move
+- [ ] 7.1 Pass the dragged card's custom title with the title it replaced, and its note, into the reschedule write in `use-appointment-drag`, and its attachment metadata into the move
 - [ ] 7.2 Add tests that a reschedule and a move both carry the details through
 
 ## 8. Verification

@@ -37,15 +37,25 @@ An event it refuses is silently excluded from slot re-allocation.
 
 ## Decisions
 
-### The title override lives in `X-LKR-TITLE`, `SUMMARY` mirrors it
+### The custom title lives in `SUMMARY`, `X-LKR-TITLE` keeps the title it replaced
 
-`SUMMARY` carries the title the planner wants shown, which is the override when there is one and the project name otherwise, so other calendar clients display the right thing.
-A separate `X-LKR-TITLE` property records that the title was set by hand and holds the same text.
-`resolve_event` prefers `X-LKR-TITLE` over the resolved project name, and an assignment without the property keeps following the project name exactly as today.
+`SUMMARY` carries whatever title the planner wants shown, because that is the property every calendar client reads.
+`X-LKR-TITLE` carries the title the custom one replaced, which is the Daylite project name at the moment the planner typed over it.
+Its presence is the marker that `SUMMARY` was set by hand: `resolve_event` uses `SUMMARY` when the property is there and the resolved project name when it is not, so an assignment nobody has renamed keeps following the project through a rename in Daylite exactly as today.
+Writing an assignment without a custom title emits no `X-LKR-TITLE` and puts the project name in `SUMMARY`, as today.
+
+Holding the replaced title rather than a copy of the custom one is what makes a later reset affordance cheap: the modal can offer "Titel zurücksetzen" and show the planner what it would go back to without resolving anything.
+That affordance is not in this change - the planner resets by emptying the field, which drops `X-LKR-TITLE` and restores the project name - but the storage is chosen so adding it later needs no format change.
+
+One consequence to keep in mind: the stored value ages.
+A project renamed in Daylite after the planner set a custom title leaves `X-LKR-TITLE` holding the old name.
+So it is a record of what was replaced, not a cache of the project name, and nothing reads it as one.
+Reset therefore clears the property and falls back to live resolution rather than writing the stored value back into `SUMMARY`, and the stored value is only ever displayed as the fallback when resolution fails.
 
 Alternatives considered.
-Making `SUMMARY` authoritative for assignments is simpler but freezes the card's title at write time, so a project renamed in Daylite would never update the grid again - a regression against the current behavior.
-Storing the override in the description below the `daylite:` line mixes it with the planner's note and forces a parsing convention on text a human also edits.
+Mirroring the custom title into both properties makes the marker redundant with `SUMMARY` and throws away the replaced title for no gain.
+Storing the custom title in the description below the `daylite:` line mixes it with the planner's note and forces a parsing convention on text a human also edits.
+A bare boolean marker property would work for display, but loses the reset affordance for the same number of bytes on the wire.
 
 ### The note is the description below the `daylite:` line
 

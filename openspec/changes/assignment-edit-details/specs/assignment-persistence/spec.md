@@ -18,8 +18,19 @@ An assignment event SHALL be able to carry a title of its own that takes precede
 - **THEN** the card shows that title inside the German placeholder note instead of the stored project name
 
 #### Scenario: Other calendar clients see the title
-- **WHEN** an assignment with a title of its own is read by another calendar client
-- **THEN** the event summary is that title
+- **WHEN** an assignment is read by another calendar client
+- **THEN** the event summary is the title of its own when it has one
+- **AND** the Daylite project name when it has none
+
+#### Scenario: The replaced title is recorded
+- **WHEN** a title of its own is written over the project name an assignment showed until then
+- **THEN** the event records that replaced title alongside the new one
+- **AND** the recorded title is left as it is by later edits that do not change the title
+
+#### Scenario: Removing the override restores live resolution
+- **WHEN** an assignment's title of its own is removed
+- **THEN** the event no longer records a replaced title
+- **AND** the card shows the Daylite project's current name, not the name recorded when the override was set
 
 ### Requirement: Assignment note
 An assignment event SHALL be able to carry free-text notes alongside its Daylite project reference, and the reference SHALL stay machine-readable.
