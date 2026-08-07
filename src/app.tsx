@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import "./app.css";
 import { ChevronLeft, ChevronRight, Settings } from "lucide-react";
+import { DataLoadingIndicator } from "./app/components/data-loading-indicator";
 import { EmployeeIcalDialog } from "./app/components/employee-ical-dialog";
 import { SettingsDialog } from "./app/components/settings/settings-dialog";
 import { usePlanningAssignments } from "./app/hooks/use-planning-assignments";
@@ -116,6 +117,12 @@ function App() {
           >
             <Settings className="size-6 text-base-content/50" />
           </button>
+          <DataLoadingIndicator
+            isLoading={
+              planningAssignmentsState.isLoading ||
+              planningEmployeesState.isLoading
+            }
+          />
         </div>
         <nav className="navbar-end gap-2">
           <button

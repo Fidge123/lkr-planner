@@ -12,6 +12,7 @@ import type { GhostSuggestion } from "../next-day-quick-add";
 import {
   type CellEvent,
   hasAbsenceConflict,
+  hasAllDayAbsence,
   isUnresolvedAssignment,
 } from "../types";
 
@@ -138,16 +139,18 @@ export function TimetableCell({
             </button>
           </li>
         ) : null}
-        <li>
-          <button
-            type="button"
-            className="btn btn-dash btn-block rounded-lg opacity-20 hover:opacity-80 transition-opacity"
-            aria-label="Aufgabe hinzufügen"
-            onClick={onAddClick}
-          >
-            +
-          </button>
-        </li>
+        {hasAllDayAbsence(events) ? null : (
+          <li>
+            <button
+              type="button"
+              className="btn btn-dash btn-block rounded-lg opacity-20 hover:opacity-80 transition-opacity"
+              aria-label="Aufgabe hinzufügen"
+              onClick={onAddClick}
+            >
+              +
+            </button>
+          </li>
+        )}
       </ul>
     </td>
   );

@@ -160,7 +160,6 @@ export function PlanningGridTable({
   const {
     eventsByEmployee,
     errorsByEmployee,
-    isLoading: isAssignmentsLoading,
     errorMessage: assignmentErrorMessage,
   } = useFrozenDuringDrag(
     assignmentState,
@@ -201,11 +200,6 @@ export function PlanningGridTable({
         onReload={reloadHolidays}
         variant="warning"
       />
-      {isAssignmentsLoading ? (
-        <p className="px-4 py-2 text-base-content/70">
-          Einsätze werden geladen...
-        </p>
-      ) : null}
       {drag.errorMessage ? (
         <section className="toast toast-top toast-center z-50">
           <section className="alert alert-error">

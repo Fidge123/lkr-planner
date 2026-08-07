@@ -105,8 +105,9 @@ The system SHALL use CalDAV as the data source for all week navigation.
 The system SHALL maintain German loading and error states.
 
 #### Scenario: Show loading state
-- **WHEN** CalDAV events are being fetched
-- **THEN** a German loading indicator is shown above the planning table
+- **WHEN** CalDAV events or the employee contacts are being fetched
+- **THEN** a spinner with the German text "Daten werden geladen..." is shown in the header next to the settings button
+- **AND** the planning table itself carries no loading text
 
 #### Scenario: Show error state on per-employee fetch failure
 - **WHEN** a CalDAV fetch fails for an individual employee

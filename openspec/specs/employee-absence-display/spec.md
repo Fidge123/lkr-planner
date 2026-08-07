@@ -67,6 +67,19 @@ The system SHALL render absence events visually distinct from assignment and bar
 - **THEN** both are rendered in the cell
 - **AND** each uses its respective styling
 
+### Requirement: No add affordance on an all-day absence
+The system SHALL hide the add button of a timetable cell that holds an absence covering the whole day, so no work is planned into a day the employee is unavailable.
+An absence covers the whole day when it carries no start time, which includes every day of a multi-day absence.
+
+#### Scenario: All-day absence in the cell
+- **WHEN** a timetable cell contains an absence event without a start time
+- **THEN** the cell shows no add button
+- **AND** the absence event itself is still rendered
+
+#### Scenario: Timed absence in the cell
+- **WHEN** the only absence event in a cell has a start time
+- **THEN** the add button is still shown
+
 ### Requirement: Absence and appointment conflict indicator
 The system SHALL highlight a timetable cell in red, with an icon and German label, when it contains both an absence event and an assignment event for the same employee and day.
 

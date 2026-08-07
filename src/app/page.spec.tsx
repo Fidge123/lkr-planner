@@ -160,12 +160,13 @@ describe("planning grid assignment states", () => {
     setSystemTime(new Date(2026, 0, 28, 9, 0, 0));
   });
 
-  it("shows german loading state when assignments are loading", () => {
+  it("shows no loading text above the grid while assignments load", () => {
     const html = renderGrid({
       assignmentState: { ...defaultAssignmentState, isLoading: true },
     });
 
-    expect(html).toContain("Einsätze werden geladen...");
+    expect(html).not.toContain("Einsätze werden geladen...");
+    expect(html).not.toContain("werden geladen");
   });
 
   it("shows german error banner with retry when assignment fetch fails", () => {

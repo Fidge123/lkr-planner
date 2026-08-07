@@ -68,6 +68,29 @@ describe("TimetableCell", () => {
     expect(html).toContain("<button");
   });
 
+  it("hides the add affordance on a day with an all-day absence", () => {
+    const html = renderCell({ events: [absence] });
+
+    expect(html).toContain("UB");
+    expect(html).not.toContain("Aufgabe hinzufügen");
+  });
+
+  it("hides the add affordance when an all-day absence sits next to a timed one", () => {
+    const html = renderCell({
+      events: [absence, { ...absence, uid: "uid-2", startTime: "13:00" }],
+    });
+
+    expect(html).not.toContain("Aufgabe hinzufügen");
+  });
+
+  it("keeps the add affordance when the only absence is a timed one", () => {
+    const html = renderCell({
+      events: [{ ...absence, startTime: "13:00", endTime: "17:00" }],
+    });
+
+    expect(html).toContain("Aufgabe hinzufügen");
+  });
+
   it("assigned cell renders as clickable with assignment data", () => {
     const html = renderCell({ events: [assignment()] });
 

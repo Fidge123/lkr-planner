@@ -46,6 +46,13 @@ export function isUnresolvedAssignment(event: CellEvent): boolean {
   return event.projectRef !== null && !event.projectStatus;
 }
 
+/** An absence without a start time covers the whole day, so nothing can be planned into it. */
+export function hasAllDayAbsence(events: CellEvent[]): boolean {
+  return events.some(
+    (event) => event.kind === "absence" && event.startTime === null,
+  );
+}
+
 export function hasAbsenceConflict(events: CellEvent[]): boolean {
   return (
     events.some((event) => event.kind === "absence") &&
