@@ -30,15 +30,9 @@
 - [x] 5.2 Add `refuse_protected_day_change` in `protection.rs` and wire it into `move_assignment`, satisfying the tests
 - [x] 5.3 Leave `reorder_assignment` and day re-slotting unguarded, and record the day-scoped rule in the specs
 
-## 6. Deliberate override
+## 6. Verification
 
-- [x] 6.1 Write failing `bun test`s for the unlock checkbox: picker, save and delete disabled while locked, all three usable once unlocked
-- [x] 6.2 Add `override_protection` to `update_assignment` and `delete_assignment` and skip the guard when it is set
-- [x] 6.3 Render the unlock checkbox in the modal's notice and pass the flag through both writes, satisfying the tests
-
-## 7. Verification
-
-- [x] 7.1 Run `cargo test` and confirm all new and existing tests pass
-- [x] 7.2 Run `bun test` and confirm all new and existing tests pass
-- [x] 7.3 Run `bun lint` and fix any issues
-- [ ] 7.4 Manually verify in the running app: an assignment linked to a "Termin FIX geplant" project shows disabled controls with a German notice, the unlock checkbox re-enables editing and deleting, and a direct backend call without the override is rejected
+- [x] 6.1 Run `cargo test` and confirm all new and existing tests pass
+- [x] 6.2 Run `bun test` and confirm all new and existing tests pass
+- [x] 6.3 Run `bun lint` and fix any issues
+- [ ] 6.4 Manually verify in the running app: an assignment linked to a "Termin FIX geplant" project shows disabled edit/delete controls with a German notice, and a direct backend call to update/delete it is rejected

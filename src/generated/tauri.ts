@@ -20,7 +20,7 @@ export const commands = {
 	updateAssignment: (input: UpdateAssignmentInput) => typedError<null, string>(__TAURI_INVOKE("update_assignment", { input })),
 	moveAssignment: (href: string, targetEmployeeReference: string, date: string, projectRef: string, projectName: string, orderIndex: number | null) => typedError<MoveAssignmentResult, string>(__TAURI_INVOKE("move_assignment", { href, targetEmployeeReference, date, projectRef, projectName, orderIndex })),
 	reorderAssignment: (href: string, uid: string, date: string, orderIndex: number) => typedError<null, string>(__TAURI_INVOKE("reorder_assignment", { href, uid, date, orderIndex })),
-	deleteAssignment: (href: string, overrideProtection: boolean) => typedError<null, string>(__TAURI_INVOKE("delete_assignment", { href, overrideProtection })),
+	deleteAssignment: (href: string) => typedError<null, string>(__TAURI_INVOKE("delete_assignment", { href })),
 	zepSaveCredentials: (rootUrl: string, username: string, password: string) => typedError<null, ZepError>(__TAURI_INVOKE("zep_save_credentials", { rootUrl, username, password })),
 	zepLoadCredentials: () => typedError<{
 	rootUrl: string,
@@ -237,8 +237,6 @@ export type UpdateAssignmentInput = {
 	projectName: string,
 	/**  Position among the target day's assignments. None keeps the assignment where it is. */
 	orderIndex: number | null,
-	/**  Set when the user deliberately unlocked a fixed appointment in the modal. */
-	overrideProtection: boolean,
 };
 
 export type ZepCalendar = {

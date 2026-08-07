@@ -16,7 +16,6 @@ export function AssignmentModal({
   onClose,
   showDeleteConfirm: initialShowDeleteConfirm = false,
   showUnsavedConfirm: initialShowUnsavedConfirm = false,
-  overrideProtection: initialOverrideProtection = false,
 }: Props) {
   const modal = useAssignmentModal({
     isOpen,
@@ -27,7 +26,6 @@ export function AssignmentModal({
     onClose,
     initialShowDeleteConfirm,
     initialShowUnsavedConfirm,
-    initialOverrideProtection,
   });
 
   if (!isOpen) return null;
@@ -70,22 +68,10 @@ export function AssignmentModal({
         ) : null}
 
         {modal.isProtected ? (
-          <section className="alert alert-warning mt-3 flex-col items-start gap-2 text-sm">
-            <p className="flex items-center gap-2">
-              <Lock className="size-4 shrink-0" aria-hidden="true" />
-              {fixedAppointmentNotice}
-            </p>
-            <label className="label cursor-pointer gap-2 p-0">
-              <input
-                type="checkbox"
-                className="checkbox checkbox-sm"
-                checked={modal.overrideProtection}
-                onChange={modal.toggleOverrideProtection}
-                disabled={modal.isSaving}
-              />
-              <span className="label-text">Sperre aufheben</span>
-            </label>
-          </section>
+          <p className="alert alert-warning mt-3 text-sm">
+            <Lock className="size-4 shrink-0" aria-hidden="true" />
+            {fixedAppointmentNotice}
+          </p>
         ) : null}
 
         <section className="mt-4 flex flex-col gap-3">
@@ -99,7 +85,7 @@ export function AssignmentModal({
               placeholder="Projekt suchen..."
               onChange={(e) => modal.changeFilter(e.target.value)}
               onKeyDown={modal.handleProjectKeyDown}
-              disabled={modal.isSaving || modal.isLocked}
+              disabled={modal.isSaving}
               role="combobox"
               aria-expanded={modal.displayedProjects.length > 0}
               aria-controls="assignment-project-results"
@@ -131,7 +117,7 @@ export function AssignmentModal({
               type="button"
               className="btn btn-sm btn-error mr-auto"
               onClick={modal.openDeleteConfirm}
-              disabled={modal.isSaving || modal.isLocked}
+              disabled={modal.isSaving || modal.isProtected}
             >
               Löschen
             </button>
@@ -150,7 +136,7 @@ export function AssignmentModal({
             onClick={modal.handleSave}
             disabled={
               modal.isSaving ||
-              modal.isLocked ||
+              modal.isProtected ||
               (!modal.isEditMode && !modal.selectedProjectRef)
             }
           >
@@ -179,5 +165,4 @@ interface Props {
   onClose: () => void;
   showDeleteConfirm?: boolean;
   showUnsavedConfirm?: boolean;
-  overrideProtection?: boolean;
 }

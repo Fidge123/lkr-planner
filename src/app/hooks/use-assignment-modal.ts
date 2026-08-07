@@ -31,7 +31,6 @@ export function useAssignmentModal({
   onClose,
   initialShowDeleteConfirm,
   initialShowUnsavedConfirm,
-  initialOverrideProtection,
 }: Input) {
   const isEditMode = assignment !== null;
 
@@ -52,15 +51,11 @@ export function useAssignmentModal({
     initialShowUnsavedConfirm,
   );
   const [isDirty, setIsDirty] = useState(false);
-  const [overrideProtection, setOverrideProtection] = useState(
-    initialOverrideProtection,
-  );
   const filterInputRef = useRef<HTMLInputElement>(null);
 
   const { projects } = usePlanningProjects();
   const isProtected =
     isEditMode && isProtectedAssignment(assignment.projectRef, projects);
-  const isLocked = isProtected && !overrideProtection;
 
   const { results, errorMessage: searchError } =
     useAssignmentProjectSearch(filter);
@@ -83,11 +78,9 @@ export function useAssignmentModal({
     setFilter("");
     setHighlightedIndex(-1);
     setIsDirty(false);
-    setOverrideProtection(initialOverrideProtection);
     filterInputRef.current?.focus();
   }, [
     isOpen,
-    initialOverrideProtection,
     initialShowDeleteConfirm,
     initialShowUnsavedConfirm,
     assignment?.projectRef,
@@ -183,7 +176,6 @@ export function useAssignmentModal({
           projectName,
           // Editing an assignment must not move it within its day.
           orderIndex: null,
-          overrideProtection,
         })
       : await commands.createAssignment({
           employeeReference,
@@ -216,10 +208,7 @@ export function useAssignmentModal({
     }
     setIsSaving(true);
     setErrorMessage(null);
-    const result = await commands.deleteAssignment(
-      assignment.href,
-      overrideProtection,
-    );
+    const result = await commands.deleteAssignment(assignment.href);
     const deleteError = commandErrorMessage(result);
     if (deleteError) {
       setErrorMessage(deleteError);
@@ -232,10 +221,6 @@ export function useAssignmentModal({
   return {
     isEditMode,
     isProtected,
-    isLocked,
-    overrideProtection,
-    toggleOverrideProtection: () =>
-      setOverrideProtection((current) => !current),
     dialogRef,
     filterInputRef,
     filter,
@@ -271,5 +256,4 @@ interface Input {
   onClose: () => void;
   initialShowDeleteConfirm: boolean;
   initialShowUnsavedConfirm: boolean;
-  initialOverrideProtection: boolean;
 }
