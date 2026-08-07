@@ -67,8 +67,8 @@ export function usePlanningAssignments(
         setLoadedWeekStart(ws);
         return;
       }
-      // Cache unconditionally, even for a superseded request: it's still valid
-      // data for that week. Only the display update below is staleness-gated.
+      // Cache unconditionally, even for a superseded request: it's still valid data for that week.
+      // Only the display update below is staleness-gated.
       const data = groupResults(result.data);
       cache.current[ws] = data;
       if (id !== requestIdRef.current) return;

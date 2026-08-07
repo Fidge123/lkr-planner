@@ -113,9 +113,8 @@ async fn replan_day_until_settled(
     ))
 }
 
-/// The updates target distinct resources and do not depend on each other, so they go out
-/// concurrently. Returns `true` when a PUT was rejected with 412 and the day needs
-/// re-planning.
+/// The updates target distinct resources and do not depend on each other, so they go out concurrently.
+/// Returns `true` when a PUT was rejected with 412 and the day needs re-planning.
 async fn put_slot_updates(
     session: &CaldavSession,
     date: &str,
@@ -156,18 +155,16 @@ async fn put_slot_updates(
     Ok(conflicted)
 }
 
-/// Failures are logged instead of returned: the primary write already succeeded, so
-/// surfacing an error here would invite a retry that duplicates the event. The next write
-/// on this day converges anyway.
+/// Failures are logged instead of returned: the primary write already succeeded, so surfacing an error here would invite a retry that duplicates the event.
+/// The next write on this day converges anyway.
 async fn reallocate_day_best_effort(session: &CaldavSession, calendar_url: &str, date: &str) {
     if let Err(e) = replan_day_until_settled(session, calendar_url, date, None).await {
         eprintln!("calendar: re-allocation for {date} failed (converges on the next write): {e}");
     }
 }
 
-/// The returned plan carries both the pending event's own slot and the PUTs for its
-/// neighbours, so one fetch serves the whole write. `None` means the day could not be
-/// planned and the caller must fall back to a full re-allocation.
+/// The returned plan carries both the pending event's own slot and the PUTs for its neighbours, so one fetch serves the whole write.
+/// `None` means the day could not be planned and the caller must fall back to a full re-allocation.
 async fn plan_day_for_pending_write(
     session: &CaldavSession,
     calendar_url: &str,
@@ -906,8 +903,7 @@ mod tests {
     impl Drop for RadicaleServer {
         fn drop(&mut self) {
             // Kill the whole process group `uvx` and the Radicale it forked belong to;
-            // `child.kill()` alone only reaches the immediate `uvx` process and leaves
-            // Radicale running, reparented to init.
+            // `child.kill()` alone only reaches the immediate `uvx` process and leaves Radicale running, reparented to init.
             #[cfg(unix)]
             {
                 let pgid = self.child.id();

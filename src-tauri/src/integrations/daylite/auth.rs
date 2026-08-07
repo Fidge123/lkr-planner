@@ -14,8 +14,7 @@ pub async fn daylite_connect_refresh_token(
     let base_url = normalize_base_url(&request.base_url)?;
     let client = DayliteApiClient::new(&base_url)?;
 
-    // Persist the freshly minted tokens under the same lock the other commands use, so a
-    // connect cannot interleave with a concurrent refresh. The existing tokens are ignored.
+    // Persist the freshly minted tokens under the same lock the other commands use, so a connect cannot interleave with a concurrent refresh. The existing tokens are ignored.
     let token_state = with_token_refresh_lock(|_existing| async move {
         let refreshed = refresh_tokens(&client, request.refresh_token).await?;
         Ok((refreshed.clone(), refreshed))

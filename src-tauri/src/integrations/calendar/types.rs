@@ -17,10 +17,9 @@ pub struct CalendarCellEvent {
     pub kind: CalendarEventKind,
     pub title: String,
     pub project_status: Option<String>,
-    // Hex color of the resolved Daylite project's category. None when the project has no
-    // category, its category has no color, or the event is not a resolved assignment.
+    // Hex color of the resolved Daylite project's category. None for no/colorless category or unresolved.
     pub category_color: Option<String>,
-    // Category of the resolved Daylite project. None for bare or unresolved events.
+    // None when the project has no category or the event is not a resolved assignment.
     pub project_category: Option<String>,
     pub date: String,
     // Start time in HH:MM format. None for all-day events.
@@ -31,13 +30,11 @@ pub struct CalendarCellEvent {
     pub href: Option<String>,
     // Daylite project reference (e.g. "/v1/projects/42") stored in DESCRIPTION. None for bare events.
     pub project_ref: Option<String>,
-    // Position among the same-day, same-employee assignments. None for events that carry no
-    // order property yet; those sort after the indexed ones.
+    // None for events that carry no order property yet; those sort after the indexed ones.
     pub order_index: Option<u32>,
 }
 
-/// CalDAV has no atomic cross-collection move, so the target copy is created
-/// first and the source deleted afterwards, which can leave a partial move.
+/// CalDAV has no atomic cross-collection move, so the target copy is created first and the source deleted afterwards, which can leave a partial move.
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum MoveAssignmentResult {
@@ -72,8 +69,7 @@ pub(super) struct RawVEvent {
     pub(super) href: String,
     // ETag from d:getetag in the REPORT response; sent as If-Match on re-slot PUTs. Empty if absent.
     pub(super) etag: String,
-    // Full calendar-data text of the resource, used to patch slot times without dropping
-    // user-added properties. Empty when the event was not parsed from a REPORT.
+    // Full calendar-data text of the resource, used to patch slot times without dropping user-added properties.Empty when the event was not parsed from a REPORT.
     pub(super) raw_ical: String,
     // Value of the order property; None when the event carries none.
     pub(super) order_index: Option<u32>,

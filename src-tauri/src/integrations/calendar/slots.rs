@@ -50,13 +50,11 @@ pub(super) struct SlotUpdate {
     pub(super) payload: String,
 }
 
-/// One assignment singled out of the day, either because the caller is about to write it
-/// itself or because it is being moved to a new position within the day.
+/// One assignment singled out of the day, either because the caller is about to write it itself or because it is being moved to a new position within the day.
 #[derive(Clone, Copy)]
 pub(super) struct DayPlacement<'a> {
     pub(super) uid: &'a str,
-    /// Requested position among the day's assignments. `None` keeps the event where it
-    /// already sits, or appends it when the day does not contain it yet.
+    /// Requested position among the day's assignments. `None` keeps the event where it already sits, or appends it when the day does not contain it yet.
     pub(super) order_index: Option<u32>,
     /// True when the caller PUTs this event itself, so the plan must not update it as well.
     pub(super) written_by_caller: bool,
@@ -68,22 +66,18 @@ pub(super) struct DayPlan {
     pub(super) updates: Vec<SlotUpdate>,
 }
 
-/// Only events whose DESCRIPTION first line is a `daylite:` reference take part, so bare,
-/// absence, and holiday events are never re-slotted. Events already sitting in their slot
-/// are skipped so repeated runs converge without extra writes.
+/// Only events whose DESCRIPTION first line is a `daylite:` reference take part, so bare, absence, and holiday events are never re-slotted.
+/// Events already sitting in their slot are skipped so repeated runs converge without extra writes.
 ///
 /// Excluded events keep whatever times they already have and take no share of the window,
-/// so the participating assignments are spread across the full 08:00-16:00 window and may
-/// overlap an excluded event. That is intended: the alternative would be to silently shrink
-/// everyone else's slot on the guess that the untouched event still occupies its old times.
+/// so the participating assignments are spread across the full 08:00-16:00 window and may overlap an excluded event.
+/// That is intended: the alternative would be to silently shrink everyone else's slot on the guess that the untouched event still occupies its old times.
 ///
-/// The day is re-sequenced to a dense 0..n-1 ordering on every call, so an event is updated
-/// whenever its order index or its slot times no longer match.
+/// The day is re-sequenced to a dense 0..n-1 ordering on every call, so an event is updated whenever its order index or its slot times no longer match.
 ///
 /// A `placement` names an event the caller singles out: it lands at the requested position,
-/// and when `written_by_caller` is set the caller PUTs it itself, so no update is planned
-/// for it and each event is written exactly once per operation. Its resulting index and
-/// slot come back via `DayPlan::placed`.
+/// and when `written_by_caller` is set the caller PUTs it itself, so no update is planned for it and each event is written exactly once per operation.
+/// Its resulting index and slot come back via `DayPlan::placed`.
 pub(super) fn plan_slot_updates(
     events: &[RawVEvent],
     date: &str,
