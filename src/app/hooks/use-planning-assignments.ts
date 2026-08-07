@@ -10,7 +10,7 @@ import { useLeadingDebounce } from "./use-leading-debounce";
 type EmployeeEvents = Record<string, CalendarCellEvent[]>;
 type EmployeeErrors = Record<string, string>;
 
-interface WeekData {
+export interface WeekData {
   eventsByEmployee: EmployeeEvents;
   errorsByEmployee: EmployeeErrors;
 }
@@ -23,6 +23,7 @@ export interface PlanningAssignmentsState {
   loadedWeekStart: string | null;
   reloadAssignments: () => void;
   invalidateWeeksContaining: (uid: string) => void;
+  getCachedWeek: (weekStart: string) => WeekData | null;
 }
 
 export function usePlanningAssignments(
@@ -67,8 +68,8 @@ export function usePlanningAssignments(
         setLoadedWeekStart(ws);
         return;
       }
-      // Cache unconditionally, even for a superseded request: it's still valid
-      // data for that week. Only the display update below is staleness-gated.
+      // Cache unconditionally, even for a superseded request: it's still valid data for that week.
+      // Only the display update below is staleness-gated.
       const data = groupResults(result.data);
       cache.current[ws] = data;
       if (id !== requestIdRef.current) return;
@@ -127,6 +128,11 @@ export function usePlanningAssignments(
     }
   }, []);
 
+  const getCachedWeek = useCallback(
+    (ws: string) => cache.current[ws] ?? null,
+    [],
+  );
+
   return useMemo(
     () => ({
       eventsByEmployee,
@@ -136,6 +142,7 @@ export function usePlanningAssignments(
       loadedWeekStart,
       reloadAssignments,
       invalidateWeeksContaining,
+      getCachedWeek,
     }),
     [
       eventsByEmployee,
@@ -145,6 +152,7 @@ export function usePlanningAssignments(
       loadedWeekStart,
       reloadAssignments,
       invalidateWeeksContaining,
+      getCachedWeek,
     ],
   );
 }

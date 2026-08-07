@@ -332,9 +332,8 @@ mod tests {
 
     #[test]
     fn vcr_alternate_namespace_prefix_is_handled_correctly() {
-        // Uses xmlns:dav="DAV:" and xmlns:caldav="urn:ietf:params:xml:ns:caldav"
-        // instead of the typical d:/c: prefixes. The parser matches by namespace
-        // URI, not prefix string.
+        // Uses xmlns:dav="DAV:" and xmlns:caldav="urn:ietf:params:xml:ns:caldav" instead of the typical d:/c: prefixes.
+        // The parser matches by namespace URI, not prefix string.
         let body = include_str!("zep_vcr/propfind_alternate_ns_prefix.xml");
         let calendars = parse_propfind_calendars(body, "https://app.zep.de/caldav/admin");
 

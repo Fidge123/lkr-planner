@@ -84,8 +84,7 @@ pub fn check_token(service: &str, username: &str) -> Result<bool, SecretError> {
 mod tests {
     use super::*;
 
-    // Note: `set_default_store` mutates global state. Tests using
-    // `with_mock_keyring` must not run concurrently with other keyring tests.
+    // Note: `set_default_store` mutates global state. Tests using `with_mock_keyring` must not run concurrently with other keyring tests.
     fn with_mock_keyring<T>(f: impl FnOnce() -> T) -> T {
         keyring_core::set_default_store(keyring_core::mock::Store::new().unwrap());
         f()

@@ -1,0 +1,38 @@
+## 1. Extract reusable description parser
+
+- [x] 1.1 Write failing `cargo test`s for a standalone `parse_daylite_reference(description: &str) -> Option<String>` function covering: valid `daylite:/<path>` first line, no reference present, empty description
+- [x] 1.2 Extract the parsing logic out of `classify_event` (`src-tauri/src/integrations/calendar/events.rs`) into this function, satisfying the tests, and update `classify_event` to call it
+
+## 2. Extend Daylite project lookup with category
+
+- [x] 2.1 Write failing `cargo test`s asserting `fetch_project_by_reference` returns `category` alongside name/status (protected category present, absent, `null`)
+- [x] 2.2 Extend `fetch_project_by_reference` in `src-tauri/src/integrations/daylite/projects.rs` to include `category` in its return value, satisfying the tests
+- [x] 2.3 Update the existing call site in `load_week_events` (`calendar/commands.rs`) to ignore the new field
+- [x] 2.4 Add `FIXED_APPOINTMENT_CATEGORY: &str = "Termin FIX geplant"` constant alongside `OVERDUE_CATEGORY`
+
+## 3. Backend guard
+
+- [x] 3.1 Write failing `cargo test`s for a `is_protected_event(href) -> bool`-style guard: protected category, non-protected category, no project reference, project lookup failure (fail open)
+- [x] 3.2 Implement the guard in `src-tauri/src/integrations/calendar/commands.rs` (or a new module), fetching the event by `href`, parsing its Daylite reference, and checking the project's category, satisfying the tests
+- [x] 3.3 Wire the guard into `update_assignment`: reject with a German error before the CalDAV PUT if the event is protected
+- [x] 3.4 Wire the guard into `delete_assignment`: reject with a German error before the CalDAV DELETE if the event is protected
+- [x] 3.5 Add `cargo test` coverage confirming `create_assignment` is unaffected by the guard
+
+## 4. Frontend disabled state
+
+- [x] 4.1 Write failing `bun test`s for the assignment modal: save/delete disabled and German notice shown when the loaded assignment's project category is `"Termin FIX geplant"`
+- [x] 4.2 Carry the resolved category to the frontend as `project_category` on `CalendarCellEvent` and update `src/app/components/assignment-modal.tsx` to disable save/delete with a notice, satisfying the tests
+- [x] 4.3 Add `bun test` coverage for surfacing the backend's German rejection message if a stale edit/delete is submitted anyway
+
+## 5. Protect the day rather than the event
+
+- [x] 5.1 Write failing `cargo test`s for the move guard: protected event moved to another day is refused, moved within its day is allowed, unprotected event moved to another day is allowed
+- [x] 5.2 Add `refuse_protected_day_change` in `protection.rs` and wire it into `move_assignment`, satisfying the tests
+- [x] 5.3 Leave `reorder_assignment` and day re-slotting unguarded, and record the day-scoped rule in the specs
+
+## 6. Verification
+
+- [x] 6.1 Run `cargo test` and confirm all new and existing tests pass
+- [x] 6.2 Run `bun test` and confirm all new and existing tests pass
+- [x] 6.3 Run `bun lint` and fix any issues
+- [x] 6.4 Manually verify in the running app: an assignment linked to a "Termin FIX geplant" project shows disabled edit/delete controls with a German notice, and a direct backend call to update/delete it is rejected

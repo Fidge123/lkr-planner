@@ -4,7 +4,7 @@ use uuid::Uuid;
 
 use super::super::ical::{build_ical_payload, parse_ical_events};
 use super::super::slots::{full_window, plan_slot_updates, DayPlacement, DayPlan, SlotUpdate};
-use super::super::types::MoveAssignmentResult;
+use super::super::types::{MoveAssignmentResult, RawVEvent};
 use super::report::fetch_events_in_range;
 
 const MAX_REALLOCATE_ATTEMPTS: u32 = 3;
@@ -33,11 +33,28 @@ fn parent_collection_url(resource_url: &str) -> &str {
         .unwrap_or(resource_url)
 }
 
-/// lkr-planner writes one VEVENT per resource, so the first component is authoritative.
+pub(crate) async fn fetch_event_by_href(
+    session: &CaldavSession,
+    href: &str,
+) -> Result<Option<RawVEvent>, String> {
+    let resource_url = resolve_href(href, &session.base_url)?;
+    fetch_event(session, &resource_url).await
+}
+
 async fn fetch_event_date(
     session: &CaldavSession,
     resource_url: &str,
 ) -> Result<Option<String>, String> {
+    Ok(fetch_event(session, resource_url)
+        .await?
+        .map(|event| event.dtstart))
+}
+
+/// lkr-planner writes one VEVENT per resource, so the first component is authoritative.
+async fn fetch_event(
+    session: &CaldavSession,
+    resource_url: &str,
+) -> Result<Option<RawVEvent>, String> {
     let response = session
         .client
         .get(resource_url)
@@ -63,7 +80,7 @@ async fn fetch_event_date(
         eprintln!("calendar: {resource_url} contained no readable VEVENT");
         return Ok(None);
     };
-    Ok(Some(event.dtstart))
+    Ok(Some(event))
 }
 
 /// Re-plans and re-PUTs the day until no PUT is rejected with 412, so a plan that raced a
@@ -96,9 +113,8 @@ async fn replan_day_until_settled(
     ))
 }
 
-/// The updates target distinct resources and do not depend on each other, so they go out
-/// concurrently. Returns `true` when a PUT was rejected with 412 and the day needs
-/// re-planning.
+/// The updates target distinct resources and do not depend on each other, so they go out concurrently.
+/// Returns `true` when a PUT was rejected with 412 and the day needs re-planning.
 async fn put_slot_updates(
     session: &CaldavSession,
     date: &str,
@@ -139,18 +155,16 @@ async fn put_slot_updates(
     Ok(conflicted)
 }
 
-/// Failures are logged instead of returned: the primary write already succeeded, so
-/// surfacing an error here would invite a retry that duplicates the event. The next write
-/// on this day converges anyway.
+/// Failures are logged instead of returned: the primary write already succeeded, so surfacing an error here would invite a retry that duplicates the event.
+/// The next write on this day converges anyway.
 async fn reallocate_day_best_effort(session: &CaldavSession, calendar_url: &str, date: &str) {
     if let Err(e) = replan_day_until_settled(session, calendar_url, date, None).await {
         eprintln!("calendar: re-allocation for {date} failed (converges on the next write): {e}");
     }
 }
 
-/// The returned plan carries both the pending event's own slot and the PUTs for its
-/// neighbours, so one fetch serves the whole write. `None` means the day could not be
-/// planned and the caller must fall back to a full re-allocation.
+/// The returned plan carries both the pending event's own slot and the PUTs for its neighbours, so one fetch serves the whole write.
+/// `None` means the day could not be planned and the caller must fall back to a full re-allocation.
 async fn plan_day_for_pending_write(
     session: &CaldavSession,
     calendar_url: &str,
@@ -889,8 +903,7 @@ mod tests {
     impl Drop for RadicaleServer {
         fn drop(&mut self) {
             // Kill the whole process group `uvx` and the Radicale it forked belong to;
-            // `child.kill()` alone only reaches the immediate `uvx` process and leaves
-            // Radicale running, reparented to init.
+            // `child.kill()` alone only reaches the immediate `uvx` process and leaves Radicale running, reparented to init.
             #[cfg(unix)]
             {
                 let pgid = self.child.id();

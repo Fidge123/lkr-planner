@@ -1,6 +1,28 @@
 import type { DayliteProjectSummary } from "../../generated/tauri";
 import type { ModalSaveAction } from "../next-day-quick-add";
 
+const fixedAppointmentCategory = "Termin FIX geplant";
+
+export const fixedAppointmentNotice =
+  "Dieser Termin ist als „Termin FIX geplant“ gesperrt und kann nicht bearbeitet oder gelöscht werden.";
+
+// Advisory only: the backend re-derives this per write and is the real enforcement.
+export function isProtectedAssignment(
+  projectCategory: string | null | undefined,
+): boolean {
+  return projectCategory === fixedAppointmentCategory;
+}
+
+const genericWriteError = "Die Änderung konnte nicht gespeichert werden.";
+
+// Keyed on the status: an error carrying no message must not read as success.
+export function commandErrorMessage(result: {
+  status: string;
+  error?: string;
+}): string | null {
+  return result.status === "error" ? result.error || genericWriteError : null;
+}
+
 export function resolveDisplayedProjects(
   filter: string,
   suggestions: DayliteProjectSummary[],
@@ -28,8 +50,7 @@ export function resolveEscapeAction(filter: string): "clear" | "close" {
 export type AssignmentWriteIntent = "create" | "update" | "missing-href";
 
 // An edit can only be written back through the assignment's CalDAV resource URL.
-// Without one the write must fail visibly: treating it as a create would duplicate the
-// assignment and leave the original untouched.
+// Without one the write must fail visibly: treating it as a create would duplicate the assignment and leave the original untouched.
 export function resolveWriteIntent(
   isEditMode: boolean,
   href: string | null | undefined,

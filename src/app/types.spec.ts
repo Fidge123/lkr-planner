@@ -11,6 +11,7 @@ function calendarEvent(
     title: "UB",
     projectStatus: null,
     categoryColor: null,
+    projectCategory: null,
     date: "2026-05-05",
     startTime: null,
     endTime: null,
