@@ -51,6 +51,19 @@ The system SHALL render default suggestions as the combobox empty-state content,
 - **AND** pressing Enter selects the highlighted suggestion into the assignment field
 - **AND** the modal stays open so the user confirms with the Speichern button
 
+### Requirement: Reserved space while suggestions load
+The system SHALL reserve the height of a full suggestion list while the default suggestions are loading, so the dialog does not resize when they arrive.
+
+#### Scenario: Modal opens before the suggestions arrive
+- **WHEN** the modal opens and the filter is empty
+- **AND** the default suggestions have not loaded yet
+- **THEN** five placeholder rows are shown in place of the result list
+- **AND** each placeholder row has the height of a loaded result row
+
+#### Scenario: Placeholder replaced by the suggestions
+- **WHEN** the default suggestions have loaded
+- **THEN** the placeholder rows are replaced by the result list
+
 ### Requirement: Suggestion count limit
 The system SHALL cap total suggestions at 5.
 

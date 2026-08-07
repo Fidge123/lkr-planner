@@ -1,7 +1,13 @@
+use tauri::menu::{Menu, MenuItem, Submenu};
+use tauri::Emitter;
 use tauri_plugin_updater::UpdaterExt;
 
 mod integrations;
 pub mod secret_manager;
+
+const RELOAD_DATA_MENU_ID: &str = "reload-data";
+/// Matched by the frontend listener in `use-reload-data-menu.ts`.
+const RELOAD_DATA_EVENT: &str = "reload-data";
 
 fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
     tauri_specta::Builder::<tauri::Wry>::new().commands(tauri_specta::collect_commands![
@@ -13,6 +19,7 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         integrations::daylite::projects::daylite_list_projects,
         integrations::daylite::projects::daylite_search_projects,
         integrations::daylite::projects::daylite_query_overdue_projects,
+        integrations::daylite::categories::daylite_project_category_colors,
         integrations::daylite::contacts::commands::daylite_list_contacts,
         integrations::daylite::contacts::commands::daylite_list_cached_contacts,
         integrations::daylite::contacts::commands::daylite_update_contact_ical_urls,
@@ -51,6 +58,8 @@ pub fn run() {
                 eprintln!("Failed to initialize credential store: {error}");
             }
 
+            install_reload_data_menu(app.handle())?;
+
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 if let Some(message) = format_update_error(update(handle).await) {
@@ -59,12 +68,52 @@ pub fn run() {
             });
             Ok(())
         })
+        .on_menu_event(|app, event| {
+            if event.id() == RELOAD_DATA_MENU_ID {
+                if let Err(error) = app.emit(RELOAD_DATA_EVENT, ()) {
+                    eprintln!("Failed to emit reload event: {error}");
+                }
+            }
+        })
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(specta_builder.invoke_handler())
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+fn install_reload_data_menu(app: &tauri::AppHandle) -> tauri::Result<()> {
+    let menu = Menu::default(app)?;
+    let reload = MenuItem::with_id(
+        app,
+        RELOAD_DATA_MENU_ID,
+        "Daten neu laden",
+        true,
+        None::<&str>,
+    )?;
+
+    match file_submenu(&menu)? {
+        Some(file) => file.prepend(&reload)?,
+        // Only reachable if a platform's default menu ever ships without a File submenu.
+        None => menu.insert(&Submenu::with_items(app, "File", true, &[&reload])?, 1)?,
+    }
+
+    app.set_menu(menu)?;
+    Ok(())
+}
+
+fn file_submenu(menu: &Menu<tauri::Wry>) -> tauri::Result<Option<Submenu<tauri::Wry>>> {
+    for item in menu.items()? {
+        let Some(submenu) = item.as_submenu() else {
+            continue;
+        };
+        if submenu.text()? == "File" {
+            return Ok(Some(submenu.clone()));
+        }
+    }
+
+    Ok(None)
 }
 
 async fn update(app: tauri::AppHandle) -> tauri_plugin_updater::Result<()> {

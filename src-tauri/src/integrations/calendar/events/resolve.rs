@@ -71,10 +71,12 @@ pub(crate) fn resolve_event(
         };
     }
 
+    // An assignment without a project status is how the frontend detects a
+    // reference it must not treat as a project name.
     CalendarCellEvent {
         uid,
         kind: CalendarEventKind::Assignment,
-        title: format!("Beschreibung für {} konnte nicht abgerufen werden", summary),
+        title: summary,
         project_status: None,
         category_color: None,
         project_ref: Some(project_ref),
@@ -240,9 +242,7 @@ mod tests {
         );
 
         assert_eq!(event.kind, CalendarEventKind::Assignment);
-        assert!(event
-            .title
-            .contains("Beschreibung für Unbekanntes Projekt konnte nicht abgerufen werden"));
+        assert_eq!(event.title, "Unbekanntes Projekt");
         assert_eq!(event.project_status, None);
         assert_eq!(event.category_color, None);
     }

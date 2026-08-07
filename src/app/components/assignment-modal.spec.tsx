@@ -12,7 +12,11 @@ import {
   resolveSaveAction,
   resolveWriteIntent,
 } from "./assignment-modal-logic";
-import { ProjectResultList, SuggestionEmptyState } from "./project-result-list";
+import {
+  ProjectResultList,
+  ProjectResultPlaceholder,
+  SuggestionEmptyState,
+} from "./project-result-list";
 
 mock.module("../../generated/tauri", () => ({
   commands: {
@@ -61,6 +65,14 @@ describe("AssignmentModal", () => {
     );
 
     expect(html).not.toContain('id="assignment-project-results"');
+  });
+
+  it("reserves the suggestion rows until the suggestions are loaded", () => {
+    const html = renderToStaticMarkup(
+      <AssignmentModal {...baseProps} isOpen assignment={null} />,
+    );
+
+    expect(html.match(/skeleton/g)).toHaveLength(5);
   });
 
   it("edit mode: shows the selected project and the delete button", () => {
@@ -182,6 +194,70 @@ describe("ProjectResultList", () => {
     expect(html).toContain('aria-current="true"');
     expect(html).toContain('aria-current="false"');
     expect(html).toContain("bg-primary");
+  });
+
+  it("marks each result with a dot in its daylite category color", () => {
+    const html = renderToStaticMarkup(
+      <ProjectResultList
+        projects={[
+          { ...project("Projekt Nord", "/v1/projects/10"), category: "Bau" },
+          {
+            ...project("Projekt Süd", "/v1/projects/11"),
+            category: "Ohne Farbe",
+          },
+        ]}
+        categoryColors={{ Bau: "#8bc34a" }}
+        highlightedIndex={-1}
+        onSelect={() => {}}
+      />,
+    );
+
+    expect(html).toContain("background-color:#8bc34a");
+    expect(html.match(/rounded-full/g)).toHaveLength(2);
+    expect(html).toContain("bg-base-content/30");
+  });
+
+  it("keeps the category dot colored on the selected row", () => {
+    const html = renderToStaticMarkup(
+      <ProjectResultList
+        projects={[
+          { ...project("Projekt Nord", "/v1/projects/10"), category: "Bau" },
+        ]}
+        categoryColors={{ Bau: "#8bc34a" }}
+        highlightedIndex={0}
+        onSelect={() => {}}
+      />,
+    );
+
+    expect(html).toContain("bg-primary text-primary-content");
+    expect(html).toContain("background-color:#8bc34a");
+  });
+
+  it("reserves rows of the same height as the loaded results", () => {
+    const placeholder = renderToStaticMarkup(<ProjectResultPlaceholder />);
+    const loaded = renderToStaticMarkup(
+      <ProjectResultList
+        projects={[project("Projekt Nord", "/v1/projects/10")]}
+        highlightedIndex={-1}
+        onSelect={() => {}}
+      />,
+    );
+
+    expect(placeholder.match(/h-8/g)).toHaveLength(5);
+    expect(loaded).toContain("h-8");
+  });
+
+  it("renders a project name with hard line breaks as a single line", () => {
+    const html = renderToStaticMarkup(
+      <ProjectResultList
+        projects={[project("DARAMIC LLC,\n Norderstedt", "/v1/projects/10")]}
+        highlightedIndex={-1}
+        onSelect={() => {}}
+      />,
+    );
+
+    expect(html).toContain("DARAMIC LLC, Norderstedt");
+    expect(html).toContain("truncate");
   });
 });
 

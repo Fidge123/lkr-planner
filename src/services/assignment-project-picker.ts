@@ -12,7 +12,7 @@ export async function searchProjectsForAssignmentPicker(
       searchTerm,
       limit: CANDIDATE_LIMIT,
       statuses: ["new_status", "in_progress"],
-      fullRecords: null,
+      fullRecords: true,
       start: null,
       sort: "name",
     }),
