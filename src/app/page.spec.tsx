@@ -28,6 +28,7 @@ const defaultAssignmentState: PlanningGridAssignmentState = {
   loadedWeekStart: null,
   reloadAssignments: () => {},
   invalidateWeeksContaining: () => {},
+  getCachedWeek: () => null,
 };
 
 const defaultHolidaysState: HolidaysState = {
