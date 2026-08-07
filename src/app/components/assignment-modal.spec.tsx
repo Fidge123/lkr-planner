@@ -184,7 +184,7 @@ describe("ProjectResultList", () => {
     expect(html).toContain("bg-primary");
   });
 
-  it("strips each result with the color of its daylite category", () => {
+  it("marks each result with a dot in its daylite category color", () => {
     const html = renderToStaticMarkup(
       <ProjectResultList
         projects={[
@@ -200,9 +200,38 @@ describe("ProjectResultList", () => {
       />,
     );
 
-    expect(html).toContain("border-left-color:#8bc34a");
-    expect(html.match(/border-l-4/g)).toHaveLength(2);
-    expect(html.match(/border-left-color/g)).toHaveLength(1);
+    expect(html).toContain("background-color:#8bc34a");
+    expect(html.match(/rounded-full/g)).toHaveLength(2);
+    expect(html).toContain("bg-base-content/30");
+  });
+
+  it("keeps the category dot colored on the selected row", () => {
+    const html = renderToStaticMarkup(
+      <ProjectResultList
+        projects={[
+          { ...project("Projekt Nord", "/v1/projects/10"), category: "Bau" },
+        ]}
+        categoryColors={{ Bau: "#8bc34a" }}
+        highlightedIndex={0}
+        onSelect={() => {}}
+      />,
+    );
+
+    expect(html).toContain("bg-primary text-primary-content");
+    expect(html).toContain("background-color:#8bc34a");
+  });
+
+  it("renders a project name with hard line breaks as a single line", () => {
+    const html = renderToStaticMarkup(
+      <ProjectResultList
+        projects={[project("DARAMIC LLC,\n Norderstedt", "/v1/projects/10")]}
+        highlightedIndex={-1}
+        onSelect={() => {}}
+      />,
+    );
+
+    expect(html).toContain("DARAMIC LLC, Norderstedt");
+    expect(html).toContain("truncate");
   });
 });
 
