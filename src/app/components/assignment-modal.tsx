@@ -92,6 +92,7 @@ export function AssignmentModal({
           ) : null}
           <ProjectResultList
             projects={modal.displayedProjects}
+            categoryColors={modal.categoryColors}
             highlightedIndex={modal.highlightedIndex}
             onSelect={modal.selectProject}
           />

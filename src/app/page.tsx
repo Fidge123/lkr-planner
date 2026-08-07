@@ -14,10 +14,8 @@ import { createPortal } from "react-dom";
 import type {
   EmployeeSetting,
   PlanningContactRecord,
-  PlanningProjectRecord,
 } from "../generated/tauri";
 import { MoveReconciliationDialog } from "./components/move-reconciliation-dialog";
-import { ProjectTable } from "./components/project-table";
 import {
   AssignmentCardBody,
   assignmentCardClass,
@@ -32,7 +30,6 @@ import { useAppointmentDrag } from "./hooks/use-appointment-drag";
 import { type HolidaysState, useHolidays } from "./hooks/use-holidays";
 import type { PlanningAssignmentsState } from "./hooks/use-planning-assignments";
 import { usePlanningEmployees } from "./hooks/use-planning-employees";
-import { usePlanningProjects } from "./hooks/use-planning-projects";
 import { getWeekDays, toLocalISODate } from "./util";
 
 // The pointer, not the dragged card's box, picks the target cell: the position inside a cell
@@ -91,7 +88,6 @@ function useFrozenDuringDrag<T>(
 export function PlanningGrid({
   weekOffset,
   showWeekend = false,
-  projectState,
   employeeState,
   assignmentState,
   employeeSettings = [],
@@ -103,14 +99,12 @@ export function PlanningGrid({
   const weekDays = getWeekDays(weekOffset, showWeekend);
   const weekStart = toLocalISODate(weekDays[0]);
 
-  const fallbackProjectsState = usePlanningProjects();
   const fallbackEmployeesState = usePlanningEmployees();
   const fallbackHolidaysState = useHolidays(weekStart);
 
   return (
     <PlanningGridTable
       weekDays={weekDays}
-      projectState={projectState ?? fallbackProjectsState}
       employeeState={employeeState ?? fallbackEmployeesState}
       assignmentState={assignmentState}
       employeeSettings={employeeSettings}
@@ -124,7 +118,6 @@ export function PlanningGrid({
 
 export function PlanningGridTable({
   weekDays,
-  projectState,
   employeeState,
   assignmentState,
   employeeSettings,
@@ -133,7 +126,6 @@ export function PlanningGridTable({
   onOpenIcalDialog,
   onNavigateWeek,
 }: PlanningGridTableProps) {
-  const { projects, isLoading, errorMessage, reloadProjects } = projectState;
   const {
     employees,
     isLoading: isEmployeeLoading,
@@ -196,7 +188,6 @@ export function PlanningGridTable({
 
   return (
     <section className="w-full h-full overflow-auto">
-      <ReloadableAlert message={errorMessage} onReload={reloadProjects} />
       <ReloadableAlert
         message={employeeErrorMessage}
         onReload={reloadEmployees}
@@ -303,8 +294,6 @@ export function PlanningGridTable({
         reconciliation={drag.reconciliation}
         onResolved={drag.resolveReconciliation}
       />
-
-      <ProjectTable projects={projects} isLoading={isLoading} />
     </section>
   );
 }
@@ -356,7 +345,6 @@ function DragPreviewCard({ payload }: { payload: AppointmentDragPayload }) {
 interface Props {
   weekOffset: number;
   showWeekend?: boolean;
-  projectState?: PlanningGridProjectsState;
   employeeState?: PlanningGridEmployeesState;
   assignmentState: PlanningGridAssignmentState;
   employeeSettings?: EmployeeSetting[];
@@ -368,7 +356,6 @@ interface Props {
 
 export interface PlanningGridTableProps {
   weekDays: Date[];
-  projectState: PlanningGridProjectsState;
   employeeState: PlanningGridEmployeesState;
   assignmentState: PlanningGridAssignmentState;
   employeeSettings: EmployeeSetting[];
@@ -376,13 +363,6 @@ export interface PlanningGridTableProps {
   holidaysState: HolidaysState;
   onOpenIcalDialog: (employee: PlanningContactRecord) => void;
   onNavigateWeek?: (direction: -1 | 1) => void;
-}
-
-export interface PlanningGridProjectsState {
-  projects: PlanningProjectRecord[];
-  isLoading: boolean;
-  errorMessage: string | null;
-  reloadProjects: () => void;
 }
 
 export interface PlanningGridEmployeesState {

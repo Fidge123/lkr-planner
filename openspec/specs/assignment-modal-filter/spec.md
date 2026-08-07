@@ -28,6 +28,22 @@ The result list starts empty; default content for the empty state is supplied by
 - **THEN** filtered results are hidden
 - **AND** the result list returns to its empty default state
 
+### Requirement: Category color strip on result items
+The system SHALL show a color strip on every item of the result list, filtered results and default suggestions alike, using the color of the project's Daylite category, so a result carries the same signal as the assignment cards in the planning grid.
+
+#### Scenario: Result of a project with a colored category
+- **WHEN** a result list item belongs to a project whose Daylite category has a color
+- **THEN** the item shows a strip in that category color
+
+#### Scenario: Result without a category color
+- **WHEN** a result list item belongs to a project without a category, or to a category without a color
+- **THEN** the item shows the neutral default strip
+
+#### Scenario: Category colors unavailable
+- **WHEN** the category colors cannot be loaded from Daylite
+- **THEN** every item shows the neutral default strip
+- **AND** no error message is shown
+
 ### Requirement: Keyboard navigation
 The system SHALL support keyboard selection over whichever result list is currently displayed (filtered results or the empty-state default content).
 

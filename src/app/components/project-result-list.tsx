@@ -1,8 +1,14 @@
 import { useEffect, useRef } from "react";
 import type { DayliteProjectSummary } from "../../generated/tauri";
+import {
+  type ProjectCategoryColors,
+  projectCategoryColor,
+} from "../../services/daylite-categories";
+import { assignmentStripClass, categoryStrip } from "./timetable-cell";
 
 export function ProjectResultList({
   projects,
+  categoryColors = {},
   highlightedIndex,
   onSelect,
 }: ProjectResultListProps) {
@@ -28,9 +34,10 @@ export function ProjectResultList({
               ref={isActive ? activeRef : undefined}
               type="button"
               aria-current={isActive}
-              className={
-                isActive ? "bg-primary text-primary-content" : undefined
-              }
+              className={`${assignmentStripClass} rounded-lg ${isActive ? "bg-primary text-primary-content" : ""}`}
+              style={categoryStrip(
+                projectCategoryColor(categoryColors, project.category),
+              )}
               onClick={() => onSelect(project)}
             >
               {project.name}
@@ -44,6 +51,8 @@ export function ProjectResultList({
 
 interface ProjectResultListProps {
   projects: DayliteProjectSummary[];
+  /** Daylite category name to color, so a result carries the same strip as its cards. */
+  categoryColors?: ProjectCategoryColors;
   highlightedIndex: number;
   onSelect: (project: DayliteProjectSummary) => void;
 }

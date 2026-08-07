@@ -183,6 +183,27 @@ describe("ProjectResultList", () => {
     expect(html).toContain('aria-current="false"');
     expect(html).toContain("bg-primary");
   });
+
+  it("strips each result with the color of its daylite category", () => {
+    const html = renderToStaticMarkup(
+      <ProjectResultList
+        projects={[
+          { ...project("Projekt Nord", "/v1/projects/10"), category: "Bau" },
+          {
+            ...project("Projekt Süd", "/v1/projects/11"),
+            category: "Ohne Farbe",
+          },
+        ]}
+        categoryColors={{ Bau: "#8bc34a" }}
+        highlightedIndex={-1}
+        onSelect={() => {}}
+      />,
+    );
+
+    expect(html).toContain("border-left-color:#8bc34a");
+    expect(html.match(/border-l-4/g)).toHaveLength(2);
+    expect(html.match(/border-left-color/g)).toHaveLength(1);
+  });
 });
 
 describe("nextHighlightIndex", () => {
