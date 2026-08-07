@@ -24,8 +24,8 @@
     "@tauri-apps/plugin-http": "~2.5.9",
     "@tauri-apps/plugin-opener": "^2.5.4",
     "@tauri-apps/plugin-updater": "~2.10.1",
-    "daisyui": "^5.7.8",
-    "lucide-react": "^1.27.0",
+    "daisyui": "^5.7.9",
+    "lucide-react": "^1.28.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "tailwindcss": "^4.3.3"
