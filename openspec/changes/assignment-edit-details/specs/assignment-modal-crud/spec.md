@@ -24,29 +24,43 @@ The modal SHALL let the planner change the day an assignment falls on, in create
 - **AND** the grid reloads without the card, because the card belongs to another week
 
 ### Requirement: Edit the assignment times
-The modal SHALL let the planner set an assignment's start and end time by hand, which pins the assignment to those times, and SHALL let the planner hand it back to automatic slot allocation.
+The modal SHALL let the planner set an assignment's start and end time by hand, and those times SHALL be applied to the write the planner is making and to nothing else.
+The assignment is not marked as manually timed, so the next re-allocation of its day returns it to its share of the window.
 
-#### Scenario: Time fields show the current slot
+#### Scenario: Time fields show the current times
 - **WHEN** the modal opens for an assignment
-- **THEN** the start and end time fields show the times the assignment currently holds, whether allocated or set by hand
+- **THEN** the start and end time fields show the times the assignment currently holds
+
+#### Scenario: Time fields in create mode
+- **WHEN** the modal opens to create an assignment
+- **THEN** the time fields show the slot the new assignment would receive from the day's allocation
 
 #### Scenario: Set times by hand
 - **WHEN** the planner changes a time and saves
 - **THEN** the assignment is written with the entered times
-- **AND** it is pinned, so later writes on that day leave its times alone
+- **AND** the day's other assignments keep the times they had
 
-#### Scenario: Return an assignment to automatic allocation
-- **WHEN** the planner empties both time fields and saves
-- **THEN** the assignment is no longer pinned
-- **AND** it receives its share of the day's window again
+#### Scenario: Times are transient
+- **WHEN** the planner has set times by hand and anything later re-allocates that day
+- **THEN** the assignment returns to its share of the window
+- **AND** nothing about the assignment records that its times were once set by hand
+
+#### Scenario: The planner is told the times are transient
+- **WHEN** the time fields are shown
+- **THEN** a German hint explains that the times apply until the day is next rearranged
+
+#### Scenario: Saving without touching the times
+- **WHEN** the planner changes only the project, title, or note and saves
+- **THEN** the day is allocated as it is today
+- **AND** the times shown in the modal are not written as requested times
 
 #### Scenario: End before or equal to start blocks the save
 - **WHEN** the entered end time is not after the entered start time
 - **THEN** the save is refused with a German error message
 - **AND** nothing is written to the calendar
 
-#### Scenario: Only one time field filled blocks the save
-- **WHEN** exactly one of the two time fields holds a value
+#### Scenario: An empty time field blocks the save
+- **WHEN** either time field is empty and the planner saves
 - **THEN** the save is refused with a German error message explaining that both times are needed
 
 #### Scenario: Times outside the standard window are accepted
@@ -88,18 +102,26 @@ The modal SHALL offer a checkbox, ticked by default, that fits the day's neighbo
 - **THEN** no neighbouring assignment is written
 
 ### Requirement: Edit the assignment title
-The modal SHALL let the planner give an assignment a title of its own that replaces the Daylite project name on the card, and SHALL keep following the project name for an assignment that has no such title.
+The modal SHALL let the planner give an assignment a title of its own that replaces the Daylite project name wherever the assignment is shown, and SHALL keep following the project name for an assignment that has no such title.
+The modal SHALL show the Daylite project name and the title of its own at the same time, so the planner always sees which project is behind a renamed assignment.
 
-#### Scenario: Title field defaults to the project name
+#### Scenario: Both the project name and the title are visible
+- **WHEN** the modal is open
+- **THEN** the selected Daylite project's name is shown in the project field
+- **AND** the title field is shown separately from it
+
+#### Scenario: Title field is empty without an override
 - **WHEN** the modal opens for an assignment without a title of its own
-- **THEN** the title field shows the resolved Daylite project name
+- **THEN** the title field is empty
+- **AND** it carries the Daylite project name as its German placeholder, so the planner sees the title that is in use
 
 #### Scenario: Title field shows an existing override
 - **WHEN** the modal opens for an assignment that carries its own title
-- **THEN** the title field shows that title, not the project name
+- **THEN** the title field shows that title
+- **AND** the project field still shows the Daylite project name
 
 #### Scenario: Save a custom title
-- **WHEN** the planner types a title different from the project name and saves
+- **WHEN** the planner types a title and saves
 - **THEN** the assignment is stored with that title
 - **AND** the card in the grid shows it instead of the project name
 
@@ -108,13 +130,10 @@ The modal SHALL let the planner give an assignment a title of its own that repla
 - **THEN** the assignment no longer carries a title of its own
 - **AND** the card shows the resolved Daylite project name again
 
-#### Scenario: Switching project refreshes an untouched title
-- **WHEN** the planner picks a different project while the title field still holds the previous project's name unchanged
-- **THEN** the title field follows the newly selected project's name
-
-#### Scenario: Switching project keeps an edited title
-- **WHEN** the planner has typed a title and then picks a different project
-- **THEN** the typed title is kept
+#### Scenario: Switching project leaves the title alone
+- **WHEN** the planner picks a different project
+- **THEN** the title field keeps whatever it held
+- **AND** its placeholder follows the newly selected project's name
 
 ### Requirement: Edit the assignment note
 The modal SHALL let the planner attach free-text notes to an assignment, stored on the calendar event so other calendar clients show them.
@@ -191,10 +210,10 @@ The system SHALL allow assigning a project to an employee/day.
 - **THEN** the created event carries them from the start
 
 #### Scenario: Create with times
-- **WHEN** the planner enters times for a new assignment
-- **THEN** it is created pinned to those times
-- **AND** the day's other assignments are allocated without it
+- **WHEN** the planner changes the times offered for a new assignment before saving
+- **THEN** it is created with those times
+- **AND** the day's existing assignments keep the times they had
 
-#### Scenario: Create without times
-- **WHEN** the planner leaves both time fields empty for a new assignment
-- **THEN** it takes part in the day's allocation like any other new assignment
+#### Scenario: Create without touching the times
+- **WHEN** the planner leaves the times offered for a new assignment as they are
+- **THEN** the day is allocated by the even split, as it is today

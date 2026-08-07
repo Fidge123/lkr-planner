@@ -50,39 +50,22 @@ An assignment event SHALL be able to carry free-text notes alongside its Daylite
 - **THEN** that text is shown as the assignment's note
 - **AND** it is preserved when the assignment is saved without touching the note
 
-### Requirement: Manual times are recorded on the event
-An assignment event SHALL record that its times were set by hand, so the times survive a round-trip through the calendar and every client sees the assignment at the times the planner chose.
-
-#### Scenario: The pin round-trips
-- **WHEN** an assignment pinned to times set by hand is written and read back
-- **THEN** it is still pinned
-- **AND** its start and end times are the ones the planner entered
-
-#### Scenario: An unpinned assignment records nothing
-- **WHEN** an assignment whose times come from the allocation is written
-- **THEN** the event carries no pin
-- **AND** it takes part in the next allocation for its day
-
-#### Scenario: Releasing the pin clears the record
-- **WHEN** an assignment's pin is removed
-- **THEN** the event no longer records one
-
 ### Requirement: Assignment details survive every write path
-Every operation that rewrites an assignment event SHALL preserve its title override, its note, and its pinned times unless the operation is explicitly changing them.
+Every operation that rewrites an assignment event SHALL preserve its title override and its note unless the operation is explicitly changing them.
+Times are not preserved this way: they belong to the day's allocation and are re-derived on every write that re-allocates, as `slot-allocation` describes.
 
 #### Scenario: Reschedule by drag
-- **WHEN** an assignment carrying a title override, a note, and pinned times is dragged to another day of the same employee
-- **THEN** the rewritten event still carries all of them
+- **WHEN** an assignment carrying a title override and a note is dragged to another day of the same employee
+- **THEN** the rewritten event still carries both
 
 #### Scenario: Move to another employee
 - **WHEN** such an assignment is dropped on another employee's cell
-- **THEN** the event created on the target calendar carries all of them
+- **THEN** the event created on the target calendar carries both
 - **AND** the source event is deleted as before
 
 #### Scenario: Reorder within a cell
 - **WHEN** such an assignment is reordered within its day
-- **THEN** the rewritten event still carries all of them
-- **AND** its pinned times are not replaced by the slot its new position would have
+- **THEN** the rewritten event still carries both
 
 #### Scenario: Slot re-allocation
 - **WHEN** the day's assignments are re-slotted after a neighbouring write
@@ -96,8 +79,7 @@ The system SHALL move an assignment from one employee's CalDAV calendar to anoth
 
 #### Scenario: Move to another employee's calendar
 - **WHEN** a move is requested with the source assignment href and a target employee reference and date
-- **THEN** a new VEVENT carrying the same project reference, project name, title override, and note is created on the target employee's primary calendar at the target date
-- **AND** it is written with the standard assignment time window, or with the source assignment's pinned times when it carried a pin
+- **THEN** a new VEVENT carrying the same project reference, project name, title override, and note is created on the target employee's primary calendar at the target date with the standard assignment time window
 - **AND** the original VEVENT is deleted from the source calendar
 - **AND** a result indicating a full move with the new CalDAV href is returned
 
