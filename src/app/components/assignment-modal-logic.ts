@@ -6,8 +6,7 @@ const fixedAppointmentCategory = "Termin FIX geplant";
 export const fixedAppointmentNotice =
   "Dieser Termin ist als „Termin FIX geplant“ gesperrt und kann nicht bearbeitet oder gelöscht werden.";
 
-// The backend enforces this independently and re-derives the category per write, so
-// this only hides the affordances instead of deciding the write.
+// The backend enforces this independently and re-derives the category per write, so this only hides the affordances instead of deciding the write.
 export function isProtectedAssignment(
   projectCategory: string | null | undefined,
 ): boolean {
@@ -16,8 +15,7 @@ export function isProtectedAssignment(
 
 const genericWriteError = "Die Änderung konnte nicht gespeichert werden.";
 
-// Keyed on the status, never on the message: an error that carries no message
-// must not read as success.
+// Keyed on the status, never on the message: an error that carries no message must not read as success.
 export function commandErrorMessage(result: {
   status: string;
   error?: string;
@@ -52,8 +50,7 @@ export function resolveEscapeAction(filter: string): "clear" | "close" {
 export type AssignmentWriteIntent = "create" | "update" | "missing-href";
 
 // An edit can only be written back through the assignment's CalDAV resource URL.
-// Without one the write must fail visibly: treating it as a create would duplicate the
-// assignment and leave the original untouched.
+// Without one the write must fail visibly: treating it as a create would duplicate the assignment and leave the original untouched.
 export function resolveWriteIntent(
   isEditMode: boolean,
   href: string | null | undefined,
