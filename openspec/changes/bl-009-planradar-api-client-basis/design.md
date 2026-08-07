@@ -28,6 +28,9 @@ The application needs to integrate with Planradar for project management. The Pl
 - This is the same "copy project" affordance offered in the Planradar UI, so it is preferred over a manual read-then-recreate
 - Blank creation uses `POST /api/v1/{customer_id}/projects` with `data.attributes` (name, street, zipcode, city, country, description, start/end dates)
 - The copy is server-side; field-level edits happen afterward via `PUT /api/v1/{customer_id}/projects/{project_id}` (see BL-037 hybrid flow)
+- Verified against a live recording: copy is **asynchronous**. It answers `202 Accepted` with `{"job_id": "<uuid>"}` and no project payload, so the client returns the job ID rather than a project ID
+- The Open API spec documents only the 404 and 406 responses for this endpoint, so the success shape was not discoverable from the spec alone
+- Resolving the job to the created project ID is therefore not possible synchronously and is left to the consuming feature (BL-037)
 
 ### Project reactivation mechanism
 **Decision**: Reactivate via the archive-project endpoint, not a separate reopen endpoint

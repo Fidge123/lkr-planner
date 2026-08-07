@@ -45,6 +45,11 @@ It takes a new `name` plus boolean toggles that select which aspects to copy:
 details, groups, ticket_types (forms), users, and components (layers).
 The copy is performed server-side, so field-level edits happen afterward via project update.
 
+Copying is asynchronous, confirmed by a live recording.
+The endpoint answers `202 Accepted` with a body of `{"job_id": "<uuid>"}` and no project payload, so the new project ID is not available when the call returns.
+The Swagger documents only the 404 and 406 responses for this endpoint, so this success shape cannot be derived from the spec.
+The client therefore returns the job ID; resolving it to the created project is left to the consuming feature.
+
 ## Project read and list
 
 List uses `GET /api/v1/{customer_id}/projects` with pagination via `page`, `pagesize` and `sort`.

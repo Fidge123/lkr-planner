@@ -1,6 +1,6 @@
 use super::client::{PlanradarApiClient, PlanradarHttpMethod};
 use super::shared::{
-    load_api_token, load_config, load_store_or_error, parse_success_json_body,
+    load_api_token, load_config, load_store_or_error, parse_success_json_body, truncate_for_log,
     validate_path_segment, PlanradarApiError, PlanradarApiErrorCode, PlanradarConfig,
 };
 use serde::{Deserialize, Serialize};
@@ -141,6 +141,9 @@ pub async fn planradar_create_project(
     create_project_core(&client, &token, &config.customer_id, &request).await
 }
 
+/// Starts a server-side copy of `project_id` and returns the **job ID**, not a project ID:
+/// Planradar performs the copy asynchronously and answers `202 Accepted` with a job handle.
+/// The copied project only exists once that job finishes.
 #[tauri::command]
 #[specta::specta]
 pub async fn planradar_copy_project(
@@ -192,7 +195,7 @@ pub(super) async fn read_project_status_core(
     let value = parse_success_json_body::<Value>(response.status, &response.body, &path)?;
     let data = value
         .get("data")
-        .ok_or_else(|| missing_field_error(&path, "data"))?;
+        .ok_or_else(|| missing_field_error(&path, "data", &value))?;
     project_from_data(data, &path)
 }
 
@@ -228,7 +231,7 @@ pub(super) async fn list_projects_core(
     let items = value
         .get("data")
         .and_then(Value::as_array)
-        .ok_or_else(|| missing_field_error(&path, "data array"))?;
+        .ok_or_else(|| missing_field_error(&path, "data array", &value))?;
 
     items
         .iter()
@@ -287,7 +290,7 @@ pub(super) async fn copy_project_core(
         .await?;
 
     let value = parse_success_json_body::<Value>(response.status, &response.body, &path)?;
-    extract_new_project_id(&value, &path)
+    extract_job_id(&value, &path)
 }
 
 pub(super) async fn reactivate_project_core(
@@ -347,7 +350,8 @@ fn insert_optional(map: &mut Map<String, Value>, key: &str, value: &Option<Strin
 }
 
 fn project_from_data(data: &Value, path: &str) -> Result<PlanradarProject, PlanradarApiError> {
-    let id = value_to_id(data.get("id")).ok_or_else(|| missing_field_error(path, "data.id"))?;
+    let id =
+        value_to_id(data.get("id")).ok_or_else(|| missing_field_error(path, "data.id", data))?;
     let attributes = data.get("attributes");
     let name = attributes
         .and_then(|attributes| attributes.get("name"))
@@ -360,7 +364,7 @@ fn project_from_data(data: &Value, path: &str) -> Result<PlanradarProject, Planr
     let status_code = attributes
         .and_then(|attributes| attributes.get("status"))
         .and_then(value_to_status_code)
-        .ok_or_else(|| missing_field_error(path, "data.attributes.status"))?;
+        .ok_or_else(|| missing_field_error(path, "data.attributes.status", data))?;
     let status = PlanradarProjectStatus::from_api_status(status_code).ok_or_else(|| {
         PlanradarApiError::new(
             PlanradarApiErrorCode::InvalidResponse,
@@ -377,7 +381,14 @@ fn extract_new_project_id(value: &Value, path: &str) -> Result<String, Planradar
     value
         .get("data")
         .and_then(|data| value_to_id(data.get("id")))
-        .ok_or_else(|| missing_field_error(path, "data.id"))
+        .ok_or_else(|| missing_field_error(path, "data.id", value))
+}
+
+/// Copying is asynchronous: Planradar answers `202 Accepted` with `{"job_id": "..."}` rather
+/// than the created project, so there is no project ID to return here. The new project only
+/// exists once the job completes; callers that need it must resolve it separately.
+fn extract_job_id(value: &Value, path: &str) -> Result<String, PlanradarApiError> {
+    value_to_id(value.get("job_id")).ok_or_else(|| missing_field_error(path, "job_id", value))
 }
 
 /// Request shapes shared by the live recording harness and the cassette replay tests.
@@ -467,12 +478,18 @@ fn value_to_status_code(value: &Value) -> Option<i64> {
     }
 }
 
-fn missing_field_error(path: &str, field: &str) -> PlanradarApiError {
+/// Includes the payload we actually received: several Planradar success responses are
+/// undocumented in the Open API spec, so the received shape is the only way to diagnose a
+/// mismatch without re-running a live recording.
+fn missing_field_error(path: &str, field: &str, received: &Value) -> PlanradarApiError {
     PlanradarApiError::new(
         PlanradarApiErrorCode::InvalidResponse,
         None,
         "Die Antwort von Planradar konnte nicht verarbeitet werden.",
-        format!("Planradar-Antwort für {path} enthält kein Feld `{field}`."),
+        format!(
+            "Planradar-Antwort für {path} enthält kein Feld `{field}`; empfangen: {}",
+            truncate_for_log(&received.to_string())
+        ),
     )
 }
 
@@ -671,13 +688,14 @@ mod tests {
     #[test]
     fn copy_project_maps_name_and_toggles_to_query_params() {
         tauri::async_runtime::block_on(async {
+            // Copying is asynchronous: 202 Accepted with a job handle, no project payload.
             let transport = MockTransport::new(vec![Ok(mock_response(
-                200,
-                r#"{"data":{"id":"7777","attributes":{"name":"Kopie","status":1}}}"#,
+                202,
+                r#"{"job_id":"f2f8a66e-39bb-4baa-a38c-0f09e4758e07"}"#,
             ))]);
             let client = PlanradarApiClient::with_transport(Box::new(transport.clone()));
 
-            let new_id = copy_project_core(
+            let job_id = copy_project_core(
                 &client,
                 "t",
                 "1234",
@@ -694,7 +712,7 @@ mod tests {
             .await
             .expect("copy should succeed");
 
-            assert_eq!(new_id, "7777");
+            assert_eq!(job_id, "f2f8a66e-39bb-4baa-a38c-0f09e4758e07");
 
             let requests = transport.requests();
             assert_eq!(requests[0].method, PlanradarHttpMethod::Post);
@@ -908,7 +926,7 @@ mod tests {
             let client = PlanradarApiClient::with_replay_cassette("planradar-copy-project.json")
                 .expect("replay client should be created");
 
-            let new_id = copy_project_core(
+            let job_id = copy_project_core(
                 &client,
                 "replay-token",
                 &vcr_fixtures::customer_id(),
@@ -918,7 +936,7 @@ mod tests {
             .await
             .expect("copy should replay from cassette");
 
-            assert!(!new_id.is_empty());
+            assert!(!job_id.is_empty());
         });
     }
 

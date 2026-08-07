@@ -32,8 +32,9 @@ The Planradar list endpoint (`GET .../projects`) supports `sort`, `page`, and `p
 ### Requirement: Project create
 The system SHALL provide functionality to create new Planradar projects, either blank or copied from a source project.
 
-Blank creation uses the create-project endpoint with project attributes (name, address, dates, description).
+Blank creation uses the create-project endpoint with project attributes (name, address, dates, description) and completes synchronously.
 Copying uses the dedicated copy-project endpoint with a new name and per-aspect toggles for details, groups, ticket types (forms), users, and components (layers).
+Copying is performed asynchronously by Planradar: the endpoint answers `202 Accepted` with a job handle, so the copied project does not exist yet when the call returns.
 
 #### Scenario: Create a blank project
 - **WHEN** user creates a project without a source project
@@ -43,7 +44,7 @@ Copying uses the dedicated copy-project endpoint with a new name and per-aspect 
 #### Scenario: Copy from a source project
 - **WHEN** user creates a project from a source project
 - **THEN** the source project is copied via the copy-project endpoint with the new name and selected aspect toggles
-- **AND** the new project ID is returned
+- **AND** the copy job ID is returned, because the copy runs asynchronously and no project ID exists yet
 
 ### Requirement: Project status read
 The system SHALL provide functionality to read project status.
