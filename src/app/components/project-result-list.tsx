@@ -5,6 +5,13 @@ import {
   projectCategoryColor,
 } from "../../services/daylite-categories";
 
+const resultListClass =
+  "bg-base-200 rounded-box w-full p-1 max-h-64 overflow-y-auto list-none";
+
+// The fixed height keeps a loaded row and its placeholder the same size.
+const resultRowClass =
+  "flex items-center gap-2 w-full h-8 px-2 rounded-md text-left text-sm";
+
 export function ProjectResultList({
   projects,
   categoryColors = {},
@@ -21,10 +28,7 @@ export function ProjectResultList({
   if (projects.length === 0) return null;
 
   return (
-    <ul
-      id="assignment-project-results"
-      className="bg-base-200 rounded-box w-full p-1 max-h-64 overflow-y-auto list-none"
-    >
+    <ul id="assignment-project-results" className={resultListClass}>
       {projects.map((project, index) => {
         const isActive = index === highlightedIndex;
         const name = singleLine(project.name);
@@ -35,7 +39,7 @@ export function ProjectResultList({
               type="button"
               aria-current={isActive}
               title={name}
-              className={`flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-left text-sm transition-colors ${isActive ? "bg-primary text-primary-content" : "hover:bg-base-300"}`}
+              className={`${resultRowClass} transition-colors ${isActive ? "bg-primary text-primary-content" : "hover:bg-base-300"}`}
               onClick={() => onSelect(project)}
             >
               <CategoryDot
@@ -46,6 +50,26 @@ export function ProjectResultList({
           </li>
         );
       })}
+    </ul>
+  );
+}
+
+/** Matches the suggestion limit in `assignment-suggestions`. */
+const placeholderRows = [0, 1, 2, 3, 4];
+
+/**
+ * Holds the height of a full suggestion list before it arrives, so the dialog does
+ * not jump once the default suggestions land.
+ */
+export function ProjectResultPlaceholder() {
+  return (
+    <ul className={`${resultListClass} pointer-events-none`} aria-hidden="true">
+      {placeholderRows.map((row) => (
+        <li key={row} className={`${resultRowClass} opacity-60`}>
+          <span className="size-2 shrink-0 rounded-full bg-base-content/30" />
+          <span className="skeleton h-3 flex-1 min-w-0" />
+        </li>
+      ))}
     </ul>
   );
 }

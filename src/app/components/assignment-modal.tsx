@@ -2,7 +2,11 @@ import type { CalendarCellEvent } from "../../generated/tauri";
 import { useAssignmentModal } from "../hooks/use-assignment-modal";
 import type { ModalSaveAction } from "../next-day-quick-add";
 import { DeleteConfirmDialog } from "./delete-confirm-dialog";
-import { ProjectResultList, SuggestionEmptyState } from "./project-result-list";
+import {
+  ProjectResultList,
+  ProjectResultPlaceholder,
+  SuggestionEmptyState,
+} from "./project-result-list";
 import { UnsavedChangesDialog } from "./unsaved-changes-dialog";
 
 export function AssignmentModal({
@@ -90,12 +94,16 @@ export function AssignmentModal({
           {modal.searchError ? (
             <p className="text-sm text-error">{modal.searchError}</p>
           ) : null}
-          <ProjectResultList
-            projects={modal.displayedProjects}
-            categoryColors={modal.categoryColors}
-            highlightedIndex={modal.highlightedIndex}
-            onSelect={modal.selectProject}
-          />
+          {modal.showSuggestionPlaceholder ? (
+            <ProjectResultPlaceholder />
+          ) : (
+            <ProjectResultList
+              projects={modal.displayedProjects}
+              categoryColors={modal.categoryColors}
+              highlightedIndex={modal.highlightedIndex}
+              onSelect={modal.selectProject}
+            />
+          )}
           <SuggestionEmptyState
             filter={modal.filter}
             suggestionsLoaded={modal.suggestionsLoaded}

@@ -9,7 +9,11 @@ import type {
   DropPreview,
 } from "../hooks/use-appointment-drag";
 import type { GhostSuggestion } from "../next-day-quick-add";
-import { type CellEvent, hasAbsenceConflict } from "../types";
+import {
+  type CellEvent,
+  hasAbsenceConflict,
+  isUnresolvedAssignment,
+} from "../types";
 
 export function TimetableCell({
   highlight = false,
@@ -223,11 +227,35 @@ export function categoryStrip(
   return categoryColor ? { borderLeftColor: categoryColor } : undefined;
 }
 
-export function AssignmentCardBody({ startTime, endTime, title }: BodyProps) {
+export function AssignmentCardBody({
+  startTime,
+  endTime,
+  title,
+  isUnresolved = false,
+}: BodyProps) {
   return (
     <>
       <EventTime startTime={startTime} endTime={endTime} />
-      <h4 className="flex-1 min-w-0 font-medium">{title}</h4>
+      {isUnresolved ? (
+        <TriangleAlert
+          className="size-4 shrink-0 text-error"
+          aria-hidden="true"
+        />
+      ) : null}
+      <h4 className="flex-1 min-w-0 font-medium">
+        {isUnresolved ? (
+          <>
+            <em className="font-normal opacity-70">Beschreibung für </em>
+            {title}
+            <em className="font-normal opacity-70">
+              {" "}
+              konnte nicht abgerufen werden
+            </em>
+          </>
+        ) : (
+          title
+        )}
+      </h4>
     </>
   );
 }
@@ -236,6 +264,8 @@ interface BodyProps {
   startTime: string | null;
   endTime: string | null;
   title: string;
+  /** Wraps the calendar summary in the German "could not be read" note. */
+  isUnresolved?: boolean;
 }
 
 function DraggableAssignmentCard({
@@ -257,9 +287,7 @@ function DraggableAssignmentCard({
     categoryColor: event.categoryColor,
     position,
   };
-  // An unresolved project renders a German error placeholder as the title;
-  // dropping such a card would persist that placeholder as the event summary.
-  const unresolved = event.projectRef !== null && !event.projectStatus;
+  const unresolved = isUnresolvedAssignment(event);
   const canDrag = Boolean(event.href) && !unresolved;
   const { attributes, listeners, setNodeRef } = useDraggable({
     id: `assignment-${employeeRef}-${event.uid}`,
@@ -280,6 +308,7 @@ function DraggableAssignmentCard({
         startTime={event.startTime}
         endTime={event.endTime}
         title={event.title}
+        isUnresolved={unresolved}
       />
     </button>
   );

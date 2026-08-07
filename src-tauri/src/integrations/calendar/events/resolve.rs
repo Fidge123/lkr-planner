@@ -71,10 +71,13 @@ pub(crate) fn resolve_event(
         };
     }
 
+    // The calendar summary stands in for the project name; an assignment whose
+    // reference did not resolve is the one case where a card carries no project
+    // status, which is how the frontend marks it as unresolved.
     CalendarCellEvent {
         uid,
         kind: CalendarEventKind::Assignment,
-        title: format!("Beschreibung für {} konnte nicht abgerufen werden", summary),
+        title: summary,
         project_status: None,
         category_color: None,
         project_ref: Some(project_ref),
@@ -240,9 +243,7 @@ mod tests {
         );
 
         assert_eq!(event.kind, CalendarEventKind::Assignment);
-        assert!(event
-            .title
-            .contains("Beschreibung für Unbekanntes Projekt konnte nicht abgerufen werden"));
+        assert_eq!(event.title, "Unbekanntes Projekt");
         assert_eq!(event.project_status, None);
         assert_eq!(event.category_color, None);
     }

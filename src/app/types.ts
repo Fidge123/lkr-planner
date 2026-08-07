@@ -38,6 +38,14 @@ function absenceCategoryColor(title: string): string {
   return absenceCodeColors[code] ?? defaultAbsenceColor;
 }
 
+/**
+ * A resolved assignment always carries its project's status, so a missing status is
+ * how a Daylite reference that could not be read shows up in the grid.
+ */
+export function isUnresolvedAssignment(event: CellEvent): boolean {
+  return event.projectRef !== null && !event.projectStatus;
+}
+
 export function hasAbsenceConflict(events: CellEvent[]): boolean {
   return (
     events.some((event) => event.kind === "absence") &&

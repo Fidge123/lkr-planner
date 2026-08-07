@@ -114,16 +114,39 @@ describe("TimetableCell", () => {
 
   it("does not make an assignment with an unresolved project draggable", () => {
     const html = renderCell({
-      events: [
-        assignment({
-          title: "Beschreibung für Projekt Süd konnte nicht abgerufen werden",
-          projectStatus: null,
-        }),
-      ],
+      events: [assignment({ title: "Projekt Süd", projectStatus: null })],
     });
 
     expect(html).not.toContain('aria-roledescription="draggable"');
     expect(html).toContain("<button");
+  });
+
+  it("marks an unresolved assignment with a red warning icon", () => {
+    const html = renderCell({
+      events: [assignment({ title: "Projekt Süd", projectStatus: null })],
+    });
+
+    expect(html).toContain("lucide-triangle-alert");
+    expect(html).toContain("text-error");
+  });
+
+  it("sets the note around an unresolved title in italics, the title itself not", () => {
+    const html = renderCell({
+      events: [assignment({ title: "Projekt Süd", projectStatus: null })],
+    });
+
+    expect(html).toContain("<em");
+    expect(html).toContain("Beschreibung für ");
+    expect(html).toContain(" konnte nicht abgerufen werden");
+    expect(html).toContain("</em>Projekt Süd<em");
+  });
+
+  it("leaves a resolved assignment title unwrapped and unmarked", () => {
+    const html = renderCell({ events: [assignment()] });
+
+    expect(html).not.toContain("<em");
+    expect(html).not.toContain("Beschreibung für");
+    expect(html).not.toContain("lucide-triangle-alert");
   });
 
   it("marks a cell with an absence and an assignment as conflicting", () => {

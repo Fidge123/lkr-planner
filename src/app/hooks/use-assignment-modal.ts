@@ -232,6 +232,7 @@ export function useAssignmentModal({
     searchError,
     suggestionsLoaded,
     suggestionCount: suggestions.length,
+    showSuggestionPlaceholder: filter.length === 0 && !suggestionsLoaded,
     showDeleteConfirm,
     showUnsavedConfirm,
     requestClose,
