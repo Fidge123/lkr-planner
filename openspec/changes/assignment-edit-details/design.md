@@ -11,8 +11,9 @@ Only slot re-allocation preserves foreign properties, because `patch_event_slot`
 `DESCRIPTION` is load-bearing.
 `classify_event` reads the Daylite project reference from the first description line, and an event whose first line does not start with `daylite:` is a bare event, not an assignment.
 
-`SUMMARY` is written but not read back for assignments.
-`resolve_event` overwrites the title with the resolved Daylite project name and only falls back to `SUMMARY` when resolution fails, which is what makes a project rename in Daylite show up on the card.
+`SUMMARY` reaches the card only when project resolution fails.
+Today `resolve_event` takes the card title from the cached or freshly fetched Daylite project and falls back to the event's `SUMMARY` only when neither lookup succeeds, which is what makes a project rename in Daylite show up on the card.
+A custom title therefore cannot simply be written to `SUMMARY` and expected to appear; it needs a reason for `resolve_event` to prefer it, which is what the first decision below supplies.
 
 Times are not the event's to keep.
 `plan_slot_updates` re-derives every participating assignment's `DTSTART` and `DTEND` from its position in the day and rewrites them on every create, update, and delete on that day.
@@ -51,10 +52,22 @@ Writing an assignment without a custom title emits no `X-LKR-TITLE` and puts the
 Holding the replaced title rather than a copy of the custom one is what makes a later reset affordance cheap: the modal can offer "Titel zurücksetzen" and show the planner what it would go back to without resolving anything.
 That affordance is not in this change - the planner resets by emptying the field, which drops `X-LKR-TITLE` and restores the project name - but the storage is chosen so adding it later needs no format change.
 
+What the grid card ends up showing, with the branch above added ahead of `resolve_event`'s existing three:
+
+| Event | Project resolves | Card title |
+| --- | --- | --- |
+| No custom title | yes | the Daylite project name, live |
+| No custom title | no | `SUMMARY`, which is the project name as written at create time, inside the German placeholder note |
+| Custom title | yes | the custom `SUMMARY` |
+| Custom title | no | the custom `SUMMARY`, inside the German placeholder note |
+
+Only the title text is affected.
+Category color, project status, and the assignment kind still come from resolving the `daylite:` reference in every one of those cases, so a renamed assignment keeps its colored strip and stays draggable.
+
 One consequence to keep in mind: the stored value ages.
 A project renamed in Daylite after the planner set a custom title leaves `X-LKR-TITLE` holding the old name.
-So it is a record of what was replaced, not a cache of the project name, and nothing reads it as one.
-Reset therefore clears the property and falls back to live resolution rather than writing the stored value back into `SUMMARY`, and the stored value is only ever displayed as the fallback when resolution fails.
+So it is a record of what was replaced, not a cache of the project name, and nothing reads it as one -- it is never displayed, on any path.
+Reset therefore clears the property and falls back to live resolution rather than writing the stored value back into `SUMMARY`.
 
 Alternatives considered.
 Mirroring the custom title into both properties makes the marker redundant with `SUMMARY` and throws away the replaced title for no gain.
