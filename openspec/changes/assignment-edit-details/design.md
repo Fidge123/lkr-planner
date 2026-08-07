@@ -14,8 +14,10 @@ Only slot re-allocation preserves foreign properties, because `patch_event_slot`
 `SUMMARY` is written but not read back for assignments.
 `resolve_event` overwrites the title with the resolved Daylite project name and only falls back to `SUMMARY` when resolution fails, which is what makes a project rename in Daylite show up on the card.
 
-`patch_event_slot` is line-based and refuses to patch an event whose rewritten property (`DTSTART`, `DTEND`, `X-LKR-ORDER`) is followed by a folded continuation line.
-An event it refuses is silently excluded from slot re-allocation.
+Times are not the event's to keep.
+`plan_slot_updates` re-derives every participating assignment's `DTSTART` and `DTEND` from its position in the day and rewrites them on every create, update, and delete on that day.
+Whatever a planner types into a time field is gone by the next write on that day unless the assignment stops participating.
+The allocator already has a notion of a non-participant: an assignment it cannot rewrite safely is filtered out, keeps its times, and takes no share of the window.
 
 ## Goals / Non-Goals
 
@@ -23,15 +25,17 @@ An event it refuses is silently excluded from slot re-allocation.
 
 - One place in the VEVENT for each new field, chosen so a planner editing the event in ZEP or another CalDAV client sees something sensible.
 - No write path can silently drop a field: the fields travel together through `AssignmentWrite`, so adding one to the struct forces every caller to supply it.
-- The written VEVENT stays patchable by `patch_event_slot`, so assignments with attachments still take part in slot re-allocation.
+- Manual times reuse the allocator's existing non-participant path rather than introducing a second notion of who owns an event's times.
 
 **Non-Goals:**
 
-- Editing start and end time.
-  The slot allocator owns the day's time windows and hand-edited times would be overwritten by the next write on that day.
-- Server-managed attachments (RFC 8607).
-  ZEP's CalDAV server is not known to implement it and the feature would be unavailable wherever it does not.
-- Attachment versioning, deduplication, or an attachment browser outside the modal.
+- File attachments.
+  Dropped from this change.
+- Dragging a card's edges in the grid to resize it.
+  Times are edited in the modal only.
+- Rearranging a whole day's times at once, or a per-employee working-time profile that replaces the fixed 08:00-16:00 window.
+- Overlap detection between an assignment and the employee's bare or absence events.
+  The allocator does not do this today and manual times do not make it more pressing.
 - Editing bare events or absences.
   They stay read-only, as they are today.
 
@@ -67,55 +71,75 @@ Alternatives considered.
 An `X-LKR-NOTE` property keeps the description clean but hides the note from every other calendar client, which is the main reason to store it on the event at all.
 Moving the project reference to an X-property and giving `DESCRIPTION` entirely to the note would be cleaner, but every assignment already on a calendar carries the reference in the description, so it would need a migration and would break older events.
 
-### Attachments are inline base64 `ATTACH` properties, capped at 5 MB per event
+### Manual times pin an assignment out of the allocation, marked by `X-LKR-TIMES`
 
-Each attachment is one `ATTACH;ENCODING=BASE64;VALUE=BINARY;FMTTYPE=<mime>;FILENAME=<name>` property.
-`FILENAME` is a non-standard parameter, but it is what calendar clients converged on for inline attachments and it is the only way to keep the original name.
-The cap is on the total base64 payload of one event, checked in the frontend before a file is added and again in the backend before the PUT.
-5 MB keeps a re-PUT of the whole event well inside what CalDAV servers accept, and every write path re-PUTs the whole event.
+An assignment written with times set by hand carries `X-LKR-TIMES:manual`, and `plan_slot_updates` filters it out of `assignments` next to the existing `can_patch_slot` check.
+From there the allocator's documented behaviour for a non-participant applies unchanged: it keeps its times, takes no share of the window, and the rest of the day still spreads across the full 08:00-16:00.
+That the remaining assignments may overlap a pinned one is not a defect to fix here; it is the same trade-off the module comment already records, and the adjacent-adjustment checkbox is the tool for closing it.
 
-This was the recommended option in the question put to the user; the question went unanswered, so the design proceeds on it.
-The alternatives, both still open if the cap or the interoperability trade-off turns out wrong: storing files in the local store keyed by event UID, which removes the size problem but makes attachments invisible in ZEP and on a second machine, and storing a URI instead of the bytes, which is cheapest but only works while the target path stays reachable.
+Pinning has to be an explicit marker rather than a comparison against the times the allocator would have produced.
+Inferring the pin -- "these times are not the ones the split would give, so they were set by hand" -- flips an assignment back to automatic whenever the day's count changes underneath it and makes the pin depend on how many other assignments exist.
 
-Files are read through a browser file input in the webview and passed to the backend as bytes, and an opened attachment is written to a temp file and handed to the already-installed opener plugin.
-That avoids adding `@tauri-apps/plugin-dialog` and its capability entry for a native file picker; the trade-off is the webview's file dialog instead of a fully native one.
+Clearing both time fields removes the property, which is the only way back into the allocation.
+Without it the first hand-typed time would pin the assignment forever, and the planner's mental model of a day that arranges itself would have no undo.
 
-### Property order in the payload keeps events patchable
+Alternatives considered.
+A per-employee working-time profile that shifts the window is what the fixed 08:00-16:00 window really wants long term, but it does not give a single job an unusual start, which is what was asked for.
+Storing manual times in X-properties beside the allocated `DTSTART`/`DTEND` would keep the allocation intact underneath, but every other calendar client would show the assignment at the allocated time, which defeats the point of setting a time at all.
 
-Long lines are folded per RFC 5545, which is a change on its own: `build_ical_payload` writes unfolded lines today, and a base64 attachment cannot stay unfolded.
-Because `patch_event_slot` refuses an event whose folded line follows a rewritten property, the payload is emitted as `UID`, `DTSTAMP`, `DTSTART`, `DTEND`, `X-LKR-ORDER`, `SUMMARY`, `X-LKR-TITLE`, `DESCRIPTION`, `ATTACH...`.
-`X-LKR-ORDER` moves ahead of the foldable properties so no fold ever follows `DTSTART`, `DTEND`, or `X-LKR-ORDER`.
+### Adjacent adjustment is a day-level plan, not a per-event write
+
+The checkbox is handled where the allocation already lives: `plan_slot_updates` gains a mode that, instead of splitting the window, takes the edited assignment's requested times and emits `SlotUpdate`s for the assignment immediately before and immediately after it in the day's order.
+The predecessor's end becomes the new start, the successor's start becomes the new end, and both are pinned along with the edited one, because their times no longer follow the split.
+Neighbours are found in the day's canonical order from `sequence_day`, so "adjacent" means the adjacent assignment, skipping bare, absence, and holiday events -- consistent with everything else the allocator does.
+
+Both neighbours are written through `patch_event_slot`, which is the existing multi-event write path and preserves foreign properties.
+A neighbour the allocator cannot rewrite safely is skipped rather than refused: it was already outside the allocator's reach.
+
+The refusal case is a squeeze, not an overlap: if the new times would move a neighbour's start to or past its own end, the whole save is refused rather than writing a zero-length or inverted event.
+Refusing beats clamping because a clamped neighbour silently loses its duration, and beats cascading because a cascade can push a chain of assignments off the end of the day.
+
+Defaulting the checkbox to ticked follows from what the day looks like otherwise: leave it off and the first manual time turns a tidy day into one with a gap and an overlap, which is a surprising result for the planner who only wanted a later start.
+
+### Folding, and the property order it forces
+
+A note is the first free-text field long enough to break the 75-octet line limit, so `build_ical_payload` starts folding instead of writing every property on one physical line.
+That interacts with `can_patch_slot`: it refuses an event whose folded continuation follows `DTSTART`, `DTEND`, or `X-LKR-ORDER`, and a refused event drops out of re-allocation silently.
+So the payload is emitted as `UID`, `DTSTAMP`, `DTSTART`, `DTEND`, `X-LKR-ORDER`, `X-LKR-TIMES`, `SUMMARY`, `X-LKR-TITLE`, `DESCRIPTION`, with the foldable properties last and `X-LKR-ORDER` ahead of them.
+
+Not folding at all is the alternative, and it is what the code does today.
+It is rejected because the length of a note is the planner's to choose, and a server that enforces the limit would reject the write rather than degrade.
 
 ### The new fields travel in `AssignmentWrite`
 
-`AssignmentWrite` grows `title_override: Option<String>`, `note: Option<String>`, and `attachments: Vec<Attachment>`.
+`AssignmentWrite` grows `title_override` (custom title plus the title it replaced), `note: Option<String>`, and `times: AssignmentTimes`, where the times are either allocated or pinned to an explicit start and end.
 Every write path already builds one, so the compiler flags each caller that has to be taught to carry the fields through: the modal save, `move_assignment`, and the drag hook's reschedule.
 
 The drag paths have no dialog to read the fields from, so they must carry the values the card already holds.
-`CalendarCellEvent` therefore gains `titleOverride`, `note`, and an attachment list, and the drag hook passes them back into the write.
-Attachments are the awkward case: shipping their bytes to the frontend just so a drag can ship them back is wasteful, so the frontend carries only each attachment's metadata and the backend re-reads the bytes from the source event during `move_assignment`.
+`CalendarCellEvent` therefore gains the custom-title marker, the note, and the pin, and the drag hook passes them back into the write.
+A drag deliberately does not re-run adjacent adjustment: it changes which day an assignment sits on, and adjusting the neighbours of a day the planner is not looking at would be a surprise.
 
 ### Reorder needs no change
 
 `reorder_assignment_core` never rebuilds the event; it re-slots the day through `patch_event_slot`, which copies unknown properties through.
-Attachments and the new properties survive it as long as the fold rule above holds.
+A pinned assignment is filtered out of the allocation but keeps its order index, so reordering still moves its card without touching its times.
 
 ## Risks / Trade-offs
 
-[A calendar server rejects an event carrying a multi-megabyte attachment] → The cap keeps events small, and the specs require the server's refusal to surface as a German error with the modal left open, so the planner can remove an attachment and retry.
+[A planner pins one assignment and the rest of the day keeps spreading across the full window, so cards overlap] → This is the allocator's documented behaviour for non-participants, the checkbox closes it in the common case, and the day's cards are ordered by order index rather than by time, so an overlap does not reorder the grid.
 
-[`patch_event_slot` refuses an event whose attachment folds directly after a rewritten property, silently dropping it from re-allocation] → Property order is pinned by the design and covered by a test that re-slots an event with an attachment; an event written by another client can still be refused, which is the existing behavior for such events.
+[A day where every assignment is pinned never re-allocates, so a delete leaves a gap] → Accepted: a planner who set every time by hand is asking to own the day. Nothing is corrupt, and clearing one assignment's times hands it back to the allocator.
+
+[Pinning is inferred rather than marked after an event is edited in ZEP, where a planner changes the times of an assignment that carries no pin] → Not handled: the next write on that day re-allocates it back, as today. Making a foreign edit pin the event would need a comparison this design deliberately rejects.
 
 [The `icalendar` crate may not unescape `\n` in `DESCRIPTION` the way `classify_event`'s `lines()` assumes] → Verified by a test before the note is built on top of it; if it does not, unescaping moves into the parse step.
 
-[A large base64 attachment crosses the Tauri IPC boundary on every open] → Bounded by the same 5 MB cap; opening writes a temp file rather than streaming the bytes into the webview.
+[Adjacent adjustment writes up to three events, so a partial failure leaves the day half-adjusted] → The neighbours go through `patch_event_slot`, the same multi-event path re-allocation already uses, so the failure mode is the one the planner already has for a failed re-slot: a reload shows the true state.
 
-[`FILENAME` on `ATTACH` is not in RFC 5545, so a strict server may strip it] → An attachment whose name is missing falls back to a generated name from its content type; the bytes are what matter.
-
-[A planner expects an attachment to be visible in ZEP and it is not, because the server does not surface inline attachments] → Not mitigable in the planner; if it happens, it is the trigger to revisit the storage decision above.
+[The `X-LKR-TIMES` marker is invisible in ZEP, so a planner there cannot tell a pinned assignment from an allocated one] → Not mitigable in the planner; the times themselves are correct in every client, which is what the employee needs.
 
 ## Migration Plan
 
 No data migration.
-Events written before this change carry no `X-LKR-TITLE`, no note, and no `ATTACH`, and every new field is optional, so they load and save exactly as they do today.
-An older build of the planner reading an event written by the new one shows the override as the card title only when the project fails to resolve, and rewrites the event without the note and attachments - so a rollback loses details on the assignments touched after it, which is the reason the fields are stored on the event rather than only in the local store.
+Events written before this change carry no `X-LKR-TITLE`, no note, and no `X-LKR-TIMES`, and every new field is optional, so they load and save exactly as they do today - in particular, every existing assignment stays in the allocation, because a pin only exists once a planner sets one.
+An older build of the planner reading an event written by the new one shows the override as the card title only when the project fails to resolve, rewrites the event without the note, and re-allocates a pinned assignment back into the day's split on the next write to that day - so a rollback loses details and manual times on the assignments touched after it.
