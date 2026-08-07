@@ -35,4 +35,4 @@
 - [x] 6.1 Run `cargo test` and confirm all new and existing tests pass
 - [x] 6.2 Run `bun test` and confirm all new and existing tests pass
 - [x] 6.3 Run `bun lint` and fix any issues
-- [ ] 6.4 Manually verify in the running app: an assignment linked to a "Termin FIX geplant" project shows disabled edit/delete controls with a German notice, and a direct backend call to update/delete it is rejected
+- [x] 6.4 Manually verify in the running app: an assignment linked to a "Termin FIX geplant" project shows disabled edit/delete controls with a German notice, and a direct backend call to update/delete it is rejected

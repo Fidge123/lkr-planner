@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Keep calendar entries that Daylite marks as fixed appointments from being changed, moved to another day or deleted by accident from the planning grid.
+
+## Requirements
 
 ### Requirement: Identify protected events by Daylite project category
 The system SHALL identify a CalDAV event as protected when the Daylite project it references has category `"Termin FIX geplant"`.
