@@ -23,7 +23,6 @@ const missingHrefMessage =
   "Dieser Einsatz kann nicht bearbeitet werden, da er keine Kalender-Adresse hat. Bitte die Ansicht neu laden.";
 
 export function useAssignmentModal({
-  isOpen,
   assignment,
   employeeReference,
   date,
@@ -64,40 +63,20 @@ export function useAssignmentModal({
 
   const { results, errorMessage: searchError } =
     useAssignmentProjectSearch(filter);
-  const { suggestions, suggestionsLoaded } =
-    useAssignmentDefaultSuggestions(isOpen);
+  const { suggestions, suggestionsLoaded } = useAssignmentDefaultSuggestions();
   const displayedProjects = resolveDisplayedProjects(
     filter,
     suggestions,
     results,
   );
-  const categoryColors = useProjectCategoryColors(isOpen);
+  const categoryColors = useProjectCategoryColors();
 
   useEffect(() => {
-    if (!isOpen) return;
-    setErrorMessage(null);
-    setIsSaving(false);
-    setShowDeleteConfirm(initialShowDeleteConfirm);
-    setShowUnsavedConfirm(initialShowUnsavedConfirm);
-    setSelectedProjectRef(assignment?.projectRef ?? "");
-    setSelectedProjectName(assignment?.title ?? "");
-    setSelectedProjectCategory(null);
-    setFilter("");
-    setHighlightedIndex(-1);
-    setIsDirty(false);
-    setIsUnlocked(initialUnlocked);
     filterInputRef.current?.focus();
-  }, [
-    isOpen,
-    initialShowDeleteConfirm,
-    initialShowUnsavedConfirm,
-    initialUnlocked,
-    assignment?.projectRef,
-    assignment?.title,
-  ]);
+  }, []);
 
   // A callback ref, not an effect: the dialog element is remounted whenever the modal swaps to the delete or unsaved-changes dialog and back,
-  // so an effect keyed on `isOpen` would leave the listener detached after the swap.
+  // so a mount effect would leave the listener detached after the swap.
   // requestClose is read through a ref because the listener outlives the render that attached it.
   const requestCloseRef = useRef<() => void>(() => {});
   const dialogRef = useCallback((dialog: HTMLDialogElement | null) => {
@@ -264,7 +243,6 @@ export function useAssignmentModal({
 }
 
 interface Input {
-  isOpen: boolean;
   assignment: CalendarCellEvent | null;
   employeeReference: string;
   date: string;

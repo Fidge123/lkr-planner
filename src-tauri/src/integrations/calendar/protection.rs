@@ -1,18 +1,16 @@
 use super::caldav::{fetch_event_by_href, CaldavSession};
 use super::events::parse_daylite_reference;
-use crate::integrations::daylite::projects::{
-    fetch_project_by_reference, ResolvedProject, FIXED_APPOINTMENT_CATEGORY,
-};
+use crate::integrations::daylite::projects::{ResolvedProject, FIXED_APPOINTMENT_CATEGORY};
 
 pub(crate) const FIXED_APPOINTMENT_MESSAGE: &str = "Dieser Termin ist als 'Termin FIX geplant' gesperrt und kann nicht geändert, auf einen anderen Tag verschoben oder gelöscht werden.";
 
 /// Refuses a write to an event whose Daylite project is a fixed appointment.
 /// The link comes from the event, never the caller: an override decides only whether to proceed, not what counts as protected.
 pub(crate) async fn refuse_protected_event(
-    app: tauri::AppHandle,
     session: &CaldavSession,
     href: &str,
     override_protection: bool,
+    lookup_project: impl AsyncFnOnce(String) -> Option<ResolvedProject>,
 ) -> Result<(), String> {
     // An overridden write skips the lookups too, so it is cheaper than a checked one.
     if override_protection {
@@ -24,22 +22,24 @@ pub(crate) async fn refuse_protected_event(
         return Ok(());
     };
 
-    let (project_ref, project) = resolve_project_link(app, href, &event.description).await;
+    let (project_ref, project) =
+        resolve_project_link(href, &event.description, lookup_project).await;
     refuse(is_protected_event(project_ref.as_deref(), project.as_ref()))
 }
 
 /// Only the day is committed, so a move that keeps the date is allowed.
 pub(crate) async fn refuse_protected_day_change(
-    app: tauri::AppHandle,
     session: &CaldavSession,
     href: &str,
     target_date: &str,
+    lookup_project: impl AsyncFnOnce(String) -> Option<ResolvedProject>,
 ) -> Result<(), String> {
     let Some(event) = fetch_event_by_href(session, href).await? else {
         return Ok(());
     };
 
-    let (project_ref, project) = resolve_project_link(app, href, &event.description).await;
+    let (project_ref, project) =
+        resolve_project_link(href, &event.description, lookup_project).await;
     refuse(protects_day_change(
         &event.dtstart,
         target_date,
@@ -49,13 +49,13 @@ pub(crate) async fn refuse_protected_day_change(
 }
 
 async fn resolve_project_link(
-    app: tauri::AppHandle,
     href: &str,
     description: &str,
+    lookup_project: impl AsyncFnOnce(String) -> Option<ResolvedProject>,
 ) -> (Option<String>, Option<ResolvedProject>) {
     let project_ref = parse_daylite_reference(description);
-    let project = match project_ref.as_deref() {
-        Some(reference) => fetch_project_by_reference(app, reference).await,
+    let project = match project_ref.clone() {
+        Some(reference) => lookup_project(reference).await,
         None => None,
     };
     if project_ref.is_some() && project.is_none() {
@@ -92,8 +92,155 @@ fn is_protected_event(project_ref: Option<&str>, project: Option<&ResolvedProjec
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::{Arc, Mutex};
+    use std::time::Duration;
+    use tauri_plugin_http::reqwest;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
     const FIXED_REF: Option<&str> = Some("/v1/projects/3001");
+
+    const PROTECTED_EVENT: &str = "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:uid-1\r\nSUMMARY:Projekt Nord\r\nDESCRIPTION:daylite:/v1/projects/3001\r\nDTSTART;VALUE=DATE:20260506\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+
+    /// Serves one event to every GET and records how often it was asked.
+    struct EventServer {
+        base_url: String,
+        requests: Arc<Mutex<usize>>,
+    }
+
+    impl EventServer {
+        async fn spawn(body: &'static str) -> Self {
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+                .await
+                .expect("bind test server");
+            let addr = listener.local_addr().expect("test server addr");
+            let requests = Arc::new(Mutex::new(0));
+            let counted = requests.clone();
+
+            tokio::spawn(async move {
+                loop {
+                    let Ok((mut stream, _)) = listener.accept().await else {
+                        break;
+                    };
+                    let counted = counted.clone();
+                    tokio::spawn(async move {
+                        let mut chunk = [0u8; 1024];
+                        if stream.read(&mut chunk).await.unwrap_or(0) == 0 {
+                            return;
+                        }
+                        *counted.lock().unwrap() += 1;
+                        let response = format!(
+                            "HTTP/1.1 200 Test\r\nContent-Type: text/calendar\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                            body.len()
+                        );
+                        let _ = stream.write_all(response.as_bytes()).await;
+                        let _ = stream.shutdown().await;
+                    });
+                }
+            });
+
+            Self {
+                base_url: format!("http://{addr}"),
+                requests,
+            }
+        }
+
+        fn count(&self) -> usize {
+            *self.requests.lock().unwrap()
+        }
+    }
+
+    fn session(base_url: &str) -> CaldavSession {
+        CaldavSession {
+            client: reqwest::Client::builder()
+                .timeout(Duration::from_secs(5))
+                .build()
+                .unwrap(),
+            username: "user".to_string(),
+            password: "pass".to_string(),
+            base_url: base_url.to_string(),
+            absence_urls: Vec::new(),
+        }
+    }
+
+    /// Records whether the guard reached the Daylite lookup, and answers with the given category.
+    fn lookup(
+        category: Option<&'static str>,
+        calls: Arc<Mutex<usize>>,
+    ) -> impl AsyncFnOnce(String) -> Option<ResolvedProject> {
+        move |_reference: String| async move {
+            *calls.lock().unwrap() += 1;
+            Some(project(category))
+        }
+    }
+
+    #[tokio::test]
+    async fn an_overridden_write_skips_the_check_and_its_lookup() {
+        let server = EventServer::spawn(PROTECTED_EVENT).await;
+        let calls = Arc::new(Mutex::new(0));
+
+        let result = refuse_protected_event(
+            &session(&server.base_url),
+            "/cal/uid-1.ics",
+            true,
+            lookup(Some(FIXED_APPOINTMENT_CATEGORY), calls.clone()),
+        )
+        .await;
+
+        assert!(result.is_ok());
+        assert_eq!(server.count(), 0);
+        assert_eq!(*calls.lock().unwrap(), 0);
+    }
+
+    #[tokio::test]
+    async fn a_write_without_an_override_is_still_refused() {
+        let server = EventServer::spawn(PROTECTED_EVENT).await;
+        let calls = Arc::new(Mutex::new(0));
+
+        let result = refuse_protected_event(
+            &session(&server.base_url),
+            "/cal/uid-1.ics",
+            false,
+            lookup(Some(FIXED_APPOINTMENT_CATEGORY), calls.clone()),
+        )
+        .await;
+
+        assert_eq!(result, Err(FIXED_APPOINTMENT_MESSAGE.to_string()));
+        assert_eq!(server.count(), 1);
+        assert_eq!(*calls.lock().unwrap(), 1);
+    }
+
+    #[tokio::test]
+    async fn a_write_to_an_unprotected_event_is_allowed_without_an_override() {
+        let server = EventServer::spawn(PROTECTED_EVENT).await;
+        let calls = Arc::new(Mutex::new(0));
+
+        let result = refuse_protected_event(
+            &session(&server.base_url),
+            "/cal/uid-1.ics",
+            false,
+            lookup(Some("Liefertermin bekannt"), calls.clone()),
+        )
+        .await;
+
+        assert!(result.is_ok());
+        assert_eq!(*calls.lock().unwrap(), 1);
+    }
+
+    #[tokio::test]
+    async fn a_move_to_another_day_is_refused_and_takes_no_override() {
+        let server = EventServer::spawn(PROTECTED_EVENT).await;
+        let calls = Arc::new(Mutex::new(0));
+
+        let result = refuse_protected_day_change(
+            &session(&server.base_url),
+            "/cal/uid-1.ics",
+            "2026-05-07",
+            lookup(Some(FIXED_APPOINTMENT_CATEGORY), calls.clone()),
+        )
+        .await;
+
+        assert_eq!(result, Err(FIXED_APPOINTMENT_MESSAGE.to_string()));
+    }
 
     fn project(category: Option<&str>) -> ResolvedProject {
         ResolvedProject {

@@ -12,7 +12,6 @@ import {
 import { UnsavedChangesDialog } from "./unsaved-changes-dialog";
 
 export function AssignmentModal({
-  isOpen,
   assignment,
   employeeReference,
   date,
@@ -23,7 +22,6 @@ export function AssignmentModal({
   unlocked: initialUnlocked = false,
 }: Props) {
   const modal = useAssignmentModal({
-    isOpen,
     assignment,
     employeeReference,
     date,
@@ -33,8 +31,6 @@ export function AssignmentModal({
     initialShowUnsavedConfirm,
     initialUnlocked,
   });
-
-  if (!isOpen) return null;
 
   if (modal.showUnsavedConfirm) {
     return (
@@ -183,7 +179,6 @@ export function AssignmentModal({
 }
 
 interface Props {
-  isOpen: boolean;
   assignment: CalendarCellEvent | null;
   employeeReference: string;
   date: string;

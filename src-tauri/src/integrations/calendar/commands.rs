@@ -321,7 +321,16 @@ pub async fn update_assignment(
         .map_err(|e| e.user_message)?;
     let session = load_caldav_session(&store)?;
 
-    refuse_protected_event(app, &session, &input.href, input.override_protection).await?;
+    refuse_protected_event(
+        &session,
+        &input.href,
+        input.override_protection,
+        |reference: String| async move {
+            crate::integrations::daylite::projects::fetch_project_by_reference(app, &reference)
+                .await
+        },
+    )
+    .await?;
 
     update_assignment_core(
         &session,
@@ -355,7 +364,10 @@ pub async fn move_assignment(
 
     let session = load_caldav_session(&store)?;
 
-    refuse_protected_day_change(app, &session, &href, &date).await?;
+    refuse_protected_day_change(&session, &href, &date, |reference: String| async move {
+        crate::integrations::daylite::projects::fetch_project_by_reference(app, &reference).await
+    })
+    .await?;
 
     move_assignment_core(
         &session,
@@ -398,7 +410,10 @@ pub async fn delete_assignment(
         .map_err(|e| e.user_message)?;
     let session = load_caldav_session(&store)?;
 
-    refuse_protected_event(app, &session, &href, override_protection).await?;
+    refuse_protected_event(&session, &href, override_protection, |reference: String| async move {
+        crate::integrations::daylite::projects::fetch_project_by_reference(app, &reference).await
+    })
+    .await?;
 
     delete_assignment_core(&session, &href).await
 }
