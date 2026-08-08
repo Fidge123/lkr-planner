@@ -2,11 +2,9 @@ use std::collections::HashMap;
 
 use super::super::types::{CalendarCellEvent, CalendarEventKind, PendingEvent};
 use crate::integrations::daylite::projects::ResolvedProject;
-use crate::integrations::local_store::DayliteCache;
 
 pub(crate) fn resolve_event(
     pending: PendingEvent,
-    cache: &DayliteCache,
     api_results: &HashMap<String, Option<ResolvedProject>>,
     category_colors: &HashMap<String, String>,
 ) -> CalendarCellEvent {
@@ -39,23 +37,6 @@ pub(crate) fn resolve_event(
             order_index,
         };
     };
-
-    if let Some(cached) = cache.projects.iter().find(|p| p.reference == project_ref) {
-        return CalendarCellEvent {
-            uid,
-            kind: CalendarEventKind::Assignment,
-            title: cached.name.clone(),
-            project_status: Some(cached.status.clone()),
-            category_color: category_color(cached.category.as_deref(), category_colors),
-            project_category: cached.category.clone(),
-            project_ref: Some(project_ref.clone()),
-            date,
-            start_time,
-            end_time,
-            href,
-            order_index,
-        };
-    }
 
     if let Some(Some(resolved)) = api_results.get(&project_ref) {
         return CalendarCellEvent {
@@ -105,20 +86,19 @@ mod tests {
     use super::super::classify::classify_event;
     use super::*;
     use crate::integrations::calendar::types::RawVEvent;
-    use crate::integrations::local_store::DayliteProjectCacheEntry;
     use chrono::NaiveDate;
 
-    fn cache_with_project(category: Option<&str>) -> DayliteCache {
-        DayliteCache {
-            last_synced_at: None,
-            projects: vec![DayliteProjectCacheEntry {
-                reference: "/v1/projects/3001".to_string(),
+    fn api_results_with_project(
+        category: Option<&str>,
+    ) -> HashMap<String, Option<ResolvedProject>> {
+        HashMap::from([(
+            "/v1/projects/3001".to_string(),
+            Some(ResolvedProject {
                 name: "Projekt Nord".to_string(),
                 status: "in_progress".to_string(),
                 category: category.map(str::to_string),
-            }],
-            contacts: vec![],
-        }
+            }),
+        )])
     }
 
     fn pending(summary: &str, project_ref: Option<&str>) -> PendingEvent {
@@ -142,12 +122,24 @@ mod tests {
     }
 
     #[test]
-    fn resolves_assignment_event_from_cache() {
+    fn resolves_the_category_daylite_returns_for_the_project() {
         let pending = pending("Projekt Nord", Some("/v1/projects/3001"));
-        let cache = cache_with_project(None);
-        let api_results = HashMap::new();
+        let api_results = api_results_with_project(Some("Termin FIX geplant"));
 
-        let event = resolve_event(pending, &cache, &api_results, &HashMap::new());
+        let event = resolve_event(pending, &api_results, &HashMap::new());
+
+        assert_eq!(
+            event.project_category,
+            Some("Termin FIX geplant".to_string())
+        );
+    }
+
+    #[test]
+    fn resolves_assignment_event_from_the_api_result() {
+        let pending = pending("Projekt Nord", Some("/v1/projects/3001"));
+        let api_results = api_results_with_project(None);
+
+        let event = resolve_event(pending, &api_results, &HashMap::new());
 
         assert_eq!(event.kind, CalendarEventKind::Assignment);
         assert_eq!(event.title, "Projekt Nord");
@@ -156,14 +148,12 @@ mod tests {
     }
 
     #[test]
-    fn resolves_category_color_from_cache() {
+    fn resolves_category_color_from_the_project_category() {
         let pending = pending("Projekt Nord", Some("/v1/projects/3001"));
-        let cache = cache_with_project(Some("Bau"));
 
         let event = resolve_event(
             pending,
-            &cache,
-            &HashMap::new(),
+            &api_results_with_project(Some("Bau")),
             &category_colors(&[("Bau", "#8bc34a")]),
         );
 
@@ -173,12 +163,10 @@ mod tests {
     #[test]
     fn leaves_category_color_unset_when_the_category_has_no_color() {
         let pending = pending("Projekt Nord", Some("/v1/projects/3001"));
-        let cache = cache_with_project(Some("Ohne Farbe"));
 
         let event = resolve_event(
             pending,
-            &cache,
-            &HashMap::new(),
+            &api_results_with_project(Some("Ohne Farbe")),
             &category_colors(&[("Bau", "#8bc34a")]),
         );
 
@@ -188,7 +176,6 @@ mod tests {
     #[test]
     fn resolves_assignment_event_from_api_result() {
         let pending = pending("Projekt Süd", Some("/v1/projects/4001"));
-        let cache = DayliteCache::default();
         let mut api_results = HashMap::new();
         api_results.insert(
             "/v1/projects/4001".to_string(),
@@ -199,7 +186,7 @@ mod tests {
             }),
         );
 
-        let event = resolve_event(pending, &cache, &api_results, &HashMap::new());
+        let event = resolve_event(pending, &api_results, &HashMap::new());
 
         assert_eq!(event.kind, CalendarEventKind::Assignment);
         assert_eq!(event.title, "Projekt Süd");
@@ -210,7 +197,6 @@ mod tests {
     #[test]
     fn resolves_category_color_from_api_result() {
         let pending = pending("Projekt Süd", Some("/v1/projects/4001"));
-        let cache = DayliteCache::default();
         let mut api_results = HashMap::new();
         api_results.insert(
             "/v1/projects/4001".to_string(),
@@ -223,7 +209,6 @@ mod tests {
 
         let event = resolve_event(
             pending,
-            &cache,
             &api_results,
             &category_colors(&[("Wartung", "#03a9f4")]),
         );
@@ -234,13 +219,11 @@ mod tests {
     #[test]
     fn shows_placeholder_when_project_not_resolvable() {
         let pending = pending("Unbekanntes Projekt", Some("/v1/projects/9999"));
-        let cache = DayliteCache::default();
         let mut api_results = HashMap::new();
         api_results.insert("/v1/projects/9999".to_string(), None);
 
         let event = resolve_event(
             pending,
-            &cache,
             &api_results,
             &category_colors(&[("Bau", "#8bc34a")]),
         );
@@ -254,12 +237,10 @@ mod tests {
     #[test]
     fn resolves_bare_event() {
         let pending = pending("Auto Werkstatt", None);
-        let cache = DayliteCache::default();
         let api_results = HashMap::new();
 
         let event = resolve_event(
             pending,
-            &cache,
             &api_results,
             &category_colors(&[("Bau", "#8bc34a")]),
         );
@@ -295,10 +276,9 @@ mod tests {
             href: "/calendars/user/cal/uid-href.ics".to_string(),
             ..Default::default()
         };
-        let cache = cache_with_project(None);
 
         let pending = classify_event(&event);
-        let cell_event = resolve_event(pending, &cache, &HashMap::new(), &HashMap::new());
+        let cell_event = resolve_event(pending, &HashMap::new(), &HashMap::new());
 
         assert_eq!(
             cell_event.href,
@@ -319,7 +299,6 @@ mod tests {
 
         let cell_event = resolve_event(
             classify_event(&event),
-            &DayliteCache::default(),
             &HashMap::new(),
             &HashMap::new(),
         );

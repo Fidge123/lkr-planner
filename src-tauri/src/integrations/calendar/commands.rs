@@ -15,7 +15,7 @@ use super::events::{
 use super::protection::{refuse_protected_day_change, refuse_protected_event};
 use super::types::{CalendarCellEvent, EmployeeWeekEvents, MoveAssignmentResult, PendingEvent};
 use crate::integrations::daylite::projects::ResolvedProject;
-use crate::integrations::local_store::{DayliteCache, LocalStore};
+use crate::integrations::local_store::LocalStore;
 
 #[tauri::command]
 #[specta::specta]
@@ -48,14 +48,13 @@ pub async fn load_week_events(
     let (fetches, error_results) =
         fetch_week_for_employees(&store, &session, week_start_date).await;
 
-    let api_results = fetch_uncached_projects(app.clone(), &store, &fetches).await;
+    let api_results = fetch_referenced_projects(app.clone(), &fetches).await;
     let category_colors =
         crate::integrations::daylite::categories::fetch_project_category_colors(app).await;
 
     Ok(assemble_week_events(
         fetches,
         error_results,
-        &store.daylite_cache,
         &api_results,
         &category_colors,
     ))
@@ -154,29 +153,21 @@ async fn fetch_week_for_employees(
     (fetches, error_results)
 }
 
-async fn fetch_uncached_projects(
+async fn fetch_referenced_projects(
     app: tauri::AppHandle,
-    store: &LocalStore,
     fetches: &[EmployeeFetch],
 ) -> HashMap<String, Option<ResolvedProject>> {
-    let mut missing_refs: HashSet<String> = HashSet::new();
+    let mut references: HashSet<String> = HashSet::new();
     for fetch in fetches {
         for event in &fetch.pending {
             if let Some(ref project_ref) = event.project_ref {
-                let in_cache = store
-                    .daylite_cache
-                    .projects
-                    .iter()
-                    .any(|p| p.reference == *project_ref);
-                if !in_cache {
-                    missing_refs.insert(project_ref.clone());
-                }
+                references.insert(project_ref.clone());
             }
         }
     }
 
     let mut api_results = HashMap::new();
-    for project_ref in missing_refs {
+    for project_ref in references {
         let result = crate::integrations::daylite::projects::fetch_project_by_reference(
             app.clone(),
             &project_ref,
@@ -191,7 +182,6 @@ async fn fetch_uncached_projects(
 fn assemble_week_events(
     fetches: Vec<EmployeeFetch>,
     error_results: Vec<EmployeeWeekEvents>,
-    cache: &DayliteCache,
     api_results: &HashMap<String, Option<ResolvedProject>>,
     category_colors: &HashMap<String, String>,
 ) -> Vec<EmployeeWeekEvents> {
@@ -200,7 +190,7 @@ fn assemble_week_events(
         let mut events: Vec<CalendarCellEvent> = fetch
             .pending
             .into_iter()
-            .map(|p| resolve_event(p, cache, api_results, category_colors))
+            .map(|p| resolve_event(p, api_results, category_colors))
             .collect();
         events.extend(fetch.absences);
         // Deduplicate by UID to guard against CalDAV servers redelivering the same event.

@@ -79,7 +79,6 @@ export type DayliteApiErrorCode = "UNAUTHORIZED" | "RATE_LIMITED" | "SERVER_ERRO
 
 export type DayliteCache = {
 	lastSyncedAt: string | null,
-	projects: DayliteProjectCacheEntry[],
 	contacts: DayliteContactCacheEntry[],
 };
 
@@ -95,13 +94,6 @@ export type DayliteContactUrl = {
 	label?: string | null,
 	url?: string | null,
 	note?: string | null,
-};
-
-export type DayliteProjectCacheEntry = {
-	reference: string,
-	name: string,
-	status: string,
-	category?: string | null,
 };
 
 export type DayliteProjectSummary = {
