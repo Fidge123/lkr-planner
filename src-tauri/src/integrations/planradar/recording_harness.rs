@@ -1,7 +1,8 @@
 use super::client::PlanradarApiClient;
 use super::projects::{
     copy_project_core, create_project_core, list_projects_core, reactivate_project_core,
-    read_project_status_core, vcr_fixtures,
+    read_project_status_core, PlanradarCopyProjectOptions, PlanradarCreateProjectRequest,
+    PlanradarListProjectsInput,
 };
 use crate::integrations::http_record_replay::VcrMode;
 
@@ -61,7 +62,7 @@ fn record_planradar_cassettes_from_live_api() {
             .expect("list cassette client should be created"),
             &config.api_token,
             &config.customer_id,
-            &vcr_fixtures::list_input(),
+            &list_input(),
         )
         .await
         .expect("list cassette should be recorded");
@@ -74,7 +75,7 @@ fn record_planradar_cassettes_from_live_api() {
             .expect("create cassette client should be created"),
             &config.api_token,
             &config.customer_id,
-            &vcr_fixtures::create_request(),
+            &create_request(&config.new_project_name),
         )
         .await
         .expect("create cassette should be recorded");
@@ -85,7 +86,7 @@ fn record_planradar_cassettes_from_live_api() {
             &config.api_token,
             &config.customer_id,
             &config.project_id,
-            &vcr_fixtures::copy_options(),
+            &copy_options(&config.new_project_name),
         )
         .await
         .expect("copy cassette should be recorded");
@@ -105,6 +106,38 @@ fn record_planradar_cassettes_from_live_api() {
         .await
         .expect("reactivate cassette should be recorded");
     });
+}
+
+fn list_input() -> PlanradarListProjectsInput {
+    PlanradarListProjectsInput {
+        sort: Some("name".to_string()),
+        page: Some(1),
+        pagesize: Some(10),
+    }
+}
+
+fn create_request(name: &str) -> PlanradarCreateProjectRequest {
+    PlanradarCreateProjectRequest {
+        name: name.to_string(),
+        // Dates are sent so a recorded cassette proves Planradar accepts the drstart-date /
+        // drend-date keys instead of dropping them.
+        city: Some("Wien".to_string()),
+        country: Some("Österreich".to_string()),
+        start_date: Some("2026-02-23T10:02:25.000Z".to_string()),
+        end_date: Some("2026-02-26T00:00:00.000Z".to_string()),
+        ..PlanradarCreateProjectRequest::default()
+    }
+}
+
+fn copy_options(name: &str) -> PlanradarCopyProjectOptions {
+    PlanradarCopyProjectOptions {
+        name: format!("{name} (Kopie)"),
+        details: true,
+        groups: true,
+        ticket_types: true,
+        users: false,
+        components: true,
+    }
 }
 
 fn required_env(key: &str) -> Result<String, String> {

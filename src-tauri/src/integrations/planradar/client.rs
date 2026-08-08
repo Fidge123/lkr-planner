@@ -38,14 +38,6 @@ impl RetryPolicy {
     }
 
     #[cfg(test)]
-    pub(super) fn none() -> Self {
-        Self {
-            max_retries: 0,
-            base_delay_ms: 0,
-        }
-    }
-
-    #[cfg(test)]
     pub(super) fn immediate(max_retries: u32) -> Self {
         Self {
             max_retries,
@@ -195,7 +187,7 @@ fn compute_wait(
         }
     }
 
-    if timestamps.len() < max_requests {
+    if max_requests == 0 || timestamps.len() < max_requests {
         return Duration::ZERO;
     }
 
@@ -223,11 +215,7 @@ impl PlanradarApiClient {
 
     #[cfg(test)]
     pub(super) fn with_transport(transport: Box<dyn PlanradarHttpTransport>) -> Self {
-        Self {
-            transport,
-            retry: RetryPolicy::none(),
-            rate_limiter: RateLimiter::disabled(),
-        }
+        Self::with_transport_and_retry(transport, RetryPolicy::immediate(0))
     }
 
     #[cfg(test)]
@@ -253,7 +241,7 @@ impl PlanradarApiClient {
 
         Ok(Self {
             transport: Box::new(transport),
-            retry: RetryPolicy::none(),
+            retry: RetryPolicy::immediate(0),
             rate_limiter: RateLimiter::disabled(),
         })
     }
@@ -593,67 +581,15 @@ pub(super) fn cassette_path_for_test(file_name: &str) -> std::path::PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::integrations::planradar::test_support::{mock_client_with_retry, mock_response};
     use std::collections::VecDeque;
-    use std::sync::{Arc, Mutex};
     use std::time::Instant;
-
-    #[derive(Clone)]
-    pub(crate) struct MockTransport {
-        responses: Arc<Mutex<VecDeque<Result<PlanradarHttpResponse, PlanradarApiError>>>>,
-        requests: Arc<Mutex<Vec<PlanradarHttpRequest>>>,
-    }
-
-    impl MockTransport {
-        pub(crate) fn new(
-            responses: Vec<Result<PlanradarHttpResponse, PlanradarApiError>>,
-        ) -> Self {
-            Self {
-                responses: Arc::new(Mutex::new(VecDeque::from(responses))),
-                requests: Arc::new(Mutex::new(Vec::new())),
-            }
-        }
-
-        pub(crate) fn requests(&self) -> Vec<PlanradarHttpRequest> {
-            self.requests
-                .lock()
-                .expect("request lock should succeed")
-                .clone()
-        }
-    }
-
-    impl PlanradarHttpTransport for MockTransport {
-        fn send<'a>(
-            &'a self,
-            request: PlanradarHttpRequest,
-        ) -> BoxFuture<'a, Result<PlanradarHttpResponse, PlanradarApiError>> {
-            Box::pin(async move {
-                self.requests
-                    .lock()
-                    .expect("request lock should succeed")
-                    .push(request);
-
-                self.responses
-                    .lock()
-                    .expect("response lock should succeed")
-                    .pop_front()
-                    .expect("mock should contain enough responses")
-            })
-        }
-    }
-
-    fn mock_response(status: u16, body: &str) -> PlanradarHttpResponse {
-        PlanradarHttpResponse {
-            status,
-            body: body.to_string(),
-        }
-    }
 
     #[test]
     fn send_request_does_not_retry_rate_limit() {
         tauri::async_runtime::block_on(async {
-            let transport = MockTransport::new(vec![Ok(mock_response(429, "rate limited"))]);
-            let client = PlanradarApiClient::with_transport_and_retry(
-                Box::new(transport.clone()),
+            let (client, transport) = mock_client_with_retry(
+                vec![Ok(mock_response(429, "rate limited"))],
                 RetryPolicy::immediate(3),
             );
 
@@ -670,17 +606,16 @@ mod tests {
     #[test]
     fn send_request_retries_transient_network_error_then_succeeds() {
         tauri::async_runtime::block_on(async {
-            let transport = MockTransport::new(vec![
-                Err(PlanradarApiError::new(
-                    PlanradarApiErrorCode::Timeout,
-                    None,
-                    "Zeitüberschreitung",
-                    "timeout",
-                )),
-                Ok(mock_response(200, r#"{"ok":true}"#)),
-            ]);
-            let client = PlanradarApiClient::with_transport_and_retry(
-                Box::new(transport.clone()),
+            let (client, transport) = mock_client_with_retry(
+                vec![
+                    Err(PlanradarApiError::new(
+                        PlanradarApiErrorCode::Timeout,
+                        None,
+                        "Zeitüberschreitung",
+                        "timeout",
+                    )),
+                    Ok(mock_response(200, r#"{"ok":true}"#)),
+                ],
                 RetryPolicy::immediate(3),
             );
 
@@ -697,12 +632,11 @@ mod tests {
     #[test]
     fn send_request_gives_up_after_max_retries() {
         tauri::async_runtime::block_on(async {
-            let transport = MockTransport::new(vec![
-                Ok(mock_response(503, "down")),
-                Ok(mock_response(503, "down")),
-            ]);
-            let client = PlanradarApiClient::with_transport_and_retry(
-                Box::new(transport.clone()),
+            let (client, transport) = mock_client_with_retry(
+                vec![
+                    Ok(mock_response(503, "down")),
+                    Ok(mock_response(503, "down")),
+                ],
                 RetryPolicy::immediate(1),
             );
 
@@ -879,9 +813,8 @@ mod tests {
     #[test]
     fn send_request_does_not_retry_non_idempotent_post() {
         tauri::async_runtime::block_on(async {
-            let transport = MockTransport::new(vec![Ok(mock_response(503, "down"))]);
-            let client = PlanradarApiClient::with_transport_and_retry(
-                Box::new(transport.clone()),
+            let (client, transport) = mock_client_with_retry(
+                vec![Ok(mock_response(503, "down"))],
                 RetryPolicy::immediate(3),
             );
 
@@ -898,9 +831,8 @@ mod tests {
     #[test]
     fn send_request_does_not_retry_client_errors() {
         tauri::async_runtime::block_on(async {
-            let transport = MockTransport::new(vec![Ok(mock_response(404, "not found"))]);
-            let client = PlanradarApiClient::with_transport_and_retry(
-                Box::new(transport.clone()),
+            let (client, transport) = mock_client_with_retry(
+                vec![Ok(mock_response(404, "not found"))],
                 RetryPolicy::immediate(3),
             );
 

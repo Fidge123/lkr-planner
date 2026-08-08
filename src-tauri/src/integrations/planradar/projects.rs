@@ -1,7 +1,7 @@
 use super::client::{PlanradarApiClient, PlanradarHttpMethod};
 use super::shared::{
     load_api_token, load_config, load_store_or_error, parse_success_json_body, truncate_for_log,
-    validate_path_segment, PlanradarApiError, PlanradarApiErrorCode, PlanradarConfig,
+    validate_path_segment, PlanradarApiError, PlanradarApiErrorCode,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
@@ -115,8 +115,8 @@ pub async fn planradar_get_project_status(
     app: tauri::AppHandle,
     project_id: String,
 ) -> Result<PlanradarProject, PlanradarApiError> {
-    let (client, token, config) = build_client(app)?;
-    read_project_status_core(&client, &token, &config.customer_id, &project_id).await
+    let (client, token, customer_id) = build_client(app)?;
+    read_project_status_core(&client, &token, &customer_id, &project_id).await
 }
 
 #[tauri::command]
@@ -125,8 +125,8 @@ pub async fn planradar_list_projects(
     app: tauri::AppHandle,
     input: PlanradarListProjectsInput,
 ) -> Result<Vec<PlanradarProject>, PlanradarApiError> {
-    let (client, token, config) = build_client(app)?;
-    list_projects_core(&client, &token, &config.customer_id, &input).await
+    let (client, token, customer_id) = build_client(app)?;
+    list_projects_core(&client, &token, &customer_id, &input).await
 }
 
 #[tauri::command]
@@ -135,8 +135,8 @@ pub async fn planradar_create_project(
     app: tauri::AppHandle,
     request: PlanradarCreateProjectRequest,
 ) -> Result<String, PlanradarApiError> {
-    let (client, token, config) = build_client(app)?;
-    create_project_core(&client, &token, &config.customer_id, &request).await
+    let (client, token, customer_id) = build_client(app)?;
+    create_project_core(&client, &token, &customer_id, &request).await
 }
 
 /// Blocks until the copied project appears and returns its ID: Planradar copies asynchronously
@@ -149,11 +149,11 @@ pub async fn planradar_copy_project(
     project_id: String,
     options: PlanradarCopyProjectOptions,
 ) -> Result<String, PlanradarApiError> {
-    let (client, token, config) = build_client(app)?;
+    let (client, token, customer_id) = build_client(app)?;
     copy_project_and_await_core(
         &client,
         &token,
-        &config.customer_id,
+        &customer_id,
         &project_id,
         &options,
         COPY_POLL_INTERVAL,
@@ -168,18 +168,20 @@ pub async fn planradar_reactivate_project(
     app: tauri::AppHandle,
     project_id: String,
 ) -> Result<(), PlanradarApiError> {
-    let (client, token, config) = build_client(app)?;
-    reactivate_project_core(&client, &token, &config.customer_id, &project_id).await
+    let (client, token, customer_id) = build_client(app)?;
+    reactivate_project_core(&client, &token, &customer_id, &project_id).await
 }
 
+/// Returns the client plus the two per-request values every command needs: the API token and the
+/// Customer ID path segment.
 fn build_client(
     app: tauri::AppHandle,
-) -> Result<(PlanradarApiClient, String, PlanradarConfig), PlanradarApiError> {
+) -> Result<(PlanradarApiClient, String, String), PlanradarApiError> {
     let store = load_store_or_error(app)?;
     let config = load_config(&store)?;
     let token = load_api_token()?;
     let client = PlanradarApiClient::new(&config.base_url)?;
-    Ok((client, token, config))
+    Ok((client, token, config.customer_id))
 }
 
 pub(super) async fn read_project_status_core(
@@ -456,59 +458,6 @@ fn extract_job_id(value: &Value, path: &str) -> Result<String, PlanradarApiError
     value_to_id(value.get("job_id")).ok_or_else(|| missing_field_error(path, "job_id", value))
 }
 
-/// Request shapes the recording harness sends when cutting new cassettes. Replay tests do not
-/// use these; they rebuild their inputs from the cassette they replay.
-#[cfg(test)]
-pub(super) mod vcr_fixtures {
-    use super::{
-        PlanradarCopyProjectOptions, PlanradarCreateProjectRequest, PlanradarListProjectsInput,
-    };
-
-    fn env_or(key: &str, fallback: &str) -> String {
-        std::env::var(key)
-            .ok()
-            .map(|value| value.trim().to_string())
-            .filter(|value| !value.is_empty())
-            .unwrap_or_else(|| fallback.to_string())
-    }
-
-    pub(in crate::integrations::planradar) fn new_project_name() -> String {
-        env_or("PLANRADAR_VCR_NEW_PROJECT_NAME", "Cassette Projekt")
-    }
-
-    pub(in crate::integrations::planradar) fn list_input() -> PlanradarListProjectsInput {
-        PlanradarListProjectsInput {
-            sort: Some("name".to_string()),
-            page: Some(1),
-            pagesize: Some(10),
-        }
-    }
-
-    pub(in crate::integrations::planradar) fn create_request() -> PlanradarCreateProjectRequest {
-        PlanradarCreateProjectRequest {
-            name: new_project_name(),
-            // Dates are sent so a recorded cassette proves Planradar accepts the drstart-date /
-            // drend-date keys instead of dropping them.
-            city: Some("Wien".to_string()),
-            country: Some("Österreich".to_string()),
-            start_date: Some("2026-02-23T10:02:25.000Z".to_string()),
-            end_date: Some("2026-02-26T00:00:00.000Z".to_string()),
-            ..PlanradarCreateProjectRequest::default()
-        }
-    }
-
-    pub(in crate::integrations::planradar) fn copy_options() -> PlanradarCopyProjectOptions {
-        PlanradarCopyProjectOptions {
-            name: format!("{} (Kopie)", new_project_name()),
-            details: true,
-            groups: true,
-            ticket_types: true,
-            users: false,
-            components: true,
-        }
-    }
-}
-
 /// JSON:API ids are strings by spec, but Planradar may serialize them as integers; accept both.
 fn value_to_id(value: Option<&Value>) -> Option<String> {
     match value? {
@@ -546,69 +495,17 @@ mod tests {
     use super::*;
     use crate::integrations::http_record_replay::RecordedRequest;
     use crate::integrations::planradar::client::{
-        cassette_path_for_test, BoxFuture, PlanradarApiClient, PlanradarHttpMethod,
-        PlanradarHttpRequest, PlanradarHttpResponse, PlanradarHttpTransport,
+        cassette_path_for_test, PlanradarApiClient, PlanradarHttpMethod, PlanradarHttpResponse,
     };
-    use std::collections::VecDeque;
-    use std::sync::{Arc, Mutex};
-
-    #[derive(Clone)]
-    struct MockTransport {
-        responses: Arc<Mutex<VecDeque<Result<PlanradarHttpResponse, PlanradarApiError>>>>,
-        requests: Arc<Mutex<Vec<PlanradarHttpRequest>>>,
-    }
-
-    impl MockTransport {
-        fn new(responses: Vec<Result<PlanradarHttpResponse, PlanradarApiError>>) -> Self {
-            Self {
-                responses: Arc::new(Mutex::new(VecDeque::from(responses))),
-                requests: Arc::new(Mutex::new(Vec::new())),
-            }
-        }
-
-        fn requests(&self) -> Vec<PlanradarHttpRequest> {
-            self.requests
-                .lock()
-                .expect("request lock should succeed")
-                .clone()
-        }
-    }
-
-    impl PlanradarHttpTransport for MockTransport {
-        fn send<'a>(
-            &'a self,
-            request: PlanradarHttpRequest,
-        ) -> BoxFuture<'a, Result<PlanradarHttpResponse, PlanradarApiError>> {
-            Box::pin(async move {
-                self.requests
-                    .lock()
-                    .expect("request lock should succeed")
-                    .push(request);
-
-                self.responses
-                    .lock()
-                    .expect("response lock should succeed")
-                    .pop_front()
-                    .expect("mock should contain enough responses")
-            })
-        }
-    }
-
-    fn mock_response(status: u16, body: &str) -> PlanradarHttpResponse {
-        PlanradarHttpResponse {
-            status,
-            body: body.to_string(),
-        }
-    }
+    use crate::integrations::planradar::test_support::{mock_client, mock_response};
 
     #[test]
     fn request_attaches_api_key_header_and_builds_customer_path() {
         tauri::async_runtime::block_on(async {
-            let transport = MockTransport::new(vec![Ok(mock_response(
+            let (client, transport) = mock_client(vec![Ok(mock_response(
                 200,
                 r#"{"data":{"id":"42","attributes":{"name":"Projekt","status":1}}}"#,
             ))]);
-            let client = PlanradarApiClient::with_transport(Box::new(transport.clone()));
 
             read_project_status_core(&client, "secret-token", "1234", "42")
                 .await
@@ -625,11 +522,10 @@ mod tests {
     #[test]
     fn read_project_status_maps_active_and_archived() {
         tauri::async_runtime::block_on(async {
-            let active = MockTransport::new(vec![Ok(mock_response(
+            let (client, _transport) = mock_client(vec![Ok(mock_response(
                 200,
                 r#"{"data":{"id":"1","attributes":{"name":" Aktiv ","status":1}}}"#,
             ))]);
-            let client = PlanradarApiClient::with_transport(Box::new(active));
             let project = read_project_status_core(&client, "t", "1234", "1")
                 .await
                 .expect("active status should parse");
@@ -637,11 +533,10 @@ mod tests {
             assert_eq!(project.name, "Aktiv");
             assert_eq!(project.status, PlanradarProjectStatus::Active);
 
-            let archived = MockTransport::new(vec![Ok(mock_response(
+            let (client, _transport) = mock_client(vec![Ok(mock_response(
                 200,
                 r#"{"data":{"id":"2","attributes":{"name":"Archiviert","status":9}}}"#,
             ))]);
-            let client = PlanradarApiClient::with_transport(Box::new(archived));
             let project = read_project_status_core(&client, "t", "1234", "2")
                 .await
                 .expect("archived status should parse");
@@ -652,14 +547,13 @@ mod tests {
     #[test]
     fn list_projects_sends_pagination_query_and_maps_results() {
         tauri::async_runtime::block_on(async {
-            let transport = MockTransport::new(vec![Ok(mock_response(
+            let (client, transport) = mock_client(vec![Ok(mock_response(
                 200,
                 r#"{"data":[
                     {"id":"1","attributes":{"name":"A","status":1}},
                     {"id":2,"attributes":{"name":"B","status":9}}
                 ]}"#,
             ))]);
-            let client = PlanradarApiClient::with_transport(Box::new(transport.clone()));
 
             let projects = list_projects_core(
                 &client,
@@ -695,11 +589,10 @@ mod tests {
     #[test]
     fn create_project_sends_attributes_body_and_returns_new_id() {
         tauri::async_runtime::block_on(async {
-            let transport = MockTransport::new(vec![Ok(mock_response(
+            let (client, transport) = mock_client(vec![Ok(mock_response(
                 201,
                 r#"{"data":{"id":"9001","attributes":{"name":"Neu","status":1}}}"#,
             ))]);
-            let client = PlanradarApiClient::with_transport(Box::new(transport.clone()));
 
             let new_id = create_project_core(
                 &client,
@@ -748,7 +641,7 @@ mod tests {
     fn copy_awaits_the_project_appearing_in_a_later_poll() {
         tauri::async_runtime::block_on(async {
             // First poll does not contain the copy yet; the second one does.
-            let transport = MockTransport::new(vec![
+            let (client, transport) = mock_client(vec![
                 Ok(copy_accepted_response()),
                 Ok(mock_response(
                     200,
@@ -759,7 +652,6 @@ mod tests {
                     r#"{"data":[{"id":"1","attributes":{"name":"Alt","status":1}},{"id":"77","attributes":{"name":"Kopie","status":1}}]}"#,
                 )),
             ]);
-            let client = PlanradarApiClient::with_transport(Box::new(transport.clone()));
 
             let new_id = copy_project_and_await_core(
                 &client,
@@ -791,7 +683,7 @@ mod tests {
                     .collect::<Vec<_>>()
                     .join(",")
             );
-            let transport = MockTransport::new(vec![
+            let (client, transport) = mock_client(vec![
                 Ok(copy_accepted_response()),
                 Ok(mock_response(200, &full_page)),
                 Ok(mock_response(
@@ -799,7 +691,6 @@ mod tests {
                     r#"{"data":[{"id":"9001","attributes":{"name":"Kopie","status":1}}]}"#,
                 )),
             ]);
-            let client = PlanradarApiClient::with_transport(Box::new(transport.clone()));
 
             let new_id = copy_project_and_await_core(
                 &client,
@@ -836,12 +727,11 @@ mod tests {
     #[test]
     fn copy_times_out_when_the_project_never_appears() {
         tauri::async_runtime::block_on(async {
-            let transport = MockTransport::new(vec![
+            let (client, _transport) = mock_client(vec![
                 Ok(copy_accepted_response()),
                 Ok(mock_response(200, r#"{"data":[]}"#)),
                 Ok(mock_response(200, r#"{"data":[]}"#)),
             ]);
-            let client = PlanradarApiClient::with_transport(Box::new(transport));
 
             let error = copy_project_and_await_core(
                 &client,
@@ -866,11 +756,10 @@ mod tests {
     #[test]
     fn copy_project_maps_name_and_toggles_to_query_params() {
         tauri::async_runtime::block_on(async {
-            let transport = MockTransport::new(vec![Ok(mock_response(
+            let (client, transport) = mock_client(vec![Ok(mock_response(
                 202,
                 r#"{"job_id":"f2f8a66e-39bb-4baa-a38c-0f09e4758e07"}"#,
             ))]);
-            let client = PlanradarApiClient::with_transport(Box::new(transport.clone()));
 
             let job_id = copy_project_core(
                 &client,
@@ -911,8 +800,7 @@ mod tests {
     #[test]
     fn reactivate_sends_archive_project_with_status_one() {
         tauri::async_runtime::block_on(async {
-            let transport = MockTransport::new(vec![Ok(mock_response(200, r#"{"data":{}}"#))]);
-            let client = PlanradarApiClient::with_transport(Box::new(transport.clone()));
+            let (client, transport) = mock_client(vec![Ok(mock_response(200, r#"{"data":{}}"#))]);
 
             reactivate_project_core(&client, "t", "1234", "42")
                 .await
@@ -932,11 +820,10 @@ mod tests {
     #[test]
     fn missing_status_is_rejected_instead_of_defaulting_to_active() {
         tauri::async_runtime::block_on(async {
-            let transport = MockTransport::new(vec![Ok(mock_response(
+            let (client, _transport) = mock_client(vec![Ok(mock_response(
                 200,
                 r#"{"data":{"id":"1","attributes":{"name":"Ohne Status"}}}"#,
             ))]);
-            let client = PlanradarApiClient::with_transport(Box::new(transport));
 
             let error = read_project_status_core(&client, "t", "1234", "1")
                 .await
@@ -948,11 +835,10 @@ mod tests {
     #[test]
     fn unknown_status_code_is_rejected() {
         tauri::async_runtime::block_on(async {
-            let transport = MockTransport::new(vec![Ok(mock_response(
+            let (client, _transport) = mock_client(vec![Ok(mock_response(
                 200,
                 r#"{"data":{"id":"1","attributes":{"name":"Seltsam","status":4}}}"#,
             ))]);
-            let client = PlanradarApiClient::with_transport(Box::new(transport));
 
             let error = read_project_status_core(&client, "t", "1234", "1")
                 .await
@@ -965,8 +851,7 @@ mod tests {
     #[test]
     fn rejects_project_id_that_escapes_the_customer_scope() {
         tauri::async_runtime::block_on(async {
-            let transport = MockTransport::new(vec![]);
-            let client = PlanradarApiClient::with_transport(Box::new(transport.clone()));
+            let (client, transport) = mock_client(vec![]);
 
             let error = read_project_status_core(&client, "t", "1234", "../../9999/projects/5")
                 .await
@@ -982,9 +867,8 @@ mod tests {
     #[test]
     fn maps_auth_failure_to_unauthorized_error() {
         tauri::async_runtime::block_on(async {
-            let transport =
-                MockTransport::new(vec![Ok(mock_response(401, r#"{"error":"invalid key"}"#))]);
-            let client = PlanradarApiClient::with_transport(Box::new(transport));
+            let (client, _transport) =
+                mock_client(vec![Ok(mock_response(401, r#"{"error":"invalid key"}"#))]);
 
             let error = read_project_status_core(&client, "t", "1234", "1")
                 .await
@@ -998,8 +882,8 @@ mod tests {
     #[test]
     fn maps_not_found_to_not_found_error() {
         tauri::async_runtime::block_on(async {
-            let transport = MockTransport::new(vec![Ok(mock_response(404, "Project Not Found"))]);
-            let client = PlanradarApiClient::with_transport(Box::new(transport));
+            let (client, _transport) =
+                mock_client(vec![Ok(mock_response(404, "Project Not Found"))]);
 
             let error = read_project_status_core(&client, "t", "1234", "999")
                 .await
@@ -1011,8 +895,7 @@ mod tests {
     #[test]
     fn maps_rate_limit_to_rate_limited_error() {
         tauri::async_runtime::block_on(async {
-            let transport = MockTransport::new(vec![Ok(mock_response(429, "slow down"))]);
-            let client = PlanradarApiClient::with_transport(Box::new(transport));
+            let (client, _transport) = mock_client(vec![Ok(mock_response(429, "slow down"))]);
 
             let error = read_project_status_core(&client, "t", "1234", "1")
                 .await
@@ -1024,8 +907,7 @@ mod tests {
     #[test]
     fn malformed_response_maps_to_invalid_response() {
         tauri::async_runtime::block_on(async {
-            let transport = MockTransport::new(vec![Ok(mock_response(200, "not json {{{"))]);
-            let client = PlanradarApiClient::with_transport(Box::new(transport));
+            let (client, _transport) = mock_client(vec![Ok(mock_response(200, "not json {{{"))]);
 
             let error = read_project_status_core(&client, "t", "1234", "1")
                 .await

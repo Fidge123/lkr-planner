@@ -39,3 +39,18 @@
 
 - [x] 7.1 Add the Customer ID and tenant/account options to the local config store
 - [x] 7.2 Store the user-provided API token in the OS keychain via the secret manager (service `lkr-planner-planradar`, username `LKR Planner Planradar Token`)
+
+## 8. Follow-ups from code review
+
+- [ ] 8.1 Establish which project ID form the path endpoints accept.
+      The recorded cassettes show a numeric ID in the request path (`/projects/1569651`) but a hashed ID in the response (`data.id` is `ymmpayd`), and the list endpoint returns the hashed form too.
+      So `PlanradarProject.id` may not be usable as input to `planradar_get_project_status` or `planradar_reactivate_project`, and `planradar_copy_project` now returns an ID it read from the project list, which inherits the same question.
+      Verify against the live API whether the hashed form is accepted in paths.
+      If it is, record a cassette that reads a project by its hashed ID so replay locks the round trip in.
+      If it is not, carry the caller-supplied ID on `PlanradarProject` instead of the returned one, and document which form the field holds.
+- [ ] 8.2 Validate the Customer ID as a path segment on the connect path.
+      `projects_path` interpolates `customer_id` without calling `validate_path_segment`, and `planradar_connect` only trims it before probing, so a value such as `../../9999` escapes the customer scope during the probe and is then persisted into a config that `load_config` rejects on every later call.
+      Make `projects_path` return `Result` and validate, mirroring `project_path`.
+- [ ] 8.3 Stop returning raw Planradar response bodies to the frontend.
+      `missing_field_error` and `normalize_http_error` embed up to 400 characters of the response body in `technical_message`, which is serialized to the frontend, and project payloads carry an `access-token` attribute plus customer addresses.
+      Log the payload instead, or restrict the diagnostic to a whitelist of keys.

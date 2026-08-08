@@ -20,7 +20,6 @@ export const commands = {
 	/**
 	 *  Stores the API token in the OS keychain and the non-secret base URL plus Customer ID in the
 	 *  local config store.
-	 *  The write order and rollback below keep those two stores from drifting apart.
 	 */
 	planradarConnect: (request: PlanradarConnectRequest) => typedError<PlanradarConnectionStatus, PlanradarApiError>(__TAURI_INVOKE("planradar_connect", { request })),
 	planradarGetProjectStatus: (projectId: string) => typedError<PlanradarProject, PlanradarApiError>(__TAURI_INVOKE("planradar_get_project_status", { projectId })),
