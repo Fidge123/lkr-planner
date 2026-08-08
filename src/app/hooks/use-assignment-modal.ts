@@ -31,6 +31,7 @@ export function useAssignmentModal({
   onClose,
   initialShowDeleteConfirm,
   initialShowUnsavedConfirm,
+  initialUnlocked,
 }: Input) {
   const isEditMode = assignment !== null;
 
@@ -54,10 +55,12 @@ export function useAssignmentModal({
     initialShowUnsavedConfirm,
   );
   const [isDirty, setIsDirty] = useState(false);
+  const [isUnlocked, setIsUnlocked] = useState(initialUnlocked);
   const filterInputRef = useRef<HTMLInputElement>(null);
 
   const isProtected =
     isEditMode && isProtectedAssignment(assignment.projectCategory);
+  const isLocked = isProtected && !isUnlocked;
 
   const { results, errorMessage: searchError } =
     useAssignmentProjectSearch(filter);
@@ -82,11 +85,13 @@ export function useAssignmentModal({
     setFilter("");
     setHighlightedIndex(-1);
     setIsDirty(false);
+    setIsUnlocked(initialUnlocked);
     filterInputRef.current?.focus();
   }, [
     isOpen,
     initialShowDeleteConfirm,
     initialShowUnsavedConfirm,
+    initialUnlocked,
     assignment?.projectRef,
     assignment?.title,
   ]);
@@ -180,6 +185,7 @@ export function useAssignmentModal({
           projectName,
           // Editing an assignment must not move it within its day.
           orderIndex: null,
+          overrideProtection: isUnlocked,
         })
       : await commands.createAssignment({
           employeeReference,
@@ -213,7 +219,7 @@ export function useAssignmentModal({
     }
     setIsSaving(true);
     setErrorMessage(null);
-    const result = await commands.deleteAssignment(assignment.href);
+    const result = await commands.deleteAssignment(assignment.href, isUnlocked);
     const deleteError = commandErrorMessage(result);
     if (deleteError) {
       setErrorMessage(deleteError);
@@ -226,6 +232,8 @@ export function useAssignmentModal({
   return {
     isEditMode,
     isProtected,
+    isLocked,
+    isUnlocked,
     dialogRef,
     filterInputRef,
     filter,
@@ -251,6 +259,7 @@ export function useAssignmentModal({
     openDeleteConfirm: () => setShowDeleteConfirm(true),
     cancelDeleteConfirm: () => setShowDeleteConfirm(false),
     continueEditing: () => setShowUnsavedConfirm(false),
+    toggleUnlock: () => setIsUnlocked((unlocked) => !unlocked),
   };
 }
 
@@ -263,4 +272,5 @@ interface Input {
   onClose: () => void;
   initialShowDeleteConfirm: boolean;
   initialShowUnsavedConfirm: boolean;
+  initialUnlocked: boolean;
 }

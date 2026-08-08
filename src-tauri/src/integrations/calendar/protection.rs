@@ -7,12 +7,18 @@ use crate::integrations::daylite::projects::{
 pub(crate) const FIXED_APPOINTMENT_MESSAGE: &str = "Dieser Termin ist als 'Termin FIX geplant' gesperrt und kann nicht geändert, auf einen anderen Tag verschoben oder gelöscht werden.";
 
 /// Refuses a write to an event whose Daylite project is a fixed appointment.
-/// The link comes from the event, never the caller, so the frontend cannot bypass it.
+/// The link comes from the event, never the caller: an override decides only whether to proceed, not what counts as protected.
 pub(crate) async fn refuse_protected_event(
     app: tauri::AppHandle,
     session: &CaldavSession,
     href: &str,
+    override_protection: bool,
 ) -> Result<(), String> {
+    // An overridden write skips the lookups too, so it is cheaper than a checked one.
+    if override_protection {
+        return Ok(());
+    }
+
     // A missing event cannot be protected; delete stays idempotent for one.
     let Some(event) = fetch_event_by_href(session, href).await? else {
         return Ok(());

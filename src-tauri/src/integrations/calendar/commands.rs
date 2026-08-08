@@ -236,6 +236,8 @@ pub struct UpdateAssignmentInput {
     pub project_name: String,
     /// Position among the target day's assignments. None keeps the assignment where it is.
     pub order_index: Option<u32>,
+    /// The user deliberately unlocked a fixed appointment for this one write.
+    pub override_protection: bool,
 }
 
 #[tauri::command]
@@ -319,7 +321,7 @@ pub async fn update_assignment(
         .map_err(|e| e.user_message)?;
     let session = load_caldav_session(&store)?;
 
-    refuse_protected_event(app, &session, &input.href).await?;
+    refuse_protected_event(app, &session, &input.href, input.override_protection).await?;
 
     update_assignment_core(
         &session,
@@ -387,12 +389,33 @@ pub async fn reorder_assignment(
 
 #[tauri::command]
 #[specta::specta]
-pub async fn delete_assignment(app: tauri::AppHandle, href: String) -> Result<(), String> {
+pub async fn delete_assignment(
+    app: tauri::AppHandle,
+    href: String,
+    override_protection: bool,
+) -> Result<(), String> {
     let store = crate::integrations::local_store::load_local_store(app.clone())
         .map_err(|e| e.user_message)?;
     let session = load_caldav_session(&store)?;
 
-    refuse_protected_event(app, &session, &href).await?;
+    refuse_protected_event(app, &session, &href, override_protection).await?;
 
     delete_assignment_core(&session, &href).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn update_input_carries_the_override_the_frontend_sends() {
+        let input: UpdateAssignmentInput = serde_json::from_str(
+            r#"{"href":"/cal/uid-1.ics","uid":"uid-1","date":"2026-05-06",
+                "projectRef":"/v1/projects/1","projectName":"Projekt Nord",
+                "orderIndex":null,"overrideProtection":true}"#,
+        )
+        .expect("update input parses");
+
+        assert!(input.override_protection);
+    }
 }
