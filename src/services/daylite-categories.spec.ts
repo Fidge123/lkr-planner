@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { mockCommands } from "../test/mock-commands";
 
 type CategoryColorsResult =
   | { status: "ok"; data: Record<string, string> }
@@ -16,9 +17,7 @@ const failsOnce = () =>
     Promise.resolve({ status: "error", error: "Daylite nicht erreichbar" }),
   );
 
-mock.module("../generated/tauri", () => ({
-  commands: { dayliteProjectCategoryColors: mockCategoryColors },
-}));
+mockCommands({ dayliteProjectCategoryColors: mockCategoryColors });
 
 const {
   loadProjectCategoryColors,

@@ -1,4 +1,5 @@
 import { describe, expect, it, mock } from "bun:test";
+import { mockCommands } from "../../test/mock-commands";
 import type {
   AppointmentDragPayload,
   CardRect,
@@ -18,13 +19,11 @@ import {
 const updateAssignmentCommand = mock(
   async (): Promise<CommandResult<null>> => ({ status: "ok", data: null }),
 );
-mock.module("../../generated/tauri", () => ({
-  commands: {
-    updateAssignment: updateAssignmentCommand,
-    reorderAssignment: mock(),
-    moveAssignment: mock(),
-  },
-}));
+mockCommands({
+  updateAssignment: updateAssignmentCommand,
+  reorderAssignment: mock(),
+  moveAssignment: mock(),
+});
 
 const payload: AppointmentDragPayload = {
   uid: "uid-1",

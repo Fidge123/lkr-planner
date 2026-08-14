@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { mockCommands } from "../test/mock-commands";
 import {
   loadCachedDayliteContacts,
   loadDayliteContacts,
@@ -11,12 +12,10 @@ const mockDayliteListCachedContacts = mock(() =>
   Promise.resolve({} as unknown),
 );
 
-mock.module("../generated/tauri", () => ({
-  commands: {
-    dayliteListContacts: mockDayliteListContacts,
-    dayliteListCachedContacts: mockDayliteListCachedContacts,
-  },
-}));
+mockCommands({
+  dayliteListContacts: mockDayliteListContacts,
+  dayliteListCachedContacts: mockDayliteListCachedContacts,
+});
 
 describe("daylite contact service", () => {
   beforeEach(() => {

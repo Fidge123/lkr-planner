@@ -4,6 +4,7 @@ import type {
   CalendarCellEvent,
   DayliteProjectSummary,
 } from "../../generated/tauri";
+import { mockCommands } from "../../test/mock-commands";
 import { AssignmentModal } from "./assignment-modal";
 import {
   commandErrorMessage,
@@ -21,13 +22,11 @@ import {
   SuggestionEmptyState,
 } from "./project-result-list";
 
-mock.module("../../generated/tauri", () => ({
-  commands: {
-    createAssignment: mock(() => Promise.resolve({ status: "ok", data: "" })),
-    updateAssignment: mock(() => Promise.resolve({ status: "ok", data: null })),
-    deleteAssignment: mock(() => Promise.resolve({ status: "ok", data: null })),
-  },
-}));
+mockCommands({
+  createAssignment: mock(() => Promise.resolve({ status: "ok", data: "" })),
+  updateAssignment: mock(() => Promise.resolve({ status: "ok", data: null })),
+  deleteAssignment: mock(() => Promise.resolve({ status: "ok", data: null })),
+});
 
 const baseProps = {
   employeeReference: "ref-123",

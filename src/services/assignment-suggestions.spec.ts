@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
 import type { DayliteProjectSummary } from "../generated/tauri";
+import { mockCommands } from "../test/mock-commands";
 import {
   combineSuggestions,
   getLastAssignedProject,
@@ -12,11 +13,9 @@ const mockDayliteQueryOverdueProjects = mock(() =>
   Promise.resolve({} as unknown),
 );
 
-mock.module("../generated/tauri", () => ({
-  commands: {
-    dayliteQueryOverdueProjects: mockDayliteQueryOverdueProjects,
-  },
-}));
+mockCommands({
+  dayliteQueryOverdueProjects: mockDayliteQueryOverdueProjects,
+});
 
 function project(name: string, ref: string): DayliteProjectSummary {
   return { self: ref, name };

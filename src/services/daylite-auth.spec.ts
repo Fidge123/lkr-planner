@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { mockCommands } from "../test/mock-commands";
 import {
   DEFAULT_DAYLITE_BASE_URL,
   resolveDayliteBaseUrl,
@@ -10,12 +11,10 @@ const mockDayliteConnectRefreshToken = mock(() =>
   Promise.resolve({} as unknown),
 );
 
-mock.module("../generated/tauri", () => ({
-  commands: {
-    loadLocalStore: mockLoadLocalStore,
-    dayliteConnectRefreshToken: mockDayliteConnectRefreshToken,
-  },
-}));
+mockCommands({
+  loadLocalStore: mockLoadLocalStore,
+  dayliteConnectRefreshToken: mockDayliteConnectRefreshToken,
+});
 
 describe("daylite auth service", () => {
   beforeEach(() => {
