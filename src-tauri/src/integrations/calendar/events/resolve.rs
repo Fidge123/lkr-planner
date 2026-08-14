@@ -123,20 +123,23 @@ mod tests {
     }
 
     #[test]
-    fn carries_the_category_the_frontend_colours_by() {
-        let pending = pending("Projekt Süd", Some("/v1/projects/4001"));
+    fn resolves_the_category_daylite_returns_for_the_project() {
+        let pending = pending("Projekt Nord", Some("/v1/projects/3001"));
 
         let event = resolve_event(
             pending,
             &resolved(
-                "/v1/projects/4001",
-                "Projekt Süd",
-                "deferred",
-                Some("Wartung"),
+                "/v1/projects/3001",
+                "Projekt Nord",
+                "in_progress",
+                Some("Termin FIX geplant"),
             ),
         );
 
-        assert_eq!(event.project_category, Some("Wartung".to_string()));
+        assert_eq!(
+            event.project_category,
+            Some("Termin FIX geplant".to_string())
+        );
     }
 
     #[test]

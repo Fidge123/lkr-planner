@@ -119,6 +119,24 @@ export function decideDropAction(
   return "none";
 }
 
+// A drag is not a deliberate enough gesture to carry a protection override.
+export function commandDropDeps(): DropDeps {
+  return {
+    updateAssignment: (href, uid, date, projectRef, projectName, orderIndex) =>
+      commands.updateAssignment({
+        href,
+        uid,
+        date,
+        projectRef,
+        projectName,
+        orderIndex,
+        overrideProtection: false,
+      }),
+    reorderAssignment: commands.reorderAssignment,
+    moveAssignment: commands.moveAssignment,
+  };
+}
+
 interface DropDeps {
   updateAssignment: (
     href: string,
@@ -404,26 +422,7 @@ export function useAppointmentDrag({
       activePayloadRef.current = null;
       if (!source || !target) return;
 
-      void performDrop(source, target, {
-        updateAssignment: (
-          href,
-          uid,
-          date,
-          projectRef,
-          projectName,
-          orderIndex,
-        ) =>
-          commands.updateAssignment({
-            href,
-            uid,
-            date,
-            projectRef,
-            projectName,
-            orderIndex,
-          }),
-        reorderAssignment: commands.reorderAssignment,
-        moveAssignment: commands.moveAssignment,
-      })
+      void performDrop(source, target, commandDropDeps())
         .then((outcome) => {
           if (outcome.kind === "done") {
             invalidateWeeksContainingRef.current(source.uid);

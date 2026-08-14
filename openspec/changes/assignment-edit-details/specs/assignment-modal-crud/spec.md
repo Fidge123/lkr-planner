@@ -179,12 +179,22 @@ The system SHALL handle unsaved changes properly.
 - **AND** the confirmation dialog is shown on close
 
 ### Requirement: Edit existing assignment
-The system SHALL allow editing an existing assignment.
+The system SHALL allow editing an existing assignment, unless it is protected because its linked Daylite project has category `"Termin FIX geplant"` and the user has not unlocked it.
 
 #### Scenario: Change project
-- **WHEN** user changes the project in edit mode and saves
+- **WHEN** user changes the project in edit mode and saves a non-protected assignment
 - **THEN** assignment is updated
 - **AND** grid reflects change immediately
+
+#### Scenario: Edit controls disabled for protected assignment
+- **WHEN** modal opens in edit mode for an assignment whose linked project has category `"Termin FIX geplant"`
+- **THEN** the save control is disabled
+- **AND** a German notice explains the appointment is fixed and points to the unlock control
+
+#### Scenario: Backend rejects a stale edit attempt
+- **WHEN** a save is submitted for an assignment that the backend determines is protected
+- **THEN** the German error message returned by the backend is shown
+- **AND** the assignment is not modified
 
 #### Scenario: Save leaves untouched fields alone
 - **WHEN** the planner changes one field and saves

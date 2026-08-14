@@ -6,6 +6,7 @@ import type {
   DropZoneData,
 } from "./use-appointment-drag";
 import {
+  commandDropDeps,
   computeEdgeZone,
   decideDropAction,
   EdgeHoverNavigator,
@@ -13,6 +14,17 @@ import {
   performDrop,
   resolveDropTarget,
 } from "./use-appointment-drag";
+
+const updateAssignmentCommand = mock(
+  async (): Promise<CommandResult<null>> => ({ status: "ok", data: null }),
+);
+mock.module("../../generated/tauri", () => ({
+  commands: {
+    updateAssignment: updateAssignmentCommand,
+    reorderAssignment: mock(),
+    moveAssignment: mock(),
+  },
+}));
 
 const payload: AppointmentDragPayload = {
   uid: "uid-1",
@@ -532,5 +544,22 @@ describe("EdgeHoverNavigator", () => {
     await Bun.sleep(30);
 
     expect(onNavigate.mock.calls).toEqual([[1]]);
+  });
+});
+
+describe("commandDropDeps", () => {
+  it("rescheduling a drag never overrides the fixed-appointment protection", async () => {
+    await commandDropDeps().updateAssignment(
+      "/cal/uid-1.ics",
+      "uid-1",
+      "2026-07-08",
+      "/v1/projects/42",
+      "Projekt Nord",
+      0,
+    );
+
+    expect(updateAssignmentCommand).toHaveBeenCalledWith(
+      expect.objectContaining({ overrideProtection: false }),
+    );
   });
 });

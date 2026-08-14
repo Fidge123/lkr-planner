@@ -76,7 +76,6 @@ impl Default for DisplaySettings {
 #[serde(rename_all = "camelCase")]
 pub struct DayliteCache {
     pub last_synced_at: Option<String>,
-    #[serde(default)]
     pub contacts: Vec<DayliteContactCacheEntry>,
 }
 

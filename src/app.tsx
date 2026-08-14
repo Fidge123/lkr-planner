@@ -23,7 +23,7 @@ function App() {
   const planningAssignmentsState = usePlanningAssignments(weekStart);
   const planningEmployeesState = usePlanningEmployees();
   // The service holds the map for the session; reloadData resets it.
-  const categoryColors = useProjectCategoryColors(true);
+  const categoryColors = useProjectCategoryColors();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [icalDialogEmployee, setIcalDialogEmployee] =
     useState<PlanningContactRecord | null>(null);
