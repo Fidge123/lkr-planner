@@ -128,20 +128,6 @@ describe("AssignmentModal", () => {
     expect(html.match(/<button[^>]*disabled[^>]*>Speichern/)).not.toBeNull();
   });
 
-  it("edit mode: unlocking re-enables the picker, save and delete", () => {
-    const html = renderToStaticMarkup(
-      <AssignmentModal {...baseProps} assignment={fixedAssignment} unlocked />,
-    );
-
-    expect(html).toContain("Bearbeitung entsperren");
-    expect(html.match(/<input[^>]*type="checkbox"[^>]*checked/)).not.toBeNull();
-    expect(
-      html.match(/<input(?=[^>]*role="combobox")[^>]*disabled/),
-    ).toBeNull();
-    expect(html.match(/<button[^>]*disabled[^>]*>Löschen/)).toBeNull();
-    expect(html.match(/<button[^>]*disabled[^>]*>Speichern/)).toBeNull();
-  });
-
   it("edit mode: keeps save and delete enabled for a plannable assignment", () => {
     const assignment: CalendarCellEvent = {
       uid: "uid-1",

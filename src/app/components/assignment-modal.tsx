@@ -19,7 +19,6 @@ export function AssignmentModal({
   onClose,
   showDeleteConfirm: initialShowDeleteConfirm = false,
   showUnsavedConfirm: initialShowUnsavedConfirm = false,
-  unlocked: initialUnlocked = false,
 }: Props) {
   const modal = useAssignmentModal({
     assignment,
@@ -29,7 +28,6 @@ export function AssignmentModal({
     onClose,
     initialShowDeleteConfirm,
     initialShowUnsavedConfirm,
-    initialUnlocked,
   });
 
   if (modal.showUnsavedConfirm) {
@@ -186,5 +184,4 @@ interface Props {
   onClose: () => void;
   showDeleteConfirm?: boolean;
   showUnsavedConfirm?: boolean;
-  unlocked?: boolean;
 }

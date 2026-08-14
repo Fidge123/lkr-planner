@@ -25,8 +25,8 @@
 
 ## 4. Drop the test-only props
 
-- [ ] 4.1 Remove `showDeleteConfirm`, `showUnsavedConfirm` and `unlocked` from `AssignmentModal`'s props
-- [ ] 4.2 Remove the matching `initialShowDeleteConfirm`, `initialShowUnsavedConfirm` and `initialUnlocked` inputs from `use-assignment-modal.ts`, keeping the open effect's resets
+- [ ] 4.1 Remove `showDeleteConfirm` and `showUnsavedConfirm` from `AssignmentModal`'s props. `unlocked` is already gone: it armed the protection override on every write, so it did not wait for the harness
+- [ ] 4.2 Remove the matching `initialShowDeleteConfirm` and `initialShowUnsavedConfirm` inputs from `use-assignment-modal.ts`, keeping the open effect's resets
 - [ ] 4.3 Confirm no component in `src` accepts a prop that only tests pass
 
 ## 5. Verification and documentation
