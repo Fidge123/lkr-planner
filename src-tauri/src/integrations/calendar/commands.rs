@@ -48,7 +48,11 @@ pub async fn load_week_events(
     let (fetches, error_results) =
         fetch_week_for_employees(&store, &session, week_start_date).await;
 
-    let resolved_projects = resolve_projects(app.clone(), &fetches).await;
+    let resolved_projects = crate::integrations::daylite::projects::resolve_projects_by_reference(
+        &store.api_endpoints.daylite_base_url,
+        project_references(&fetches),
+    )
+    .await;
     let category_colors =
         crate::integrations::daylite::categories::fetch_project_category_colors(app).await;
 
@@ -153,10 +157,9 @@ async fn fetch_week_for_employees(
     (fetches, error_results)
 }
 
-async fn resolve_projects(
-    app: tauri::AppHandle,
-    fetches: &[EmployeeFetch],
-) -> HashMap<String, Option<ResolvedProject>> {
+/// A project referenced by several assignments, or by the same one in more than one
+/// employee's calendar, is resolved once.
+fn project_references(fetches: &[EmployeeFetch]) -> Vec<String> {
     let mut references: HashSet<String> = HashSet::new();
     for fetch in fetches {
         for event in &fetch.pending {
@@ -166,17 +169,7 @@ async fn resolve_projects(
         }
     }
 
-    let mut resolved = HashMap::new();
-    for project_ref in references {
-        let project = crate::integrations::daylite::projects::resolve_project_by_reference(
-            app.clone(),
-            &project_ref,
-        )
-        .await;
-        resolved.insert(project_ref, project);
-    }
-
-    resolved
+    references.into_iter().collect()
 }
 
 fn assemble_week_events(

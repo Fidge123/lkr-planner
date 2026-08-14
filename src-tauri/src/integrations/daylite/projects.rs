@@ -8,9 +8,11 @@ use super::shared::{
     DayliteApiError, DayliteSearchInput, DayliteSearchResult, DayliteSearchSort, DayliteTokenState,
 };
 use chrono::{DateTime, NaiveDate, SecondsFormat, Utc};
+use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use specta::Type;
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Deserialize)]
 struct DayliteProjectSummaryDto {
@@ -329,15 +331,62 @@ pub(crate) struct ResolvedProject {
     pub(crate) category: Option<String>,
 }
 
+// Daylite has no way to resolve a set of references in one search, so a week costs one
+// request per distinct project. They run concurrently, but bounded: an unbounded burst
+// is what a rate limit answers with 429.
+const PROJECT_RESOLUTION_CONCURRENCY: usize = 6;
+
+/// Resolves a week's project references, sharing one HTTP client across all of them so
+/// the connection pool is reused instead of paying a TLS handshake per project.
+pub(crate) async fn resolve_projects_by_reference(
+    daylite_base_url: &str,
+    references: Vec<String>,
+) -> HashMap<String, Option<ResolvedProject>> {
+    let Ok(client) = DayliteApiClient::new(daylite_base_url) else {
+        return references
+            .into_iter()
+            .map(|reference| (reference, None))
+            .collect();
+    };
+
+    resolve_all(references, PROJECT_RESOLUTION_CONCURRENCY, |reference| {
+        let client = &client;
+        async move { resolve_project_cached(client, &reference).await }
+    })
+    .await
+}
+
+async fn resolve_all<F, Fut>(
+    references: Vec<String>,
+    concurrency: usize,
+    resolve: F,
+) -> HashMap<String, Option<ResolvedProject>>
+where
+    F: Fn(String) -> Fut,
+    Fut: std::future::Future<Output = Option<ResolvedProject>>,
+{
+    futures::stream::iter(references)
+        .map(|reference| {
+            let resolve = &resolve;
+            async move {
+                let project = resolve(reference.clone()).await;
+                (reference, project)
+            }
+        })
+        .buffer_unordered(concurrency)
+        .collect()
+        .await
+}
+
 /// Week loads resolve the same references repeatedly, across the active week and
 /// both prefetched neighbours, so every lookup goes through the TTL cache.
-pub(crate) async fn resolve_project_by_reference(
-    app: tauri::AppHandle,
+async fn resolve_project_cached(
+    client: &DayliteApiClient,
     project_ref: &str,
 ) -> Option<ResolvedProject> {
     project_cache()
         .get_or_load(project_ref, cache_now_ms(), || {
-            fetch_project_by_reference(app, project_ref)
+            fetch_project(client, project_ref)
         })
         .await
 }
@@ -348,6 +397,13 @@ pub(crate) async fn fetch_project_by_reference(
     app: tauri::AppHandle,
     project_ref: &str,
 ) -> Option<ResolvedProject> {
+    let store = crate::integrations::local_store::load_local_store(app).ok()?;
+    let client = DayliteApiClient::new(&store.api_endpoints.daylite_base_url).ok()?;
+
+    fetch_project(&client, project_ref).await
+}
+
+async fn fetch_project(client: &DayliteApiClient, project_ref: &str) -> Option<ResolvedProject> {
     // The project_ref is an absolute API path like "/v1/projects/3001".
     // The DayliteApiClient base_url already includes the version prefix, so strip "/v1".
     let path = project_ref.strip_prefix("/v1").unwrap_or(project_ref);
@@ -355,12 +411,9 @@ pub(crate) async fn fetch_project_by_reference(
         return None;
     }
 
-    let store = crate::integrations::local_store::load_local_store(app).ok()?;
-    let client = DayliteApiClient::new(&store.api_endpoints.daylite_base_url).ok()?;
-
-    with_daylite_tokens(&client, |tokens| async {
+    with_daylite_tokens(client, |tokens| async {
         let (summary, tokens): (DayliteProjectSummaryDto, _) = send_authenticated_json(
-            &client,
+            client,
             tokens,
             DayliteHttpRequest::new(DayliteHttpMethod::Get, path),
         )
@@ -394,9 +447,9 @@ fn project_status_to_string(status: &PlanningProjectStatus) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::{
-        map_daylite_project_summary, map_project_status, query_overdue_projects_core,
+        map_daylite_project_summary, map_project_status, query_overdue_projects_core, resolve_all,
         resolve_project, search_projects_core, DayliteProjectSummaryDto, PlanningProjectStatus,
-        FIXED_APPOINTMENT_CATEGORY,
+        ResolvedProject, FIXED_APPOINTMENT_CATEGORY,
     };
     use crate::integrations::daylite::client::DayliteApiClient;
     use crate::integrations::daylite::client::DayliteHttpMethod;
@@ -407,6 +460,77 @@ mod tests {
     use crate::integrations::daylite::test_support::{
         mock_client, mock_response, token_state, valid_token_state,
     };
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    fn resolved(name: &str) -> ResolvedProject {
+        ResolvedProject {
+            name: name.to_string(),
+            status: "in_progress".to_string(),
+            category: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn keeps_each_project_against_its_own_reference_when_replies_arrive_out_of_order() {
+        let references = vec![
+            "/v1/projects/1".to_string(),
+            "/v1/projects/2".to_string(),
+            "/v1/projects/3".to_string(),
+        ];
+
+        let all = resolve_all(references, 3, |reference| async move {
+            // The last reference settles first, so the results arrive reversed.
+            let delay = 3 - reference
+                .rsplit('/')
+                .next()
+                .unwrap()
+                .parse::<usize>()
+                .unwrap();
+            for _ in 0..delay {
+                tokio::task::yield_now().await;
+            }
+            Some(resolved(&format!("Projekt {reference}")))
+        })
+        .await;
+
+        assert_eq!(all.len(), 3);
+        for reference in ["/v1/projects/1", "/v1/projects/2", "/v1/projects/3"] {
+            assert_eq!(
+                all.get(reference).unwrap().as_ref().unwrap().name,
+                format!("Projekt {reference}")
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn keeps_no_more_than_the_configured_number_of_requests_in_flight() {
+        let references: Vec<String> = (1..=12).map(|id| format!("/v1/projects/{id}")).collect();
+        let in_flight = AtomicUsize::new(0);
+        let peak = AtomicUsize::new(0);
+
+        let all = resolve_all(references, 4, |_| {
+            let in_flight = &in_flight;
+            let peak = &peak;
+            async move {
+                let running = in_flight.fetch_add(1, Ordering::SeqCst) + 1;
+                peak.fetch_max(running, Ordering::SeqCst);
+                tokio::task::yield_now().await;
+                in_flight.fetch_sub(1, Ordering::SeqCst);
+                Some(resolved("Projekt"))
+            }
+        })
+        .await;
+
+        assert_eq!(all.len(), 12);
+        assert_eq!(peak.load(Ordering::SeqCst), 4);
+    }
+
+    #[tokio::test]
+    async fn records_a_reference_that_did_not_resolve() {
+        let all = resolve_all(vec!["/v1/projects/9999".to_string()], 4, |_| async { None }).await;
+
+        assert_eq!(all.get("/v1/projects/9999"), Some(&None));
+    }
 
     #[test]
     fn resolved_project_carries_the_category_alongside_name_and_status() {

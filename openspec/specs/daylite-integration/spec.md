@@ -29,28 +29,35 @@ The system SHALL support typed read and search commands for Daylite Projects and
 - **AND** an unrecognized status is normalized to `new_status`
 
 ### Requirement: Read Request Optimization
-The system SHALL optimize repeated reads using a short-lived in-memory TTL cache and request coalescing.
-
-#### Scenario: Coalescing simultaneous requests
-- **GIVEN** multiple UI components request the same Daylite project data concurrently
-- **WHEN** no valid cache exists
-- **THEN** only one underlying API request is dispatched
-- **AND** the result is distributed to all pending callers
-
-#### Scenario: Graceful Stale Fallback
-- **GIVEN** a request to Daylite encounters transient network failure
-- **WHEN** stale data is present in the cache
-- **THEN** the system falls back to the stale data to maintain UI stability
+The system SHALL serve repeated reads from short-lived in-memory caches, and SHALL coalesce concurrent reads of the same record into a single request.
+Daylite cannot resolve a set of references in one search, so a week costs one request per distinct project reference it has not cached.
 
 #### Scenario: Repeated project resolution within the cache lifetime
 - **GIVEN** a project reference resolved while loading a week
 - **WHEN** the same reference is resolved again before the cache entry expires
 - **THEN** the cached project is returned without a further API request
 
+#### Scenario: Concurrent resolution of one project reference
+- **GIVEN** the same project reference is resolved concurrently, as a week and its prefetched neighbours do
+- **WHEN** no valid cache entry exists
+- **THEN** one API request is dispatched
+- **AND** every caller receives its result
+
 #### Scenario: Failed project resolution is not cached
 - **GIVEN** a project reference whose resolution failed
 - **WHEN** the same reference is resolved again
 - **THEN** the resolution is retried instead of serving the failure
+
+#### Scenario: Project resolution stays within its concurrency limit
+- **GIVEN** a week referencing more uncached projects than the concurrency limit
+- **WHEN** those references are resolved
+- **THEN** no more than that many requests are in flight at once
+
+#### Scenario: Contact list falls back to stale data
+- **GIVEN** a contact list read encounters a transient failure
+- **WHEN** contacts from an earlier read are still held in the cache
+- **THEN** those contacts are served so the planning grid stays populated
+- **AND** the German error message is surfaced alongside them
 
 ### Requirement: Project search with server-side status filtering
 The system SHALL filter projects by status in the Daylite API search body.
