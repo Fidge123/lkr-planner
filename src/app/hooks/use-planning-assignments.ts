@@ -106,6 +106,7 @@ export function usePlanningAssignments(
 
   useEffect(() => {
     let cancelled = false;
+    let idleTimer: ReturnType<typeof setTimeout> | undefined;
     void loadWeekWithPrefetch({
       weekStart: debouncedWeekStart,
       loadActive: loadActiveWeek,
@@ -113,11 +114,12 @@ export function usePlanningAssignments(
       isCancelled: () => cancelled,
       wait: (ms) =>
         new Promise((resolve) => {
-          setTimeout(resolve, ms);
+          idleTimer = setTimeout(resolve, ms);
         }),
     });
     return () => {
       cancelled = true;
+      clearTimeout(idleTimer);
     };
   }, [debouncedWeekStart, loadActiveWeek, prefetchWeek]);
 
