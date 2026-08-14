@@ -62,8 +62,12 @@ Leaving some files on `renderToStaticMarkup` would leave two conventions in the 
 Eight files is small enough to finish, and `renderToStaticMarkup` leaves the codebase with them.
 
 ### The test-only props go last
-`showDeleteConfirm`, `showUnsavedConfirm` and `unlocked` are removed only after the specs that depend on them reach those states by clicking.
+`showDeleteConfirm` and `showUnsavedConfirm` are removed only after the specs that depend on them reach those states by clicking.
 Doing it in that order keeps the suite green throughout and proves the interaction path works before the prop that substituted for it disappears.
+
+`unlocked` did not wait, because it was not the same kind of prop.
+The other two open a dialog; `unlocked` set the fixed-appointment override on every write the modal made, with no affordance on screen when the assignment was unprotected.
+It is already gone, and the render assertion it stood in for is task 2.3.
 
 ## Risks / Trade-offs
 
