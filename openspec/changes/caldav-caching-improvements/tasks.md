@@ -9,8 +9,11 @@
 
 ## 2. Shared HTTP client
 
-- [ ] 2.1 Add a shared `reqwest::Client` held in Tauri managed state (or `OnceLock`), following the existing Daylite integration's pattern
-- [ ] 2.2 Replace per-call `reqwest::Client::new()` in `load_week_events`, `create_assignment`, `update_assignment`, and `delete_assignment` (`src-tauri/src/integrations/calendar/commands.rs`) with the shared client
+Landed outside this change, as `caldav_client()` in `src-tauri/src/integrations/calendar/commands.rs`.
+Every command reaches it through `build_caldav_session`.
+
+- [x] 2.1 Add a shared `reqwest::Client` held in Tauri managed state (or `OnceLock`), following the existing Daylite integration's pattern
+- [x] 2.2 Replace per-call `reqwest::Client::new()` in `load_week_events`, `create_assignment`, `update_assignment`, and `delete_assignment` (`src-tauri/src/integrations/calendar/commands.rs`) with the shared client
 
 ## 3. Wire cache into commands
 
@@ -20,7 +23,10 @@
 
 ## 4. Concurrent Daylite project resolution
 
-- [ ] 4.1 Change the sequential loop resolving missing Daylite project refs in `load_week_events` (`commands.rs`) to resolve them concurrently
+Landed outside this change, as `resolve_all` in `src-tauri/src/integrations/daylite/projects.rs`.
+Resolution is bounded by `PROJECT_RESOLUTION_CONCURRENCY` and reads through a TTL cache.
+
+- [x] 4.1 Change the sequential loop resolving missing Daylite project refs in `load_week_events` (`commands.rs`) to resolve them concurrently
 
 ## 5. Frontend targeted invalidation
 
