@@ -17,7 +17,6 @@ pub struct CalendarCellEvent {
     pub kind: CalendarEventKind,
     pub title: String,
     pub project_status: Option<String>,
-    // Hex color of the resolved Daylite project's category. None for no/colorless category or unresolved.
     // None when the project has no category or the event is not a resolved assignment.
     pub project_category: Option<String>,
     pub date: String,
