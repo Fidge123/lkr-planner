@@ -24,6 +24,7 @@ const {
   loadProjectCategoryColors,
   projectCategoryColor,
   resetProjectCategoryColors,
+  subscribeProjectCategoryColors,
 } = await import("./daylite-categories");
 
 describe("loadProjectCategoryColors", () => {
@@ -63,6 +64,42 @@ describe("loadProjectCategoryColors", () => {
     await loadProjectCategoryColors();
 
     expect(await loadProjectCategoryColors()).toEqual(backendColors);
+  });
+});
+
+describe("subscribeProjectCategoryColors", () => {
+  beforeEach(() => {
+    resetProjectCategoryColors();
+    mockCategoryColors.mockClear();
+  });
+
+  it("notifies subscribers when the colors are reset", () => {
+    let notifications = 0;
+    const unsubscribe = subscribeProjectCategoryColors(() => {
+      notifications += 1;
+    });
+
+    resetProjectCategoryColors();
+    resetProjectCategoryColors();
+    unsubscribe();
+    resetProjectCategoryColors();
+
+    expect(notifications).toBe(2);
+  });
+
+  it("lets a notified subscriber load the refreshed colors", async () => {
+    let reloads = 0;
+    const unsubscribe = subscribeProjectCategoryColors(() => {
+      void loadProjectCategoryColors();
+      reloads += 1;
+    });
+    await loadProjectCategoryColors();
+
+    resetProjectCategoryColors();
+    unsubscribe();
+
+    expect(reloads).toBe(1);
+    expect(mockCategoryColors).toHaveBeenCalledTimes(2);
   });
 });
 
