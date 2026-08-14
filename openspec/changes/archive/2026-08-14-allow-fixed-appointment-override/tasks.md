@@ -25,4 +25,4 @@
 - [x] 5.1 Run `cargo test` and confirm all new and existing tests pass
 - [x] 5.2 Run `bun test` and confirm all new and existing tests pass
 - [x] 5.3 Run `bun lint` and `bunx tsc --noEmit` and fix any issues
-- [ ] 5.4 Manually verify in the running app: a fixed appointment is locked on open, the unlock control re-enables editing and deleting, both writes go through, and reopening the modal locks it again
+- [x] 5.4 Manually verify in the running app: a fixed appointment is locked on open, the unlock control re-enables editing and deleting, both writes go through, and reopening the modal locks it again
