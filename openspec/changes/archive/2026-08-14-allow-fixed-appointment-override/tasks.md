@@ -1,11 +1,11 @@
 ## 1. Confirm the modal actually detects protection
 
-- [ ] 1.1 Run the app against real data and confirm the German notice and the disabled controls appear for an assignment linked to a "Termin FIX geplant" project
-- [ ] 1.2 If they do not, establish whether the event's `projectCategory` arrives populated, and fix the lookup before building the unlock on top of it
+- [x] 1.1 Run the app against real data and confirm the German notice and the disabled controls appear for an assignment linked to a "Termin FIX geplant" project
+- [x] 1.2 If they do not, establish whether the event's `projectCategory` arrives populated, and fix the lookup before building the unlock on top of it
 
 ## 2. Backend override
 
-- [ ] 2.1 Write failing `cargo test`s for the guard being skipped when the override is set, and still running when it is not
+- [x] 2.1 Write failing `cargo test`s for the guard being skipped when the override is set, and still running when it is not
 - [x] 2.2 Add the override field to `UpdateAssignmentInput` and an override parameter to `delete_assignment`, skipping `refuse_protected_event` when set, satisfying the tests
 - [x] 2.3 Confirm `move_assignment` takes no override and still rejects a day change for a protected event
 
