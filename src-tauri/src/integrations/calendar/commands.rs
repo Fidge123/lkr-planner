@@ -54,14 +54,10 @@ pub async fn load_week_events(
         project_references(&fetches),
     )
     .await;
-    let category_colors =
-        crate::integrations::daylite::categories::fetch_project_category_colors(app).await;
-
     Ok(assemble_week_events(
         fetches,
         error_results,
         &resolved_projects,
-        &category_colors,
     ))
 }
 
@@ -185,14 +181,13 @@ fn assemble_week_events(
     fetches: Vec<EmployeeFetch>,
     error_results: Vec<EmployeeWeekEvents>,
     resolved_projects: &HashMap<String, Option<ResolvedProject>>,
-    category_colors: &HashMap<String, String>,
 ) -> Vec<EmployeeWeekEvents> {
     let mut results = error_results;
     for fetch in fetches {
         let mut events: Vec<CalendarCellEvent> = fetch
             .pending
             .into_iter()
-            .map(|p| resolve_event(p, resolved_projects, category_colors))
+            .map(|p| resolve_event(p, resolved_projects))
             .collect();
         events.extend(fetch.absences);
         // Deduplicate by UID to guard against CalDAV servers redelivering the same event.

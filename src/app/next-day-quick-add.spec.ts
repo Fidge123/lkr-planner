@@ -24,7 +24,6 @@ function event(
     kind,
     title: "Irrelevant",
     projectStatus: null,
-    categoryColor: null,
     projectCategory: null,
     projectRef: null,
     date,

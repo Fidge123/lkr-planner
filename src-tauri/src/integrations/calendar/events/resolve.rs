@@ -6,7 +6,6 @@ use crate::integrations::daylite::projects::ResolvedProject;
 pub(crate) fn resolve_event(
     pending: PendingEvent,
     resolved_projects: &HashMap<String, Option<ResolvedProject>>,
-    category_colors: &HashMap<String, String>,
 ) -> CalendarCellEvent {
     let PendingEvent {
         uid,
@@ -27,7 +26,6 @@ pub(crate) fn resolve_event(
             kind: CalendarEventKind::Bare,
             title: summary,
             project_status: None,
-            category_color: None,
             project_category: None,
             project_ref: None,
             date,
@@ -44,7 +42,6 @@ pub(crate) fn resolve_event(
             kind: CalendarEventKind::Assignment,
             title: resolved.name.clone(),
             project_status: Some(resolved.status.clone()),
-            category_color: category_color(resolved.category.as_deref(), category_colors),
             project_category: resolved.category.clone(),
             project_ref: Some(project_ref.clone()),
             date,
@@ -62,7 +59,6 @@ pub(crate) fn resolve_event(
         kind: CalendarEventKind::Assignment,
         title: summary,
         project_status: None,
-        category_color: None,
         project_category: None,
         project_ref: Some(project_ref),
         date,
@@ -71,13 +67,6 @@ pub(crate) fn resolve_event(
         href,
         order_index,
     }
-}
-
-fn category_color(
-    category: Option<&str>,
-    category_colors: &HashMap<String, String>,
-) -> Option<String> {
-    category_colors.get(category?).cloned()
 }
 
 #[cfg(test)]
@@ -117,13 +106,6 @@ mod tests {
         }
     }
 
-    fn category_colors(pairs: &[(&str, &str)]) -> HashMap<String, String> {
-        pairs
-            .iter()
-            .map(|(name, color)| (name.to_string(), color.to_string()))
-            .collect()
-    }
-
     #[test]
     fn resolves_assignment_event() {
         let pending = pending("Projekt Süd", Some("/v1/projects/4001"));
@@ -131,18 +113,17 @@ mod tests {
         let event = resolve_event(
             pending,
             &resolved("/v1/projects/4001", "Projekt Süd", "deferred", None),
-            &HashMap::new(),
         );
 
         assert_eq!(event.kind, CalendarEventKind::Assignment);
         assert_eq!(event.title, "Projekt Süd");
         assert_eq!(event.project_status, Some("deferred".to_string()));
-        assert_eq!(event.category_color, None);
+        assert_eq!(event.project_category, None);
         assert_eq!(event.date, "2026-01-26");
     }
 
     #[test]
-    fn resolves_category_color() {
+    fn carries_the_category_the_frontend_colours_by() {
         let pending = pending("Projekt Süd", Some("/v1/projects/4001"));
 
         let event = resolve_event(
@@ -153,28 +134,9 @@ mod tests {
                 "deferred",
                 Some("Wartung"),
             ),
-            &category_colors(&[("Wartung", "#03a9f4")]),
         );
 
-        assert_eq!(event.category_color, Some("#03a9f4".to_string()));
-    }
-
-    #[test]
-    fn leaves_category_color_unset_when_the_category_has_no_color() {
-        let pending = pending("Projekt Nord", Some("/v1/projects/3001"));
-
-        let event = resolve_event(
-            pending,
-            &resolved(
-                "/v1/projects/3001",
-                "Projekt Nord",
-                "in_progress",
-                Some("Ohne Farbe"),
-            ),
-            &category_colors(&[("Bau", "#8bc34a")]),
-        );
-
-        assert_eq!(event.category_color, None);
+        assert_eq!(event.project_category, Some("Wartung".to_string()));
     }
 
     #[test]
@@ -182,36 +144,28 @@ mod tests {
         let pending = pending("Unbekanntes Projekt", Some("/v1/projects/9999"));
         let resolved_projects = HashMap::from([("/v1/projects/9999".to_string(), None)]);
 
-        let event = resolve_event(
-            pending,
-            &resolved_projects,
-            &category_colors(&[("Bau", "#8bc34a")]),
-        );
+        let event = resolve_event(pending, &resolved_projects);
 
         assert_eq!(event.kind, CalendarEventKind::Assignment);
         assert_eq!(event.title, "Unbekanntes Projekt");
         assert_eq!(event.project_status, None);
-        assert_eq!(event.category_color, None);
+        assert_eq!(event.project_category, None);
     }
 
     #[test]
     fn resolves_bare_event() {
         let pending = pending("Auto Werkstatt", None);
 
-        let event = resolve_event(
-            pending,
-            &HashMap::new(),
-            &category_colors(&[("Bau", "#8bc34a")]),
-        );
+        let event = resolve_event(pending, &HashMap::new());
 
         assert_eq!(event.kind, CalendarEventKind::Bare);
         assert_eq!(event.title, "Auto Werkstatt");
         assert_eq!(event.project_status, None);
-        assert_eq!(event.category_color, None);
+        assert_eq!(event.project_category, None);
     }
 
     #[test]
-    fn absence_events_have_no_category_color() {
+    fn absence_events_carry_no_category() {
         let raw = RawVEvent {
             uid: "abs-1".to_string(),
             summary: "UB".to_string(),
@@ -222,7 +176,7 @@ mod tests {
 
         let events = map_absence_raw_events_for_week(vec![raw], week_start);
 
-        assert_eq!(events[0].category_color, None);
+        assert_eq!(events[0].project_category, None);
     }
 
     #[test]
@@ -239,7 +193,6 @@ mod tests {
         let cell_event = resolve_event(
             pending,
             &resolved("/v1/projects/3001", "Projekt Nord", "in_progress", None),
-            &HashMap::new(),
         );
 
         assert_eq!(
@@ -259,7 +212,7 @@ mod tests {
             ..Default::default()
         };
 
-        let cell_event = resolve_event(classify_event(&event), &HashMap::new(), &HashMap::new());
+        let cell_event = resolve_event(classify_event(&event), &HashMap::new());
 
         assert_eq!(cell_event.order_index, Some(1));
     }

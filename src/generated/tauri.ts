@@ -47,7 +47,6 @@ export type CalendarCellEvent = {
 	kind: CalendarEventKind,
 	title: string,
 	projectStatus: string | null,
-	categoryColor: string | null,
 	projectCategory: string | null,
 	date: string,
 	startTime: string | null,

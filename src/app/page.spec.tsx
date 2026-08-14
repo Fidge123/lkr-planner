@@ -69,7 +69,6 @@ function cellEvent(overrides: Partial<CalendarCellEvent>): CalendarCellEvent {
     kind: "assignment",
     title: "Projekt Nord",
     projectStatus: "in_progress",
-    categoryColor: null,
     projectCategory: null,
     projectRef: "/v1/projects/1",
     date: "2026-01-26",
@@ -184,9 +183,10 @@ describe("planning grid assignment states", () => {
   });
 
   it("renders lkr-planner assignment event in cell with its category color", () => {
-    const html = renderGrid(
-      withEvents([cellEvent({ categoryColor: "#8bc34a" })]),
-    );
+    const html = renderGrid({
+      ...withEvents([cellEvent({ projectCategory: "Bau" })]),
+      categoryColors: { Bau: "#8bc34a" },
+    });
 
     expect(html).toContain("Projekt Nord");
     expect(html).toContain("border-left-color:#8bc34a");
@@ -249,6 +249,7 @@ describe("planning grid drag-and-drop wiring", () => {
         employeeSettings={[]}
         hideNonPlannableEmployees={false}
         holidaysState={defaultHolidaysState}
+        categoryColors={{}}
         onOpenIcalDialog={() => {}}
         onNavigateWeek={() => {}}
         {...withEvents([

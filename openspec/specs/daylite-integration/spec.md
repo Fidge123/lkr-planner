@@ -100,8 +100,8 @@ The system SHALL normalize malformed API responses into German user-facing error
 The system SHALL retrieve Daylite categories with their colors for coloring project events.
 
 #### Scenario: Fetch project categories
-- **WHEN** the system needs category colors for the planning grid
-- **THEN** it requests `GET /categories` with the `entity=project` filter
+- **WHEN** the category colors are requested
+- **THEN** the system requests `GET /categories` with the `entity=project` filter
 - **AND** parses `name` and `hex_colour` for each category into a name-to-color map
 
 #### Scenario: Category without a color
@@ -109,9 +109,10 @@ The system SHALL retrieve Daylite categories with their colors for coloring proj
 - **THEN** the category yields no color
 - **AND** events of projects in that category fall back to the neutral color
 
-#### Scenario: Category colors for the assignment modal
+#### Scenario: One map serves the grid and the assignment modal
 - **WHEN** the frontend requests the project category colors
 - **THEN** the name-to-color map is returned as a typed command result
+- **AND** the planning grid and the project picker coloring both read that one map
 - **AND** a failure yields no colors rather than a user-facing error
 
 #### Scenario: Overdue results carry their category

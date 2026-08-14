@@ -15,6 +15,7 @@ import type {
   EmployeeSetting,
   PlanningContactRecord,
 } from "../generated/tauri";
+import type { ProjectCategoryColors } from "../services/daylite-categories";
 import { MoveReconciliationDialog } from "./components/move-reconciliation-dialog";
 import {
   AssignmentCardBody,
@@ -87,6 +88,7 @@ export function PlanningGrid({
   employeeSettings = [],
   hideNonPlannableEmployees = true,
   holidaysState,
+  categoryColors = {},
   onOpenIcalDialog = () => {},
   onNavigateWeek,
 }: Props) {
@@ -104,6 +106,7 @@ export function PlanningGrid({
       employeeSettings={employeeSettings}
       hideNonPlannableEmployees={hideNonPlannableEmployees}
       holidaysState={holidaysState ?? fallbackHolidaysState}
+      categoryColors={categoryColors}
       onOpenIcalDialog={onOpenIcalDialog}
       onNavigateWeek={onNavigateWeek}
     />
@@ -117,6 +120,7 @@ export function PlanningGridTable({
   employeeSettings,
   hideNonPlannableEmployees,
   holidaysState,
+  categoryColors,
   onOpenIcalDialog,
   onNavigateWeek,
 }: PlanningGridTableProps) {
@@ -227,6 +231,7 @@ export function PlanningGridTable({
             employeeSettings={employeeSettings}
             eventsByEmployee={eventsByEmployee}
             errorsByEmployee={errorsByEmployee}
+            categoryColors={categoryColors}
             holidays={holidays}
             isEmployeeLoading={isEmployeeLoading}
             dropPreview={drag.dropPreview}
@@ -270,6 +275,7 @@ export function PlanningGridTable({
               employeeSettings={employeeSettings}
               eventsByEmployee={incomingWeek?.eventsByEmployee ?? {}}
               errorsByEmployee={incomingWeek?.errorsByEmployee ?? {}}
+              categoryColors={categoryColors}
               holidays={holidays}
               isEmployeeLoading={isEmployeeLoading}
               onOpenIcalDialog={onOpenIcalDialog}
@@ -338,6 +344,7 @@ interface Props {
   employeeSettings?: EmployeeSetting[];
   hideNonPlannableEmployees?: boolean;
   holidaysState?: HolidaysState;
+  categoryColors?: ProjectCategoryColors;
   onOpenIcalDialog?: (employee: PlanningContactRecord) => void;
   onNavigateWeek?: (direction: -1 | 1) => void;
 }
@@ -349,6 +356,7 @@ export interface PlanningGridTableProps {
   employeeSettings: EmployeeSetting[];
   hideNonPlannableEmployees: boolean;
   holidaysState: HolidaysState;
+  categoryColors: ProjectCategoryColors;
   onOpenIcalDialog: (employee: PlanningContactRecord) => void;
   onNavigateWeek?: (direction: -1 | 1) => void;
 }
