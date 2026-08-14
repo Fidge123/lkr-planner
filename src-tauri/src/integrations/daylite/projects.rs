@@ -62,39 +62,6 @@ pub struct DayliteProjectSummary {
     pub modify_date: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum PlanningProjectStatus {
-    NewStatus,
-    InProgress,
-    Done,
-    Abandoned,
-    Cancelled,
-    Deferred,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
-pub struct PlanningProjectRecord {
-    #[serde(rename = "self")]
-    pub reference: String,
-    pub name: String,
-    pub status: PlanningProjectStatus,
-    #[serde(default)]
-    pub category: Option<String>,
-    #[serde(default)]
-    pub keywords: Vec<String>,
-    #[serde(default)]
-    pub due: Option<String>,
-    #[serde(default)]
-    pub started: Option<String>,
-    #[serde(default)]
-    pub completed: Option<String>,
-    #[serde(default)]
-    pub create_date: Option<String>,
-    #[serde(default)]
-    pub modify_date: Option<String>,
-}
-
 const OVERDUE_CATEGORY: &str = "Überfällig";
 pub(crate) const FIXED_APPOINTMENT_CATEGORY: &str = "Termin FIX geplant";
 // The Daylite API has no multi-value operator for scalar fields, so the overdue
@@ -241,23 +208,6 @@ fn extract_numeric_id(reference: &str) -> u64 {
         .unwrap_or(u64::MAX)
 }
 
-fn map_daylite_project_summary(project: DayliteProjectSummaryDto) -> PlanningProjectRecord {
-    let project = normalize_project_summary(project);
-
-    PlanningProjectRecord {
-        reference: project.reference,
-        name: project.name,
-        status: map_project_status(project.status),
-        category: project.category,
-        keywords: project.keywords,
-        due: project.due,
-        started: project.started,
-        completed: project.completed,
-        create_date: project.create_date,
-        modify_date: project.modify_date,
-    }
-}
-
 fn normalize_project_summary(project: DayliteProjectSummaryDto) -> DayliteProjectSummary {
     DayliteProjectSummary {
         reference: trimmed(project.reference),
@@ -298,18 +248,19 @@ fn normalize_optional_date(value: Option<String>) -> Option<String> {
     None
 }
 
-fn map_project_status(status: Option<String>) -> PlanningProjectStatus {
+/// Anything Daylite sends outside the known set is treated as a new project.
+fn map_project_status(status: Option<String>) -> &'static str {
     let normalized = trimmed_or_none(status)
         .map(|value| value.to_lowercase())
         .unwrap_or_default();
 
     match normalized.as_str() {
-        "in_progress" => PlanningProjectStatus::InProgress,
-        "done" => PlanningProjectStatus::Done,
-        "abandoned" => PlanningProjectStatus::Abandoned,
-        "cancelled" => PlanningProjectStatus::Cancelled,
-        "deferred" => PlanningProjectStatus::Deferred,
-        _ => PlanningProjectStatus::NewStatus,
+        "in_progress" => "in_progress",
+        "done" => "done",
+        "abandoned" => "abandoned",
+        "cancelled" => "cancelled",
+        "deferred" => "deferred",
+        _ => "new_status",
     }
 }
 
@@ -407,31 +358,19 @@ async fn fetch_project(client: &DayliteApiClient, project_ref: &str) -> Option<R
 }
 
 fn resolve_project(summary: DayliteProjectSummaryDto) -> ResolvedProject {
-    let mapped = map_daylite_project_summary(summary);
     ResolvedProject {
-        name: mapped.name,
-        status: project_status_to_string(&mapped.status).to_string(),
-        category: mapped.category,
-    }
-}
-
-fn project_status_to_string(status: &PlanningProjectStatus) -> &'static str {
-    match status {
-        PlanningProjectStatus::InProgress => "in_progress",
-        PlanningProjectStatus::Done => "done",
-        PlanningProjectStatus::Abandoned => "abandoned",
-        PlanningProjectStatus::Cancelled => "cancelled",
-        PlanningProjectStatus::Deferred => "deferred",
-        PlanningProjectStatus::NewStatus => "new_status",
+        name: trimmed(summary.name),
+        status: map_project_status(summary.status).to_string(),
+        category: trimmed_or_none(summary.category),
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        map_daylite_project_summary, map_project_status, query_overdue_projects_core, resolve_all,
-        resolve_project, search_projects_core, DayliteProjectSummaryDto, PlanningProjectStatus,
-        ResolvedProject, FIXED_APPOINTMENT_CATEGORY,
+        map_project_status, normalize_project_summary, query_overdue_projects_core, resolve_all,
+        resolve_project, search_projects_core, DayliteProjectSummaryDto, ResolvedProject,
+        FIXED_APPOINTMENT_CATEGORY,
     };
     use crate::integrations::daylite::client::DayliteApiClient;
     use crate::integrations::daylite::client::DayliteHttpMethod;
@@ -561,11 +500,10 @@ mod tests {
             modify_date: Some("2026-02-15T12:45:00+01:00".to_string()),
         };
 
-        let mapped = map_daylite_project_summary(project);
+        let mapped = normalize_project_summary(project);
 
         assert_eq!(mapped.reference, "/v1/projects/7000");
         assert_eq!(mapped.name, "Projekt Nord");
-        assert_eq!(mapped.status, PlanningProjectStatus::NewStatus);
         assert_eq!(mapped.category, Some("Überfällig".to_string()));
         assert_eq!(
             mapped.keywords,
@@ -581,8 +519,10 @@ mod tests {
 
     #[test]
     fn defaults_unknown_project_status_to_new_status() {
-        let mapped_status = map_project_status(Some("unknown-status".to_string()));
-        assert_eq!(mapped_status, PlanningProjectStatus::NewStatus);
+        assert_eq!(
+            map_project_status(Some("unknown-status".to_string())),
+            "new_status"
+        );
     }
 
     #[tokio::test]
