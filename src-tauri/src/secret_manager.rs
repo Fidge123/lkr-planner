@@ -66,20 +66,6 @@ pub fn get_token(service: &str, username: &str) -> Result<String, SecretError> {
     entry.get_password().map_err(map_keyring_error)
 }
 
-pub fn delete_token(service: &str, username: &str) -> Result<(), SecretError> {
-    let entry = Entry::new(service, username).map_err(map_keyring_error)?;
-    entry.delete_credential().map_err(map_keyring_error)
-}
-
-pub fn check_token(service: &str, username: &str) -> Result<bool, SecretError> {
-    let entry = Entry::new(service, username).map_err(map_keyring_error)?;
-    match entry.get_password() {
-        Ok(_) => Ok(true),
-        Err(KeyringError::NoEntry) => Ok(false),
-        Err(e) => Err(map_keyring_error(e)),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -99,14 +85,6 @@ mod tests {
     }
 
     #[test]
-    fn check_token_returns_false_when_not_set() {
-        with_mock_keyring(|| {
-            let result = check_token("absent_service", "nobody").unwrap();
-            assert!(!result);
-        });
-    }
-
-    #[test]
     fn map_keyring_error_maps_no_entry_to_not_found() {
         let err = map_keyring_error(keyring_core::Error::NoEntry);
         assert_eq!(err, SecretError::NotFound);
@@ -119,14 +97,6 @@ mod tests {
             entry.set_password("my-secret").unwrap();
             let pw = entry.get_password().unwrap();
             assert_eq!(pw, "my-secret");
-        });
-    }
-
-    #[test]
-    fn delete_nonexistent_token_returns_not_found() {
-        with_mock_keyring(|| {
-            let err = delete_token("absent_service", "nobody").unwrap_err();
-            assert_eq!(err, SecretError::NotFound);
         });
     }
 

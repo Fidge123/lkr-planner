@@ -19,11 +19,6 @@ The system SHALL store tokens in OS-level secure storage.
 - **THEN** token is returned from secure storage
 - **AND** no plain text token file is accessed
 
-#### Scenario: Delete token from keychain
-- **GIVEN** token exists in keychain
-- **WHEN** deleting token
-- **THEN** token is removed from secure storage
-
 ### Requirement: Plain text absence
 The system SHALL ensure tokens are not visible in plain text files.
 
