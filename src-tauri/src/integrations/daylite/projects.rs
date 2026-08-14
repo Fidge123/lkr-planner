@@ -2,6 +2,7 @@ use super::auth_flow::send_authenticated_json;
 use super::client::DayliteApiClient;
 use super::client::DayliteHttpMethod;
 use super::client::DayliteHttpRequest;
+use super::project_cache::{cache_now_ms, project_cache};
 use super::shared::{
     build_limit_query, run_daylite_command, trimmed, trimmed_or_none, with_token_refresh_lock,
     DayliteApiError, DayliteSearchInput, DayliteSearchResult, DayliteSearchSort, DayliteTokenState,
@@ -327,6 +328,21 @@ pub(crate) struct ResolvedProject {
     pub(crate) category: Option<String>,
 }
 
+/// Week loads resolve the same references repeatedly, across the active week and
+/// both prefetched neighbours, so every lookup goes through the TTL cache.
+pub(crate) async fn resolve_project_by_reference(
+    app: tauri::AppHandle,
+    project_ref: &str,
+) -> Option<ResolvedProject> {
+    project_cache()
+        .get_or_load(project_ref, cache_now_ms(), || {
+            fetch_project_by_reference(app, project_ref)
+        })
+        .await
+}
+
+/// Deliberately uncached: the fixed-appointment guard runs once per write and must
+/// judge the category as it stands now, not as the last week load saw it.
 pub(crate) async fn fetch_project_by_reference(
     app: tauri::AppHandle,
     project_ref: &str,

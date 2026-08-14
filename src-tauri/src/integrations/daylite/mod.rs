@@ -3,6 +3,7 @@ mod auth_flow;
 pub mod categories;
 mod client;
 pub mod contacts;
+mod project_cache;
 pub mod projects;
 #[cfg(test)]
 mod recording_harness;

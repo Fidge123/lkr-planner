@@ -42,6 +42,16 @@ The system SHALL optimize repeated reads using a short-lived in-memory TTL cache
 - **WHEN** stale data is present in the cache
 - **THEN** the system falls back to the stale data to maintain UI stability
 
+#### Scenario: Repeated project resolution within the cache lifetime
+- **GIVEN** a project reference resolved while loading a week
+- **WHEN** the same reference is resolved again before the cache entry expires
+- **THEN** the cached project is returned without a further API request
+
+#### Scenario: Failed project resolution is not cached
+- **GIVEN** a project reference whose resolution failed
+- **WHEN** the same reference is resolved again
+- **THEN** the resolution is retried instead of serving the failure
+
 ### Requirement: Project search with server-side status filtering
 The system SHALL filter projects by status in the Daylite API search body.
 

@@ -105,9 +105,16 @@ export function usePlanningAssignments(
   }, []);
 
   useEffect(() => {
-    void loadActiveWeek(debouncedWeekStart);
-    void prefetchWeek(adjacentWeek(debouncedWeekStart, -7));
-    void prefetchWeek(adjacentWeek(debouncedWeekStart, 7));
+    let cancelled = false;
+    void loadWeekWithPrefetch(
+      debouncedWeekStart,
+      loadActiveWeek,
+      prefetchWeek,
+      () => cancelled,
+    );
+    return () => {
+      cancelled = true;
+    };
   }, [debouncedWeekStart, loadActiveWeek, prefetchWeek]);
 
   const reloadAssignments = useCallback(() => {
@@ -155,6 +162,26 @@ export function usePlanningAssignments(
       getCachedWeek,
     ],
   );
+}
+
+/**
+ * Every loadWeekEvents call contends for the backend's Daylite token lock, so a
+ * prefetch dispatched alongside the active week delays the week the user is
+ * looking at. Awaiting the active load keeps that contention off the critical path.
+ */
+export async function loadWeekWithPrefetch(
+  weekStart: string,
+  loadActive: (weekStart: string) => Promise<void>,
+  prefetch: (weekStart: string) => Promise<void>,
+  isCancelled: () => boolean,
+): Promise<void> {
+  await loadActive(weekStart);
+  if (isCancelled()) return;
+
+  await Promise.all([
+    prefetch(adjacentWeek(weekStart, -7)),
+    prefetch(adjacentWeek(weekStart, 7)),
+  ]);
 }
 
 function groupResults(entries: EmployeeWeekEvents[]): WeekData {
