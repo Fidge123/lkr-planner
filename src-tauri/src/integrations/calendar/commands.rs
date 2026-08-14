@@ -400,9 +400,15 @@ pub async fn delete_assignment(
         .map_err(|e| e.user_message)?;
     let session = load_caldav_session(&store)?;
 
-    refuse_protected_event(&session, &href, override_protection, |reference: String| async move {
-        crate::integrations::daylite::projects::fetch_project_by_reference(app, &reference).await
-    })
+    refuse_protected_event(
+        &session,
+        &href,
+        override_protection,
+        |reference: String| async move {
+            crate::integrations::daylite::projects::fetch_project_by_reference(app, &reference)
+                .await
+        },
+    )
     .await?;
 
     delete_assignment_core(&session, &href).await

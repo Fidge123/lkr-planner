@@ -297,11 +297,7 @@ mod tests {
             ..Default::default()
         };
 
-        let cell_event = resolve_event(
-            classify_event(&event),
-            &HashMap::new(),
-            &HashMap::new(),
-        );
+        let cell_event = resolve_event(classify_event(&event), &HashMap::new(), &HashMap::new());
 
         assert_eq!(cell_event.order_index, Some(1));
     }
