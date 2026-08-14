@@ -106,12 +106,16 @@ export function usePlanningAssignments(
 
   useEffect(() => {
     let cancelled = false;
-    void loadWeekWithPrefetch(
-      debouncedWeekStart,
-      loadActiveWeek,
-      prefetchWeek,
-      () => cancelled,
-    );
+    void loadWeekWithPrefetch({
+      weekStart: debouncedWeekStart,
+      loadActive: loadActiveWeek,
+      prefetch: prefetchWeek,
+      isCancelled: () => cancelled,
+      wait: (ms) =>
+        new Promise((resolve) => {
+          setTimeout(resolve, ms);
+        }),
+    });
     return () => {
       cancelled = true;
     };
@@ -164,18 +168,38 @@ export function usePlanningAssignments(
   );
 }
 
+export interface WeekLoadSequence {
+  weekStart: string;
+  loadActive: (weekStart: string) => Promise<void>;
+  prefetch: (weekStart: string) => Promise<void>;
+  isCancelled: () => boolean;
+  wait: (ms: number) => Promise<void>;
+}
+
 /**
- * Every loadWeekEvents call contends for the backend's Daylite token lock, so a
- * prefetch dispatched alongside the active week delays the week the user is
- * looking at. Awaiting the active load keeps that contention off the critical path.
+ * A week load the backend has already started cannot be called off, so swiping
+ * across several weeks would leave neighbours loading that nobody asked for,
+ * competing with the week that replaced them. Settling first means a burst of
+ * swipes dispatches no prefetch at all.
  */
-export async function loadWeekWithPrefetch(
-  weekStart: string,
-  loadActive: (weekStart: string) => Promise<void>,
-  prefetch: (weekStart: string) => Promise<void>,
-  isCancelled: () => boolean,
-): Promise<void> {
+const prefetchIdleMs = 400;
+
+/**
+ * A prefetch dispatched alongside the active week competes with it for CalDAV
+ * connections and Daylite requests, so it waits for the active week to land and
+ * for the user to settle on it.
+ */
+export async function loadWeekWithPrefetch({
+  weekStart,
+  loadActive,
+  prefetch,
+  isCancelled,
+  wait,
+}: WeekLoadSequence): Promise<void> {
   await loadActive(weekStart);
+  if (isCancelled()) return;
+
+  await wait(prefetchIdleMs);
   if (isCancelled()) return;
 
   await Promise.all([

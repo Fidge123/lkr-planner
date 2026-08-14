@@ -45,6 +45,7 @@ A week with no cached assignments SHALL be shown as an empty grid with that week
 - **GIVEN** the planning view loads the week the user is on
 - **WHEN** the neighbouring weeks are prefetched
 - **THEN** the prefetch is dispatched only after the active week has loaded
+- **AND** only after the user has stayed on that week for a short settling period
 - **AND** the prefetch is skipped when the user moved to another week meanwhile
 
 ### Requirement: A swipe past the commit threshold changes the week

@@ -1,4 +1,5 @@
 use chrono::NaiveDate;
+use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use std::collections::{HashMap, HashSet};
@@ -64,6 +65,11 @@ pub async fn load_week_events(
     ))
 }
 
+// Each unit here is two CalDAV requests, primary and absence, so the roster fans out to
+// twice this many in flight. Bounded because a week and its two prefetched neighbours
+// can be loading at once, against one ZEP server.
+const EMPLOYEE_FETCH_CONCURRENCY: usize = 4;
+
 struct EmployeeFetch {
     employee_reference: String,
     pending: Vec<PendingEvent>,
@@ -128,7 +134,10 @@ async fn fetch_week_for_employees(
         })
         .collect();
 
-    let fetch_results = futures::future::join_all(employee_futures).await;
+    let fetch_results: Vec<_> = futures::stream::iter(employee_futures)
+        .buffer_unordered(EMPLOYEE_FETCH_CONCURRENCY)
+        .collect()
+        .await;
 
     let mut fetches = Vec::new();
     let mut error_results = Vec::new();
@@ -269,17 +278,28 @@ fn load_caldav_session(
     build_caldav_session(store, credentials)
 }
 
-fn build_caldav_session(
-    store: &crate::integrations::local_store::LocalStore,
-    credentials: crate::integrations::zep::ZepStoredCredentials,
-) -> Result<CaldavSession, String> {
+/// Shared so concurrent week loads reuse one connection pool instead of opening their
+/// own. Cloning a reqwest client shares the pool rather than copying it.
+fn caldav_client() -> Result<reqwest::Client, String> {
+    static CLIENT: std::sync::OnceLock<reqwest::Client> = std::sync::OnceLock::new();
+    if let Some(client) = CLIENT.get() {
+        return Ok(client.clone());
+    }
+
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(30))
         .build()
         .map_err(|e| format!("HTTP-Client konnte nicht erstellt werden: {e}"))?;
 
+    Ok(CLIENT.get_or_init(|| client).clone())
+}
+
+fn build_caldav_session(
+    store: &crate::integrations::local_store::LocalStore,
+    credentials: crate::integrations::zep::ZepStoredCredentials,
+) -> Result<CaldavSession, String> {
     Ok(CaldavSession {
-        client,
+        client: caldav_client()?,
         username: credentials.username,
         password: credentials.password,
         base_url: store.api_endpoints.zep_caldav_root_url.clone(),
