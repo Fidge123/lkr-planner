@@ -4,14 +4,10 @@ import {
   loadDayliteContacts,
   preloadDayliteContactsFromDisk,
   test_resetDayliteContactCache,
-  updateDayliteContactIcalUrls,
 } from "./daylite-contacts";
 
 const mockDayliteListContacts = mock(() => Promise.resolve({} as unknown));
 const mockDayliteListCachedContacts = mock(() =>
-  Promise.resolve({} as unknown),
-);
-const mockDayliteUpdateContactIcalUrls = mock(() =>
   Promise.resolve({} as unknown),
 );
 
@@ -19,7 +15,6 @@ mock.module("../generated/tauri", () => ({
   commands: {
     dayliteListContacts: mockDayliteListContacts,
     dayliteListCachedContacts: mockDayliteListCachedContacts,
-    dayliteUpdateContactIcalUrls: mockDayliteUpdateContactIcalUrls,
   },
 }));
 
@@ -27,7 +22,6 @@ describe("daylite contact service", () => {
   beforeEach(() => {
     mockDayliteListContacts.mockClear();
     mockDayliteListCachedContacts.mockClear();
-    mockDayliteUpdateContactIcalUrls.mockClear();
     test_resetDayliteContactCache();
   });
 
@@ -97,52 +91,6 @@ describe("daylite contact service", () => {
     );
     expect(result.data[0]?.self).toBe("/v1/contacts/2001");
     expect(mockDayliteListCachedContacts).toHaveBeenCalledTimes(1);
-  });
-
-  it("updates in-memory cache when contact urls are updated", async () => {
-    mockDayliteListContacts.mockResolvedValue({
-      status: "ok",
-      data: [
-        {
-          self: "/v1/contacts/4001",
-          full_name: "Mira Monteur",
-          category: "Monteur",
-          urls: [],
-        },
-      ],
-    });
-    await loadDayliteContacts();
-
-    mockDayliteUpdateContactIcalUrls.mockResolvedValue({
-      status: "ok",
-      data: {
-        self: "/v1/contacts/4001",
-        full_name: "Mira Monteur (Aktualisiert)",
-        category: "Monteur",
-        urls: [
-          {
-            label: "Einsatz iCal",
-            url: "https://example.com/mira-primary.ics",
-          },
-          {
-            label: "Abwesenheit iCal",
-            url: "https://example.com/mira-absence.ics",
-          },
-        ],
-      },
-    });
-
-    const updated = await updateDayliteContactIcalUrls({
-      contactReference: "/v1/contacts/4001",
-      primaryIcalUrl: "https://example.com/mira-primary.ics",
-      absenceIcalUrl: "https://example.com/mira-absence.ics",
-    });
-
-    expect(updated.full_name).toBe("Mira Monteur (Aktualisiert)");
-
-    const cached = await loadDayliteContacts();
-    expect(cached.source).toBe("cache");
-    expect(cached.data[0]?.full_name).toBe("Mira Monteur (Aktualisiert)");
   });
 
   it("reads the on-disk store once when the preload already served it", async () => {

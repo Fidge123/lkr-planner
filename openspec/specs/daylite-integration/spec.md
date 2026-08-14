@@ -17,10 +17,16 @@ The system SHALL authenticate with Daylite API and persist refresh-token rotatio
 ### Requirement: Project and Contact Search
 The system SHALL support typed read and search commands for Daylite Projects and Contacts.
 
-#### Scenario: Retrieve Projects
+#### Scenario: Retrieve Contacts
 - **GIVEN** an active Daylite session
-- **WHEN** the application requests the project list
-- **THEN** Daylite projects are retrieved, parsed into domain models, and returned
+- **WHEN** the application requests the contact list
+- **THEN** Daylite contacts are retrieved, parsed into domain models, and returned
+
+#### Scenario: Resolve a single project by reference
+- **GIVEN** an assignment carrying a Daylite project reference
+- **WHEN** the project behind that reference is requested
+- **THEN** the project is retrieved and its name, status, and category are returned
+- **AND** an unrecognized status is normalized to `new_status`
 
 ### Requirement: Read Request Optimization
 The system SHALL optimize repeated reads using a short-lived in-memory TTL cache and request coalescing.

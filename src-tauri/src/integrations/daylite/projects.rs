@@ -92,17 +92,6 @@ pub struct PlanningProjectRecord {
     pub modify_date: Option<String>,
 }
 
-#[tauri::command]
-#[specta::specta]
-pub async fn daylite_list_projects(
-    app: tauri::AppHandle,
-) -> Result<Vec<PlanningProjectRecord>, DayliteApiError> {
-    run_daylite_command(app, |client, tokens| async move {
-        list_projects_core(&client, tokens).await
-    })
-    .await
-}
-
 const OVERDUE_CATEGORY: &str = "Überfällig";
 pub(crate) const FIXED_APPOINTMENT_CATEGORY: &str = "Termin FIX geplant";
 // The Daylite API has no multi-value operator for scalar fields, so the overdue
@@ -135,31 +124,6 @@ pub async fn daylite_search_projects(
         search_projects_core(&client, tokens, &input).await
     })
     .await
-}
-
-pub(super) async fn list_projects_core(
-    client: &DayliteApiClient,
-    token_state: DayliteTokenState,
-) -> Result<(Vec<PlanningProjectRecord>, DayliteTokenState), DayliteApiError> {
-    let (search_result, token_state) =
-        send_authenticated_json::<DayliteSearchResult<DayliteProjectSummaryDto>>(
-            client,
-            token_state,
-            DayliteHttpRequest {
-                query: vec![("full-records".to_string(), "true".to_string())],
-                body: Some(json!({})),
-                ..DayliteHttpRequest::new(DayliteHttpMethod::Post, "/projects/_search")
-            },
-        )
-        .await?;
-
-    let projects = search_result
-        .results
-        .into_iter()
-        .map(map_daylite_project_summary)
-        .collect();
-
-    Ok((projects, token_state))
 }
 
 pub(super) async fn query_overdue_projects_core(
@@ -413,15 +377,15 @@ fn project_status_to_string(status: &PlanningProjectStatus) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::{
-        list_projects_core, map_daylite_project_summary, map_project_status,
-        query_overdue_projects_core, resolve_project, search_projects_core,
-        DayliteProjectSummaryDto, PlanningProjectStatus, FIXED_APPOINTMENT_CATEGORY,
+        map_daylite_project_summary, map_project_status, query_overdue_projects_core,
+        resolve_project, search_projects_core, DayliteProjectSummaryDto, PlanningProjectStatus,
+        FIXED_APPOINTMENT_CATEGORY,
     };
     use crate::integrations::daylite::client::DayliteApiClient;
     use crate::integrations::daylite::client::DayliteHttpMethod;
     use crate::integrations::daylite::shared::{
         DayliteApiError, DayliteApiErrorCode, DayliteSearchInput, DayliteSearchResult,
-        DayliteSearchSort, DayliteTokenState,
+        DayliteSearchSort,
     };
     use crate::integrations::daylite::test_support::{
         mock_client, mock_response, token_state, valid_token_state,
@@ -496,35 +460,6 @@ mod tests {
     fn defaults_unknown_project_status_to_new_status() {
         let mapped_status = map_project_status(Some("unknown-status".to_string()));
         assert_eq!(mapped_status, PlanningProjectStatus::NewStatus);
-    }
-
-    #[tokio::test]
-    async fn list_projects_sends_search_request_and_maps_results() {
-        let (client, transport) = mock_client(vec![Ok(mock_response(
-            200,
-            r#"{"results":[{"self":"/v1/projects/1","name":"Projekt A","status":"in_progress"},{"self":"/v1/projects/2","name":"Projekt B"}],"next":null}"#,
-        ))]);
-
-        let (projects, token_state) = list_projects_core(&client, valid_token_state())
-            .await
-            .expect("list should succeed");
-
-        assert_eq!(projects.len(), 2);
-        assert_eq!(projects[0].name, "Projekt A");
-        assert_eq!(projects[0].status, PlanningProjectStatus::InProgress);
-        assert_eq!(projects[1].name, "Projekt B");
-        assert_eq!(projects[1].status, PlanningProjectStatus::NewStatus);
-        assert_eq!(token_state.access_token, "at");
-
-        let requests = transport.requests();
-        assert_eq!(requests.len(), 1);
-        assert_eq!(requests[0].path, "/projects/_search");
-        assert_eq!(requests[0].method, DayliteHttpMethod::Post);
-        assert_eq!(
-            requests[0].query,
-            vec![("full-records".to_string(), "true".to_string())]
-        );
-        assert!(requests[0].body.is_some());
     }
 
     #[tokio::test]
@@ -778,55 +713,6 @@ mod tests {
     fn extract_numeric_id_returns_max_for_non_numeric() {
         assert_eq!(super::extract_numeric_id("/v1/projects/abc"), u64::MAX);
         assert_eq!(super::extract_numeric_id(""), u64::MAX);
-    }
-
-    #[tokio::test]
-    async fn list_projects_returns_updated_token_state_after_refresh() {
-        let (client, _) = mock_client(vec![
-            Ok(mock_response(
-                200,
-                r#"{"access_token":"new-at","refresh_token":"new-rt","expires_in":3600}"#,
-            )),
-            Ok(mock_response(200, r#"{"results":[],"next":null}"#)),
-        ]);
-
-        let (projects, token_state) = list_projects_core(
-            &client,
-            DayliteTokenState {
-                access_token: String::new(),
-                refresh_token: "old-rt".to_string(),
-                access_token_expires_at_ms: None,
-            },
-        )
-        .await
-        .expect("list after refresh should succeed");
-
-        assert!(projects.is_empty());
-        assert_eq!(token_state.access_token, "new-at");
-        assert_eq!(token_state.refresh_token, "new-rt");
-        assert!(token_state.access_token_expires_at_ms.is_some());
-    }
-
-    #[tokio::test]
-    async fn list_projects_replays_vcr_cassette() {
-        let client = DayliteApiClient::with_replay_cassette("daylite-list-projects.json")
-            .expect("replay client should be created");
-
-        let (projects, token_state) = list_projects_core(
-            &client,
-            token_state("replay-access-token", "replay-refresh-token"),
-        )
-        .await
-        .expect("list should replay from cassette");
-
-        assert!(!projects.is_empty());
-        assert!(projects
-            .iter()
-            .all(|project| project.reference.starts_with("/v1/projects/")));
-        assert!(projects
-            .iter()
-            .all(|project| !project.name.is_empty() && project.name == project.name.trim()));
-        assert_eq!(token_state.access_token, "replay-access-token");
     }
 
     #[tokio::test]
