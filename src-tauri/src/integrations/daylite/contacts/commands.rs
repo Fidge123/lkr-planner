@@ -7,7 +7,7 @@ use super::mapping::{
 use super::types::PlanningContactRecord;
 use crate::integrations::daylite::client::DayliteApiClient;
 use crate::integrations::daylite::shared::{
-    load_store_or_error, save_store_or_error, with_token_refresh_lock, DayliteApiError,
+    load_store_or_error, save_store_or_error, with_daylite_tokens, DayliteApiError,
 };
 
 #[tauri::command]
@@ -17,7 +17,8 @@ pub async fn daylite_list_contacts(
 ) -> Result<Vec<PlanningContactRecord>, DayliteApiError> {
     let mut store = load_store_or_error(app.clone())?;
     let client = DayliteApiClient::new(&store.api_endpoints.daylite_base_url)?;
-    let contacts = with_token_refresh_lock(|tokens| list_contacts_core(&client, tokens)).await?;
+    let contacts =
+        with_daylite_tokens(&client, |tokens| list_contacts_core(&client, tokens)).await?;
 
     store.daylite_cache.last_synced_at = Some(current_timestamp_iso8601());
     store.daylite_cache.contacts = contacts

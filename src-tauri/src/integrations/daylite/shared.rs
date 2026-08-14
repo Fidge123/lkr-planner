@@ -1,5 +1,7 @@
 use super::super::local_store::{self, LocalStore};
-use super::client::DayliteApiClient;
+use super::auth_flow::refresh_tokens;
+use super::client::{BoxFuture, DayliteApiClient};
+use super::token_session::{token_session, TokenLease};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use specta::Type;
@@ -169,40 +171,127 @@ pub(super) fn store_daylite_tokens(token_state: &DayliteTokenState) -> Result<()
     })
 }
 
-/// Process-wide lock that serializes the Daylite token lifecycle (load → refresh → store).
-/// Daylite rotates the refresh token on every use, so two concurrent refreshes would race
-/// and the loser would invalidate the winner's token, signing the user out; the whole
-/// cycle must stay under one lock rather than just the network call.
-fn token_refresh_lock() -> &'static tokio::sync::Mutex<()> {
-    static LOCK: std::sync::OnceLock<tokio::sync::Mutex<()>> = std::sync::OnceLock::new();
-    LOCK.get_or_init(|| tokio::sync::Mutex::new(()))
+/// Rotating the refresh token is the part that cannot race: Daylite invalidates the
+/// old one as it issues the next, so two concurrent rotations would sign the user out.
+/// Sending a request with an already valid access token is safe in parallel, so the
+/// lock lives inside the session and covers the rotation only.
+async fn lease_tokens(client: &DayliteApiClient) -> Result<TokenLease, DayliteApiError> {
+    let session = token_session();
+    if session.is_empty() {
+        session.seed(load_daylite_tokens()?);
+    }
+
+    session
+        .lease(current_epoch_ms()?, |current| {
+            rotate_tokens(client, current)
+        })
+        .await
 }
 
-pub(super) async fn with_token_refresh_lock<T, Fut>(
+async fn rotate_tokens(
+    client: &DayliteApiClient,
+    current: DayliteTokenState,
+) -> Result<DayliteTokenState, DayliteApiError> {
+    if current.access_token.trim().is_empty() && current.refresh_token.trim().is_empty() {
+        return Err(missing_token_error(
+            "Es sind keine Daylite-Zugangsdaten hinterlegt. Bitte ein Refresh-Token hinterlegen.",
+            "Weder Access- noch Refresh-Token sind vorhanden.",
+        ));
+    }
+
+    let rotated = refresh_tokens(client, current.refresh_token).await?;
+    store_daylite_tokens(&rotated)?;
+
+    Ok(rotated)
+}
+
+/// Runs `operation` with a leased access token, retrying once when Daylite rejects it.
+/// A rejection that outlasts the expiry check means the token was revoked server-side,
+/// which the expiry-driven rotation cannot anticipate.
+pub(super) async fn with_daylite_tokens<T, F, Fut>(
+    client: &DayliteApiClient,
+    operation: F,
+) -> Result<T, DayliteApiError>
+where
+    F: Fn(DayliteTokenState) -> Fut,
+    Fut: std::future::Future<Output = Result<(T, DayliteTokenState), DayliteApiError>>,
+{
+    let lease = lease_tokens(client).await?;
+    retry_once_on_unauthorized(lease.tokens.clone(), operation, || async {
+        let renewed = token_session()
+            .renew(&lease, |current| rotate_tokens(client, current))
+            .await?;
+        Ok(renewed.tokens)
+    })
+    .await
+}
+
+async fn retry_once_on_unauthorized<T, F, Fut, R, RFut>(
+    tokens: DayliteTokenState,
+    operation: F,
+    renew: R,
+) -> Result<T, DayliteApiError>
+where
+    F: Fn(DayliteTokenState) -> Fut,
+    Fut: std::future::Future<Output = Result<(T, DayliteTokenState), DayliteApiError>>,
+    R: FnOnce() -> RFut,
+    RFut: std::future::Future<Output = Result<DayliteTokenState, DayliteApiError>>,
+{
+    match operation(tokens).await {
+        Ok((value, _)) => Ok(value),
+        Err(error) if error.code == DayliteApiErrorCode::Unauthorized => {
+            let (value, _) = operation(renew().await?).await?;
+            Ok(value)
+        }
+        Err(error) => Err(error),
+    }
+}
+
+/// For an operation that cannot be replayed, such as one that has already mutated the
+/// local store: a rejected token surfaces as an error the caller can retry deliberately.
+pub(super) async fn with_daylite_tokens_once<T, Fut>(
+    client: &DayliteApiClient,
     operation: impl FnOnce(DayliteTokenState) -> Fut,
 ) -> Result<T, DayliteApiError>
 where
     Fut: std::future::Future<Output = Result<(T, DayliteTokenState), DayliteApiError>>,
 {
-    let _guard = token_refresh_lock().lock().await;
-    let tokens = load_daylite_tokens()?;
-    let (value, updated_tokens) = operation(tokens).await?;
-    store_daylite_tokens(&updated_tokens)?;
+    let lease = lease_tokens(client).await?;
+    let (value, _) = operation(lease.tokens.clone()).await?;
     Ok(value)
 }
 
 /// For read-only command bodies only: commands that mutate the local store manage the store themselves.
-pub(super) async fn run_daylite_command<T, F, Fut>(
+pub(super) async fn run_daylite_command<T>(
     app: tauri::AppHandle,
-    operation: F,
-) -> Result<T, DayliteApiError>
-where
-    F: FnOnce(DayliteApiClient, DayliteTokenState) -> Fut,
-    Fut: std::future::Future<Output = Result<(T, DayliteTokenState), DayliteApiError>>,
-{
+    operation: impl for<'a> Fn(
+        &'a DayliteApiClient,
+        DayliteTokenState,
+    ) -> BoxFuture<'a, Result<(T, DayliteTokenState), DayliteApiError>>,
+) -> Result<T, DayliteApiError> {
     let store = load_store_or_error(app)?;
     let client = DayliteApiClient::new(&store.api_endpoints.daylite_base_url)?;
-    with_token_refresh_lock(move |tokens| operation(client, tokens)).await
+    with_daylite_tokens(&client, |tokens| operation(&client, tokens)).await
+}
+
+/// Adopts tokens minted from a refresh token the user supplied, replacing whatever the
+/// session held.
+pub(super) async fn adopt_daylite_tokens<F, Fut>(
+    mint: F,
+) -> Result<DayliteTokenState, DayliteApiError>
+where
+    F: FnOnce() -> Fut,
+    Fut: std::future::Future<Output = Result<DayliteTokenState, DayliteApiError>>,
+{
+    let lease = token_session()
+        .adopt(|| async {
+            let minted = mint().await?;
+            store_daylite_tokens(&minted)?;
+            Ok(minted)
+        })
+        .await?;
+
+    Ok(lease.tokens)
 }
 
 pub(super) fn load_store_or_error(app: tauri::AppHandle) -> Result<LocalStore, DayliteApiError> {
@@ -355,4 +444,118 @@ fn map_store_error(error: local_store::StoreError) -> DayliteApiError {
         error.user_message,
         error.technical_message,
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    fn tokens(access: &str) -> DayliteTokenState {
+        DayliteTokenState {
+            access_token: access.to_string(),
+            refresh_token: "rt".to_string(),
+            access_token_expires_at_ms: Some(900_000),
+        }
+    }
+
+    fn unauthorized() -> DayliteApiError {
+        DayliteApiError::new(
+            DayliteApiErrorCode::Unauthorized,
+            Some(401),
+            "abgelaufen",
+            "401",
+        )
+    }
+
+    #[tokio::test]
+    async fn a_successful_call_does_not_renew() {
+        let renewals = AtomicUsize::new(0);
+
+        let value = retry_once_on_unauthorized(
+            tokens("at"),
+            |current| async move { Ok(("ok", current)) },
+            || async {
+                renewals.fetch_add(1, Ordering::SeqCst);
+                Ok(tokens("renewed"))
+            },
+        )
+        .await
+        .expect("call should succeed");
+
+        assert_eq!(value, "ok");
+        assert_eq!(renewals.load(Ordering::SeqCst), 0);
+    }
+
+    #[tokio::test]
+    async fn a_rejected_token_is_renewed_and_the_call_replayed() {
+        let attempts = AtomicUsize::new(0);
+        let seen = std::sync::Mutex::new(Vec::new());
+
+        let value = retry_once_on_unauthorized(
+            tokens("at"),
+            |current| {
+                let attempt = attempts.fetch_add(1, Ordering::SeqCst);
+                seen.lock().unwrap().push(current.access_token.clone());
+                async move {
+                    if attempt == 0 {
+                        return Err(unauthorized());
+                    }
+                    Ok(("ok", current))
+                }
+            },
+            || async { Ok(tokens("renewed")) },
+        )
+        .await
+        .expect("call should succeed after renewal");
+
+        assert_eq!(value, "ok");
+        assert_eq!(attempts.load(Ordering::SeqCst), 2);
+        assert_eq!(*seen.lock().unwrap(), vec!["at", "renewed"]);
+    }
+
+    #[tokio::test]
+    async fn a_second_rejection_is_not_retried_again() {
+        let attempts = AtomicUsize::new(0);
+
+        let error = retry_once_on_unauthorized(
+            tokens("at"),
+            |_| {
+                attempts.fetch_add(1, Ordering::SeqCst);
+                async { Err::<(&str, DayliteTokenState), _>(unauthorized()) }
+            },
+            || async { Ok(tokens("renewed")) },
+        )
+        .await
+        .expect_err("a second rejection should surface");
+
+        assert_eq!(error.code, DayliteApiErrorCode::Unauthorized);
+        assert_eq!(attempts.load(Ordering::SeqCst), 2);
+    }
+
+    #[tokio::test]
+    async fn an_error_that_is_not_a_rejection_does_not_renew() {
+        let renewals = AtomicUsize::new(0);
+
+        let error = retry_once_on_unauthorized(
+            tokens("at"),
+            |_| async {
+                Err::<(&str, DayliteTokenState), _>(DayliteApiError::new(
+                    DayliteApiErrorCode::RateLimited,
+                    Some(429),
+                    "zu viele",
+                    "429",
+                ))
+            },
+            || async {
+                renewals.fetch_add(1, Ordering::SeqCst);
+                Ok(tokens("renewed"))
+            },
+        )
+        .await
+        .expect_err("the error should surface");
+
+        assert_eq!(error.code, DayliteApiErrorCode::RateLimited);
+        assert_eq!(renewals.load(Ordering::SeqCst), 0);
+    }
 }

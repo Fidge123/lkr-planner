@@ -4,9 +4,7 @@ use serde::Deserialize;
 
 use super::auth_flow::send_authenticated_json;
 use super::client::{DayliteApiClient, DayliteHttpMethod, DayliteHttpRequest};
-use super::shared::{
-    run_daylite_command, with_token_refresh_lock, DayliteApiError, DayliteTokenState,
-};
+use super::shared::{run_daylite_command, with_daylite_tokens, DayliteApiError, DayliteTokenState};
 
 #[derive(Debug, Clone, Deserialize)]
 struct DayliteCategoryDto {
@@ -43,8 +41,8 @@ impl DayliteCategoryListDto {
 pub async fn daylite_project_category_colors(
     app: tauri::AppHandle,
 ) -> Result<HashMap<String, String>, DayliteApiError> {
-    run_daylite_command(app, |client, tokens| async move {
-        fetch_project_category_colors_core(&client, tokens).await
+    run_daylite_command(app, |client, tokens| {
+        Box::pin(fetch_project_category_colors_core(client, tokens))
     })
     .await
 }
@@ -59,9 +57,11 @@ pub(crate) async fn fetch_project_category_colors(
         return HashMap::new();
     };
 
-    with_token_refresh_lock(|tokens| fetch_project_category_colors_core(&client, tokens))
-        .await
-        .unwrap_or_default()
+    with_daylite_tokens(&client, |tokens| {
+        fetch_project_category_colors_core(&client, tokens)
+    })
+    .await
+    .unwrap_or_default()
 }
 
 pub(super) async fn fetch_project_category_colors_core(

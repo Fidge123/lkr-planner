@@ -4,7 +4,7 @@ use super::client::DayliteHttpMethod;
 use super::client::DayliteHttpRequest;
 use super::project_cache::{cache_now_ms, project_cache};
 use super::shared::{
-    build_limit_query, run_daylite_command, trimmed, trimmed_or_none, with_token_refresh_lock,
+    build_limit_query, run_daylite_command, trimmed, trimmed_or_none, with_daylite_tokens,
     DayliteApiError, DayliteSearchInput, DayliteSearchResult, DayliteSearchSort, DayliteTokenState,
 };
 use chrono::{DateTime, NaiveDate, SecondsFormat, Utc};
@@ -109,8 +109,8 @@ const OVERDUE_CANDIDATE_LIMIT: u16 = 50;
 pub async fn daylite_query_overdue_projects(
     app: tauri::AppHandle,
 ) -> Result<Vec<DayliteProjectSummary>, DayliteApiError> {
-    run_daylite_command(app, |client, tokens| async move {
-        query_overdue_projects_core(&client, tokens).await
+    run_daylite_command(app, |client, tokens| {
+        Box::pin(query_overdue_projects_core(client, tokens))
     })
     .await
 }
@@ -121,8 +121,9 @@ pub async fn daylite_search_projects(
     app: tauri::AppHandle,
     input: DayliteSearchInput,
 ) -> Result<DayliteSearchResult<DayliteProjectSummary>, DayliteApiError> {
-    run_daylite_command(app, |client, tokens| async move {
-        search_projects_core(&client, tokens, &input).await
+    run_daylite_command(app, move |client, tokens| {
+        let input = input.clone();
+        Box::pin(async move { search_projects_core(client, tokens, &input).await })
     })
     .await
 }
@@ -357,7 +358,7 @@ pub(crate) async fn fetch_project_by_reference(
     let store = crate::integrations::local_store::load_local_store(app).ok()?;
     let client = DayliteApiClient::new(&store.api_endpoints.daylite_base_url).ok()?;
 
-    with_token_refresh_lock(|tokens| async move {
+    with_daylite_tokens(&client, |tokens| async {
         let (summary, tokens): (DayliteProjectSummaryDto, _) = send_authenticated_json(
             &client,
             tokens,

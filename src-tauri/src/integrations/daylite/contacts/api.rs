@@ -13,7 +13,7 @@ use crate::integrations::daylite::client::{
     DayliteApiClient, DayliteHttpMethod, DayliteHttpRequest,
 };
 use crate::integrations::daylite::shared::{
-    with_token_refresh_lock, DayliteApiError, DayliteApiErrorCode, DayliteSearchResult,
+    with_daylite_tokens_once, DayliteApiError, DayliteApiErrorCode, DayliteSearchResult,
     DayliteTokenState,
 };
 use crate::integrations::local_store::LocalStore;
@@ -27,8 +27,10 @@ pub async fn sync_contact_ical_urls(
     let daylite_base_url = store.api_endpoints.daylite_base_url.clone();
     let client = DayliteApiClient::new(&daylite_base_url)?;
 
-    with_token_refresh_lock(|tokens| update_contact_ical_urls_core(&client, tokens, store, &input))
-        .await?;
+    with_daylite_tokens_once(&client, |tokens| {
+        update_contact_ical_urls_core(&client, tokens, store, &input)
+    })
+    .await?;
 
     store.daylite_cache.last_synced_at = Some(current_timestamp_iso8601());
     Ok(())
