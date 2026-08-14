@@ -34,8 +34,11 @@ That was wider than the invariant requires and made each call pay a keychain rea
 - Hold the token state in memory for the process lifetime, seeded from the keychain on first use.
 - Serialize rotation only. Sending a request with an already valid access token is safe in parallel, because an access token is a bearer credential; only rotation cannot race, since Daylite invalidates a refresh token as it issues the next one.
 - Re-check freshness after acquiring the rotation lock, so callers that queued behind a rotation adopt its result instead of rotating again.
-- Hand out a token only when it has at least 60 seconds of life left.
-  This margin must exceed the 10 second threshold the request path applies, so that the unlocked refresh inside the request helpers is unreachable while a lease is held.
+- Hand out a token only when it has at least 60 seconds of life left, so a leased token outlives the operation it was leased for.
+- Rotate in exactly one place.
+  The request helpers previously refreshed an expiring token themselves, outside the rotation lock, and the rotated pair was discarded rather than persisted.
+  That retired the stored refresh token server-side while the keychain kept the dead one, so the next rotation failed and signed the user out.
+  The request path now sends the token it was handed and reports a rejection instead of refreshing.
 - Write to the keychain only as part of a rotation, not per request.
 - Retry a request once when Daylite answers `401`, forcing one rotation first.
   Expiry-driven refresh cannot anticipate a token revoked server-side, which is the case this covers.

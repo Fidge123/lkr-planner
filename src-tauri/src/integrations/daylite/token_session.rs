@@ -3,7 +3,7 @@ use std::sync::{OnceLock, RwLock};
 
 use super::shared::{DayliteApiError, DayliteTokenState};
 
-/// Exceeds the 10s margin `ensure_access_token` applies, so its refresh never fires under a lease.
+/// A leased token has to outlive the whole operation: nothing refreshes mid-request.
 const LEASE_MIN_REMAINING_MS: u64 = 60_000;
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -50,8 +50,8 @@ pub async fn daylite_project_category_colors(
 pub(super) async fn fetch_project_category_colors_core(
     client: &DayliteApiClient,
     token_state: DayliteTokenState,
-) -> Result<(HashMap<String, String>, DayliteTokenState), DayliteApiError> {
-    let (list, token_state) = send_authenticated_json::<DayliteCategoryListDto>(
+) -> Result<HashMap<String, String>, DayliteApiError> {
+    let list = send_authenticated_json::<DayliteCategoryListDto>(
         client,
         token_state,
         DayliteHttpRequest {
@@ -74,7 +74,7 @@ pub(super) async fn fetch_project_category_colors_core(
         })
         .collect();
 
-    Ok((colors, token_state))
+    Ok(colors)
 }
 
 fn normalize_hex_colour(value: Option<String>) -> Option<String> {
@@ -125,7 +125,7 @@ mod tests {
             ]}"##,
         ))]);
 
-        let (colors, _) = fetch_project_category_colors_core(&client, valid_token_state())
+        let colors = fetch_project_category_colors_core(&client, valid_token_state())
             .await
             .expect("category fetch should succeed");
 
@@ -143,7 +143,7 @@ mod tests {
             ]}"##,
         ))]);
 
-        let (colors, _) = fetch_project_category_colors_core(&client, valid_token_state())
+        let colors = fetch_project_category_colors_core(&client, valid_token_state())
             .await
             .expect("category fetch should succeed");
 
@@ -157,7 +157,7 @@ mod tests {
             r##"{"results":[{"name":"Stillgelegt","hex_colour":"#ff9800","is_active":false}]}"##,
         ))]);
 
-        let (colors, _) = fetch_project_category_colors_core(&client, valid_token_state())
+        let colors = fetch_project_category_colors_core(&client, valid_token_state())
             .await
             .expect("category fetch should succeed");
 
@@ -171,7 +171,7 @@ mod tests {
             r##"[{"name":"Bau","hex_colour":"#8bc34a"}]"##,
         ))]);
 
-        let (colors, _) = fetch_project_category_colors_core(&client, valid_token_state())
+        let colors = fetch_project_category_colors_core(&client, valid_token_state())
             .await
             .expect("category fetch should succeed");
 
@@ -185,7 +185,7 @@ mod tests {
             r##"{"results":[{"name":"Bau","hex_colour":"8BC34A"}]}"##,
         ))]);
 
-        let (colors, _) = fetch_project_category_colors_core(&client, valid_token_state())
+        let colors = fetch_project_category_colors_core(&client, valid_token_state())
             .await
             .expect("category fetch should succeed");
 

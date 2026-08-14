@@ -3,30 +3,11 @@ use super::client::DayliteHttpMethod;
 use super::client::DayliteHttpRequest;
 use super::shared::{
     current_epoch_ms, missing_token_error, normalize_http_error, parse_json_body,
-    parse_success_json_body, should_refresh_access_token, truncate_for_log, DayliteApiError,
-    DayliteApiErrorCode, DayliteTokenState,
+    parse_success_json_body, truncate_for_log, DayliteApiError, DayliteApiErrorCode,
+    DayliteTokenState,
 };
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
-
-pub(super) async fn ensure_access_token(
-    client: &DayliteApiClient,
-    mut token_state: DayliteTokenState,
-) -> Result<DayliteTokenState, DayliteApiError> {
-    if token_state.access_token.trim().is_empty() && token_state.refresh_token.trim().is_empty() {
-        return Err(missing_token_error(
-            "Es sind keine Daylite-Zugangsdaten hinterlegt. Bitte ein Refresh-Token hinterlegen.",
-            "Weder Access- noch Refresh-Token sind vorhanden.",
-        ));
-    }
-
-    let now_ms = current_epoch_ms()?;
-    if should_refresh_access_token(&token_state, now_ms) {
-        token_state = refresh_tokens(client, token_state.refresh_token.clone()).await?;
-    }
-
-    Ok(token_state)
-}
 
 pub(super) async fn refresh_tokens(
     client: &DayliteApiClient,
@@ -111,29 +92,26 @@ pub(super) async fn send_authenticated_request(
     client: &DayliteApiClient,
     token_state: DayliteTokenState,
     mut request: DayliteHttpRequest,
-) -> Result<DayliteTokenState, DayliteApiError> {
-    let token_state = ensure_access_token(client, token_state).await?;
+) -> Result<(), DayliteApiError> {
     let path = request.path.clone();
-    request.access_token = Some(token_state.access_token.clone());
+    request.access_token = Some(token_state.access_token);
     let response = client.send_request(request).await?;
     if !(200..300).contains(&response.status) {
         return Err(normalize_http_error(response.status, &response.body, &path));
     }
-    Ok(token_state)
+    Ok(())
 }
 
 pub(super) async fn send_authenticated_json<T: DeserializeOwned>(
     client: &DayliteApiClient,
     token_state: DayliteTokenState,
     mut request: DayliteHttpRequest,
-) -> Result<(T, DayliteTokenState), DayliteApiError> {
-    let token_state = ensure_access_token(client, token_state).await?;
+) -> Result<T, DayliteApiError> {
     let path = request.path.clone();
-    request.access_token = Some(token_state.access_token.clone());
+    request.access_token = Some(token_state.access_token);
     let response = client.send_request(request).await?;
-    let data = parse_success_json_body::<T>(response.status, &response.body, &path)?;
 
-    Ok((data, token_state))
+    parse_success_json_body::<T>(response.status, &response.body, &path)
 }
 
 #[derive(Debug, Deserialize)]
@@ -160,38 +138,13 @@ fn parse_refresh_response_body(
 
 #[cfg(test)]
 mod tests {
-    use super::{ensure_access_token, refresh_tokens, send_authenticated_json};
+    use super::{refresh_tokens, send_authenticated_json};
     use crate::integrations::daylite::client::{
         DayliteApiClient, DayliteHttpMethod, DayliteHttpRequest,
     };
     use crate::integrations::daylite::shared::{DayliteApiErrorCode, DayliteTokenState};
     use crate::integrations::daylite::test_support::{mock_client, mock_response, token_state};
     use serde::Deserialize;
-
-    #[tokio::test]
-    async fn ensure_access_token_returns_missing_token_error_when_both_tokens_are_missing() {
-        let client =
-            DayliteApiClient::new("https://daylite.example").expect("client should be created");
-
-        let error = ensure_access_token(&client, DayliteTokenState::default())
-            .await
-            .expect_err("missing tokens should fail");
-
-        assert_eq!(error.code, DayliteApiErrorCode::MissingToken);
-    }
-
-    #[tokio::test]
-    async fn ensure_access_token_keeps_existing_access_token_when_expiry_is_in_future() {
-        let client =
-            DayliteApiClient::new("https://daylite.example").expect("client should be created");
-        let original_state = token_state("existing-access-token", "refresh-token");
-
-        let token_state = ensure_access_token(&client, original_state.clone())
-            .await
-            .expect("existing token should be reused");
-
-        assert_eq!(token_state, original_state);
-    }
 
     #[tokio::test]
     async fn refresh_tokens_rejects_blank_refresh_token() {
@@ -214,7 +167,7 @@ mod tests {
     async fn send_authenticated_json_uses_existing_access_token_and_parses_payload() {
         let (client, transport) = mock_client(vec![Ok(mock_response(200, r#"{"value":"ok"}"#))]);
 
-        let (data, token_state) = send_authenticated_json::<AuthFlowFixture>(
+        let data = send_authenticated_json::<AuthFlowFixture>(
             &client,
             token_state("existing-access-token", "refresh-token"),
             DayliteHttpRequest {
@@ -231,8 +184,6 @@ mod tests {
                 value: "ok".to_string(),
             }
         );
-        assert_eq!(token_state.access_token, "existing-access-token");
-
         let requests = transport.requests();
         assert_eq!(requests.len(), 1);
         assert_eq!(requests[0].path, "/projects/_search");
@@ -243,39 +194,26 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn send_authenticated_json_refreshes_before_request_when_access_token_is_missing() {
-        let (client, transport) = mock_client(vec![
-            Ok(mock_response(
-                200,
-                r#"{"access_token":"refreshed-access-token","refresh_token":"refreshed-refresh-token","expires_in":3600}"#,
-            )),
-            Ok(mock_response(200, r#"{"value":"ok"}"#)),
-        ]);
+    async fn send_authenticated_json_does_not_rotate_an_expired_token() {
+        let (client, transport) = mock_client(vec![Ok(mock_response(401, r#"{"error":"nope"}"#))]);
 
-        let (_, token_state) = send_authenticated_json::<AuthFlowFixture>(
+        let error = send_authenticated_json::<AuthFlowFixture>(
             &client,
             DayliteTokenState {
-                access_token: String::new(),
-                refresh_token: "initial-refresh-token".to_string(),
-                access_token_expires_at_ms: None,
+                access_token: "expired-access-token".to_string(),
+                refresh_token: "refresh-token".to_string(),
+                access_token_expires_at_ms: Some(0),
             },
             DayliteHttpRequest::new(DayliteHttpMethod::Get, "/contacts/100"),
         )
         .await
-        .expect("request should succeed after refresh");
+        .expect_err("an expired token should be rejected, not rotated");
 
-        assert_eq!(token_state.access_token, "refreshed-access-token");
-        assert_eq!(token_state.refresh_token, "refreshed-refresh-token");
-        assert!(token_state.access_token_expires_at_ms.is_some());
+        assert_eq!(error.code, DayliteApiErrorCode::Unauthorized);
 
         let requests = transport.requests();
-        assert_eq!(requests.len(), 2);
-        assert_eq!(requests[0].path, "/personal_token/refresh_token");
-        assert_eq!(requests[1].path, "/contacts/100");
-        assert_eq!(
-            requests[1].access_token,
-            Some("refreshed-access-token".to_string())
-        );
+        assert_eq!(requests.len(), 1);
+        assert_eq!(requests[0].path, "/contacts/100");
     }
 
     #[tokio::test]

@@ -133,7 +133,7 @@ pub async fn daylite_search_projects(
 pub(super) async fn query_overdue_projects_core(
     client: &DayliteApiClient,
     token_state: DayliteTokenState,
-) -> Result<(Vec<DayliteProjectSummary>, DayliteTokenState), DayliteApiError> {
+) -> Result<Vec<DayliteProjectSummary>, DayliteApiError> {
     let clauses: Vec<serde_json::Value> = OVERDUE_STATUSES
         .iter()
         .map(|status| {
@@ -144,17 +144,16 @@ pub(super) async fn query_overdue_projects_core(
         })
         .collect();
 
-    let (search_result, token_state) =
-        send_authenticated_json::<DayliteSearchResult<DayliteProjectSummaryDto>>(
-            client,
-            token_state,
-            DayliteHttpRequest {
-                query: build_limit_query(Some(OVERDUE_CANDIDATE_LIMIT)),
-                body: Some(json!(clauses)),
-                ..DayliteHttpRequest::new(DayliteHttpMethod::Post, "/projects/_search")
-            },
-        )
-        .await?;
+    let search_result = send_authenticated_json::<DayliteSearchResult<DayliteProjectSummaryDto>>(
+        client,
+        token_state,
+        DayliteHttpRequest {
+            query: build_limit_query(Some(OVERDUE_CANDIDATE_LIMIT)),
+            body: Some(json!(clauses)),
+            ..DayliteHttpRequest::new(DayliteHttpMethod::Post, "/projects/_search")
+        },
+    )
+    .await?;
 
     let mut results: Vec<DayliteProjectSummary> = search_result
         .results
@@ -170,20 +169,14 @@ pub(super) async fn query_overdue_projects_core(
     results.sort_by_key(|project| extract_numeric_id(&project.reference));
     results.truncate(OVERDUE_DISPLAY_LIMIT);
 
-    Ok((results, token_state))
+    Ok(results)
 }
 
 pub(super) async fn search_projects_core(
     client: &DayliteApiClient,
     token_state: DayliteTokenState,
     input: &DayliteSearchInput,
-) -> Result<
-    (
-        DayliteSearchResult<DayliteProjectSummary>,
-        DayliteTokenState,
-    ),
-    DayliteApiError,
-> {
+) -> Result<DayliteSearchResult<DayliteProjectSummary>, DayliteApiError> {
     let body = match &input.statuses {
         Some(statuses) if !statuses.is_empty() => {
             let clauses: Vec<serde_json::Value> = statuses
@@ -208,17 +201,16 @@ pub(super) async fn search_projects_core(
         query.push(("start".to_string(), start.clone()));
     }
 
-    let (search_result, token_state) =
-        send_authenticated_json::<DayliteSearchResult<DayliteProjectSummaryDto>>(
-            client,
-            token_state,
-            DayliteHttpRequest {
-                query,
-                body: Some(body),
-                ..DayliteHttpRequest::new(DayliteHttpMethod::Post, "/projects/_search")
-            },
-        )
-        .await?;
+    let search_result = send_authenticated_json::<DayliteSearchResult<DayliteProjectSummaryDto>>(
+        client,
+        token_state,
+        DayliteHttpRequest {
+            query,
+            body: Some(body),
+            ..DayliteHttpRequest::new(DayliteHttpMethod::Post, "/projects/_search")
+        },
+    )
+    .await?;
 
     let mut results: Vec<DayliteProjectSummary> = search_result
         .results
@@ -235,13 +227,10 @@ pub(super) async fn search_projects_core(
         results.truncate(limit as usize);
     }
 
-    Ok((
-        DayliteSearchResult {
-            results,
-            next: trimmed_or_none(search_result.next),
-        },
-        token_state,
-    ))
+    Ok(DayliteSearchResult {
+        results,
+        next: trimmed_or_none(search_result.next),
+    })
 }
 
 fn extract_numeric_id(reference: &str) -> u64 {
@@ -405,13 +394,13 @@ async fn fetch_project(client: &DayliteApiClient, project_ref: &str) -> Option<R
     }
 
     with_daylite_tokens(client, |tokens| async {
-        let (summary, tokens): (DayliteProjectSummaryDto, _) = send_authenticated_json(
+        let summary: DayliteProjectSummaryDto = send_authenticated_json(
             client,
             tokens,
             DayliteHttpRequest::new(DayliteHttpMethod::Get, path),
         )
         .await?;
-        Ok((resolve_project(summary), tokens))
+        Ok(resolve_project(summary))
     })
     .await
     .ok()
@@ -603,7 +592,7 @@ mod tests {
             r#"{"results":[{"self":" /v1/projects/10 ","name":" Projekt Nord ","category":" Bau ","keywords":[" Aufträge ",""],"due":"2026-02-15"}],"next":" /v1/projects/_search?offset=5 "}"#,
         ))]);
 
-        let (result, _) = search_projects_core(
+        let result = search_projects_core(
             &client,
             valid_token_state(),
             &DayliteSearchInput {
@@ -650,7 +639,7 @@ mod tests {
         ],"next":null}"#,
         ))]);
 
-        let (result, _) =
+        let result =
             search_projects_core(&client, valid_token_state(), &DayliteSearchInput::default())
                 .await
                 .expect("search should succeed");
@@ -680,7 +669,7 @@ mod tests {
         ],"next":null}"#,
         ))]);
 
-        let (result, _) = search_projects_core(
+        let result = search_projects_core(
             &client,
             valid_token_state(),
             &DayliteSearchInput {
@@ -707,7 +696,7 @@ mod tests {
         ],"next":null}"#,
         ))]);
 
-        let (result, _) = search_projects_core(
+        let result = search_projects_core(
             &client,
             valid_token_state(),
             &DayliteSearchInput {
@@ -769,7 +758,7 @@ mod tests {
         ],"next":null}"#,
         ))]);
 
-        let (results, _) = query_overdue_projects_core(&client, valid_token_state())
+        let results = query_overdue_projects_core(&client, valid_token_state())
             .await
             .expect("overdue query should succeed");
 
@@ -797,7 +786,7 @@ mod tests {
             r#"{"results":[{"self":"/v1/projects/3","name":"Drei"}],"next":null}"#,
         ))]);
 
-        let (results, _) = query_overdue_projects_core(&client, valid_token_state())
+        let results = query_overdue_projects_core(&client, valid_token_state())
             .await
             .expect("overdue query should succeed");
 
@@ -820,7 +809,7 @@ mod tests {
         let client = DayliteApiClient::with_replay_cassette("daylite-overdue-projects.json")
             .expect("replay client should be created");
 
-        let (results, token_state) = query_overdue_projects_core(
+        let results = query_overdue_projects_core(
             &client,
             token_state("replay-access-token", "replay-refresh-token"),
         )
@@ -833,7 +822,6 @@ mod tests {
                 && !project.name.is_empty()
                 && project.name == project.name.trim()
         }));
-        assert_eq!(token_state.access_token, "replay-access-token");
     }
 
     #[test]
@@ -854,7 +842,7 @@ mod tests {
         let client = DayliteApiClient::with_replay_cassette("daylite-search-projects.json")
             .expect("replay client should be created");
 
-        let (search_result, token_state) = search_projects_core(
+        let search_result = search_projects_core(
             &client,
             token_state("replay-access-token", "replay-refresh-token"),
             &DayliteSearchInput {
@@ -879,7 +867,6 @@ mod tests {
             .as_deref()
             .map(|next| next.starts_with("/v1/projects/_search"))
             .unwrap_or(true));
-        assert_eq!(token_state.access_token, "replay-access-token");
     }
 
     #[tokio::test]
@@ -887,7 +874,7 @@ mod tests {
         let client = DayliteApiClient::with_replay_cassette("daylite-search-projects.json")
             .expect("status-filter cassette client should be created");
 
-        let (search_result, token_state) = search_projects_core(
+        let search_result = search_projects_core(
             &client,
             token_state("test-token", "test-refresh"),
             &DayliteSearchInput {
@@ -905,8 +892,6 @@ mod tests {
             !search_result.results.is_empty(),
             "cassette should contain results"
         );
-        assert_eq!(token_state.access_token, "test-token");
-
         for project in &search_result.results {
             assert!(
                 project.status.as_deref() == Some("new")
@@ -922,7 +907,7 @@ mod tests {
         let client = DayliteApiClient::with_replay_cassette("daylite-search-projects.json")
             .expect("no-match cassette client should be created");
 
-        let (search_result, token_state) = search_projects_core(
+        let search_result = search_projects_core(
             &client,
             token_state("test-token", "test-refresh"),
             &DayliteSearchInput {
@@ -937,7 +922,6 @@ mod tests {
         .expect("no-match search should replay from cassette");
 
         assert!(search_result.results.is_empty());
-        assert_eq!(token_state.access_token, "test-token");
     }
 
     #[tokio::test]

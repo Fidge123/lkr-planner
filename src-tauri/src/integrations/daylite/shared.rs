@@ -208,7 +208,7 @@ pub(super) async fn with_daylite_tokens<T, F, Fut>(
 ) -> Result<T, DayliteApiError>
 where
     F: Fn(DayliteTokenState) -> Fut,
-    Fut: std::future::Future<Output = Result<(T, DayliteTokenState), DayliteApiError>>,
+    Fut: std::future::Future<Output = Result<T, DayliteApiError>>,
 {
     let lease = lease_tokens(client).await?;
     retry_once_on_unauthorized(lease.tokens.clone(), operation, || async {
@@ -227,17 +227,15 @@ async fn retry_once_on_unauthorized<T, F, Fut, R, RFut>(
 ) -> Result<T, DayliteApiError>
 where
     F: Fn(DayliteTokenState) -> Fut,
-    Fut: std::future::Future<Output = Result<(T, DayliteTokenState), DayliteApiError>>,
+    Fut: std::future::Future<Output = Result<T, DayliteApiError>>,
     R: FnOnce() -> RFut,
     RFut: std::future::Future<Output = Result<DayliteTokenState, DayliteApiError>>,
 {
     match operation(tokens).await {
-        Ok((value, _)) => Ok(value),
         Err(error) if error.code == DayliteApiErrorCode::Unauthorized => {
-            let (value, _) = operation(renew().await?).await?;
-            Ok(value)
+            operation(renew().await?).await
         }
-        Err(error) => Err(error),
+        result => result,
     }
 }
 
@@ -247,11 +245,10 @@ pub(super) async fn with_daylite_tokens_once<T, Fut>(
     operation: impl FnOnce(DayliteTokenState) -> Fut,
 ) -> Result<T, DayliteApiError>
 where
-    Fut: std::future::Future<Output = Result<(T, DayliteTokenState), DayliteApiError>>,
+    Fut: std::future::Future<Output = Result<T, DayliteApiError>>,
 {
     let lease = lease_tokens(client).await?;
-    let (value, _) = operation(lease.tokens.clone()).await?;
-    Ok(value)
+    operation(lease.tokens).await
 }
 
 /// For read-only command bodies only: commands that mutate the local store manage the store themselves.
@@ -260,7 +257,7 @@ pub(super) async fn run_daylite_command<T>(
     operation: impl for<'a> Fn(
         &'a DayliteApiClient,
         DayliteTokenState,
-    ) -> BoxFuture<'a, Result<(T, DayliteTokenState), DayliteApiError>>,
+    ) -> BoxFuture<'a, Result<T, DayliteApiError>>,
 ) -> Result<T, DayliteApiError> {
     let store = load_store_or_error(app)?;
     let client = DayliteApiClient::new(&store.api_endpoints.daylite_base_url)?;
@@ -369,17 +366,6 @@ pub(super) fn missing_token_error(user_message: &str, technical_message: &str) -
     )
 }
 
-pub(super) fn should_refresh_access_token(token_state: &DayliteTokenState, now_ms: u64) -> bool {
-    if token_state.access_token.trim().is_empty() {
-        return true;
-    }
-
-    match token_state.access_token_expires_at_ms {
-        Some(expires_at_ms) => expires_at_ms <= now_ms.saturating_add(10_000),
-        None => true,
-    }
-}
-
 pub(super) fn current_epoch_ms() -> Result<u64, DayliteApiError> {
     let duration = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -465,7 +451,7 @@ mod tests {
 
         let value = retry_once_on_unauthorized(
             tokens("at"),
-            |current| async move { Ok(("ok", current)) },
+            |_| async { Ok("ok") },
             || async {
                 renewals.fetch_add(1, Ordering::SeqCst);
                 Ok(tokens("renewed"))
@@ -492,7 +478,7 @@ mod tests {
                     if attempt == 0 {
                         return Err(unauthorized());
                     }
-                    Ok(("ok", current))
+                    Ok("ok")
                 }
             },
             || async { Ok(tokens("renewed")) },
@@ -513,7 +499,7 @@ mod tests {
             tokens("at"),
             |_| {
                 attempts.fetch_add(1, Ordering::SeqCst);
-                async { Err::<(&str, DayliteTokenState), _>(unauthorized()) }
+                async { Err::<&str, _>(unauthorized()) }
             },
             || async { Ok(tokens("renewed")) },
         )
@@ -531,7 +517,7 @@ mod tests {
         let error = retry_once_on_unauthorized(
             tokens("at"),
             |_| async {
-                Err::<(&str, DayliteTokenState), _>(DayliteApiError::new(
+                Err::<&str, _>(DayliteApiError::new(
                     DayliteApiErrorCode::RateLimited,
                     Some(429),
                     "zu viele",
