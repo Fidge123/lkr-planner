@@ -1,6 +1,6 @@
 use super::super::local_store::{self, LocalStore};
 use super::auth_flow::refresh_tokens;
-use super::client::{BoxFuture, DayliteApiClient};
+use super::client::DayliteApiClient;
 use super::token_session::{token_session, TokenLease};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -254,10 +254,7 @@ where
 /// For read-only command bodies only: commands that mutate the local store manage the store themselves.
 pub(super) async fn run_daylite_command<T>(
     app: tauri::AppHandle,
-    operation: impl for<'a> Fn(
-        &'a DayliteApiClient,
-        DayliteTokenState,
-    ) -> BoxFuture<'a, Result<T, DayliteApiError>>,
+    operation: impl AsyncFn(&DayliteApiClient, DayliteTokenState) -> Result<T, DayliteApiError>,
 ) -> Result<T, DayliteApiError> {
     let store = load_store_or_error(app)?;
     let client = DayliteApiClient::new(&store.api_endpoints.daylite_base_url)?;

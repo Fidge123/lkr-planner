@@ -78,8 +78,8 @@ const OVERDUE_CANDIDATE_LIMIT: u16 = 50;
 pub async fn daylite_query_overdue_projects(
     app: tauri::AppHandle,
 ) -> Result<Vec<DayliteProjectSummary>, DayliteApiError> {
-    run_daylite_command(app, |client, tokens| {
-        Box::pin(query_overdue_projects_core(client, tokens))
+    run_daylite_command(app, async |client, tokens| {
+        query_overdue_projects_core(client, tokens).await
     })
     .await
 }
@@ -90,9 +90,8 @@ pub async fn daylite_search_projects(
     app: tauri::AppHandle,
     input: DayliteSearchInput,
 ) -> Result<DayliteSearchResult<DayliteProjectSummary>, DayliteApiError> {
-    run_daylite_command(app, move |client, tokens| {
-        let input = input.clone();
-        Box::pin(async move { search_projects_core(client, tokens, &input).await })
+    run_daylite_command(app, async move |client, tokens| {
+        search_projects_core(client, tokens, &input).await
     })
     .await
 }

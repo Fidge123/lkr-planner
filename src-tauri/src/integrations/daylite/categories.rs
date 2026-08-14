@@ -41,8 +41,8 @@ impl DayliteCategoryListDto {
 pub async fn daylite_project_category_colors(
     app: tauri::AppHandle,
 ) -> Result<HashMap<String, String>, DayliteApiError> {
-    run_daylite_command(app, |client, tokens| {
-        Box::pin(fetch_project_category_colors_core(client, tokens))
+    run_daylite_command(app, async |client, tokens| {
+        fetch_project_category_colors_core(client, tokens).await
     })
     .await
 }
