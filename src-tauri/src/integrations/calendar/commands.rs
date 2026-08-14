@@ -15,7 +15,7 @@ use super::events::{
 use super::protection::{refuse_protected_day_change, refuse_protected_event};
 use super::types::{CalendarCellEvent, EmployeeWeekEvents, MoveAssignmentResult, PendingEvent};
 use crate::integrations::daylite::projects::ResolvedProject;
-use crate::integrations::local_store::{DayliteCache, LocalStore};
+use crate::integrations::local_store::LocalStore;
 
 #[tauri::command]
 #[specta::specta]
@@ -48,14 +48,13 @@ pub async fn load_week_events(
     let (fetches, error_results) =
         fetch_week_for_employees(&store, &session, week_start_date).await;
 
-    let api_results = fetch_uncached_projects(app.clone(), &store, &fetches).await;
+    let api_results = fetch_referenced_projects(app.clone(), &fetches).await;
     let category_colors =
         crate::integrations::daylite::categories::fetch_project_category_colors(app).await;
 
     Ok(assemble_week_events(
         fetches,
         error_results,
-        &store.daylite_cache,
         &api_results,
         &category_colors,
     ))
@@ -154,29 +153,21 @@ async fn fetch_week_for_employees(
     (fetches, error_results)
 }
 
-async fn fetch_uncached_projects(
+async fn fetch_referenced_projects(
     app: tauri::AppHandle,
-    store: &LocalStore,
     fetches: &[EmployeeFetch],
 ) -> HashMap<String, Option<ResolvedProject>> {
-    let mut missing_refs: HashSet<String> = HashSet::new();
+    let mut references: HashSet<String> = HashSet::new();
     for fetch in fetches {
         for event in &fetch.pending {
             if let Some(ref project_ref) = event.project_ref {
-                let in_cache = store
-                    .daylite_cache
-                    .projects
-                    .iter()
-                    .any(|p| p.reference == *project_ref);
-                if !in_cache {
-                    missing_refs.insert(project_ref.clone());
-                }
+                references.insert(project_ref.clone());
             }
         }
     }
 
     let mut api_results = HashMap::new();
-    for project_ref in missing_refs {
+    for project_ref in references {
         let result = crate::integrations::daylite::projects::fetch_project_by_reference(
             app.clone(),
             &project_ref,
@@ -191,7 +182,6 @@ async fn fetch_uncached_projects(
 fn assemble_week_events(
     fetches: Vec<EmployeeFetch>,
     error_results: Vec<EmployeeWeekEvents>,
-    cache: &DayliteCache,
     api_results: &HashMap<String, Option<ResolvedProject>>,
     category_colors: &HashMap<String, String>,
 ) -> Vec<EmployeeWeekEvents> {
@@ -200,7 +190,7 @@ fn assemble_week_events(
         let mut events: Vec<CalendarCellEvent> = fetch
             .pending
             .into_iter()
-            .map(|p| resolve_event(p, cache, api_results, category_colors))
+            .map(|p| resolve_event(p, api_results, category_colors))
             .collect();
         events.extend(fetch.absences);
         // Deduplicate by UID to guard against CalDAV servers redelivering the same event.
@@ -236,6 +226,8 @@ pub struct UpdateAssignmentInput {
     pub project_name: String,
     /// Position among the target day's assignments. None keeps the assignment where it is.
     pub order_index: Option<u32>,
+    /// The user deliberately unlocked a fixed appointment for this one write.
+    pub override_protection: bool,
 }
 
 #[tauri::command]
@@ -319,7 +311,16 @@ pub async fn update_assignment(
         .map_err(|e| e.user_message)?;
     let session = load_caldav_session(&store)?;
 
-    refuse_protected_event(app, &session, &input.href).await?;
+    refuse_protected_event(
+        &session,
+        &input.href,
+        input.override_protection,
+        |reference: String| async move {
+            crate::integrations::daylite::projects::fetch_project_by_reference(app, &reference)
+                .await
+        },
+    )
+    .await?;
 
     update_assignment_core(
         &session,
@@ -353,7 +354,10 @@ pub async fn move_assignment(
 
     let session = load_caldav_session(&store)?;
 
-    refuse_protected_day_change(app, &session, &href, &date).await?;
+    refuse_protected_day_change(&session, &href, &date, |reference: String| async move {
+        crate::integrations::daylite::projects::fetch_project_by_reference(app, &reference).await
+    })
+    .await?;
 
     move_assignment_core(
         &session,
@@ -387,12 +391,42 @@ pub async fn reorder_assignment(
 
 #[tauri::command]
 #[specta::specta]
-pub async fn delete_assignment(app: tauri::AppHandle, href: String) -> Result<(), String> {
+pub async fn delete_assignment(
+    app: tauri::AppHandle,
+    href: String,
+    override_protection: bool,
+) -> Result<(), String> {
     let store = crate::integrations::local_store::load_local_store(app.clone())
         .map_err(|e| e.user_message)?;
     let session = load_caldav_session(&store)?;
 
-    refuse_protected_event(app, &session, &href).await?;
+    refuse_protected_event(
+        &session,
+        &href,
+        override_protection,
+        |reference: String| async move {
+            crate::integrations::daylite::projects::fetch_project_by_reference(app, &reference)
+                .await
+        },
+    )
+    .await?;
 
     delete_assignment_core(&session, &href).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn update_input_carries_the_override_the_frontend_sends() {
+        let input: UpdateAssignmentInput = serde_json::from_str(
+            r#"{"href":"/cal/uid-1.ics","uid":"uid-1","date":"2026-05-06",
+                "projectRef":"/v1/projects/1","projectName":"Projekt Nord",
+                "orderIndex":null,"overrideProtection":true}"#,
+        )
+        .expect("update input parses");
+
+        assert!(input.override_protection);
+    }
 }

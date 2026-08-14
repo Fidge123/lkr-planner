@@ -147,14 +147,15 @@ export function TimetableRow({
         )}
       </tr>
 
-      <AssignmentModal
-        isOpen={modalState !== null}
-        assignment={modalState?.assignment ?? null}
-        employeeReference={employee.self}
-        date={modalState?.date ?? ""}
-        onSave={handleSave}
-        onClose={() => setModalState(null)}
-      />
+      {modalState !== null ? (
+        <AssignmentModal
+          assignment={modalState.assignment}
+          employeeReference={employee.self}
+          date={modalState.date}
+          onSave={handleSave}
+          onClose={() => setModalState(null)}
+        />
+      ) : null}
     </>
   );
 }

@@ -4,7 +4,7 @@ import type { ModalSaveAction } from "../next-day-quick-add";
 const fixedAppointmentCategory = "Termin FIX geplant";
 
 export const fixedAppointmentNotice =
-  "Dieser Termin ist als „Termin FIX geplant“ gesperrt und kann nicht bearbeitet oder gelöscht werden.";
+  "Dieser Termin ist als „Termin FIX geplant“ gesperrt. Zum Bearbeiten oder Löschen bitte entsperren.";
 
 // Advisory only: the backend re-derives this per write and is the real enforcement.
 export function isProtectedAssignment(
