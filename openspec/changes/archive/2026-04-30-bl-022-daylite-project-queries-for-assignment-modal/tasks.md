@@ -26,5 +26,5 @@
 
 ## 5. Integration Testing
 
-- [ ] 5.1 Update VCR cassette for `daylite-search-projects` to include status-filtered request
-- [ ] 5.2 Write VCR replay test verifying status filter produces only `new_status`/`in_progress` results
+- [x] 5.1 Update VCR cassette for `daylite-search-projects` to include status-filtered request
+- [x] 5.2 Write VCR replay test verifying status filter produces only `new_status`/`in_progress` results
