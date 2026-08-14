@@ -23,7 +23,8 @@ jobs:
       - name: Setup Biome
         uses: biomejs/setup-biome@v2
         with:
-          version: 2.5.0
+          # Keep in lockstep with @biomejs/biome in package.json and the $schema in biome.json.
+          version: 2.5.8
 
       - name: Run Biome
         run: biome ci .
