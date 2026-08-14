@@ -176,18 +176,11 @@ export interface WeekLoadSequence {
   wait: (ms: number) => Promise<void>;
 }
 
-/**
- * A week load the backend has already started cannot be called off, so swiping
- * across several weeks would leave neighbours loading that nobody asked for,
- * competing with the week that replaced them. Settling first means a burst of
- * swipes dispatches no prefetch at all.
- */
 const prefetchIdleMs = 400;
 
 /**
- * A prefetch dispatched alongside the active week competes with it for CalDAV
- * connections and Daylite requests, so it waits for the active week to land and
- * for the user to settle on it.
+ * A prefetch competes with the active week for CalDAV connections and Daylite requests.
+ * A started week load cannot be called off, so it waits for the user to settle first.
  */
 export async function loadWeekWithPrefetch({
   weekStart,

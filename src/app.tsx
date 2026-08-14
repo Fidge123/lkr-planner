@@ -22,8 +22,7 @@ function App() {
   const weekStart = getWeekStart(weekOffset, showWeekend);
   const planningAssignmentsState = usePlanningAssignments(weekStart);
   const planningEmployeesState = usePlanningEmployees();
-  // One read serves the grid and the assignment modal: the service holds the map for
-  // the session, and reloadData resets it.
+  // The service holds the map for the session; reloadData resets it.
   const categoryColors = useProjectCategoryColors(true);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [icalDialogEmployee, setIcalDialogEmployee] =

@@ -3,9 +3,7 @@ use std::sync::{OnceLock, RwLock};
 
 use super::shared::{DayliteApiError, DayliteTokenState};
 
-/// A lease must outlive the 10s margin `ensure_access_token` applies plus the longest
-/// operation it is held across, so that the unlocked refresh inside the
-/// `send_authenticated_*` helpers is unreachable while a lease is in hand.
+/// Exceeds the 10s margin `ensure_access_token` applies, so its refresh never fires under a lease.
 const LEASE_MIN_REMAINING_MS: u64 = 60_000;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -19,9 +17,8 @@ struct SessionState {
     generation: u64,
 }
 
-/// Keeps the Daylite token state in memory so an ordinary request costs no keychain
-/// access, and serializes only the rotation, which is the part that cannot race:
-/// Daylite invalidates a refresh token as it hands out the next one.
+/// Only rotation is serialized: Daylite invalidates a refresh token as it issues the next.
+/// A request carrying an already valid access token is safe in parallel.
 pub(super) struct TokenSession {
     state: RwLock<Option<SessionState>>,
     rotation: tokio::sync::Mutex<()>,
@@ -51,8 +48,6 @@ impl TokenSession {
         self.state.read().expect("token session poisoned").is_none()
     }
 
-    /// Hands out the cached tokens when they have life left, rotating under the lock
-    /// otherwise.
     pub(super) async fn lease<F, Fut>(
         &self,
         now_ms: u64,
@@ -75,8 +70,7 @@ impl TokenSession {
         self.rotate_locked(rotate).await
     }
 
-    /// Replaces a lease the API rejected. A burst of rejections costs one rotation:
-    /// whoever gets the lock first rotates, the rest find a newer generation and take it.
+    /// A burst of rejections costs one rotation: the rest take the newer generation.
     pub(super) async fn renew<F, Fut>(
         &self,
         stale: &TokenLease,
@@ -94,8 +88,7 @@ impl TokenSession {
         self.rotate_locked(rotate).await
     }
 
-    /// Replaces the session wholesale from a freshly minted token, under the same lock
-    /// a rotation takes so a connect cannot interleave with one.
+    /// Takes the rotation lock so a connect cannot interleave with one.
     pub(super) async fn adopt<F, Fut>(&self, mint: F) -> Result<TokenLease, DayliteApiError>
     where
         F: FnOnce() -> Fut,

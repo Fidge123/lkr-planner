@@ -12,9 +12,7 @@ struct CacheEntry {
     fetched_at_ms: u64,
 }
 
-/// One slot per project reference. Holding the slot across the load is what makes
-/// concurrent callers for the same reference share a single request instead of
-/// each dispatching their own.
+/// Held across the load, so concurrent callers for one reference share a single request.
 type Slot = Arc<tokio::sync::Mutex<Option<CacheEntry>>>;
 
 pub(super) struct ProjectCache {
@@ -49,8 +47,7 @@ impl ProjectCache {
             }
         }
 
-        // A failed load stays uncached so a rate-limited or timed-out reference
-        // resolves again on the next week load instead of degrading for a whole TTL.
+        // A cached failure would degrade the card for a whole TTL, so only successes are stored.
         let project = load().await?;
         *entry = Some(CacheEntry {
             project: project.clone(),

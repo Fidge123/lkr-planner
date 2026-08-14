@@ -171,10 +171,6 @@ pub(super) fn store_daylite_tokens(token_state: &DayliteTokenState) -> Result<()
     })
 }
 
-/// Rotating the refresh token is the part that cannot race: Daylite invalidates the
-/// old one as it issues the next, so two concurrent rotations would sign the user out.
-/// Sending a request with an already valid access token is safe in parallel, so the
-/// lock lives inside the session and covers the rotation only.
 async fn lease_tokens(client: &DayliteApiClient) -> Result<TokenLease, DayliteApiError> {
     let session = token_session();
     if session.is_empty() {
@@ -205,9 +201,7 @@ async fn rotate_tokens(
     Ok(rotated)
 }
 
-/// Runs `operation` with a leased access token, retrying once when Daylite rejects it.
-/// A rejection that outlasts the expiry check means the token was revoked server-side,
-/// which the expiry-driven rotation cannot anticipate.
+/// Retries once on rejection: a token revoked server-side defeats expiry-driven rotation.
 pub(super) async fn with_daylite_tokens<T, F, Fut>(
     client: &DayliteApiClient,
     operation: F,
@@ -247,8 +241,7 @@ where
     }
 }
 
-/// For an operation that cannot be replayed, such as one that has already mutated the
-/// local store: a rejected token surfaces as an error the caller can retry deliberately.
+/// For operations that cannot be replayed, such as one that has already mutated the store.
 pub(super) async fn with_daylite_tokens_once<T, Fut>(
     client: &DayliteApiClient,
     operation: impl FnOnce(DayliteTokenState) -> Fut,
@@ -274,8 +267,6 @@ pub(super) async fn run_daylite_command<T>(
     with_daylite_tokens(&client, |tokens| operation(&client, tokens)).await
 }
 
-/// Adopts tokens minted from a refresh token the user supplied, replacing whatever the
-/// session held.
 pub(super) async fn adopt_daylite_tokens<F, Fut>(
     mint: F,
 ) -> Result<DayliteTokenState, DayliteApiError>

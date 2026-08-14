@@ -331,13 +331,9 @@ pub(crate) struct ResolvedProject {
     pub(crate) category: Option<String>,
 }
 
-// Daylite has no way to resolve a set of references in one search, so a week costs one
-// request per distinct project. They run concurrently, but bounded: an unbounded burst
-// is what a rate limit answers with 429.
+// An unbounded burst is what a rate limit answers with 429.
 const PROJECT_RESOLUTION_CONCURRENCY: usize = 6;
 
-/// Resolves a week's project references, sharing one HTTP client across all of them so
-/// the connection pool is reused instead of paying a TLS handshake per project.
 pub(crate) async fn resolve_projects_by_reference(
     daylite_base_url: &str,
     references: Vec<String>,
@@ -378,8 +374,6 @@ where
         .await
 }
 
-/// Week loads resolve the same references repeatedly, across the active week and
-/// both prefetched neighbours, so every lookup goes through the TTL cache.
 async fn resolve_project_cached(
     client: &DayliteApiClient,
     project_ref: &str,
@@ -391,8 +385,7 @@ async fn resolve_project_cached(
         .await
 }
 
-/// Deliberately uncached: the fixed-appointment guard runs once per write and must
-/// judge the category as it stands now, not as the last week load saw it.
+/// Deliberately uncached: the fixed-appointment guard must see the category as it stands now.
 pub(crate) async fn fetch_project_by_reference(
     app: tauri::AppHandle,
     project_ref: &str,

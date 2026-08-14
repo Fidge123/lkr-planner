@@ -61,9 +61,7 @@ pub async fn load_week_events(
     ))
 }
 
-// Each unit here is two CalDAV requests, primary and absence, so the roster fans out to
-// twice this many in flight. Bounded because a week and its two prefetched neighbours
-// can be loading at once, against one ZEP server.
+// One unit is two requests, primary and absence, so the roster fans out to twice this.
 const EMPLOYEE_FETCH_CONCURRENCY: usize = 4;
 
 struct EmployeeFetch {
@@ -162,8 +160,6 @@ async fn fetch_week_for_employees(
     (fetches, error_results)
 }
 
-/// A project referenced by several assignments, or by the same one in more than one
-/// employee's calendar, is resolved once.
 fn project_references(fetches: &[EmployeeFetch]) -> Vec<String> {
     let mut references: HashSet<String> = HashSet::new();
     for fetch in fetches {
@@ -273,8 +269,7 @@ fn load_caldav_session(
     build_caldav_session(store, credentials)
 }
 
-/// Shared so concurrent week loads reuse one connection pool instead of opening their
-/// own. Cloning a reqwest client shares the pool rather than copying it.
+/// Cloning a reqwest client shares its connection pool rather than copying it.
 fn caldav_client() -> Result<reqwest::Client, String> {
     static CLIENT: std::sync::OnceLock<reqwest::Client> = std::sync::OnceLock::new();
     if let Some(client) = CLIENT.get() {
