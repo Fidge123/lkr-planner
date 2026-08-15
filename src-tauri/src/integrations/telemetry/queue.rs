@@ -34,6 +34,7 @@ impl EventBuffer {
         self.events.push_back(event);
     }
 
+    #[cfg(test)]
     pub fn len(&self) -> usize {
         self.events.len()
     }
@@ -75,7 +76,6 @@ pub async fn run_flush_task<S: EventSink>(mut receiver: Receiver<TelemetryComman
                     buffer.clear();
                     retry = None;
                 }
-                Some(TelemetryCommand::Flush) => flush(&mut buffer, &mut retry, &sink).await,
                 Some(TelemetryCommand::Shutdown(acknowledgement)) => {
                     flush(&mut buffer, &mut retry, &sink).await;
                     let _ = acknowledgement.send(());
@@ -254,16 +254,17 @@ mod tests {
         let (recorder, receiver) = TelemetryRecorder::channel();
         recorder.apply_settings(&enabled());
         let sink = Arc::new(RecordingSink::failing(1));
-        recorder.record(event(1));
-        recorder.request_flush();
-        recorder.request_flush();
+        for index in 0..(BATCH_SIZE * 2) {
+            recorder.record(event(index as u64));
+        }
         drop(recorder);
 
         run_flush_task(receiver, Arc::clone(&sink)).await;
 
         let batches = sink.batches();
-        assert_eq!(batches.len(), 2, "the failed batch is retried exactly once");
-        assert_eq!(batches[0], batches[1]);
+        assert_eq!(batches.len(), 3, "the failed batch is retried exactly once");
+        assert_eq!(batches[0], batches[1], "the retry resends the failed batch");
+        assert_ne!(batches[1], batches[2], "the second batch follows the retry");
     }
 
     #[tokio::test]
@@ -289,7 +290,10 @@ mod tests {
         for index in 0..(MAX_BUFFERED_EVENTS * 2) {
             recorder.record(event(index as u64));
         }
-        assert!(recorder.is_enabled(), "recording survives a failing sink");
+        assert!(
+            recorder.settings().enabled,
+            "recording survives a failing sink"
+        );
         drop(recorder);
 
         run_flush_task(receiver, Arc::clone(&sink)).await;

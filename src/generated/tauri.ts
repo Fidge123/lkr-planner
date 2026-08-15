@@ -30,7 +30,7 @@ export const commands = {
 	zepTestCredentials: (rootUrl: string, username: string, password: string) => typedError<ZepCredentialTestResult, ZepError>(__TAURI_INVOKE("zep_test_credentials", { rootUrl, username, password })),
 	zepDiscoverCalendars: () => typedError<ZepCalendar[], ZepError>(__TAURI_INVOKE("zep_discover_calendars")),
 	zepSaveAndTestCalendar: (dayliteContactReference: string, source: IcalSource, calendarUrl: string | null) => typedError<ZepCalendarTestResult, ZepError>(__TAURI_INVOKE("zep_save_and_test_calendar", { dayliteContactReference, source, calendarUrl })),
-	telemetryGetSettings: () => typedError<TelemetrySettings, StoreError>(__TAURI_INVOKE("telemetry_get_settings")),
+	telemetryGetSettings: () => __TAURI_INVOKE<TelemetrySettings>("telemetry_get_settings"),
 	telemetrySetEnabled: (enabled: boolean) => typedError<TelemetrySettings, StoreError>(__TAURI_INVOKE("telemetry_set_enabled", { enabled })),
 	telemetryCaptureFrontendError: (error: FrontendErrorInput) => __TAURI_INVOKE<void>("telemetry_capture_frontend_error", { error }),
 };

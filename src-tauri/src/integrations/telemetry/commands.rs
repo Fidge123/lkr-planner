@@ -35,8 +35,8 @@ pub struct FrontendErrorInput {
 
 #[tauri::command]
 #[specta::specta]
-pub fn telemetry_get_settings(app: tauri::AppHandle) -> Result<TelemetrySettings, StoreError> {
-    Ok(load_local_store(app)?.telemetry)
+pub fn telemetry_get_settings(app: tauri::AppHandle) -> TelemetrySettings {
+    app.state::<TelemetryState>().recorder().settings()
 }
 
 #[tauri::command]

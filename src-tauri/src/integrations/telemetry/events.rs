@@ -5,7 +5,6 @@ use serde_json::{Map, Value};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Operation {
-    AppStartup,
     LoadLocalStore,
     SaveLocalStore,
     LoadWeekEvents,
@@ -29,14 +28,11 @@ pub enum Operation {
     ZepDiscoverCalendars,
     ZepSaveAndTestCalendar,
     DayliteRequest,
-    DayliteTokenRefresh,
     CaldavRead,
     CaldavWrite,
-    CaldavDiscover,
     CaldavProjectLookup,
     HolidayApiRequest,
     KeychainRead,
-    KeychainWrite,
     FrontendRender,
     FrontendPromiseRejection,
     FrontendUncaughtError,
@@ -45,7 +41,6 @@ pub enum Operation {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Integration {
-    App,
     Daylite,
     Zep,
     Holidays,
@@ -189,7 +184,6 @@ mod tests {
             "daylite_search_projects"
         );
         assert_eq!(dimension(&Operation::CaldavWrite), "caldav_write");
-        assert_eq!(dimension(&Operation::AppStartup), "app_startup");
     }
 
     #[test]
@@ -201,7 +195,7 @@ mod tests {
         );
 
         let event = TelemetryEvent::error_occurred(
-            Operation::CaldavDiscover,
+            Operation::CaldavRead,
             Integration::Zep,
             ErrorCode::from_enum(&error.code),
             Some(&error.technical_message),
@@ -247,6 +241,5 @@ mod tests {
         assert_eq!(dimension(&Integration::LocalStore), "local_store");
         assert_eq!(dimension(&Integration::Keychain), "keychain");
         assert_eq!(dimension(&Integration::Frontend), "frontend");
-        assert_eq!(dimension(&Integration::App), "app");
     }
 }

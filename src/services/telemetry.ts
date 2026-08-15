@@ -1,16 +1,11 @@
 import { commands, type FrontendErrorInput } from "../generated/tauri";
 import { unwrapCommandResult } from "./command-result";
 
-const loadErrorMessage =
-  "Die Diagnose-Einstellung konnte nicht geladen werden.";
 const saveErrorMessage =
   "Die Diagnose-Einstellung konnte nicht gespeichert werden.";
 
 export async function loadTelemetrySettings(): Promise<boolean> {
-  return unwrapCommandResult(
-    await commands.telemetryGetSettings(),
-    loadErrorMessage,
-  ).enabled;
+  return (await commands.telemetryGetSettings()).enabled;
 }
 
 export async function saveTelemetryEnabled(enabled: boolean): Promise<boolean> {

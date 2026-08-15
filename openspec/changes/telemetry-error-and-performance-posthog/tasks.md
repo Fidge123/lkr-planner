@@ -72,20 +72,20 @@
 
 ## 10. Build configuration
 
-- [ ] 10.1 Wire `POSTHOG_API_KEY` into the release build workflow only, leaving development and CI builds without it
-- [ ] 10.2 Confirm a build without the variable produces an inert client and a passing test suite
+- [x] 10.1 Wire `POSTHOG_API_KEY` into the release build workflow only, leaving development and CI builds without it
+- [x] 10.2 Confirm a build without the variable produces an inert client and a passing test suite
 
 ## 11. Documentation
 
-- [ ] 11.1 Write `docs/adr/0013-telemetry-and-posthog-integration.md` recording the opt-in default, the backend-only client, the EU region choice, and the data minimization rules
-- [ ] 11.2 Add telemetry to the README implemented-features list
-- [ ] 11.3 Run `bun run test:docs`
+- [x] 11.1 Write `docs/adr/0013-telemetry-and-posthog-integration.md` recording the opt-in default, the backend-only client, the EU region choice, and the data minimization rules
+- [x] 11.2 Add telemetry to the README implemented-features list
+- [x] 11.3 Run `bun run test:docs`
 
 ## 12. Verification
 
-- [ ] 12.1 Run `cargo test` in `src-tauri` and confirm all tests pass
-- [ ] 12.2 Run `bun test` and confirm all tests pass
-- [ ] 12.3 Run `bun lint` and fix any issues
+- [x] 12.1 Run `cargo test` in `src-tauri` and confirm all tests pass
+- [x] 12.2 Run `bun test` and confirm all tests pass
+- [x] 12.3 Run `bun lint` and fix any issues
 - [ ] 12.4 Manually verify with telemetry disabled that no outbound request reaches the telemetry endpoint
 - [ ] 12.5 Manually verify with telemetry enabled against a scratch PostHog project that a forced Daylite failure and a week load appear as `error_occurred` and `operation_completed` events carrying no personal or business data
-- [ ] 12.6 Run `bunx openspec validate telemetry-error-and-performance-posthog --strict`
+- [x] 12.6 Run `bunx openspec validate telemetry-error-and-performance-posthog --strict`

@@ -30,10 +30,6 @@ impl PostHogClient {
         }
     }
 
-    pub fn is_inert(&self) -> bool {
-        self.api_key.is_none()
-    }
-
     pub fn batch_payload(
         &self,
         events: Vec<TelemetryEvent>,
@@ -169,7 +165,6 @@ mod tests {
     fn client_is_inert_without_a_build_time_key() {
         let client = PostHogClient::from_build_config();
 
-        assert!(client.is_inert());
         assert_eq!(client.batch_payload(vec![event()], &context()), None);
     }
 

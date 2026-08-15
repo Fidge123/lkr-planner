@@ -9,7 +9,6 @@ const COMMAND_CHANNEL_CAPACITY: usize = 256;
 pub enum TelemetryCommand {
     Record(Box<TelemetryEvent>),
     DiscardPending,
-    Flush,
     Shutdown(oneshot::Sender<()>),
 }
 
@@ -68,8 +67,12 @@ impl TelemetryRecorder {
         settings
     }
 
-    pub fn is_enabled(&self) -> bool {
-        self.lock().enabled
+    pub fn settings(&self) -> TelemetrySettings {
+        let state = self.lock();
+        TelemetrySettings {
+            enabled: state.enabled,
+            install_id: state.install_id.clone(),
+        }
     }
 
     pub fn install_id(&self) -> Option<String> {
@@ -82,12 +85,6 @@ impl TelemetryRecorder {
         }
 
         self.send(TelemetryCommand::Record(Box::new(event)));
-    }
-
-    pub fn request_flush(&self) {
-        if self.is_enabled() {
-            self.send(TelemetryCommand::Flush);
-        }
     }
 
     /// Resolves once the flush task has delivered what it holds, so shutdown can
@@ -193,7 +190,7 @@ mod tests {
             commands.last(),
             Some(TelemetryCommand::DiscardPending)
         ));
-        assert!(!recorder.is_enabled());
+        assert!(!recorder.settings().enabled);
     }
 
     #[test]

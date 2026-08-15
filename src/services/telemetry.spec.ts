@@ -8,10 +8,7 @@ import {
 let enabled = false;
 
 const mockGetSettings = mock(() =>
-  Promise.resolve({
-    status: "ok" as const,
-    data: { enabled, installId: null },
-  }),
+  Promise.resolve({ enabled, installId: null }),
 );
 const mockSetEnabled = mock((next: boolean) => {
   enabled = next;
