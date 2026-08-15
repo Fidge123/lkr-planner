@@ -38,27 +38,27 @@
 
 ## 6. Tauri wiring
 
-- [ ] 6.1 Add `telemetry_get_settings` and `telemetry_set_enabled` commands and register them in the specta builder in `src-tauri/src/lib.rs`
-- [ ] 6.2 Add the `telemetry_capture_frontend_error` command accepting error name, message, and context, routing through the same redaction and consent gate
-- [ ] 6.3 Initialize telemetry state and spawn the flush task in the Tauri `setup` hook
-- [ ] 6.4 Emit the `app_started` event with the startup duration measured from process start to the ready state
-- [ ] 6.5 Add a bounded two second final flush on `RunEvent::Exit`
-- [ ] 6.6 Run `cargo test` to regenerate `src/generated/tauri.ts` via the bindings test and confirm the new commands appear
+- [x] 6.1 Add `telemetry_get_settings` and `telemetry_set_enabled` commands and register them in the specta builder in `src-tauri/src/lib.rs`
+- [x] 6.2 Add the `telemetry_capture_frontend_error` command accepting error name, message, and context, routing through the same redaction and consent gate
+- [x] 6.3 Initialize telemetry state and spawn the flush task in the Tauri `setup` hook
+- [x] 6.4 Emit the `app_started` event with the startup duration measured from process start to the ready state
+- [x] 6.5 Add a bounded two second final flush on `RunEvent::Exit`
+- [x] 6.6 Run `cargo test` to regenerate `src/generated/tauri.ts` via the bindings test and confirm the new commands appear
 
 ## 7. Consent UI
 
-- [ ] 7.1 Write failing tests in `src/app/components/settings/telemetry-panel.spec.tsx`: the toggle reflects the stored state, toggling persists via the command, and the German description names what is and is not transmitted
-- [ ] 7.2 Implement `telemetry-panel.tsx` with the DaisyUI toggle and the German description, satisfying the tests
-- [ ] 7.3 Add the "Diagnose" section to `sections` in `settings-dialog.tsx` and render the panel
-- [ ] 7.4 Update `settings-dialog` tests for the new section
+- [x] 7.1 Write failing tests in `src/app/components/settings/telemetry-panel.spec.tsx`: the toggle reflects the stored state, toggling persists via the command, and the German description names what is and is not transmitted
+- [x] 7.2 Implement `telemetry-panel.tsx` with the DaisyUI toggle and the German description, satisfying the tests
+- [x] 7.3 Add the "Diagnose" section to `sections` in `settings-dialog.tsx` and render the panel
+- [x] 7.4 Update `settings-dialog` tests for the new section
 
 ## 8. Frontend error capture
 
-- [ ] 8.1 Write failing tests for the root error boundary: a child render error reports through the telemetry command and a German fallback message is displayed
-- [ ] 8.2 Implement the error boundary and mount it at the application root in `src/app/page.tsx`
-- [ ] 8.3 Write failing tests for the global `error` and `unhandledrejection` handlers forwarding to the telemetry command
-- [ ] 8.4 Implement the global handlers, satisfying the tests
-- [ ] 8.5 Verify no frontend module references the PostHog endpoint or key
+- [x] 8.1 Write failing tests for the root error boundary: a child render error reports through the telemetry command and a German fallback message is displayed
+- [x] 8.2 Implement the error boundary and mount it at the application root in `src/app/page.tsx`
+- [x] 8.3 Write failing tests for the global `error` and `unhandledrejection` handlers forwarding to the telemetry command
+- [x] 8.4 Implement the global handlers, satisfying the tests
+- [x] 8.5 Verify no frontend module references the PostHog endpoint or key
 
 ## 9. Backend instrumentation
 

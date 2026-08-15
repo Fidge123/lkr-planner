@@ -30,6 +30,9 @@ export const commands = {
 	zepTestCredentials: (rootUrl: string, username: string, password: string) => typedError<ZepCredentialTestResult, ZepError>(__TAURI_INVOKE("zep_test_credentials", { rootUrl, username, password })),
 	zepDiscoverCalendars: () => typedError<ZepCalendar[], ZepError>(__TAURI_INVOKE("zep_discover_calendars")),
 	zepSaveAndTestCalendar: (dayliteContactReference: string, source: IcalSource, calendarUrl: string | null) => typedError<ZepCalendarTestResult, ZepError>(__TAURI_INVOKE("zep_save_and_test_calendar", { dayliteContactReference, source, calendarUrl })),
+	telemetryGetSettings: () => typedError<TelemetrySettings, StoreError>(__TAURI_INVOKE("telemetry_get_settings")),
+	telemetrySetEnabled: (enabled: boolean) => typedError<TelemetrySettings, StoreError>(__TAURI_INVOKE("telemetry_set_enabled", { enabled })),
+	telemetryCaptureFrontendError: (error: FrontendErrorInput) => __TAURI_INVOKE<void>("telemetry_capture_frontend_error", { error }),
 };
 
 /* Types */
@@ -162,6 +165,15 @@ export type EmployeeWeekEvents = {
 	events: CalendarCellEvent[],
 	error: string | null,
 };
+
+export type FrontendErrorInput = {
+	source: FrontendErrorSource,
+	name: string,
+	message: string,
+	context: string | null,
+};
+
+export type FrontendErrorSource = "render" | "uncaughtError" | "unhandledRejection";
 
 export type Holiday = {
 	date: string,

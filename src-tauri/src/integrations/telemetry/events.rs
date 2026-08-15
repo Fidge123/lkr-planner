@@ -108,6 +108,15 @@ impl TelemetryEvent {
         }
     }
 
+    pub fn with_context(mut self, context: Option<&str>) -> Self {
+        if let Some(context) = context {
+            self.properties
+                .insert("context".to_string(), Value::String(sanitize(context)));
+        }
+
+        self
+    }
+
     pub fn with_http_status(mut self, http_status: Option<u16>) -> Self {
         if let Some(status) = http_status {
             self.properties

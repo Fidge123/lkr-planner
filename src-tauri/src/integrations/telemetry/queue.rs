@@ -76,6 +76,11 @@ pub async fn run_flush_task<S: EventSink>(mut receiver: Receiver<TelemetryComman
                     retry = None;
                 }
                 Some(TelemetryCommand::Flush) => flush(&mut buffer, &mut retry, &sink).await,
+                Some(TelemetryCommand::Shutdown(acknowledgement)) => {
+                    flush(&mut buffer, &mut retry, &sink).await;
+                    let _ = acknowledgement.send(());
+                    return;
+                }
                 None => break,
             },
             _ = ticker.tick() => flush(&mut buffer, &mut retry, &sink).await,
@@ -259,6 +264,20 @@ mod tests {
         let batches = sink.batches();
         assert_eq!(batches.len(), 2, "the failed batch is retried exactly once");
         assert_eq!(batches[0], batches[1]);
+    }
+
+    #[tokio::test]
+    async fn shutdown_delivers_pending_events_and_acknowledges() {
+        let (recorder, receiver) = TelemetryRecorder::channel();
+        recorder.apply_settings(&enabled());
+        let sink = Arc::new(RecordingSink::default());
+        recorder.record(event(1));
+
+        let acknowledgement = recorder.shutdown();
+        run_flush_task(receiver, Arc::clone(&sink)).await;
+
+        assert_eq!(sink.batches().len(), 1);
+        assert!(acknowledgement.await.is_ok());
     }
 
     #[tokio::test]

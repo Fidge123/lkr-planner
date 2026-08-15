@@ -1,7 +1,7 @@
 use super::events::TelemetryEvent;
 use crate::integrations::local_store::types::TelemetrySettings;
 use std::sync::Mutex;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 
 const COMMAND_CHANNEL_CAPACITY: usize = 256;
 
@@ -10,6 +10,7 @@ pub enum TelemetryCommand {
     Record(Box<TelemetryEvent>),
     DiscardPending,
     Flush,
+    Shutdown(oneshot::Sender<()>),
 }
 
 #[derive(Debug, Default)]
@@ -87,6 +88,15 @@ impl TelemetryRecorder {
         if self.is_enabled() {
             self.send(TelemetryCommand::Flush);
         }
+    }
+
+    /// Resolves once the flush task has delivered what it holds, so shutdown can
+    /// bound the wait instead of guessing.
+    pub fn shutdown(&self) -> oneshot::Receiver<()> {
+        let (sender, receiver) = oneshot::channel();
+        self.send(TelemetryCommand::Shutdown(sender));
+
+        receiver
     }
 
     /// A store enabled by an older build can lack an identifier; mint one rather
