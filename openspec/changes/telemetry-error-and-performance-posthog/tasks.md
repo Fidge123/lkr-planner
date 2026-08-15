@@ -1,40 +1,40 @@
 ## 1. Local store telemetry settings
 
-- [ ] 1.1 Write failing `cargo test`s in `src-tauri/src/integrations/local_store/types.rs`: telemetry defaults to disabled, a store file without a `telemetry` section loads without error, and the install identifier round-trips through save and reload
-- [ ] 1.2 Add `TelemetrySettings { enabled: bool, install_id: Option<String> }` to `LocalStore` behind `#[serde(default)]`, satisfying the tests
-- [ ] 1.3 Run `cargo test` in `src-tauri` and confirm the existing local store tests still pass
+- [x] 1.1 Write failing `cargo test`s in `src-tauri/src/integrations/local_store/types.rs`: telemetry defaults to disabled, a store file without a `telemetry` section loads without error, and the install identifier round-trips through save and reload
+- [x] 1.2 Add `TelemetrySettings { enabled: bool, install_id: Option<String> }` to `LocalStore` behind `#[serde(default)]`, satisfying the tests
+- [x] 1.3 Run `cargo test` in `src-tauri` and confirm the existing local store tests still pass
 
 ## 2. Telemetry module foundation
 
-- [ ] 2.1 Create `src-tauri/src/integrations/telemetry/mod.rs` and register it in `integrations/mod.rs`
-- [ ] 2.2 Write failing tests for the `Operation` and `Integration` enums serializing to stable snake_case dimension values
-- [ ] 2.3 Implement `events.rs` with the `Operation` and `Integration` enums and the `operation_completed` / `error_occurred` / `app_started` event structs, satisfying the tests
-- [ ] 2.4 Write failing tests for the redaction sanitizer: a message containing a URL, an absolute file path, a bearer token, and an e-mail address comes out with each value redacted and the surrounding description retained
-- [ ] 2.5 Implement `redact.rs` and make the event constructors the only way to build an event, running every free-text field through the sanitizer
-- [ ] 2.6 Write a failing test asserting that an event built from a `ZepError` whose technical message embeds a calendar URL transmits no URL
-- [ ] 2.7 Satisfy that test and confirm structured dimensions carry no free text
+- [x] 2.1 Create `src-tauri/src/integrations/telemetry/mod.rs` and register it in `integrations/mod.rs`
+- [x] 2.2 Write failing tests for the `Operation` and `Integration` enums serializing to stable snake_case dimension values
+- [x] 2.3 Implement `events.rs` with the `Operation` and `Integration` enums and the `operation_completed` / `error_occurred` / `app_started` event structs, satisfying the tests
+- [x] 2.4 Write failing tests for the redaction sanitizer: a message containing a URL, an absolute file path, a bearer token, and an e-mail address comes out with each value redacted and the surrounding description retained
+- [x] 2.5 Implement `redact.rs` and make the event constructors the only way to build an event, running every free-text field through the sanitizer
+- [x] 2.6 Write a failing test asserting that an event built from a `ZepError` whose technical message embeds a calendar URL transmits no URL
+- [x] 2.7 Satisfy that test and confirm structured dimensions carry no free text
 
 ## 3. Consent gate and install identity
 
-- [ ] 3.1 Write failing tests: no event is recorded while telemetry is disabled, events are recorded once enabled, and disabling discards pending events
-- [ ] 3.2 Implement the consent gate in the telemetry recorder, reading the flag from the local store, satisfying the tests
-- [ ] 3.3 Write failing tests: an install identifier is generated on first activation, is stable across reloads, and is a random `uuid` v4 rather than derived from user or host data
-- [ ] 3.4 Implement install identifier generation and persistence, satisfying the tests
+- [x] 3.1 Write failing tests: no event is recorded while telemetry is disabled, events are recorded once enabled, and disabling discards pending events
+- [x] 3.2 Implement the consent gate in the telemetry recorder, reading the flag from the local store, satisfying the tests
+- [x] 3.3 Write failing tests: an install identifier is generated on first activation, is stable across reloads, and is a random `uuid` v4 rather than derived from user or host data
+- [x] 3.4 Implement install identifier generation and persistence, satisfying the tests
 
 ## 4. Buffering and delivery
 
-- [ ] 4.1 Write failing tests for the bounded buffer: events flush at twenty buffered events, flush on the interval tick, drop oldest-first at the five hundred event cap, and recording returns without awaiting delivery
-- [ ] 4.2 Implement `queue.rs` with the bounded `tokio::sync::mpsc` channel and the background flush task, satisfying the tests
-- [ ] 4.3 Write a failing test asserting the client is inert when `POSTHOG_API_KEY` is absent at compile time (no request attempted)
-- [ ] 4.4 Implement `client.rs` posting batches to the EU `/batch/` endpoint with the `option_env!` key, satisfying the test
-- [ ] 4.5 Add a cassette-based test for the capture request using the existing `http_record_replay` harness, asserting the batch payload shape and that `distinct_id` is the install identifier
-- [ ] 4.6 Write a failing test asserting a failed delivery attempt is not surfaced to the caller and the buffer stays bounded
-- [ ] 4.7 Implement drop-after-one-retry delivery failure handling, satisfying the test
+- [x] 4.1 Write failing tests for the bounded buffer: events flush at twenty buffered events, flush on the interval tick, drop oldest-first at the five hundred event cap, and recording returns without awaiting delivery
+- [x] 4.2 Implement `queue.rs` with the bounded `tokio::sync::mpsc` channel and the background flush task, satisfying the tests
+- [x] 4.3 Write a failing test asserting the client is inert when `POSTHOG_API_KEY` is absent at compile time (no request attempted)
+- [x] 4.4 Implement `client.rs` posting batches to the EU `/batch/` endpoint with the `option_env!` key, satisfying the test
+- [x] 4.5 Add a cassette-based test for the capture request using the existing `http_record_replay` harness, asserting the batch payload shape and that `distinct_id` is the install identifier
+- [x] 4.6 Write a failing test asserting a failed delivery attempt is not surfaced to the caller and the buffer stays bounded
+- [x] 4.7 Implement drop-after-one-retry delivery failure handling, satisfying the test
 
 ## 5. Event context
 
-- [ ] 5.1 Write failing tests asserting every transmitted event carries the app version, the OS name and version, and the install identifier
-- [ ] 5.2 Implement context enrichment applied at batch build time, satisfying the tests
+- [x] 5.1 Write failing tests asserting every transmitted event carries the app version, the OS name and version, and the install identifier
+- [x] 5.2 Implement context enrichment applied at batch build time, satisfying the tests
 
 ## 6. Tauri wiring
 

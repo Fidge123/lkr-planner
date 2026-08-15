@@ -125,7 +125,7 @@ mod tests {
     use super::*;
     use crate::integrations::local_store::types::{
         ApiEndpoints, CachedHoliday, DayliteCache, DayliteContactCacheEntry, DayliteContactUrl,
-        DisplaySettings, EmployeeSetting, HolidayCacheEntry,
+        DisplaySettings, EmployeeSetting, HolidayCacheEntry, TelemetrySettings,
     };
     use std::fs;
     use std::path::PathBuf;
@@ -184,6 +184,10 @@ mod tests {
                     name: "Neujahr".to_string(),
                 }],
             }],
+            telemetry: TelemetrySettings {
+                enabled: true,
+                install_id: Some("11111111-2222-4333-8444-555555555555".to_string()),
+            },
         };
 
         save_store_to_path(&test_path, &store).expect("save should succeed");
@@ -304,6 +308,45 @@ mod tests {
 
         assert!(loaded.display_settings.show_weekend);
         assert!(loaded.display_settings.hide_non_plannable_employees);
+    }
+
+    #[test]
+    fn telemetry_settings_round_trip_through_save_and_load() {
+        let test_path = unique_test_path("telemetry-round-trip.json");
+        let store = LocalStore {
+            telemetry: TelemetrySettings {
+                enabled: true,
+                install_id: Some("11111111-2222-4333-8444-555555555555".to_string()),
+            },
+            ..LocalStore::default()
+        };
+
+        save_store_to_path(&test_path, &store).expect("save should succeed");
+        let loaded = load_store_from_path(&test_path).expect("reload should succeed");
+
+        assert!(loaded.telemetry.enabled);
+        assert_eq!(
+            loaded.telemetry.install_id.as_deref(),
+            Some("11111111-2222-4333-8444-555555555555")
+        );
+    }
+
+    #[test]
+    fn store_without_telemetry_field_loads_with_telemetry_disabled() {
+        let test_path = unique_test_path("no-telemetry-section.json");
+        write_test_file(
+            &test_path,
+            r#"{
+              "apiEndpoints": {"dayliteBaseUrl":"","planradarBaseUrl":"","zepCaldavRootUrl":""},
+              "employeeSettings": [],
+              "dayliteCache": {"projects":[],"contacts":[]}
+            }"#,
+        );
+
+        let loaded = load_store_from_path(&test_path).expect("should load without telemetry");
+
+        assert!(!loaded.telemetry.enabled);
+        assert_eq!(loaded.telemetry.install_id, None);
     }
 
     #[test]

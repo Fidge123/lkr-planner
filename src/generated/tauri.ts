@@ -182,6 +182,7 @@ export type LocalStore = {
 	displaySettings?: DisplaySettings,
 	dayliteCache: DayliteCache,
 	holidayCache?: HolidayCacheEntry[],
+	telemetry?: TelemetrySettings,
 };
 
 /**  CalDAV has no atomic cross-collection move, so the target copy is created first and the source deleted afterwards, which can leave a partial move. */
@@ -219,6 +220,11 @@ export type StoreError = {
 };
 
 export type StoreErrorCode = "READ_FAILED" | "WRITE_FAILED" | "CORRUPT_FILE" | "MISSING_FIELDS";
+
+export type TelemetrySettings = {
+	enabled?: boolean,
+	installId?: string | null,
+};
 
 export type UpdateAssignmentInput = {
 	href: string,
