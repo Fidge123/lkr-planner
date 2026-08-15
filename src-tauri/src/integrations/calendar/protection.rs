@@ -1,6 +1,8 @@
 use super::caldav::{fetch_event_by_href, CaldavSession};
 use super::events::parse_daylite_reference;
 use crate::integrations::daylite::projects::{ResolvedProject, FIXED_APPOINTMENT_CATEGORY};
+use crate::integrations::telemetry::events::Operation;
+use crate::integrations::telemetry::observe::RequestFailure;
 
 pub(crate) const FIXED_APPOINTMENT_MESSAGE: &str = "Dieser Termin ist als 'Termin FIX geplant' gesperrt und kann nicht geändert, auf einen anderen Tag verschoben oder gelöscht werden.";
 
@@ -23,7 +25,7 @@ pub(crate) async fn refuse_protected_event(
     };
 
     let (project_ref, project) =
-        resolve_project_link(href, &event.description, lookup_project).await;
+        resolve_project_link(session, &event.description, lookup_project).await;
     refuse(is_protected_event(project_ref.as_deref(), project.as_ref()))
 }
 
@@ -39,7 +41,7 @@ pub(crate) async fn refuse_protected_day_change(
     };
 
     let (project_ref, project) =
-        resolve_project_link(href, &event.description, lookup_project).await;
+        resolve_project_link(session, &event.description, lookup_project).await;
     refuse(protects_day_change(
         &event.dtstart,
         target_date,
@@ -49,7 +51,7 @@ pub(crate) async fn refuse_protected_day_change(
 }
 
 async fn resolve_project_link(
-    href: &str,
+    session: &CaldavSession,
     description: &str,
     lookup_project: impl AsyncFnOnce(String) -> Option<ResolvedProject>,
 ) -> (Option<String>, Option<ResolvedProject>) {
@@ -59,7 +61,13 @@ async fn resolve_project_link(
         None => None,
     };
     if project_ref.is_some() && project.is_none() {
-        eprintln!("calendar: project lookup failed for {href}, treating the event as unprotected");
+        session.record_failure(
+            Operation::CaldavProjectLookup,
+            RequestFailure::new(
+                "PROJECT_LOOKUP_FAILED",
+                "project lookup failed, treating the event as unprotected",
+            ),
+        );
     }
     (project_ref, project)
 }
@@ -151,6 +159,7 @@ mod tests {
 
     fn session(base_url: &str) -> CaldavSession {
         CaldavSession {
+            telemetry: None,
             client: reqwest::Client::builder()
                 .timeout(Duration::from_secs(5))
                 .build()

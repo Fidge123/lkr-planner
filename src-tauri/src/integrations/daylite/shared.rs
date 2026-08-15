@@ -200,8 +200,9 @@ where
     F: FnOnce(DayliteApiClient, DayliteTokenState) -> Fut,
     Fut: std::future::Future<Output = Result<(T, DayliteTokenState), DayliteApiError>>,
 {
-    let store = load_store_or_error(app)?;
-    let client = DayliteApiClient::new(&store.api_endpoints.daylite_base_url)?;
+    let store = load_store_or_error(app.clone())?;
+    let client =
+        DayliteApiClient::new(&store.api_endpoints.daylite_base_url)?.with_telemetry(&app);
     with_token_refresh_lock(move |tokens| operation(client, tokens)).await
 }
 

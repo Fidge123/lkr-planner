@@ -1,3 +1,52 @@
+use crate::integrations::telemetry::events::{Integration, Operation};
+use crate::integrations::telemetry::observe::observe;
+
+#[tauri::command]
+#[specta::specta]
+pub async fn daylite_list_contacts(
+    app: tauri::AppHandle,
+) -> Result<Vec<PlanningContactRecord>, DayliteApiError> {
+    let handle = app.clone();
+    observe(
+        &handle,
+        Operation::DayliteListContacts,
+        Integration::Daylite,
+        daylite_list_contacts_inner(app),
+    )
+    .await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn daylite_update_contact_ical_urls(
+    app: tauri::AppHandle,
+    input: DayliteUpdateContactIcalUrlsInput,
+) -> Result<PlanningContactRecord, DayliteApiError> {
+    let handle = app.clone();
+    observe(
+        &handle,
+        Operation::DayliteUpdateContactIcalUrls,
+        Integration::Daylite,
+        daylite_update_contact_ical_urls_inner(app, input),
+    )
+    .await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn daylite_list_cached_contacts(
+    app: tauri::AppHandle,
+) -> Result<Vec<PlanningContactRecord>, DayliteApiError> {
+    let handle = app.clone();
+    observe(
+        &handle,
+        Operation::DayliteListCachedContacts,
+        Integration::Daylite,
+        async { daylite_list_cached_contacts_inner(app) },
+    )
+    .await
+}
+
 use super::api::{current_timestamp_iso8601, list_contacts_core, update_contact_ical_urls_core};
 use super::ical_urls::reconcile_employee_calendars_from_contacts;
 use super::mapping::{
@@ -10,13 +59,12 @@ use crate::integrations::daylite::shared::{
     load_store_or_error, save_store_or_error, with_token_refresh_lock, DayliteApiError,
 };
 
-#[tauri::command]
-#[specta::specta]
-pub async fn daylite_list_contacts(
+async fn daylite_list_contacts_inner(
     app: tauri::AppHandle,
 ) -> Result<Vec<PlanningContactRecord>, DayliteApiError> {
     let mut store = load_store_or_error(app.clone())?;
-    let client = DayliteApiClient::new(&store.api_endpoints.daylite_base_url)?;
+    let client =
+        DayliteApiClient::new(&store.api_endpoints.daylite_base_url)?.with_telemetry(&app);
     let contacts = with_token_refresh_lock(|tokens| list_contacts_core(&client, tokens)).await?;
 
     store.daylite_cache.last_synced_at = Some(current_timestamp_iso8601());
@@ -32,14 +80,13 @@ pub async fn daylite_list_contacts(
     Ok(contacts)
 }
 
-#[tauri::command]
-#[specta::specta]
-pub async fn daylite_update_contact_ical_urls(
+async fn daylite_update_contact_ical_urls_inner(
     app: tauri::AppHandle,
     input: DayliteUpdateContactIcalUrlsInput,
 ) -> Result<PlanningContactRecord, DayliteApiError> {
     let mut store = load_store_or_error(app.clone())?;
-    let client = DayliteApiClient::new(&store.api_endpoints.daylite_base_url)?;
+    let client =
+        DayliteApiClient::new(&store.api_endpoints.daylite_base_url)?.with_telemetry(&app);
 
     let updated_contact = with_token_refresh_lock(|tokens| {
         update_contact_ical_urls_core(&client, tokens, &mut store, &input)
@@ -52,9 +99,7 @@ pub async fn daylite_update_contact_ical_urls(
     Ok(updated_contact)
 }
 
-#[tauri::command]
-#[specta::specta]
-pub fn daylite_list_cached_contacts(
+fn daylite_list_cached_contacts_inner(
     app: tauri::AppHandle,
 ) -> Result<Vec<PlanningContactRecord>, DayliteApiError> {
     let store = load_store_or_error(app)?;

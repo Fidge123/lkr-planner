@@ -1,3 +1,89 @@
+use crate::integrations::telemetry::events::{Integration, Operation};
+use crate::integrations::telemetry::observe::observe;
+
+#[tauri::command]
+#[specta::specta]
+pub async fn zep_test_credentials(
+    app: tauri::AppHandle,
+    root_url: String,
+    username: String,
+    password: String,
+) -> Result<ZepCredentialTestResult, ZepError> {
+    observe(
+        &app,
+        Operation::ZepTestCredentials,
+        Integration::Zep,
+        zep_test_credentials_inner(root_url, username, password),
+    )
+    .await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn zep_save_credentials(
+    app: tauri::AppHandle,
+    root_url: String,
+    username: String,
+    password: String,
+) -> Result<(), ZepError> {
+    let handle = app.clone();
+    observe(
+        &handle,
+        Operation::ZepSaveCredentials,
+        Integration::Zep,
+        async { zep_save_credentials_inner(app, root_url, username, password) },
+    )
+    .await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn zep_load_credentials(
+    app: tauri::AppHandle,
+) -> Result<Option<ZepCredentialsInfo>, ZepError> {
+    let handle = app.clone();
+    observe(
+        &handle,
+        Operation::ZepLoadCredentials,
+        Integration::Zep,
+        async { zep_load_credentials_inner(app) },
+    )
+    .await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn zep_discover_calendars(
+    app: tauri::AppHandle,
+) -> Result<Vec<ZepCalendar>, ZepError> {
+    let handle = app.clone();
+    observe(
+        &handle,
+        Operation::ZepDiscoverCalendars,
+        Integration::Zep,
+        zep_discover_calendars_inner(app),
+    )
+    .await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn zep_save_and_test_calendar(
+    app: tauri::AppHandle,
+    daylite_contact_reference: String,
+    source: IcalSource,
+    calendar_url: Option<String>,
+) -> Result<ZepCalendarTestResult, ZepError> {
+    let handle = app.clone();
+    observe(
+        &handle,
+        Operation::ZepSaveAndTestCalendar,
+        Integration::Zep,
+        zep_save_and_test_calendar_inner(app, daylite_contact_reference, source, calendar_url),
+    )
+    .await
+}
+
 use super::caldav::{parse_propfind_calendars, probe_calendar, propfind};
 use super::credentials::{load_zep_credentials_from_keychain, save_zep_credentials_to_keychain};
 use super::settings::{current_timestamp, find_or_default_setting, update_setting};
@@ -9,9 +95,7 @@ use crate::integrations::daylite::contacts::{
     sync_contact_ical_urls, DayliteUpdateContactIcalUrlsInput,
 };
 
-#[tauri::command]
-#[specta::specta]
-pub fn zep_save_credentials(
+fn zep_save_credentials_inner(
     app: tauri::AppHandle,
     root_url: String,
     username: String,
@@ -36,9 +120,7 @@ pub fn zep_save_credentials(
     Ok(())
 }
 
-#[tauri::command]
-#[specta::specta]
-pub fn zep_load_credentials(app: tauri::AppHandle) -> Result<Option<ZepCredentialsInfo>, ZepError> {
+fn zep_load_credentials_inner(app: tauri::AppHandle) -> Result<Option<ZepCredentialsInfo>, ZepError> {
     let store = crate::integrations::local_store::load_local_store(app)?;
 
     let root_url = store.api_endpoints.zep_caldav_root_url.trim().to_string();
@@ -56,9 +138,7 @@ pub fn zep_load_credentials(app: tauri::AppHandle) -> Result<Option<ZepCredentia
     }
 }
 
-#[tauri::command]
-#[specta::specta]
-pub async fn zep_test_credentials(
+async fn zep_test_credentials_inner(
     root_url: String,
     username: String,
     password: String,
@@ -80,9 +160,7 @@ pub async fn zep_test_credentials(
     })
 }
 
-#[tauri::command]
-#[specta::specta]
-pub async fn zep_discover_calendars(app: tauri::AppHandle) -> Result<Vec<ZepCalendar>, ZepError> {
+async fn zep_discover_calendars_inner(app: tauri::AppHandle) -> Result<Vec<ZepCalendar>, ZepError> {
     let store = crate::integrations::local_store::load_local_store(app)?;
 
     let root_url = store.api_endpoints.zep_caldav_root_url.trim().to_string();
@@ -101,9 +179,7 @@ pub async fn zep_discover_calendars(app: tauri::AppHandle) -> Result<Vec<ZepCale
     Ok(calendars)
 }
 
-#[tauri::command]
-#[specta::specta]
-pub async fn zep_save_and_test_calendar(
+async fn zep_save_and_test_calendar_inner(
     app: tauri::AppHandle,
     daylite_contact_reference: String,
     source: IcalSource,

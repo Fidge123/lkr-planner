@@ -1,3 +1,52 @@
+use crate::integrations::telemetry::events::{Integration, Operation};
+use crate::integrations::telemetry::observe::observe;
+
+#[tauri::command]
+#[specta::specta]
+pub async fn daylite_list_projects(
+    app: tauri::AppHandle,
+) -> Result<Vec<PlanningProjectRecord>, DayliteApiError> {
+    let handle = app.clone();
+    observe(
+        &handle,
+        Operation::DayliteListProjects,
+        Integration::Daylite,
+        daylite_list_projects_inner(app),
+    )
+    .await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn daylite_query_overdue_projects(
+    app: tauri::AppHandle,
+) -> Result<Vec<DayliteProjectSummary>, DayliteApiError> {
+    let handle = app.clone();
+    observe(
+        &handle,
+        Operation::DayliteQueryOverdueProjects,
+        Integration::Daylite,
+        daylite_query_overdue_projects_inner(app),
+    )
+    .await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn daylite_search_projects(
+    app: tauri::AppHandle,
+    input: DayliteSearchInput,
+) -> Result<DayliteSearchResult<DayliteProjectSummary>, DayliteApiError> {
+    let handle = app.clone();
+    observe(
+        &handle,
+        Operation::DayliteSearchProjects,
+        Integration::Daylite,
+        daylite_search_projects_inner(app, input),
+    )
+    .await
+}
+
 use super::auth_flow::send_authenticated_json;
 use super::client::DayliteApiClient;
 use super::client::DayliteHttpMethod;
@@ -92,9 +141,7 @@ pub struct PlanningProjectRecord {
     pub modify_date: Option<String>,
 }
 
-#[tauri::command]
-#[specta::specta]
-pub async fn daylite_list_projects(
+async fn daylite_list_projects_inner(
     app: tauri::AppHandle,
 ) -> Result<Vec<PlanningProjectRecord>, DayliteApiError> {
     run_daylite_command(app, |client, tokens| async move {
@@ -114,9 +161,7 @@ const OVERDUE_DISPLAY_LIMIT: usize = 5;
 // candidate pool keeps the projects with the lowest IDs deterministic.
 const OVERDUE_CANDIDATE_LIMIT: u16 = 50;
 
-#[tauri::command]
-#[specta::specta]
-pub async fn daylite_query_overdue_projects(
+async fn daylite_query_overdue_projects_inner(
     app: tauri::AppHandle,
 ) -> Result<Vec<DayliteProjectSummary>, DayliteApiError> {
     run_daylite_command(app, |client, tokens| async move {
@@ -125,9 +170,7 @@ pub async fn daylite_query_overdue_projects(
     .await
 }
 
-#[tauri::command]
-#[specta::specta]
-pub async fn daylite_search_projects(
+async fn daylite_search_projects_inner(
     app: tauri::AppHandle,
     input: DayliteSearchInput,
 ) -> Result<DayliteSearchResult<DayliteProjectSummary>, DayliteApiError> {
@@ -374,8 +417,10 @@ pub(crate) async fn fetch_project_by_reference(
         return None;
     }
 
-    let store = crate::integrations::local_store::load_local_store(app).ok()?;
-    let client = DayliteApiClient::new(&store.api_endpoints.daylite_base_url).ok()?;
+    let store = crate::integrations::local_store::load_local_store(app.clone()).ok()?;
+    let client = DayliteApiClient::new(&store.api_endpoints.daylite_base_url)
+        .ok()?
+        .with_telemetry(&app);
 
     with_token_refresh_lock(|tokens| async move {
         let (summary, tokens): (DayliteProjectSummaryDto, _) = send_authenticated_json(

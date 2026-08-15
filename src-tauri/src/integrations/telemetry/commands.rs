@@ -64,7 +64,7 @@ pub fn telemetry_capture_frontend_error(app: tauri::AppHandle, error: FrontendEr
         error.source.operation(),
         Integration::Frontend,
         ErrorCode::from_untrusted(&error.name),
-        &error.message,
+        Some(&error.message),
     )
     .with_context(error.context.as_deref());
 

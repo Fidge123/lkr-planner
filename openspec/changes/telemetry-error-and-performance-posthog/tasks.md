@@ -62,13 +62,13 @@
 
 ## 9. Backend instrumentation
 
-- [ ] 9.1 Implement the `telemetry::observe(Operation, future)` helper with tests covering success, failure, and that the measured duration is emitted in both cases
-- [ ] 9.2 Wrap the calendar commands in `calendar/commands.rs` (`load_week_events`, `create_assignment`, `update_assignment`, `move_assignment`, `reorder_assignment`, `delete_assignment`)
-- [ ] 9.3 Instrument the CalDAV request sites in `calendar/caldav/`, replacing the `eprintln!` failure logs in `write.rs` and `protection.rs` with telemetry events plus the existing log where it still aids local debugging
-- [ ] 9.4 Instrument the Daylite request sites in `daylite/client.rs`, `projects.rs`, `categories.rs`, and `contacts/`, ensuring no search term or project name enters an event
-- [ ] 9.5 Instrument the ZEP commands and credential loading in `zep/`, ensuring no calendar URL or password enters an event
-- [ ] 9.6 Instrument the holiday API request in `holidays.rs`, replacing its four `eprintln!` failure paths
-- [ ] 9.7 Instrument local store read and write failures with the existing `StoreErrorCode` as the error dimension
+- [x] 9.1 Implement the `telemetry::observe(Operation, future)` helper with tests covering success, failure, and that the measured duration is emitted in both cases
+- [x] 9.2 Wrap the calendar commands in `calendar/commands.rs` (`load_week_events`, `create_assignment`, `update_assignment`, `move_assignment`, `reorder_assignment`, `delete_assignment`)
+- [x] 9.3 Instrument the CalDAV request sites in `calendar/caldav/`, replacing the `eprintln!` failure logs in `write.rs` and `protection.rs` with telemetry events plus the existing log where it still aids local debugging
+- [x] 9.4 Instrument the Daylite request sites in `daylite/client.rs`, `projects.rs`, `categories.rs`, and `contacts/`, ensuring no search term or project name enters an event
+- [x] 9.5 Instrument the ZEP commands and credential loading in `zep/`, ensuring no calendar URL or password enters an event
+- [x] 9.6 Instrument the holiday API request in `holidays.rs`, replacing its four `eprintln!` failure paths
+- [x] 9.7 Instrument local store read and write failures with the existing `StoreErrorCode` as the error dimension
 
 ## 10. Build configuration
 

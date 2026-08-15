@@ -1,3 +1,21 @@
+use crate::integrations::telemetry::events::{Integration, Operation};
+use crate::integrations::telemetry::observe::observe;
+
+#[tauri::command]
+#[specta::specta]
+pub async fn daylite_project_category_colors(
+    app: tauri::AppHandle,
+) -> Result<HashMap<String, String>, DayliteApiError> {
+    let handle = app.clone();
+    observe(
+        &handle,
+        Operation::DayliteProjectCategoryColors,
+        Integration::Daylite,
+        daylite_project_category_colors_inner(app),
+    )
+    .await
+}
+
 use std::collections::HashMap;
 
 use serde::Deserialize;
@@ -38,9 +56,7 @@ impl DayliteCategoryListDto {
     }
 }
 
-#[tauri::command]
-#[specta::specta]
-pub async fn daylite_project_category_colors(
+async fn daylite_project_category_colors_inner(
     app: tauri::AppHandle,
 ) -> Result<HashMap<String, String>, DayliteApiError> {
     run_daylite_command(app, |client, tokens| async move {
@@ -52,10 +68,12 @@ pub async fn daylite_project_category_colors(
 pub(crate) async fn fetch_project_category_colors(
     app: tauri::AppHandle,
 ) -> HashMap<String, String> {
-    let Ok(store) = crate::integrations::local_store::load_local_store(app) else {
+    let Ok(store) = crate::integrations::local_store::load_local_store(app.clone()) else {
         return HashMap::new();
     };
-    let Ok(client) = DayliteApiClient::new(&store.api_endpoints.daylite_base_url) else {
+    let Ok(client) = DayliteApiClient::new(&store.api_endpoints.daylite_base_url)
+        .map(|client| client.with_telemetry(&app))
+    else {
         return HashMap::new();
     };
 

@@ -84,13 +84,15 @@ impl TelemetryEvent {
         operation: Operation,
         integration: Integration,
         code: ErrorCode,
-        message: &str,
+        message: Option<&str>,
     ) -> Self {
         let mut properties = Map::new();
         insert_dimension(&mut properties, "operation", operation);
         insert_dimension(&mut properties, "integration", integration);
         properties.insert("code".to_string(), Value::String(code.into_value()));
-        properties.insert("message".to_string(), Value::String(sanitize(message)));
+        if let Some(message) = message {
+            properties.insert("message".to_string(), Value::String(sanitize(message)));
+        }
 
         Self {
             name: "error_occurred",
@@ -202,7 +204,7 @@ mod tests {
             Operation::CaldavDiscover,
             Integration::Zep,
             ErrorCode::from_enum(&error.code),
-            &error.technical_message,
+            Some(&error.technical_message),
         );
 
         let payload = serde_json::to_string(event.properties()).expect("payload should serialize");

@@ -16,10 +16,123 @@ use super::protection::{refuse_protected_day_change, refuse_protected_event};
 use super::types::{CalendarCellEvent, EmployeeWeekEvents, MoveAssignmentResult, PendingEvent};
 use crate::integrations::daylite::projects::ResolvedProject;
 use crate::integrations::local_store::LocalStore;
+use crate::integrations::telemetry::events::{Integration, Operation};
+use crate::integrations::telemetry::observe::{observe, record_failure};
+use tauri::Manager;
 
 #[tauri::command]
 #[specta::specta]
 pub async fn load_week_events(
+    app: tauri::AppHandle,
+    week_start: String,
+) -> Result<Vec<EmployeeWeekEvents>, String> {
+    let handle = app.clone();
+    observe(
+        &handle,
+        Operation::LoadWeekEvents,
+        Integration::Zep,
+        load_week_events_inner(app, week_start),
+    )
+    .await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn create_assignment(
+    app: tauri::AppHandle,
+    input: CreateAssignmentInput,
+) -> Result<String, String> {
+    let handle = app.clone();
+    observe(
+        &handle,
+        Operation::CreateAssignment,
+        Integration::Zep,
+        create_assignment_inner(app, input),
+    )
+    .await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn update_assignment(
+    app: tauri::AppHandle,
+    input: UpdateAssignmentInput,
+) -> Result<(), String> {
+    let handle = app.clone();
+    observe(
+        &handle,
+        Operation::UpdateAssignment,
+        Integration::Zep,
+        update_assignment_inner(app, input),
+    )
+    .await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn move_assignment(
+    app: tauri::AppHandle,
+    href: String,
+    target_employee_reference: String,
+    date: String,
+    project_ref: String,
+    project_name: String,
+    order_index: Option<u32>,
+) -> Result<MoveAssignmentResult, String> {
+    let handle = app.clone();
+    observe(
+        &handle,
+        Operation::MoveAssignment,
+        Integration::Zep,
+        move_assignment_inner(app,
+            href,
+            target_employee_reference,
+            date,
+            project_ref,
+            project_name,
+            order_index),
+    )
+    .await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn reorder_assignment(
+    app: tauri::AppHandle,
+    href: String,
+    uid: String,
+    date: String,
+    order_index: u32,
+) -> Result<(), String> {
+    let handle = app.clone();
+    observe(
+        &handle,
+        Operation::ReorderAssignment,
+        Integration::Zep,
+        reorder_assignment_inner(app, href, uid, date, order_index),
+    )
+    .await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn delete_assignment(
+    app: tauri::AppHandle,
+    href: String,
+    override_protection: bool,
+) -> Result<(), String> {
+    let handle = app.clone();
+    observe(
+        &handle,
+        Operation::DeleteAssignment,
+        Integration::Zep,
+        delete_assignment_inner(app, href, override_protection),
+    )
+    .await
+}
+
+
+async fn load_week_events_inner(
     app: tauri::AppHandle,
     week_start: String,
 ) -> Result<Vec<EmployeeWeekEvents>, String> {
@@ -32,18 +145,12 @@ pub async fn load_week_events(
     let credentials = match crate::integrations::zep::load_zep_credentials_from_keychain() {
         Ok(c) => c,
         Err(e) => {
-            let results = employees_with_error(&store, &e.user_message);
-            if results.is_empty() {
-                eprintln!(
-                    "load_week_events: ZEP credentials unavailable and no primary calendars configured: {}",
-                    e.technical_message
-                );
-            }
-            return Ok(results);
+            record_failure(&app, Operation::KeychainRead, Integration::Keychain, &e);
+            return Ok(employees_with_error(&store, &e.user_message));
         }
     };
 
-    let session = build_caldav_session(&store, credentials)?;
+    let session = build_caldav_session(&app, &store, credentials)?;
 
     let (fetches, error_results) =
         fetch_week_for_employees(&store, &session, week_start_date).await;
@@ -230,18 +337,16 @@ pub struct UpdateAssignmentInput {
     pub override_protection: bool,
 }
 
-#[tauri::command]
-#[specta::specta]
-pub async fn create_assignment(
+async fn create_assignment_inner(
     app: tauri::AppHandle,
     input: CreateAssignmentInput,
 ) -> Result<String, String> {
     let store =
-        crate::integrations::local_store::load_local_store(app).map_err(|e| e.user_message)?;
+        crate::integrations::local_store::load_local_store(app.clone()).map_err(|e| e.user_message)?;
 
     let calendar_url = resolve_employee_calendar_url(&store, &input.employee_reference)?;
 
-    let session = load_caldav_session(&store)?;
+    let session = load_caldav_session(&app, &store)?;
 
     create_assignment_core(
         &session,
@@ -271,14 +376,16 @@ fn resolve_employee_calendar_url(
 }
 
 fn load_caldav_session(
+    app: &tauri::AppHandle,
     store: &crate::integrations::local_store::LocalStore,
 ) -> Result<CaldavSession, String> {
     let credentials = crate::integrations::zep::load_zep_credentials_from_keychain()
         .map_err(|e| e.user_message)?;
-    build_caldav_session(store, credentials)
+    build_caldav_session(app, store, credentials)
 }
 
 fn build_caldav_session(
+    app: &tauri::AppHandle,
     store: &crate::integrations::local_store::LocalStore,
     credentials: crate::integrations::zep::ZepStoredCredentials,
 ) -> Result<CaldavSession, String> {
@@ -292,6 +399,9 @@ fn build_caldav_session(
         username: credentials.username,
         password: credentials.password,
         base_url: store.api_endpoints.zep_caldav_root_url.clone(),
+        telemetry: app
+            .try_state::<crate::integrations::telemetry::state::TelemetryState>()
+            .map(|state| std::sync::Arc::clone(state.recorder())),
         absence_urls: store
             .employee_settings
             .iter()
@@ -301,15 +411,13 @@ fn build_caldav_session(
     })
 }
 
-#[tauri::command]
-#[specta::specta]
-pub async fn update_assignment(
+async fn update_assignment_inner(
     app: tauri::AppHandle,
     input: UpdateAssignmentInput,
 ) -> Result<(), String> {
     let store = crate::integrations::local_store::load_local_store(app.clone())
         .map_err(|e| e.user_message)?;
-    let session = load_caldav_session(&store)?;
+    let session = load_caldav_session(&app, &store)?;
 
     refuse_protected_event(
         &session,
@@ -336,9 +444,7 @@ pub async fn update_assignment(
     .await
 }
 
-#[tauri::command]
-#[specta::specta]
-pub async fn move_assignment(
+async fn move_assignment_inner(
     app: tauri::AppHandle,
     href: String,
     target_employee_reference: String,
@@ -352,7 +458,7 @@ pub async fn move_assignment(
 
     let target_calendar_url = resolve_employee_calendar_url(&store, &target_employee_reference)?;
 
-    let session = load_caldav_session(&store)?;
+    let session = load_caldav_session(&app, &store)?;
 
     refuse_protected_day_change(&session, &href, &date, |reference: String| async move {
         crate::integrations::daylite::projects::fetch_project_by_reference(app, &reference).await
@@ -373,9 +479,7 @@ pub async fn move_assignment(
     .await
 }
 
-#[tauri::command]
-#[specta::specta]
-pub async fn reorder_assignment(
+async fn reorder_assignment_inner(
     app: tauri::AppHandle,
     href: String,
     uid: String,
@@ -383,22 +487,20 @@ pub async fn reorder_assignment(
     order_index: u32,
 ) -> Result<(), String> {
     let store =
-        crate::integrations::local_store::load_local_store(app).map_err(|e| e.user_message)?;
-    let session = load_caldav_session(&store)?;
+        crate::integrations::local_store::load_local_store(app.clone()).map_err(|e| e.user_message)?;
+    let session = load_caldav_session(&app, &store)?;
 
     reorder_assignment_core(&session, &href, &uid, &date, order_index).await
 }
 
-#[tauri::command]
-#[specta::specta]
-pub async fn delete_assignment(
+async fn delete_assignment_inner(
     app: tauri::AppHandle,
     href: String,
     override_protection: bool,
 ) -> Result<(), String> {
     let store = crate::integrations::local_store::load_local_store(app.clone())
         .map_err(|e| e.user_message)?;
-    let session = load_caldav_session(&store)?;
+    let session = load_caldav_session(&app, &store)?;
 
     refuse_protected_event(
         &session,
