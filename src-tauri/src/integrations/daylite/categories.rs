@@ -53,7 +53,7 @@ pub(super) async fn fetch_project_category_colors_core(
 ) -> Result<HashMap<String, String>, DayliteApiError> {
     let list = send_authenticated_json::<DayliteCategoryListDto>(
         client,
-        token_state,
+        &token_state.access_token,
         DayliteHttpRequest {
             query: vec![("entity".to_string(), "project".to_string())],
             ..DayliteHttpRequest::new(DayliteHttpMethod::Get, "/categories")

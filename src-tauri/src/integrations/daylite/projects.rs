@@ -112,7 +112,7 @@ pub(super) async fn query_overdue_projects_core(
 
     let search_result = send_authenticated_json::<DayliteSearchResult<DayliteProjectSummaryDto>>(
         client,
-        token_state,
+        &token_state.access_token,
         DayliteHttpRequest {
             query: build_limit_query(Some(OVERDUE_CANDIDATE_LIMIT)),
             body: Some(json!(clauses)),
@@ -169,7 +169,7 @@ pub(super) async fn search_projects_core(
 
     let search_result = send_authenticated_json::<DayliteSearchResult<DayliteProjectSummaryDto>>(
         client,
-        token_state,
+        &token_state.access_token,
         DayliteHttpRequest {
             query,
             body: Some(body),
@@ -343,10 +343,10 @@ async fn fetch_project(client: &DayliteApiClient, project_ref: &str) -> Option<R
         return None;
     }
 
-    with_daylite_tokens(client, |tokens| async {
+    with_daylite_tokens(client, |tokens| async move {
         let summary: DayliteProjectSummaryDto = send_authenticated_json(
             client,
-            tokens,
+            &tokens.access_token,
             DayliteHttpRequest::new(DayliteHttpMethod::Get, path),
         )
         .await?;

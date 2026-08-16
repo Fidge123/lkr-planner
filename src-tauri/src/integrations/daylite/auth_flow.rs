@@ -90,11 +90,11 @@ pub(super) async fn refresh_tokens(
 /// For endpoints that may return 204 No Content: verifies 2xx, ignores the body.
 pub(super) async fn send_authenticated_request(
     client: &DayliteApiClient,
-    token_state: DayliteTokenState,
+    access_token: &str,
     mut request: DayliteHttpRequest,
 ) -> Result<(), DayliteApiError> {
     let path = request.path.clone();
-    request.access_token = Some(token_state.access_token);
+    request.access_token = Some(access_token.to_string());
     let response = client.send_request(request).await?;
     if !(200..300).contains(&response.status) {
         return Err(normalize_http_error(response.status, &response.body, &path));
@@ -104,11 +104,11 @@ pub(super) async fn send_authenticated_request(
 
 pub(super) async fn send_authenticated_json<T: DeserializeOwned>(
     client: &DayliteApiClient,
-    token_state: DayliteTokenState,
+    access_token: &str,
     mut request: DayliteHttpRequest,
 ) -> Result<T, DayliteApiError> {
     let path = request.path.clone();
-    request.access_token = Some(token_state.access_token);
+    request.access_token = Some(access_token.to_string());
     let response = client.send_request(request).await?;
 
     parse_success_json_body::<T>(response.status, &response.body, &path)
@@ -142,8 +142,8 @@ mod tests {
     use crate::integrations::daylite::client::{
         DayliteApiClient, DayliteHttpMethod, DayliteHttpRequest,
     };
-    use crate::integrations::daylite::shared::{DayliteApiErrorCode, DayliteTokenState};
-    use crate::integrations::daylite::test_support::{mock_client, mock_response, token_state};
+    use crate::integrations::daylite::shared::DayliteApiErrorCode;
+    use crate::integrations::daylite::test_support::{mock_client, mock_response};
     use serde::Deserialize;
 
     #[tokio::test]
@@ -169,7 +169,7 @@ mod tests {
 
         let data = send_authenticated_json::<AuthFlowFixture>(
             &client,
-            token_state("existing-access-token", "refresh-token"),
+            "existing-access-token",
             DayliteHttpRequest {
                 query: vec![("full-records".to_string(), "true".to_string())],
                 ..DayliteHttpRequest::new(DayliteHttpMethod::Post, "/projects/_search")
@@ -194,20 +194,16 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn send_authenticated_json_does_not_rotate_an_expired_token() {
+    async fn send_authenticated_json_surfaces_a_rejection_without_a_second_request() {
         let (client, transport) = mock_client(vec![Ok(mock_response(401, r#"{"error":"nope"}"#))]);
 
         let error = send_authenticated_json::<AuthFlowFixture>(
             &client,
-            DayliteTokenState {
-                access_token: "expired-access-token".to_string(),
-                refresh_token: "refresh-token".to_string(),
-                access_token_expires_at_ms: Some(0),
-            },
+            "rejected-access-token",
             DayliteHttpRequest::new(DayliteHttpMethod::Get, "/contacts/100"),
         )
         .await
-        .expect_err("an expired token should be rejected, not rotated");
+        .expect_err("a rejection belongs to the caller that can rotate");
 
         assert_eq!(error.code, DayliteApiErrorCode::Unauthorized);
 
@@ -293,7 +289,7 @@ mod tests {
 
         let error = send_authenticated_json::<AuthFlowFixture>(
             &client,
-            token_state("valid-token", "refresh"),
+            "valid-token",
             DayliteHttpRequest::new(DayliteHttpMethod::Get, "/projects/123"),
         )
         .await
@@ -309,7 +305,7 @@ mod tests {
 
         let error = send_authenticated_json::<AuthFlowFixture>(
             &client,
-            token_state("valid-token", "refresh"),
+            "valid-token",
             DayliteHttpRequest::new(DayliteHttpMethod::Get, "/contacts/100"),
         )
         .await

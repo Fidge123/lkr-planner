@@ -46,7 +46,7 @@ pub(in crate::integrations::daylite) async fn update_contact_ical_urls_core(
     let contact_path = format!("/contacts/{contact_id}");
     let current_contact = send_authenticated_json::<DayliteContactSummary>(
         client,
-        token_state.clone(),
+        &token_state.access_token,
         DayliteHttpRequest::new(DayliteHttpMethod::Get, contact_path.clone()),
     )
     .await?;
@@ -57,7 +57,7 @@ pub(in crate::integrations::daylite) async fn update_contact_ical_urls_core(
     );
     send_authenticated_request(
         client,
-        token_state,
+        &token_state.access_token,
         DayliteHttpRequest {
             body: Some(json!({
                 "urls": merged_urls,
@@ -98,7 +98,7 @@ pub(in crate::integrations::daylite) async fn list_contacts_core(
 ) -> Result<Vec<PlanningContactRecord>, DayliteApiError> {
     let search_result = send_authenticated_json::<DayliteSearchResult<DayliteContactSummary>>(
         client,
-        token_state,
+        &token_state.access_token,
         DayliteHttpRequest {
             query: vec![("full-records".to_string(), "true".to_string())],
             // A top-level array of clauses is matched with OR semantics; both
