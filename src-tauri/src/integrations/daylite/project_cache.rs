@@ -79,13 +79,20 @@ impl ProjectCache {
     }
 }
 
-/// A slot another task holds is skipped: `try_lock` failing means a load is in flight.
+/// Evicting a slot a caller holds orphans its load, so only the map's own reference may remain.
+/// `slot_for` hands out the reference before the caller locks it, which `try_lock` alone would miss.
 fn sweep_expired(slots: &mut HashMap<String, Slot>, now_ms: u64, ttl_ms: u64) {
-    slots.retain(|_, slot| match slot.try_lock() {
-        Ok(entry) => entry
-            .as_ref()
-            .is_some_and(|cached| now_ms.saturating_sub(cached.fetched_at_ms) < ttl_ms),
-        Err(_) => true,
+    slots.retain(|_, slot| {
+        if Arc::strong_count(slot) > 1 {
+            return true;
+        }
+
+        match slot.try_lock() {
+            Ok(entry) => entry
+                .as_ref()
+                .is_some_and(|cached| now_ms.saturating_sub(cached.fetched_at_ms) < ttl_ms),
+            Err(_) => true,
+        }
     });
 }
 
@@ -245,6 +252,22 @@ mod tests {
 
         assert_eq!(resolved, Some(project("Eins")));
         assert_eq!(calls.load(Ordering::SeqCst), 0);
+    }
+
+    #[tokio::test]
+    async fn a_sweep_keeps_a_slot_a_caller_still_holds() {
+        let held: Slot = Arc::new(tokio::sync::Mutex::new(Some(CacheEntry {
+            project: project("Alt"),
+            fetched_at_ms: 0,
+        })));
+        let mut slots = HashMap::from([("/v1/projects/1".to_string(), held.clone())]);
+
+        sweep_expired(&mut slots, 61_000, 30_000);
+        assert_eq!(slots.len(), 1);
+
+        drop(held);
+        sweep_expired(&mut slots, 61_000, 30_000);
+        assert!(slots.is_empty());
     }
 
     #[tokio::test]
