@@ -126,24 +126,16 @@ impl TokenSession {
     }
 
     fn fresh_lease(&self, now_ms: u64) -> Option<TokenLease> {
-        let state = self.state.read().expect("token session poisoned");
-        let state = state.as_ref()?;
-        if !has_life_left(&state.tokens, now_ms, self.min_remaining_ms) {
-            return None;
-        }
-
-        Some(TokenLease {
-            tokens: state.tokens.clone(),
-            generation: state.generation,
-        })
+        self.lease_if(|state| has_life_left(&state.tokens, now_ms, self.min_remaining_ms))
     }
 
     fn lease_newer_than(&self, generation: u64) -> Option<TokenLease> {
+        self.lease_if(|state| state.generation > generation)
+    }
+
+    fn lease_if(&self, accept: impl Fn(&SessionState) -> bool) -> Option<TokenLease> {
         let state = self.state.read().expect("token session poisoned");
-        let state = state.as_ref()?;
-        if state.generation <= generation {
-            return None;
-        }
+        let state = state.as_ref().filter(|state| accept(state))?;
 
         Some(TokenLease {
             tokens: state.tokens.clone(),
