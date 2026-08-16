@@ -12,7 +12,7 @@ use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use specta::Type;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone, Deserialize)]
 struct DayliteProjectSummaryDto {
@@ -275,7 +275,7 @@ const PROJECT_RESOLUTION_CONCURRENCY: usize = 6;
 
 pub(crate) async fn resolve_projects_by_reference(
     daylite_base_url: &str,
-    references: Vec<String>,
+    references: HashSet<String>,
 ) -> HashMap<String, Option<ResolvedProject>> {
     let Ok(client) = DayliteApiClient::new(daylite_base_url) else {
         return references
@@ -292,7 +292,7 @@ pub(crate) async fn resolve_projects_by_reference(
 }
 
 async fn resolve_all<F, Fut>(
-    references: Vec<String>,
+    references: HashSet<String>,
     concurrency: usize,
     resolve: F,
 ) -> HashMap<String, Option<ResolvedProject>>
@@ -380,6 +380,7 @@ mod tests {
     use crate::integrations::daylite::test_support::{
         mock_client, mock_response, token_state, valid_token_state,
     };
+    use std::collections::HashSet;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     fn resolved(name: &str) -> ResolvedProject {
@@ -392,11 +393,11 @@ mod tests {
 
     #[tokio::test]
     async fn keeps_each_project_against_its_own_reference_when_replies_arrive_out_of_order() {
-        let references = vec![
+        let references = HashSet::from([
             "/v1/projects/1".to_string(),
             "/v1/projects/2".to_string(),
             "/v1/projects/3".to_string(),
-        ];
+        ]);
 
         let all = resolve_all(references, 3, |reference| async move {
             // The last reference settles first, so the results arrive reversed.
@@ -424,7 +425,7 @@ mod tests {
 
     #[tokio::test]
     async fn keeps_no_more_than_the_configured_number_of_requests_in_flight() {
-        let references: Vec<String> = (1..=12).map(|id| format!("/v1/projects/{id}")).collect();
+        let references: HashSet<String> = (1..=12).map(|id| format!("/v1/projects/{id}")).collect();
         let in_flight = AtomicUsize::new(0);
         let peak = AtomicUsize::new(0);
 
@@ -447,7 +448,12 @@ mod tests {
 
     #[tokio::test]
     async fn records_a_reference_that_did_not_resolve() {
-        let all = resolve_all(vec!["/v1/projects/9999".to_string()], 4, |_| async { None }).await;
+        let all = resolve_all(
+            HashSet::from(["/v1/projects/9999".to_string()]),
+            4,
+            |_| async { None },
+        )
+        .await;
 
         assert_eq!(all.get("/v1/projects/9999"), Some(&None));
     }

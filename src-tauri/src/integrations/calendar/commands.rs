@@ -160,7 +160,7 @@ async fn fetch_week_for_employees(
     (fetches, error_results)
 }
 
-fn project_references(fetches: &[EmployeeFetch]) -> Vec<String> {
+fn project_references(fetches: &[EmployeeFetch]) -> HashSet<String> {
     let mut references: HashSet<String> = HashSet::new();
     for fetch in fetches {
         for event in &fetch.pending {
@@ -170,7 +170,7 @@ fn project_references(fetches: &[EmployeeFetch]) -> Vec<String> {
         }
     }
 
-    references.into_iter().collect()
+    references
 }
 
 fn assemble_week_events(
@@ -273,17 +273,16 @@ fn load_caldav_session(
 
 /// Cloning a reqwest client shares its connection pool rather than copying it.
 fn caldav_client() -> Result<reqwest::Client, String> {
-    static CLIENT: std::sync::OnceLock<reqwest::Client> = std::sync::OnceLock::new();
-    if let Some(client) = CLIENT.get() {
-        return Ok(client.clone());
-    }
-
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(30))
-        .build()
-        .map_err(|e| format!("HTTP-Client konnte nicht erstellt werden: {e}"))?;
-
-    Ok(CLIENT.get_or_init(|| client).clone())
+    static CLIENT: std::sync::OnceLock<Result<reqwest::Client, String>> =
+        std::sync::OnceLock::new();
+    CLIENT
+        .get_or_init(|| {
+            reqwest::Client::builder()
+                .timeout(Duration::from_secs(30))
+                .build()
+                .map_err(|e| format!("HTTP-Client konnte nicht erstellt werden: {e}"))
+        })
+        .clone()
 }
 
 fn build_caldav_session(
