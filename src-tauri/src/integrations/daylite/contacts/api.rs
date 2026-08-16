@@ -41,7 +41,7 @@ pub(in crate::integrations::daylite) async fn update_contact_ical_urls_core(
     token_state: DayliteTokenState,
     store: &mut LocalStore,
     input: &DayliteUpdateContactIcalUrlsInput,
-) -> Result<PlanningContactRecord, DayliteApiError> {
+) -> Result<(), DayliteApiError> {
     let contact_id = parse_contact_id(&input.contact_reference)?;
     let contact_path = format!("/contacts/{contact_id}");
     let current_contact = send_authenticated_json::<DayliteContactSummary>(
@@ -81,7 +81,7 @@ pub(in crate::integrations::daylite) async fn update_contact_ical_urls_core(
 
     cached_contacts.retain(|contact| contact.reference != updated_contact.reference);
     if is_planning_contact(&updated_contact) {
-        cached_contacts.push(updated_contact.clone());
+        cached_contacts.push(updated_contact);
     }
 
     store.daylite_cache.contacts = sort_contacts(filter_planning_contacts(cached_contacts))
@@ -89,7 +89,7 @@ pub(in crate::integrations::daylite) async fn update_contact_ical_urls_core(
         .map(map_planning_contact_to_cache_entry)
         .collect();
 
-    Ok(updated_contact)
+    Ok(())
 }
 
 pub(in crate::integrations::daylite) async fn list_contacts_core(
@@ -195,7 +195,7 @@ mod tests {
         let (client, transport) = mock_client(vec![Ok(get_response), Ok(patch_response)]);
         let mut store = LocalStore::default();
 
-        let contact = update_contact_ical_urls_core(
+        update_contact_ical_urls_core(
             &client,
             token_state("token", "refresh"),
             &mut store,
@@ -208,7 +208,6 @@ mod tests {
         .await
         .expect("update should succeed");
 
-        assert_eq!(contact.reference, "/v1/contacts/500");
         let requests = transport.requests();
         assert_eq!(requests.len(), 2);
         assert_eq!(requests[0].method, DayliteHttpMethod::Get);
@@ -231,7 +230,7 @@ mod tests {
         let (client, _) = mock_client(vec![Ok(get_response), Ok(patch_response)]);
         let mut store = LocalStore::default();
 
-        let contact = update_contact_ical_urls_core(
+        update_contact_ical_urls_core(
             &client,
             token_state("token", "refresh"),
             &mut store,
@@ -244,11 +243,12 @@ mod tests {
         .await
         .expect("update should succeed even when PATCH returns 204 No Content");
 
-        assert_eq!(contact.reference, "/v1/contacts/800");
-        assert_eq!(contact.category, Some("Monteur".to_string()));
-        assert_eq!(contact.urls.len(), 1);
+        let cached = &store.daylite_cache.contacts[0];
+        assert_eq!(cached.reference, "/v1/contacts/800");
+        assert_eq!(cached.category, Some("Monteur".to_string()));
+        assert_eq!(cached.urls.len(), 1);
         assert_eq!(
-            contact.urls[0].url,
+            cached.urls[0].url,
             Some("https://example.com/primary.ics".to_string())
         );
     }
@@ -273,7 +273,7 @@ mod tests {
             urls: vec![],
         }];
 
-        let contact = update_contact_ical_urls_core(
+        update_contact_ical_urls_core(
             &client,
             token_state("token", "refresh"),
             &mut store,
@@ -286,7 +286,6 @@ mod tests {
         .await
         .expect("update should succeed");
 
-        assert_eq!(contact.category, Some("Monteur".to_string()));
         assert_eq!(store.daylite_cache.contacts.len(), 1);
         assert_eq!(
             store.daylite_cache.contacts[0].reference,
@@ -315,7 +314,7 @@ mod tests {
             urls: vec![],
         }];
 
-        let contact = update_contact_ical_urls_core(
+        update_contact_ical_urls_core(
             &client,
             token_state("token", "refresh"),
             &mut store,
@@ -328,7 +327,6 @@ mod tests {
         .await
         .expect("update should succeed");
 
-        assert_eq!(contact.category, Some("Vertrieb".to_string()));
         assert!(store.daylite_cache.contacts.is_empty());
     }
 
@@ -376,7 +374,7 @@ mod tests {
                 .expect("replay client should be created");
         let mut store = LocalStore::default();
 
-        let contact = update_contact_ical_urls_core(
+        update_contact_ical_urls_core(
             &client,
             token_state("replay-access-token", "replay-refresh-token"),
             &mut store,
@@ -389,13 +387,10 @@ mod tests {
         .await
         .expect("update should replay from cassette");
 
-        assert_eq!(contact.reference, "/v1/contacts/1029");
-        assert_eq!(contact.category, Some("Monteur".to_string()));
-        assert_eq!(contact.urls.len(), 2);
         assert_eq!(store.daylite_cache.contacts.len(), 1);
-        assert_eq!(
-            store.daylite_cache.contacts[0].reference,
-            "/v1/contacts/1029"
-        );
+        let cached = &store.daylite_cache.contacts[0];
+        assert_eq!(cached.reference, "/v1/contacts/1029");
+        assert_eq!(cached.category, Some("Monteur".to_string()));
+        assert_eq!(cached.urls.len(), 2);
     }
 }

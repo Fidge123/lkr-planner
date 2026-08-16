@@ -240,12 +240,12 @@ where
 }
 
 /// For operations that cannot be replayed, such as one that has already mutated the store.
-pub(super) async fn with_daylite_tokens_once<T, Fut>(
+pub(super) async fn with_daylite_tokens_once<Fut>(
     client: &DayliteApiClient,
     operation: impl FnOnce(DayliteTokenState) -> Fut,
-) -> Result<T, DayliteApiError>
+) -> Result<(), DayliteApiError>
 where
-    Fut: std::future::Future<Output = Result<T, DayliteApiError>>,
+    Fut: std::future::Future<Output = Result<(), DayliteApiError>>,
 {
     let lease = lease_tokens(client).await?;
     operation(lease.tokens).await
