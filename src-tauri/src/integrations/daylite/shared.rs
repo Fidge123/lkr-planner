@@ -268,15 +268,13 @@ where
     F: FnOnce() -> Fut,
     Fut: std::future::Future<Output = Result<DayliteTokenState, DayliteApiError>>,
 {
-    let lease = token_session()
+    token_session()
         .adopt(|| async {
             let minted = mint().await?;
             store_daylite_tokens(&minted)?;
             Ok(minted)
         })
-        .await?;
-
-    Ok(lease.tokens)
+        .await
 }
 
 pub(super) fn load_store_or_error(app: tauri::AppHandle) -> Result<LocalStore, DayliteApiError> {

@@ -89,14 +89,14 @@ impl TokenSession {
     }
 
     /// Takes the rotation lock so a connect cannot interleave with one.
-    pub(super) async fn adopt<F, Fut>(&self, mint: F) -> Result<TokenLease, DayliteApiError>
+    pub(super) async fn adopt<F, Fut>(&self, mint: F) -> Result<DayliteTokenState, DayliteApiError>
     where
         F: FnOnce() -> Fut,
         Fut: Future<Output = Result<DayliteTokenState, DayliteApiError>>,
     {
         let _guard = self.rotation.lock().await;
         let tokens = mint().await?;
-        Ok(self.publish(tokens))
+        Ok(self.publish(tokens).tokens)
     }
 
     async fn rotate_locked<F, Fut>(&self, rotate: F) -> Result<TokenLease, DayliteApiError>
