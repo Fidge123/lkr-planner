@@ -23,7 +23,6 @@ const missingHrefMessage =
   "Dieser Einsatz kann nicht bearbeitet werden, da er keine Kalender-Adresse hat. Bitte die Ansicht neu laden.";
 
 export function useAssignmentModal({
-  isOpen,
   assignment,
   employeeReference,
   date,
@@ -54,45 +53,29 @@ export function useAssignmentModal({
     initialShowUnsavedConfirm,
   );
   const [isDirty, setIsDirty] = useState(false);
+  const [isUnlocked, setIsUnlocked] = useState(false);
   const filterInputRef = useRef<HTMLInputElement>(null);
 
   const isProtected =
     isEditMode && isProtectedAssignment(assignment.projectCategory);
+  const isLocked = isProtected && !isUnlocked;
 
   const { results, errorMessage: searchError } =
     useAssignmentProjectSearch(filter);
-  const { suggestions, suggestionsLoaded } =
-    useAssignmentDefaultSuggestions(isOpen);
+  const { suggestions, suggestionsLoaded } = useAssignmentDefaultSuggestions();
   const displayedProjects = resolveDisplayedProjects(
     filter,
     suggestions,
     results,
   );
-  const categoryColors = useProjectCategoryColors(isOpen);
+  const categoryColors = useProjectCategoryColors();
 
   useEffect(() => {
-    if (!isOpen) return;
-    setErrorMessage(null);
-    setIsSaving(false);
-    setShowDeleteConfirm(initialShowDeleteConfirm);
-    setShowUnsavedConfirm(initialShowUnsavedConfirm);
-    setSelectedProjectRef(assignment?.projectRef ?? "");
-    setSelectedProjectName(assignment?.title ?? "");
-    setSelectedProjectCategory(null);
-    setFilter("");
-    setHighlightedIndex(-1);
-    setIsDirty(false);
     filterInputRef.current?.focus();
-  }, [
-    isOpen,
-    initialShowDeleteConfirm,
-    initialShowUnsavedConfirm,
-    assignment?.projectRef,
-    assignment?.title,
-  ]);
+  }, []);
 
   // A callback ref, not an effect: the dialog element is remounted whenever the modal swaps to the delete or unsaved-changes dialog and back,
-  // so an effect keyed on `isOpen` would leave the listener detached after the swap.
+  // so a mount effect would leave the listener detached after the swap.
   // requestClose is read through a ref because the listener outlives the render that attached it.
   const requestCloseRef = useRef<() => void>(() => {});
   const dialogRef = useCallback((dialog: HTMLDialogElement | null) => {
@@ -180,6 +163,7 @@ export function useAssignmentModal({
           projectName,
           // Editing an assignment must not move it within its day.
           orderIndex: null,
+          overrideProtection: isUnlocked,
         })
       : await commands.createAssignment({
           employeeReference,
@@ -213,7 +197,7 @@ export function useAssignmentModal({
     }
     setIsSaving(true);
     setErrorMessage(null);
-    const result = await commands.deleteAssignment(assignment.href);
+    const result = await commands.deleteAssignment(assignment.href, isUnlocked);
     const deleteError = commandErrorMessage(result);
     if (deleteError) {
       setErrorMessage(deleteError);
@@ -226,6 +210,8 @@ export function useAssignmentModal({
   return {
     isEditMode,
     isProtected,
+    isLocked,
+    isUnlocked,
     dialogRef,
     filterInputRef,
     filter,
@@ -251,11 +237,11 @@ export function useAssignmentModal({
     openDeleteConfirm: () => setShowDeleteConfirm(true),
     cancelDeleteConfirm: () => setShowDeleteConfirm(false),
     continueEditing: () => setShowUnsavedConfirm(false),
+    toggleUnlock: () => setIsUnlocked((unlocked) => !unlocked),
   };
 }
 
 interface Input {
-  isOpen: boolean;
   assignment: CalendarCellEvent | null;
   employeeReference: string;
   date: string;

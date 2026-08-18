@@ -125,7 +125,7 @@ mod tests {
     use super::*;
     use crate::integrations::local_store::types::{
         ApiEndpoints, CachedHoliday, DayliteCache, DayliteContactCacheEntry, DayliteContactUrl,
-        DayliteProjectCacheEntry, DisplaySettings, EmployeeSetting, HolidayCacheEntry,
+        DisplaySettings, EmployeeSetting, HolidayCacheEntry,
     };
     use std::fs;
     use std::path::PathBuf;
@@ -165,12 +165,6 @@ mod tests {
             },
             daylite_cache: DayliteCache {
                 last_synced_at: Some("2026-02-13T12:00:00Z".to_string()),
-                projects: vec![DayliteProjectCacheEntry {
-                    reference: "/v1/projects/1".to_string(),
-                    name: "Projekt Nord".to_string(),
-                    status: "in_progress".to_string(),
-                    category: None,
-                }],
                 contacts: vec![DayliteContactCacheEntry {
                     reference: "/v1/contacts/1".to_string(),
                     full_name: Some("Max Mustermann".to_string()),

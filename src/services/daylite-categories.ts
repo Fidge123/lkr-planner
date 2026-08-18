@@ -3,6 +3,7 @@ import { commands } from "../generated/tauri";
 export type ProjectCategoryColors = Record<string, string>;
 
 let inFlight: Promise<ProjectCategoryColors> | null = null;
+const listeners = new Set<() => void>();
 
 /** Held for the whole session, unlike the TTL-cached project and contact reads. */
 export function loadProjectCategoryColors(): Promise<ProjectCategoryColors> {
@@ -12,6 +13,16 @@ export function loadProjectCategoryColors(): Promise<ProjectCategoryColors> {
 
 export function resetProjectCategoryColors(): void {
   inFlight = null;
+  for (const listener of listeners) listener();
+}
+
+export function subscribeProjectCategoryColors(
+  listener: () => void,
+): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
 }
 
 export function projectCategoryColor(

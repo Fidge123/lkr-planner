@@ -10,13 +10,11 @@ export const commands = {
 	loadWeekEvents: (weekStart: string) => typedError<EmployeeWeekEvents[], string>(__TAURI_INVOKE("load_week_events", { weekStart })),
 	getHolidaysForWeek: (weekStart: string) => typedError<Holiday[], string>(__TAURI_INVOKE("get_holidays_for_week", { weekStart })),
 	dayliteConnectRefreshToken: (request: DayliteRefreshTokenRequest) => typedError<DayliteTokenSyncStatus, DayliteApiError>(__TAURI_INVOKE("daylite_connect_refresh_token", { request })),
-	dayliteListProjects: () => typedError<PlanningProjectRecord[], DayliteApiError>(__TAURI_INVOKE("daylite_list_projects")),
 	dayliteSearchProjects: (input: DayliteSearchInput) => typedError<DayliteSearchResult<DayliteProjectSummary>, DayliteApiError>(__TAURI_INVOKE("daylite_search_projects", { input })),
 	dayliteQueryOverdueProjects: () => typedError<DayliteProjectSummary[], DayliteApiError>(__TAURI_INVOKE("daylite_query_overdue_projects")),
 	dayliteProjectCategoryColors: () => typedError<{ [key in string]: string }, DayliteApiError>(__TAURI_INVOKE("daylite_project_category_colors")),
 	dayliteListContacts: () => typedError<PlanningContactRecord[], DayliteApiError>(__TAURI_INVOKE("daylite_list_contacts")),
 	dayliteListCachedContacts: () => typedError<PlanningContactRecord[], DayliteApiError>(__TAURI_INVOKE("daylite_list_cached_contacts")),
-	dayliteUpdateContactIcalUrls: (input: DayliteUpdateContactIcalUrlsInput) => typedError<PlanningContactRecord, DayliteApiError>(__TAURI_INVOKE("daylite_update_contact_ical_urls", { input })),
 	/**
 	 *  Stores the API token in the OS keychain and the non-secret base URL plus Customer ID in the
 	 *  local config store.
@@ -36,7 +34,7 @@ export const commands = {
 	updateAssignment: (input: UpdateAssignmentInput) => typedError<null, string>(__TAURI_INVOKE("update_assignment", { input })),
 	moveAssignment: (href: string, targetEmployeeReference: string, date: string, projectRef: string, projectName: string, orderIndex: number | null) => typedError<MoveAssignmentResult, string>(__TAURI_INVOKE("move_assignment", { href, targetEmployeeReference, date, projectRef, projectName, orderIndex })),
 	reorderAssignment: (href: string, uid: string, date: string, orderIndex: number) => typedError<null, string>(__TAURI_INVOKE("reorder_assignment", { href, uid, date, orderIndex })),
-	deleteAssignment: (href: string) => typedError<null, string>(__TAURI_INVOKE("delete_assignment", { href })),
+	deleteAssignment: (href: string, overrideProtection: boolean) => typedError<null, string>(__TAURI_INVOKE("delete_assignment", { href, overrideProtection })),
 	zepSaveCredentials: (rootUrl: string, username: string, password: string) => typedError<null, ZepError>(__TAURI_INVOKE("zep_save_credentials", { rootUrl, username, password })),
 	zepLoadCredentials: () => typedError<{
 	rootUrl: string,
@@ -69,7 +67,6 @@ export type CalendarCellEvent = {
 	kind: CalendarEventKind,
 	title: string,
 	projectStatus: string | null,
-	categoryColor: string | null,
 	projectCategory: string | null,
 	date: string,
 	startTime: string | null,
@@ -99,7 +96,6 @@ export type DayliteApiErrorCode = "UNAUTHORIZED" | "RATE_LIMITED" | "SERVER_ERRO
 
 export type DayliteCache = {
 	lastSyncedAt: string | null,
-	projects: DayliteProjectCacheEntry[],
 	contacts: DayliteContactCacheEntry[],
 };
 
@@ -115,13 +111,6 @@ export type DayliteContactUrl = {
 	label?: string | null,
 	url?: string | null,
 	note?: string | null,
-};
-
-export type DayliteProjectCacheEntry = {
-	reference: string,
-	name: string,
-	status: string,
-	category?: string | null,
 };
 
 export type DayliteProjectSummary = {
@@ -161,12 +150,6 @@ export type DayliteSearchSort = "id" | "name";
 export type DayliteTokenSyncStatus = {
 	hasAccessToken: boolean,
 	hasRefreshToken: boolean,
-};
-
-export type DayliteUpdateContactIcalUrlsInput = {
-	contactReference: string,
-	primaryIcalUrl: string,
-	absenceIcalUrl: string,
 };
 
 export type DisplaySettings = {
@@ -224,21 +207,6 @@ export type PlanningContactRecord = {
 	category?: string | null,
 	urls?: DayliteContactUrl[],
 };
-
-export type PlanningProjectRecord = {
-	self: string,
-	name: string,
-	status: PlanningProjectStatus,
-	category?: string | null,
-	keywords?: string[],
-	due?: string | null,
-	started?: string | null,
-	completed?: string | null,
-	create_date?: string | null,
-	modify_date?: string | null,
-};
-
-export type PlanningProjectStatus = "new_status" | "in_progress" | "done" | "abandoned" | "cancelled" | "deferred";
 
 export type PlanradarApiError = {
 	code: PlanradarApiErrorCode,
@@ -312,6 +280,8 @@ export type UpdateAssignmentInput = {
 	projectName: string,
 	/**  Position among the target day's assignments. None keeps the assignment where it is. */
 	orderIndex: number | null,
+	/**  The user deliberately unlocked a fixed appointment for this one write. */
+	overrideProtection: boolean,
 };
 
 export type ZepCalendar = {

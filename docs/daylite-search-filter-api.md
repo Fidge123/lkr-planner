@@ -75,6 +75,9 @@ An empty body `{}` returns all records (subject to `limit`).
 
 > The `self` attribute is not supported in search filters.
 
+> Neither is the numeric object id, so a set of known references cannot be resolved in one batched search.
+> Records addressed by reference have to be fetched individually via `GET /{entity}/{id}`, or covered by a filter on some other attribute such as `status`.
+
 ## Filter Examples
 
 ### Single field, single value

@@ -1,16 +1,15 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
 import type { DayliteSearchInput } from "../generated/tauri";
+import { mockCommands } from "../test/mock-commands";
 import { searchProjectsForAssignmentPicker } from "./assignment-project-picker";
 
 const mockDayliteSearchProjects = mock((_: DayliteSearchInput) =>
   Promise.resolve({} as unknown),
 );
 
-mock.module("../generated/tauri", () => ({
-  commands: {
-    dayliteSearchProjects: mockDayliteSearchProjects,
-  },
-}));
+mockCommands({
+  dayliteSearchProjects: mockDayliteSearchProjects,
+});
 
 describe("assignment project picker service", () => {
   beforeEach(() => {

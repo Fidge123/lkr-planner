@@ -13,7 +13,7 @@ use crate::integrations::daylite::client::{
     DayliteApiClient, DayliteHttpMethod, DayliteHttpRequest,
 };
 use crate::integrations::daylite::shared::{
-    with_token_refresh_lock, DayliteApiError, DayliteApiErrorCode, DayliteSearchResult,
+    with_daylite_tokens_once, DayliteApiError, DayliteApiErrorCode, DayliteSearchResult,
     DayliteTokenState,
 };
 use crate::integrations::local_store::LocalStore;
@@ -27,8 +27,10 @@ pub async fn sync_contact_ical_urls(
     let daylite_base_url = store.api_endpoints.daylite_base_url.clone();
     let client = DayliteApiClient::new(&daylite_base_url)?;
 
-    with_token_refresh_lock(|tokens| update_contact_ical_urls_core(&client, tokens, store, &input))
-        .await?;
+    with_daylite_tokens_once(&client, |tokens| {
+        update_contact_ical_urls_core(&client, tokens, store, &input)
+    })
+    .await?;
 
     store.daylite_cache.last_synced_at = Some(current_timestamp_iso8601());
     Ok(())
@@ -39,12 +41,12 @@ pub(in crate::integrations::daylite) async fn update_contact_ical_urls_core(
     token_state: DayliteTokenState,
     store: &mut LocalStore,
     input: &DayliteUpdateContactIcalUrlsInput,
-) -> Result<(PlanningContactRecord, DayliteTokenState), DayliteApiError> {
+) -> Result<(), DayliteApiError> {
     let contact_id = parse_contact_id(&input.contact_reference)?;
     let contact_path = format!("/contacts/{contact_id}");
-    let (current_contact, token_state) = send_authenticated_json::<DayliteContactSummary>(
+    let current_contact = send_authenticated_json::<DayliteContactSummary>(
         client,
-        token_state,
+        &token_state.access_token,
         DayliteHttpRequest::new(DayliteHttpMethod::Get, contact_path.clone()),
     )
     .await?;
@@ -53,9 +55,9 @@ pub(in crate::integrations::daylite) async fn update_contact_ical_urls_core(
         &input.primary_ical_url,
         &input.absence_ical_url,
     );
-    let token_state = send_authenticated_request(
+    send_authenticated_request(
         client,
-        token_state,
+        &token_state.access_token,
         DayliteHttpRequest {
             body: Some(json!({
                 "urls": merged_urls,
@@ -79,7 +81,7 @@ pub(in crate::integrations::daylite) async fn update_contact_ical_urls_core(
 
     cached_contacts.retain(|contact| contact.reference != updated_contact.reference);
     if is_planning_contact(&updated_contact) {
-        cached_contacts.push(updated_contact.clone());
+        cached_contacts.push(updated_contact);
     }
 
     store.daylite_cache.contacts = sort_contacts(filter_planning_contacts(cached_contacts))
@@ -87,29 +89,28 @@ pub(in crate::integrations::daylite) async fn update_contact_ical_urls_core(
         .map(map_planning_contact_to_cache_entry)
         .collect();
 
-    Ok((updated_contact, token_state))
+    Ok(())
 }
 
 pub(in crate::integrations::daylite) async fn list_contacts_core(
     client: &DayliteApiClient,
     token_state: DayliteTokenState,
-) -> Result<(Vec<PlanningContactRecord>, DayliteTokenState), DayliteApiError> {
-    let (search_result, token_state) =
-        send_authenticated_json::<DayliteSearchResult<DayliteContactSummary>>(
-            client,
-            token_state,
-            DayliteHttpRequest {
-                query: vec![("full-records".to_string(), "true".to_string())],
-                // A top-level array of clauses is matched with OR semantics; both
-                // planning categories are fetched in one call.
-                body: Some(json!([
-                    { "category": { "equal": "Monteur" } },
-                    { "category": { "equal": "Test" } },
-                ])),
-                ..DayliteHttpRequest::new(DayliteHttpMethod::Post, "/contacts/_search")
-            },
-        )
-        .await?;
+) -> Result<Vec<PlanningContactRecord>, DayliteApiError> {
+    let search_result = send_authenticated_json::<DayliteSearchResult<DayliteContactSummary>>(
+        client,
+        &token_state.access_token,
+        DayliteHttpRequest {
+            query: vec![("full-records".to_string(), "true".to_string())],
+            // A top-level array of clauses is matched with OR semantics; both
+            // planning categories are fetched in one call.
+            body: Some(json!([
+                { "category": { "equal": "Monteur" } },
+                { "category": { "equal": "Test" } },
+            ])),
+            ..DayliteHttpRequest::new(DayliteHttpMethod::Post, "/contacts/_search")
+        },
+    )
+    .await?;
     let contacts = sort_contacts(filter_planning_contacts(
         search_result
             .results
@@ -118,7 +119,7 @@ pub(in crate::integrations::daylite) async fn list_contacts_core(
             .collect(),
     ));
 
-    Ok((contacts, token_state))
+    Ok(contacts)
 }
 
 pub(super) fn current_timestamp_iso8601() -> String {
@@ -154,7 +155,7 @@ mod tests {
         );
         let (client, transport) = mock_client(vec![Ok(search_response)]);
 
-        let (contacts, _) = list_contacts_core(&client, token_state("token", "refresh"))
+        let contacts = list_contacts_core(&client, token_state("token", "refresh"))
             .await
             .expect("list should succeed");
 
@@ -194,7 +195,7 @@ mod tests {
         let (client, transport) = mock_client(vec![Ok(get_response), Ok(patch_response)]);
         let mut store = LocalStore::default();
 
-        let (contact, token_state) = update_contact_ical_urls_core(
+        update_contact_ical_urls_core(
             &client,
             token_state("token", "refresh"),
             &mut store,
@@ -206,9 +207,6 @@ mod tests {
         )
         .await
         .expect("update should succeed");
-
-        assert_eq!(contact.reference, "/v1/contacts/500");
-        assert_eq!(token_state.access_token, "token");
 
         let requests = transport.requests();
         assert_eq!(requests.len(), 2);
@@ -232,7 +230,7 @@ mod tests {
         let (client, _) = mock_client(vec![Ok(get_response), Ok(patch_response)]);
         let mut store = LocalStore::default();
 
-        let (contact, _) = update_contact_ical_urls_core(
+        update_contact_ical_urls_core(
             &client,
             token_state("token", "refresh"),
             &mut store,
@@ -245,11 +243,12 @@ mod tests {
         .await
         .expect("update should succeed even when PATCH returns 204 No Content");
 
-        assert_eq!(contact.reference, "/v1/contacts/800");
-        assert_eq!(contact.category, Some("Monteur".to_string()));
-        assert_eq!(contact.urls.len(), 1);
+        let cached = &store.daylite_cache.contacts[0];
+        assert_eq!(cached.reference, "/v1/contacts/800");
+        assert_eq!(cached.category, Some("Monteur".to_string()));
+        assert_eq!(cached.urls.len(), 1);
         assert_eq!(
-            contact.urls[0].url,
+            cached.urls[0].url,
             Some("https://example.com/primary.ics".to_string())
         );
     }
@@ -274,7 +273,7 @@ mod tests {
             urls: vec![],
         }];
 
-        let (contact, _) = update_contact_ical_urls_core(
+        update_contact_ical_urls_core(
             &client,
             token_state("token", "refresh"),
             &mut store,
@@ -287,7 +286,6 @@ mod tests {
         .await
         .expect("update should succeed");
 
-        assert_eq!(contact.category, Some("Monteur".to_string()));
         assert_eq!(store.daylite_cache.contacts.len(), 1);
         assert_eq!(
             store.daylite_cache.contacts[0].reference,
@@ -316,7 +314,7 @@ mod tests {
             urls: vec![],
         }];
 
-        let (contact, _) = update_contact_ical_urls_core(
+        update_contact_ical_urls_core(
             &client,
             token_state("token", "refresh"),
             &mut store,
@@ -329,7 +327,6 @@ mod tests {
         .await
         .expect("update should succeed");
 
-        assert_eq!(contact.category, Some("Vertrieb".to_string()));
         assert!(store.daylite_cache.contacts.is_empty());
     }
 
@@ -338,7 +335,7 @@ mod tests {
         let client = DayliteApiClient::with_replay_cassette("daylite-list-contacts.json")
             .expect("replay client should be created");
 
-        let (contacts, token_state) = list_contacts_core(
+        let contacts = list_contacts_core(
             &client,
             token_state("replay-access-token", "replay-refresh-token"),
         )
@@ -368,7 +365,6 @@ mod tests {
             contact_display_name(&pair[0]).to_lowercase()
                 <= contact_display_name(&pair[1]).to_lowercase()
         }));
-        assert_eq!(token_state.access_token, "replay-access-token");
     }
 
     #[tokio::test]
@@ -378,7 +374,7 @@ mod tests {
                 .expect("replay client should be created");
         let mut store = LocalStore::default();
 
-        let (contact, token_state) = update_contact_ical_urls_core(
+        update_contact_ical_urls_core(
             &client,
             token_state("replay-access-token", "replay-refresh-token"),
             &mut store,
@@ -391,14 +387,10 @@ mod tests {
         .await
         .expect("update should replay from cassette");
 
-        assert_eq!(contact.reference, "/v1/contacts/1029");
-        assert_eq!(contact.category, Some("Monteur".to_string()));
-        assert_eq!(contact.urls.len(), 2);
-        assert_eq!(token_state.access_token, "replay-access-token");
         assert_eq!(store.daylite_cache.contacts.len(), 1);
-        assert_eq!(
-            store.daylite_cache.contacts[0].reference,
-            "/v1/contacts/1029"
-        );
+        let cached = &store.daylite_cache.contacts[0];
+        assert_eq!(cached.reference, "/v1/contacts/1029");
+        assert_eq!(cached.category, Some("Monteur".to_string()));
+        assert_eq!(cached.urls.len(), 2);
     }
 }

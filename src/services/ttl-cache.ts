@@ -23,8 +23,6 @@ interface TtlCacheOptions<T> {
 
 export interface TtlCache<T> {
   get: (options?: CacheLoadOptions) => Promise<CacheLoadResult<T>>;
-  /** Rewrites the cached entries in place, keeping the current fetch timestamp. */
-  update: (next: (current: T[]) => T[]) => void;
   /**
    * Publishes already-known data without counting as a fetch, so a caller that has
    * read it from elsewhere can spare the fallback a second read of the same source.
@@ -49,23 +47,14 @@ export function createTtlCache<T>({
   // Bumped whenever a request is superseded, so a chain that is still settling
   // cannot write its result over the newer one that replaced it.
   let generation = 0;
-  // Updates made while a load was already running: the data it returns was read
-  // before the update, so it has to be replayed onto whatever lands.
-  let pendingUpdates: ((current: T[]) => T[])[] = [];
-
-  function replayPendingUpdates(data: T[]): T[] {
-    return pendingUpdates.reduce((current, apply) => apply(current), data);
-  }
 
   function startLoad(): Promise<CacheLoadResult<T>> {
     const requestGeneration = ++generation;
     const isCurrent = () => requestGeneration === generation;
 
     return load()
-      .then((loaded) => {
-        const data = replayPendingUpdates(loaded);
+      .then((data) => {
         if (isCurrent()) {
-          pendingUpdates = [];
           entry = { data, fetchedAtMs: now() };
         }
         return { data, source: "network" } satisfies CacheLoadResult<T>;
@@ -85,13 +74,11 @@ export function createTtlCache<T>({
         // see, nor escape as a rejection this catch never wrapped.
         const fromDisk = (await fallback?.().catch(() => [])) ?? [];
         if (fromDisk.length > 0) {
-          const fromFallback = replayPendingUpdates(fromDisk);
           if (isCurrent()) {
-            pendingUpdates = [];
-            entry = { data: fromFallback, fetchedAtMs: now() };
+            entry = { data: fromDisk, fetchedAtMs: now() };
           }
           return {
-            data: fromFallback,
+            data: fromDisk,
             source: "disk-cache",
             errorMessage,
           } satisfies CacheLoadResult<T>;
@@ -125,14 +112,6 @@ export function createTtlCache<T>({
       return inFlight;
     },
 
-    update(next: (current: T[]) => T[]): void {
-      if (inFlight) {
-        pendingUpdates.push(next);
-      }
-      if (!entry) return;
-      entry = { data: next(entry.data), fetchedAtMs: entry.fetchedAtMs };
-    },
-
     seed(data: T[]): void {
       if (entry || data.length === 0) return;
       // Stamped as already expired: unlike the fallback, which runs because the
@@ -146,7 +125,6 @@ export function createTtlCache<T>({
       generation += 1;
       entry = null;
       inFlight = null;
-      pendingUpdates = [];
     },
   };
 }

@@ -80,18 +80,7 @@ impl Default for DisplaySettings {
 #[serde(rename_all = "camelCase")]
 pub struct DayliteCache {
     pub last_synced_at: Option<String>,
-    pub projects: Vec<DayliteProjectCacheEntry>,
     pub contacts: Vec<DayliteContactCacheEntry>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct DayliteProjectCacheEntry {
-    pub reference: String,
-    pub name: String,
-    pub status: String,
-    #[serde(default)]
-    pub category: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq, Default)]

@@ -12,7 +12,6 @@ import {
 import { UnsavedChangesDialog } from "./unsaved-changes-dialog";
 
 export function AssignmentModal({
-  isOpen,
   assignment,
   employeeReference,
   date,
@@ -22,7 +21,6 @@ export function AssignmentModal({
   showUnsavedConfirm: initialShowUnsavedConfirm = false,
 }: Props) {
   const modal = useAssignmentModal({
-    isOpen,
     assignment,
     employeeReference,
     date,
@@ -31,8 +29,6 @@ export function AssignmentModal({
     initialShowDeleteConfirm,
     initialShowUnsavedConfirm,
   });
-
-  if (!isOpen) return null;
 
   if (modal.showUnsavedConfirm) {
     return (
@@ -72,10 +68,25 @@ export function AssignmentModal({
         ) : null}
 
         {modal.isProtected ? (
-          <p className="alert alert-warning mt-3 text-sm">
-            <Lock className="size-4 shrink-0" aria-hidden="true" />
-            {fixedAppointmentNotice}
-          </p>
+          <section className="alert alert-warning mt-3 flex-col items-start gap-2 text-sm">
+            <p>
+              <Lock
+                className="mr-2 inline size-4 shrink-0"
+                aria-hidden="true"
+              />
+              {fixedAppointmentNotice}
+            </p>
+            <label className="label cursor-pointer gap-2 p-0">
+              <input
+                type="checkbox"
+                className="checkbox checkbox-sm"
+                checked={modal.isUnlocked}
+                onChange={modal.toggleUnlock}
+                disabled={modal.isSaving}
+              />
+              <span className="label-text">Bearbeitung entsperren</span>
+            </label>
+          </section>
         ) : null}
 
         <section className="mt-4 flex flex-col gap-3">
@@ -89,7 +100,7 @@ export function AssignmentModal({
               placeholder="Projekt suchen..."
               onChange={(e) => modal.changeFilter(e.target.value)}
               onKeyDown={modal.handleProjectKeyDown}
-              disabled={modal.isSaving}
+              disabled={modal.isSaving || modal.isLocked}
               role="combobox"
               aria-expanded={modal.displayedProjects.length > 0}
               aria-controls="assignment-project-results"
@@ -126,7 +137,7 @@ export function AssignmentModal({
               type="button"
               className="btn btn-sm btn-error mr-auto"
               onClick={modal.openDeleteConfirm}
-              disabled={modal.isSaving || modal.isProtected}
+              disabled={modal.isSaving || modal.isLocked}
             >
               Löschen
             </button>
@@ -145,7 +156,7 @@ export function AssignmentModal({
             onClick={modal.handleSave}
             disabled={
               modal.isSaving ||
-              modal.isProtected ||
+              modal.isLocked ||
               (!modal.isEditMode && !modal.selectedProjectRef)
             }
           >
@@ -166,7 +177,6 @@ export function AssignmentModal({
 }
 
 interface Props {
-  isOpen: boolean;
   assignment: CalendarCellEvent | null;
   employeeReference: string;
   date: string;

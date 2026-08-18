@@ -1,10 +1,5 @@
-import {
-  commands,
-  type DayliteUpdateContactIcalUrlsInput,
-  type PlanningContactRecord,
-} from "../generated/tauri";
+import { commands, type PlanningContactRecord } from "../generated/tauri";
 import { unwrapCommandResult } from "./command-result";
-import { normalizeOptionalString } from "./daylite-service-helpers";
 import {
   type CacheLoadOptions,
   type CacheLoadResult,
@@ -52,38 +47,6 @@ export async function loadCachedDayliteContacts(): Promise<
   }
 
   return result.data;
-}
-
-export async function updateDayliteContactIcalUrls(
-  input: DayliteUpdateContactIcalUrlsInput,
-): Promise<PlanningContactRecord> {
-  const contact = unwrapCommandResult(
-    await commands.dayliteUpdateContactIcalUrls(input),
-    "Die Daten konnten nicht von Daylite geladen werden.",
-  );
-
-  contactCache.update((contacts) => {
-    const others = contacts.filter((entry) => entry.self !== contact.self);
-    return sortContacts(
-      isMonteurContact(contact) ? [...others, contact] : others,
-    );
-  });
-
-  return contact;
-}
-
-function isMonteurContact(contact: PlanningContactRecord): boolean {
-  return normalizeOptionalString(contact.category)?.toLowerCase() === "monteur";
-}
-
-function sortContacts(
-  contacts: PlanningContactRecord[],
-): PlanningContactRecord[] {
-  return [...contacts].sort((left, right) =>
-    (left.nickname ?? left.full_name ?? "").localeCompare(
-      right.nickname ?? right.full_name ?? "",
-    ),
-  );
 }
 
 export function test_resetDayliteContactCache(): void {

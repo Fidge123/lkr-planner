@@ -97,11 +97,11 @@ export type DropOutcome =
   | { kind: "partialMove"; newHref: string; sourceHref: string }
   | { kind: "error"; message: string };
 
-export const edgeZoneWidth = 48;
-export const edgeDwellMs = 1000;
+const edgeZoneWidth = 48;
+const edgeDwellMs = 1000;
 // Without a cooldown the dwell restarts the instant it fires, so holding a
 // moment too long after a jump compounds into several weeks at once.
-export const edgeCooldownMs = 1000;
+const edgeCooldownMs = 1000;
 
 export function decideDropAction(
   source: AppointmentDragPayload,
@@ -117,6 +117,24 @@ export function decideDropAction(
     return "reorder";
   }
   return "none";
+}
+
+// A drag is not a deliberate enough gesture to carry a protection override.
+export function commandDropDeps(): DropDeps {
+  return {
+    updateAssignment: (href, uid, date, projectRef, projectName, orderIndex) =>
+      commands.updateAssignment({
+        href,
+        uid,
+        date,
+        projectRef,
+        projectName,
+        orderIndex,
+        overrideProtection: false,
+      }),
+    reorderAssignment: commands.reorderAssignment,
+    moveAssignment: commands.moveAssignment,
+  };
 }
 
 interface DropDeps {
@@ -404,26 +422,7 @@ export function useAppointmentDrag({
       activePayloadRef.current = null;
       if (!source || !target) return;
 
-      void performDrop(source, target, {
-        updateAssignment: (
-          href,
-          uid,
-          date,
-          projectRef,
-          projectName,
-          orderIndex,
-        ) =>
-          commands.updateAssignment({
-            href,
-            uid,
-            date,
-            projectRef,
-            projectName,
-            orderIndex,
-          }),
-        reorderAssignment: commands.reorderAssignment,
-        moveAssignment: commands.moveAssignment,
-      })
+      void performDrop(source, target, commandDropDeps())
         .then((outcome) => {
           if (outcome.kind === "done") {
             invalidateWeeksContainingRef.current(source.uid);

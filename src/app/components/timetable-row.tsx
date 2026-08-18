@@ -7,6 +7,7 @@ import {
   type PlanningContactRecord,
 } from "../../generated/tauri";
 import { recordLastAssignedProject } from "../../services/assignment-suggestions";
+import type { ProjectCategoryColors } from "../../services/daylite-categories";
 import type { DropPreview } from "../hooks/use-appointment-drag";
 import type { GhostSuggestion, ModalSaveAction } from "../next-day-quick-add";
 import { isGhostVisible, nextGhostState } from "../next-day-quick-add";
@@ -20,6 +21,7 @@ export function TimetableRow({
   employee,
   calendarEvents,
   calendarError,
+  categoryColors,
   week,
   employeeSetting,
   dropPreview = null,
@@ -122,7 +124,9 @@ export function TimetableRow({
             const rawDayEvents = calendarEvents.filter(
               (e) => e.date === isoDay,
             );
-            const dayEvents = rawDayEvents.map(toCellEvent);
+            const dayEvents = rawDayEvents.map((event) =>
+              toCellEvent(event, categoryColors),
+            );
             const suggestion =
               ghost && isGhostVisible(ghost, isoDay, rawDayEvents)
                 ? ghost
@@ -147,14 +151,15 @@ export function TimetableRow({
         )}
       </tr>
 
-      <AssignmentModal
-        isOpen={modalState !== null}
-        assignment={modalState?.assignment ?? null}
-        employeeReference={employee.self}
-        date={modalState?.date ?? ""}
-        onSave={handleSave}
-        onClose={() => setModalState(null)}
-      />
+      {modalState !== null ? (
+        <AssignmentModal
+          assignment={modalState.assignment}
+          employeeReference={employee.self}
+          date={modalState.date}
+          onSave={handleSave}
+          onClose={() => setModalState(null)}
+        />
+      ) : null}
     </>
   );
 }
@@ -184,6 +189,7 @@ interface Props {
   employee: PlanningContactRecord;
   calendarEvents: CalendarCellEvent[];
   calendarError: string | null;
+  categoryColors: ProjectCategoryColors;
   week: {
     days: Date[];
     holidayDates: Set<string>;

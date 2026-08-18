@@ -4,6 +4,7 @@ import type {
   CalendarCellEvent,
   DayliteProjectSummary,
 } from "../../generated/tauri";
+import { mockCommands } from "../../test/mock-commands";
 import { AssignmentModal } from "./assignment-modal";
 import {
   commandErrorMessage,
@@ -21,13 +22,11 @@ import {
   SuggestionEmptyState,
 } from "./project-result-list";
 
-mock.module("../../generated/tauri", () => ({
-  commands: {
-    createAssignment: mock(() => Promise.resolve({ status: "ok", data: "" })),
-    updateAssignment: mock(() => Promise.resolve({ status: "ok", data: null })),
-    deleteAssignment: mock(() => Promise.resolve({ status: "ok", data: null })),
-  },
-}));
+mockCommands({
+  createAssignment: mock(() => Promise.resolve({ status: "ok", data: "" })),
+  updateAssignment: mock(() => Promise.resolve({ status: "ok", data: null })),
+  deleteAssignment: mock(() => Promise.resolve({ status: "ok", data: null })),
+});
 
 const baseProps = {
   employeeReference: "ref-123",
@@ -36,21 +35,28 @@ const baseProps = {
   onClose: () => {},
 };
 
+const fixedAssignment: CalendarCellEvent = {
+  uid: "uid-9",
+  kind: "assignment",
+  title: "Projekt Fix",
+  projectStatus: "in_progress",
+  projectCategory: "Termin FIX geplant",
+  projectRef: "/v1/projects/9",
+  date: "2026-05-06",
+  startTime: "08:00",
+  endTime: "16:00",
+  href: "/calendars/user/cal/uid-9.ics",
+  orderIndex: null,
+};
+
 function project(name: string, ref: string): DayliteProjectSummary {
   return { self: ref, name, status: "in_progress" };
 }
 
 describe("AssignmentModal", () => {
-  it("renders nothing when closed", () => {
-    const html = renderToStaticMarkup(
-      <AssignmentModal {...baseProps} isOpen={false} assignment={null} />,
-    );
-    expect(html).toBe("");
-  });
-
   it("create mode: renders the project filter input and save button", () => {
     const html = renderToStaticMarkup(
-      <AssignmentModal {...baseProps} isOpen assignment={null} />,
+      <AssignmentModal {...baseProps} assignment={null} />,
     );
 
     expect(html).toContain("<dialog");
@@ -64,7 +70,7 @@ describe("AssignmentModal", () => {
 
   it("create mode: starts with an empty result list (empty default state)", () => {
     const html = renderToStaticMarkup(
-      <AssignmentModal {...baseProps} isOpen assignment={null} />,
+      <AssignmentModal {...baseProps} assignment={null} />,
     );
 
     expect(html).not.toContain('id="assignment-project-results"');
@@ -72,7 +78,7 @@ describe("AssignmentModal", () => {
 
   it("reserves the suggestion rows until the suggestions are loaded", () => {
     const html = renderToStaticMarkup(
-      <AssignmentModal {...baseProps} isOpen assignment={null} />,
+      <AssignmentModal {...baseProps} assignment={null} />,
     );
 
     expect(html.match(/skeleton/g)).toHaveLength(5);
@@ -84,7 +90,6 @@ describe("AssignmentModal", () => {
       kind: "assignment",
       title: "Projekt Alpha",
       projectStatus: "in_progress",
-      categoryColor: null,
       projectCategory: null,
       projectRef: "/v1/projects/1",
       date: "2026-05-06",
@@ -95,7 +100,7 @@ describe("AssignmentModal", () => {
     };
 
     const html = renderToStaticMarkup(
-      <AssignmentModal {...baseProps} isOpen assignment={existingAssignment} />,
+      <AssignmentModal {...baseProps} assignment={existingAssignment} />,
     );
 
     expect(html).toContain("<dialog");
@@ -107,28 +112,17 @@ describe("AssignmentModal", () => {
     expect(html).toContain("Löschen");
   });
 
-  it("edit mode: disables save and delete with a notice for a fixed appointment", () => {
-    const fixedAssignment: CalendarCellEvent = {
-      uid: "uid-9",
-      kind: "assignment",
-      title: "Projekt Fix",
-      projectStatus: "in_progress",
-      categoryColor: null,
-      projectCategory: "Termin FIX geplant",
-      projectRef: "/v1/projects/9",
-      date: "2026-05-06",
-      startTime: "08:00",
-      endTime: "16:00",
-      href: "/calendars/user/cal/uid-9.ics",
-      orderIndex: null,
-    };
-
+  it("edit mode: locks the picker, save and delete for a fixed appointment", () => {
     const html = renderToStaticMarkup(
-      <AssignmentModal {...baseProps} isOpen assignment={fixedAssignment} />,
+      <AssignmentModal {...baseProps} assignment={fixedAssignment} />,
     );
 
     expect(html).toContain("Termin FIX geplant");
-    expect(html).toContain("kann nicht bearbeitet oder gelöscht werden");
+    expect(html).toContain("Bearbeitung entsperren");
+    expect(html.match(/<input[^>]*type="checkbox"[^>]*checked/)).toBeNull();
+    expect(
+      html.match(/<input(?=[^>]*role="combobox")[^>]*disabled/),
+    ).not.toBeNull();
     expect(html.match(/<button[^>]*disabled[^>]*>Löschen/)).not.toBeNull();
     expect(html.match(/<button[^>]*disabled[^>]*>Speichern/)).not.toBeNull();
   });
@@ -139,7 +133,6 @@ describe("AssignmentModal", () => {
       kind: "assignment",
       title: "Projekt Alpha",
       projectStatus: "in_progress",
-      categoryColor: null,
       projectCategory: null,
       projectRef: "/v1/projects/1",
       date: "2026-05-06",
@@ -150,22 +143,18 @@ describe("AssignmentModal", () => {
     };
 
     const html = renderToStaticMarkup(
-      <AssignmentModal {...baseProps} isOpen assignment={assignment} />,
+      <AssignmentModal {...baseProps} assignment={assignment} />,
     );
 
     expect(html).not.toContain("Termin FIX geplant");
+    expect(html).not.toContain("Bearbeitung entsperren");
     expect(html.match(/<button[^>]*disabled[^>]*>Löschen/)).toBeNull();
     expect(html.match(/<button[^>]*disabled[^>]*>Speichern/)).toBeNull();
   });
 
   it("unsaved changes dialog renders when closing modal with dirty state", () => {
     const html = renderToStaticMarkup(
-      <AssignmentModal
-        {...baseProps}
-        isOpen
-        assignment={null}
-        showUnsavedConfirm
-      />,
+      <AssignmentModal {...baseProps} assignment={null} showUnsavedConfirm />,
     );
 
     expect(html).toContain("Ungespeicherte Änderungen");
@@ -179,7 +168,6 @@ describe("AssignmentModal", () => {
       kind: "assignment",
       title: "Projekt Beta",
       projectStatus: "new_status",
-      categoryColor: null,
       projectCategory: null,
       projectRef: "/v1/projects/2",
       date: "2026-05-06",
@@ -192,7 +180,6 @@ describe("AssignmentModal", () => {
     const html = renderToStaticMarkup(
       <AssignmentModal
         {...baseProps}
-        isOpen
         assignment={existingAssignment}
         showDeleteConfirm
       />,
