@@ -30,7 +30,6 @@ export function useAssignmentModal({
   onClose,
   initialShowDeleteConfirm,
   initialShowUnsavedConfirm,
-  initialUnlocked,
 }: Input) {
   const isEditMode = assignment !== null;
 
@@ -54,7 +53,7 @@ export function useAssignmentModal({
     initialShowUnsavedConfirm,
   );
   const [isDirty, setIsDirty] = useState(false);
-  const [isUnlocked, setIsUnlocked] = useState(initialUnlocked);
+  const [isUnlocked, setIsUnlocked] = useState(false);
   const filterInputRef = useRef<HTMLInputElement>(null);
 
   const isProtected =
@@ -250,5 +249,4 @@ interface Input {
   onClose: () => void;
   initialShowDeleteConfirm: boolean;
   initialShowUnsavedConfirm: boolean;
-  initialUnlocked: boolean;
 }

@@ -4,9 +4,7 @@ use serde::Deserialize;
 
 use super::auth_flow::send_authenticated_json;
 use super::client::{DayliteApiClient, DayliteHttpMethod, DayliteHttpRequest};
-use super::shared::{
-    run_daylite_command, with_token_refresh_lock, DayliteApiError, DayliteTokenState,
-};
+use super::shared::{run_daylite_command, DayliteApiError, DayliteTokenState};
 
 #[derive(Debug, Clone, Deserialize)]
 struct DayliteCategoryDto {
@@ -43,34 +41,19 @@ impl DayliteCategoryListDto {
 pub async fn daylite_project_category_colors(
     app: tauri::AppHandle,
 ) -> Result<HashMap<String, String>, DayliteApiError> {
-    run_daylite_command(app, |client, tokens| async move {
-        fetch_project_category_colors_core(&client, tokens).await
+    run_daylite_command(app, async |client, tokens| {
+        fetch_project_category_colors_core(client, tokens).await
     })
     .await
-}
-
-pub(crate) async fn fetch_project_category_colors(
-    app: tauri::AppHandle,
-) -> HashMap<String, String> {
-    let Ok(store) = crate::integrations::local_store::load_local_store(app) else {
-        return HashMap::new();
-    };
-    let Ok(client) = DayliteApiClient::new(&store.api_endpoints.daylite_base_url) else {
-        return HashMap::new();
-    };
-
-    with_token_refresh_lock(|tokens| fetch_project_category_colors_core(&client, tokens))
-        .await
-        .unwrap_or_default()
 }
 
 pub(super) async fn fetch_project_category_colors_core(
     client: &DayliteApiClient,
     token_state: DayliteTokenState,
-) -> Result<(HashMap<String, String>, DayliteTokenState), DayliteApiError> {
-    let (list, token_state) = send_authenticated_json::<DayliteCategoryListDto>(
+) -> Result<HashMap<String, String>, DayliteApiError> {
+    let list = send_authenticated_json::<DayliteCategoryListDto>(
         client,
-        token_state,
+        &token_state.access_token,
         DayliteHttpRequest {
             query: vec![("entity".to_string(), "project".to_string())],
             ..DayliteHttpRequest::new(DayliteHttpMethod::Get, "/categories")
@@ -91,7 +74,7 @@ pub(super) async fn fetch_project_category_colors_core(
         })
         .collect();
 
-    Ok((colors, token_state))
+    Ok(colors)
 }
 
 fn normalize_hex_colour(value: Option<String>) -> Option<String> {
@@ -142,7 +125,7 @@ mod tests {
             ]}"##,
         ))]);
 
-        let (colors, _) = fetch_project_category_colors_core(&client, valid_token_state())
+        let colors = fetch_project_category_colors_core(&client, valid_token_state())
             .await
             .expect("category fetch should succeed");
 
@@ -160,7 +143,7 @@ mod tests {
             ]}"##,
         ))]);
 
-        let (colors, _) = fetch_project_category_colors_core(&client, valid_token_state())
+        let colors = fetch_project_category_colors_core(&client, valid_token_state())
             .await
             .expect("category fetch should succeed");
 
@@ -174,7 +157,7 @@ mod tests {
             r##"{"results":[{"name":"Stillgelegt","hex_colour":"#ff9800","is_active":false}]}"##,
         ))]);
 
-        let (colors, _) = fetch_project_category_colors_core(&client, valid_token_state())
+        let colors = fetch_project_category_colors_core(&client, valid_token_state())
             .await
             .expect("category fetch should succeed");
 
@@ -188,7 +171,7 @@ mod tests {
             r##"[{"name":"Bau","hex_colour":"#8bc34a"}]"##,
         ))]);
 
-        let (colors, _) = fetch_project_category_colors_core(&client, valid_token_state())
+        let colors = fetch_project_category_colors_core(&client, valid_token_state())
             .await
             .expect("category fetch should succeed");
 
@@ -202,7 +185,7 @@ mod tests {
             r##"{"results":[{"name":"Bau","hex_colour":"8BC34A"}]}"##,
         ))]);
 
-        let (colors, _) = fetch_project_category_colors_core(&client, valid_token_state())
+        let colors = fetch_project_category_colors_core(&client, valid_token_state())
             .await
             .expect("category fetch should succeed");
 

@@ -1,4 +1,8 @@
 import type { CalendarCellEvent } from "../generated/tauri";
+import {
+  type ProjectCategoryColors,
+  projectCategoryColor,
+} from "../services/daylite-categories";
 
 export interface CellEvent {
   uid: string;
@@ -57,9 +61,14 @@ export function hasAbsenceConflict(events: CellEvent[]): boolean {
   );
 }
 
-export function toCellEvent(event: CalendarCellEvent): CellEvent {
+export function toCellEvent(
+  event: CalendarCellEvent,
+  categoryColors: ProjectCategoryColors,
+): CellEvent {
   const categoryColor =
-    event.kind === "assignment" ? (event.categoryColor ?? null) : null;
+    event.kind === "assignment"
+      ? projectCategoryColor(categoryColors, event.projectCategory)
+      : null;
   const color =
     event.kind === "absence"
       ? absenceCategoryColor(event.title)

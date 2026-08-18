@@ -2,6 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-02-27
+- Amended: 2026-08-14 (two named commands removed, category color joined at render time)
 
 ## Context
 
@@ -26,6 +27,22 @@ Replace existing `daylite_list_projects`, `daylite_list_contacts`, and `daylite_
 Add `daylite_list_cached_contacts` in Rust so frontend services no longer read/write raw `LocalStore` for contact cache usage.
 Keep `Monteur` filtering hardcoded in Rust backend contact flows.
 Keep search commands unchanged unless required by compile-time coupling.
+
+## Amendment 2026-08-14
+
+`daylite_list_projects` and `daylite_update_contact_ical_urls`, two of the three commands named above, have been removed.
+Neither had a frontend caller: project resolution goes through the single-project read, and the iCal write reaches Daylite through the ZEP calendar flow.
+`daylite_list_contacts` and `daylite_list_cached_contacts` are unaffected, as is the decision that Rust returns planning-ready records.
+
+The category color is now joined where the card is rendered rather than in the week payload.
+`CalendarCellEvent` carries `projectCategory`, and the planning grid looks the color up in the same map the assignment modal's project picker already loads.
+Fetching and normalizing the categories stays in Rust, so only the join moved, not the integration logic.
+
+- Every week load previously fetched the whole category map again, three times per week navigation once prefetching is counted, for data that changes about as often as configuration.
+- The frontend fetched the same map separately for the project picker, so the two paths duplicated each other.
+- The color map is read once per session and reset by "Daten neu laden", so a recolored category appears after a reload or a restart rather than on the next week load.
+  This is accepted deliberately: category colors are closer to configuration than to planning data.
+- A project's own category still comes from the project resolution cache, so recategorizing a project surfaces as quickly as any other project change.
 
 ## Consequences
 

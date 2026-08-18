@@ -5,6 +5,7 @@ import type {
   Holiday,
   PlanningContactRecord,
 } from "../../generated/tauri";
+import type { ProjectCategoryColors } from "../../services/daylite-categories";
 import type { DropPreview } from "../hooks/use-appointment-drag";
 import { toLocalISODate } from "../util";
 import { TimetableHeader } from "./timetable-header";
@@ -16,6 +17,7 @@ export function WeekTable({
   employeeSettings,
   eventsByEmployee,
   errorsByEmployee,
+  categoryColors,
   holidays,
   isEmployeeLoading,
   dropPreview = null,
@@ -61,6 +63,7 @@ export function WeekTable({
             employee={employee}
             calendarEvents={eventsByEmployee[employee.self] ?? []}
             calendarError={errorsByEmployee[employee.self] ?? null}
+            categoryColors={categoryColors}
             week={{ days: weekDays, holidayDates }}
             employeeSetting={
               employeeSettings.find(
@@ -94,6 +97,7 @@ export interface WeekTableProps {
   employeeSettings: EmployeeSetting[];
   eventsByEmployee: Record<string, CalendarCellEvent[]>;
   errorsByEmployee: Record<string, string>;
+  categoryColors: ProjectCategoryColors;
   holidays: Holiday[];
   isEmployeeLoading: boolean;
   dropPreview?: DropPreview | null;

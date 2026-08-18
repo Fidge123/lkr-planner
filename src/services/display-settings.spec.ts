@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { mockCommands } from "../test/mock-commands";
 import { loadDisplaySettings, saveDisplaySettings } from "./display-settings";
 
 interface DisplaySettings {
@@ -18,12 +19,10 @@ const mockSaveLocalStore = mock(
   },
 );
 
-mock.module("../generated/tauri", () => ({
-  commands: {
-    loadLocalStore: mockLoadLocalStore,
-    saveLocalStore: mockSaveLocalStore,
-  },
-}));
+mockCommands({
+  loadLocalStore: mockLoadLocalStore,
+  saveLocalStore: mockSaveLocalStore,
+});
 
 describe("display settings service", () => {
   beforeEach(() => {

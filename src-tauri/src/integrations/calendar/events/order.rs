@@ -23,7 +23,6 @@ mod tests {
             kind,
             title: "Termin".to_string(),
             project_status: None,
-            category_color: None,
             project_category: None,
             project_ref: None,
             date: date.to_string(),

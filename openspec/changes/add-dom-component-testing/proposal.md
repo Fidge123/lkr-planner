@@ -6,7 +6,8 @@ Every interactive behaviour is therefore untestable, and the gap is not theoreti
 The modal is permanently mounted per employee row, so the reset is the only thing standing between an unlock and its leaking onto the next assignment opened in that row.
 
 The workaround has a second cost.
-`AssignmentModal` accepts `showDeleteConfirm`, `showUnsavedConfirm` and `unlocked` purely so a static render can start in a state the user reaches by clicking; no production caller passes any of them.
+`AssignmentModal` accepts `showDeleteConfirm` and `showUnsavedConfirm` purely so a static render can start in a state the user reaches by clicking; no production caller passes either of them.
+It accepted an `unlocked` prop on the same grounds until that one was removed separately, for arming the protection override rather than opening a dialog.
 Each new interactive state adds another prop to the public interface of a component that does not need it.
 
 ## What Changes
@@ -33,7 +34,7 @@ Removing the test-only props changes no requirement in `assignment-modal-crud`: 
 - `package.json`: new devDependencies for the DOM environment and the React testing library; no change to the `test` script.
 - `bunfig.toml`: new file preloading the DOM registrator before the test run.
 - `src/app/**/*.spec.tsx`: the eight static-markup spec files move to the new harness.
-- `src/app/components/assignment-modal.tsx` and `src/app/hooks/use-assignment-modal.ts`: the `showDeleteConfirm`, `showUnsavedConfirm` and `unlocked` props and their hook inputs go away.
+- `src/app/components/assignment-modal.tsx` and `src/app/hooks/use-assignment-modal.ts`: the `showDeleteConfirm` and `showUnsavedConfirm` props and their hook inputs go away.
 - `docs/adr`: a new ADR on the testing layers.
 - No change to the Rust backend, to `cargo test`, or to the pure-logic specs that need no DOM.
 

@@ -2,6 +2,8 @@ import { describe, expect, it } from "bun:test";
 import type { CalendarCellEvent } from "../generated/tauri";
 import { type CellEvent, hasAbsenceConflict, toCellEvent } from "./types";
 
+const categoryColors = { Bau: "#8bc34a" };
+
 function calendarEvent(
   overrides: Partial<CalendarCellEvent> = {},
 ): CalendarCellEvent {
@@ -10,7 +12,6 @@ function calendarEvent(
     kind: "absence",
     title: "UB",
     projectStatus: null,
-    categoryColor: null,
     projectCategory: null,
     date: "2026-05-05",
     startTime: null,
@@ -99,51 +100,70 @@ describe("toCellEvent absence colors", () => {
 
   for (const [title, expected] of codeColors) {
     it(`maps absence code ${title} to its family color`, () => {
-      expect(toCellEvent(calendarEvent({ title })).color).toBe(expected);
+      expect(toCellEvent(calendarEvent({ title }), categoryColors).color).toBe(
+        expected,
+      );
     });
   }
 
   it("matches codes case-insensitively and ignores surrounding whitespace", () => {
-    expect(toCellEvent(calendarEvent({ title: "  kro  " })).color).toBe(
-      "bg-(--color-absence-sick)/20",
-    );
+    expect(
+      toCellEvent(calendarEvent({ title: "  kro  " }), categoryColors).color,
+    ).toBe("bg-(--color-absence-sick)/20");
   });
 
   it("keeps the default color for an unknown absence title", () => {
-    expect(toCellEvent(calendarEvent({ title: "Sonderfall" })).color).toBe(
-      "bg-info/30",
-    );
+    expect(
+      toCellEvent(calendarEvent({ title: "Sonderfall" }), categoryColors).color,
+    ).toBe("bg-info/30");
   });
 
   it("does not apply absence colors to bare events", () => {
     expect(
-      toCellEvent(calendarEvent({ kind: "bare", title: "UB" })).color,
+      toCellEvent(calendarEvent({ kind: "bare", title: "UB" }), categoryColors)
+        .color,
     ).toBe("bg-base-200");
   });
 });
 
 describe("toCellEvent assignment colors", () => {
-  it("carries the Daylite category color untouched", () => {
+  it("colors the card from the category's Daylite color", () => {
     const event = toCellEvent(
       calendarEvent({
         kind: "assignment",
         title: "Projekt Nord",
         projectStatus: "in_progress",
-        categoryColor: "#8bc34a",
+        projectCategory: "Bau",
       }),
+      categoryColors,
     );
 
     expect(event.categoryColor).toBe("#8bc34a");
     expect(event.color).toBe("bg-base-200");
   });
 
-  it("uses the neutral surface without a category color", () => {
+  it("leaves the strip unset for a category that has no color", () => {
+    const event = toCellEvent(
+      calendarEvent({
+        kind: "assignment",
+        title: "Projekt Nord",
+        projectStatus: "in_progress",
+        projectCategory: "Ohne Farbe",
+      }),
+      categoryColors,
+    );
+
+    expect(event.categoryColor).toBeNull();
+  });
+
+  it("uses the neutral surface without a category", () => {
     const event = toCellEvent(
       calendarEvent({
         kind: "assignment",
         title: "Projekt Nord",
         projectStatus: "in_progress",
       }),
+      categoryColors,
     );
 
     expect(event.categoryColor).toBeNull();
@@ -163,6 +183,7 @@ describe("toCellEvent assignment colors", () => {
     for (const projectStatus of statuses) {
       const event = toCellEvent(
         calendarEvent({ kind: "assignment", title: "Projekt", projectStatus }),
+        categoryColors,
       );
       expect(event.color).toBe("bg-base-200");
     }
@@ -171,20 +192,25 @@ describe("toCellEvent assignment colors", () => {
   it("uses the neutral surface for an unresolved project", () => {
     const event = toCellEvent(
       calendarEvent({ kind: "assignment", title: "Projekt Nord" }),
+      categoryColors,
     );
 
     expect(event.categoryColor).toBeNull();
     expect(event.color).toBe("bg-base-200");
   });
 
-  it("ignores a category color on absence and bare events", () => {
-    const absence = toCellEvent(calendarEvent({ categoryColor: "#8bc34a" }));
+  it("ignores a category on absence and bare events", () => {
+    const absence = toCellEvent(
+      calendarEvent({ projectCategory: "Bau" }),
+      categoryColors,
+    );
     const bare = toCellEvent(
       calendarEvent({
         kind: "bare",
         title: "Werkstatt",
-        categoryColor: "#8bc34a",
+        projectCategory: "Bau",
       }),
+      categoryColors,
     );
 
     expect(absence.categoryColor).toBeNull();

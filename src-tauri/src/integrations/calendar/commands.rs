@@ -1,4 +1,5 @@
 use chrono::NaiveDate;
+use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use std::collections::{HashMap, HashSet};
@@ -48,17 +49,20 @@ pub async fn load_week_events(
     let (fetches, error_results) =
         fetch_week_for_employees(&store, &session, week_start_date).await;
 
-    let api_results = fetch_referenced_projects(app.clone(), &fetches).await;
-    let category_colors =
-        crate::integrations::daylite::categories::fetch_project_category_colors(app).await;
-
+    let resolved_projects = crate::integrations::daylite::projects::resolve_projects_by_reference(
+        &store.api_endpoints.daylite_base_url,
+        project_references(&fetches),
+    )
+    .await;
     Ok(assemble_week_events(
         fetches,
         error_results,
-        &api_results,
-        &category_colors,
+        &resolved_projects,
     ))
 }
+
+// One unit is two requests, primary and absence, so the roster fans out to twice this.
+const EMPLOYEE_FETCH_CONCURRENCY: usize = 4;
 
 struct EmployeeFetch {
     employee_reference: String,
@@ -124,7 +128,10 @@ async fn fetch_week_for_employees(
         })
         .collect();
 
-    let fetch_results = futures::future::join_all(employee_futures).await;
+    let fetch_results: Vec<_> = futures::stream::iter(employee_futures)
+        .buffer_unordered(EMPLOYEE_FETCH_CONCURRENCY)
+        .collect()
+        .await;
 
     let mut fetches = Vec::new();
     let mut error_results = Vec::new();
@@ -153,10 +160,7 @@ async fn fetch_week_for_employees(
     (fetches, error_results)
 }
 
-async fn fetch_referenced_projects(
-    app: tauri::AppHandle,
-    fetches: &[EmployeeFetch],
-) -> HashMap<String, Option<ResolvedProject>> {
+fn project_references(fetches: &[EmployeeFetch]) -> HashSet<String> {
     let mut references: HashSet<String> = HashSet::new();
     for fetch in fetches {
         for event in &fetch.pending {
@@ -166,31 +170,20 @@ async fn fetch_referenced_projects(
         }
     }
 
-    let mut api_results = HashMap::new();
-    for project_ref in references {
-        let result = crate::integrations::daylite::projects::fetch_project_by_reference(
-            app.clone(),
-            &project_ref,
-        )
-        .await;
-        api_results.insert(project_ref, result);
-    }
-
-    api_results
+    references
 }
 
 fn assemble_week_events(
     fetches: Vec<EmployeeFetch>,
     error_results: Vec<EmployeeWeekEvents>,
-    api_results: &HashMap<String, Option<ResolvedProject>>,
-    category_colors: &HashMap<String, String>,
+    resolved_projects: &HashMap<String, Option<ResolvedProject>>,
 ) -> Vec<EmployeeWeekEvents> {
     let mut results = error_results;
     for fetch in fetches {
         let mut events: Vec<CalendarCellEvent> = fetch
             .pending
             .into_iter()
-            .map(|p| resolve_event(p, api_results, category_colors))
+            .map(|p| resolve_event(p, resolved_projects))
             .collect();
         events.extend(fetch.absences);
         // Deduplicate by UID to guard against CalDAV servers redelivering the same event.
@@ -278,17 +271,26 @@ fn load_caldav_session(
     build_caldav_session(store, credentials)
 }
 
+/// Cloning a reqwest client shares its connection pool rather than copying it.
+fn caldav_client() -> Result<reqwest::Client, String> {
+    static CLIENT: std::sync::OnceLock<Result<reqwest::Client, String>> =
+        std::sync::OnceLock::new();
+    CLIENT
+        .get_or_init(|| {
+            reqwest::Client::builder()
+                .timeout(Duration::from_secs(30))
+                .build()
+                .map_err(|e| format!("HTTP-Client konnte nicht erstellt werden: {e}"))
+        })
+        .clone()
+}
+
 fn build_caldav_session(
     store: &crate::integrations::local_store::LocalStore,
     credentials: crate::integrations::zep::ZepStoredCredentials,
 ) -> Result<CaldavSession, String> {
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(30))
-        .build()
-        .map_err(|e| format!("HTTP-Client konnte nicht erstellt werden: {e}"))?;
-
     Ok(CaldavSession {
-        client,
+        client: caldav_client()?,
         username: credentials.username,
         password: credentials.password,
         base_url: store.api_endpoints.zep_caldav_root_url.clone(),
