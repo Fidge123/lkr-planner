@@ -132,8 +132,7 @@ impl TelemetryEvent {
     }
 }
 
-/// A closed dimension: built from a serializable error enum, or sanitized when it
-/// originates outside the backend.
+/// A closed dimension; a code originating outside the backend is sanitized.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ErrorCode(String);
 

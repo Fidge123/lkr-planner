@@ -52,8 +52,7 @@ impl TelemetryError for DayliteApiError {
     }
 }
 
-/// A bare string error is the German user message, which can name a project or a
-/// contact, so only the fact of the failure is reported.
+/// The string is the German user message and can name a project, so it is not sent.
 impl TelemetryError for String {
     fn error_code(&self) -> ErrorCode {
         ErrorCode::from_enum(&"COMMAND_FAILED")
@@ -120,8 +119,7 @@ impl TelemetryError for RequestFailure {
     }
 }
 
-/// For synchronous call sites, which record the failure only: their duration is
-/// dominated by the caller that already reports one.
+/// Failure only: the command wrapping this site already reports a duration.
 pub fn record_failure<E: TelemetryError>(
     app: &tauri::AppHandle,
     operation: Operation,

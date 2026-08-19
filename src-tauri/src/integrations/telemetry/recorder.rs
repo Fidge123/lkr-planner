@@ -18,8 +18,7 @@ struct ConsentState {
     install_id: Option<String>,
 }
 
-/// Consent is cached in memory; the local store is only read at startup and
-/// written when the user changes the setting.
+/// Consent is cached here; the store is read at startup and written on change.
 pub struct TelemetryRecorder {
     state: Mutex<ConsentState>,
     sender: mpsc::Sender<TelemetryCommand>,
@@ -87,8 +86,7 @@ impl TelemetryRecorder {
         self.send(TelemetryCommand::Record(Box::new(event)));
     }
 
-    /// Resolves once the flush task has delivered what it holds, so shutdown can
-    /// bound the wait instead of guessing.
+    /// Lets shutdown bound its wait instead of guessing.
     pub fn shutdown(&self) -> oneshot::Receiver<()> {
         let (sender, receiver) = oneshot::channel();
         self.send(TelemetryCommand::Shutdown(sender));
@@ -96,8 +94,7 @@ impl TelemetryRecorder {
         receiver
     }
 
-    /// A store enabled by an older build can lack an identifier; mint one rather
-    /// than dropping the event.
+    /// A store enabled by an older build can lack an identifier.
     fn ensure_active(&self) -> bool {
         let mut state = self.lock();
         if !state.enabled {
@@ -111,8 +108,7 @@ impl TelemetryRecorder {
         true
     }
 
-    /// A full channel drops the event: telemetry never applies back-pressure to a
-    /// user-facing operation.
+    /// Dropping beats back-pressure on a user-facing operation.
     fn send(&self, command: TelemetryCommand) {
         let _ = self.sender.try_send(command);
     }

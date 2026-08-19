@@ -12,8 +12,7 @@ pub struct TelemetryState {
 }
 
 impl TelemetryState {
-    /// Returns the state and the flush task to spawn; the task ends when the
-    /// state is dropped or shutdown is requested.
+    /// The returned task ends when the state is dropped or shutdown is requested.
     pub fn start() -> (Self, impl std::future::Future<Output = ()> + Send) {
         let (recorder, receiver) = TelemetryRecorder::channel();
         let recorder = Arc::new(recorder);

@@ -1,6 +1,5 @@
 fn main() {
-    // `option_env!("POSTHOG_API_KEY")` is baked in at compile time, so a changed
-    // key must invalidate the cached build.
+    // The key is baked in by `option_env!`, so a change must invalidate the build.
     println!("cargo:rerun-if-env-changed=POSTHOG_API_KEY");
     tauri_build::build()
 }
