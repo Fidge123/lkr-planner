@@ -113,19 +113,10 @@ async fn flush<S: EventSink>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::integrations::telemetry::events::{Integration, Operation};
     use crate::integrations::telemetry::recorder::TelemetryRecorder;
+    use crate::integrations::telemetry::test_support::{enabled, event};
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Mutex;
-
-    fn event(duration_ms: u64) -> TelemetryEvent {
-        TelemetryEvent::operation_completed(
-            Operation::LoadWeekEvents,
-            Integration::Zep,
-            true,
-            duration_ms,
-        )
-    }
 
     #[derive(Default)]
     struct RecordingSink {
@@ -300,10 +291,4 @@ mod tests {
         assert!(sink.batches().iter().all(|batch| batch.len() <= BATCH_SIZE));
     }
 
-    fn enabled() -> crate::integrations::local_store::types::TelemetrySettings {
-        crate::integrations::local_store::types::TelemetrySettings {
-            enabled: true,
-            install_id: Some("11111111-2222-4333-8444-555555555555".to_string()),
-        }
-    }
 }

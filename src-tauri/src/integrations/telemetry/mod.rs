@@ -7,3 +7,5 @@ pub mod queue;
 pub mod recorder;
 pub mod redact;
 pub mod state;
+#[cfg(test)]
+mod test_support;

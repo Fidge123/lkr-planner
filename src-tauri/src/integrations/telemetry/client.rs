@@ -2,7 +2,9 @@ use super::context::EventContext;
 use super::events::TelemetryEvent;
 use super::queue::DeliveryError;
 #[cfg(test)]
-use crate::integrations::http_record_replay::{RecordReplayConfig, RecordedRequest, VcrMode};
+use crate::integrations::http_record_replay::{
+    cassette_path_for_test, RecordReplayConfig, RecordedRequest, VcrMode,
+};
 use serde_json::{json, Map, Value};
 use tauri_plugin_http::reqwest;
 
@@ -118,13 +120,6 @@ impl PostHogClient {
     }
 }
 
-#[cfg(test)]
-fn cassette_path_for_test(file_name: &str) -> std::path::PathBuf {
-    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../tests/cassettes")
-        .join(file_name)
-}
-
 fn enrich(properties: &Map<String, Value>, context: &EventContext) -> Map<String, Value> {
     let mut enriched = properties.clone();
     enriched.insert(
@@ -146,26 +141,22 @@ fn enrich(properties: &Map<String, Value>, context: &EventContext) -> Map<String
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::integrations::telemetry::events::{Integration, Operation};
+    use crate::integrations::telemetry::test_support::{event, INSTALL_ID};
 
     fn context() -> EventContext {
         EventContext {
-            install_id: "11111111-2222-4333-8444-555555555555".to_string(),
+            install_id: INSTALL_ID.to_string(),
             app_version: "0.1.0".to_string(),
             os_name: "macos".to_string(),
             os_version: "15.3".to_string(),
         }
     }
 
-    fn event() -> TelemetryEvent {
-        TelemetryEvent::operation_completed(Operation::LoadWeekEvents, Integration::Zep, true, 42)
-    }
-
     #[test]
     fn client_is_inert_without_a_build_time_key() {
         let client = PostHogClient::from_build_config();
 
-        assert_eq!(client.batch_payload(vec![event()], &context()), None);
+        assert_eq!(client.batch_payload(vec![event(42)], &context()), None);
     }
 
     #[test]
@@ -173,7 +164,7 @@ mod tests {
         let client = PostHogClient::with_key_for_test("phc_test_key");
 
         let payload = client
-            .batch_payload(vec![event(), event()], &context())
+            .batch_payload(vec![event(42), event(42)], &context())
             .expect("a configured client builds a payload");
 
         assert_eq!(
@@ -189,12 +180,12 @@ mod tests {
         let client = PostHogClient::with_key_for_test("phc_test_key");
 
         let payload = client
-            .batch_payload(vec![event()], &context())
+            .batch_payload(vec![event(42)], &context())
             .expect("a configured client builds a payload");
 
         assert_eq!(
             payload["batch"][0]["distinct_id"],
-            "11111111-2222-4333-8444-555555555555"
+            INSTALL_ID
         );
     }
 
@@ -203,7 +194,7 @@ mod tests {
         let client = PostHogClient::with_replay_cassette("phc_test_key", "posthog-capture.json");
 
         client
-            .send(vec![event()], &context())
+            .send(vec![event(42)], &context())
             .await
             .expect("the recorded interaction should match the built request");
     }
@@ -214,7 +205,7 @@ mod tests {
         let mut rejected = context();
         rejected.install_id = "rejected-install-id".to_string();
 
-        let result = client.send(vec![event()], &rejected).await;
+        let result = client.send(vec![event(42)], &rejected).await;
 
         assert_eq!(result, Err(DeliveryError));
     }

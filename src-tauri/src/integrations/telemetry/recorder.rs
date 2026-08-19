@@ -127,41 +127,24 @@ fn generate_install_id() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::integrations::telemetry::events::{Integration, Operation};
-
-    impl TelemetryRecorder {
-        fn for_test() -> (Self, mpsc::Receiver<TelemetryCommand>) {
-            Self::channel()
-        }
-    }
-
-    fn test_event() -> TelemetryEvent {
-        TelemetryEvent::operation_completed(Operation::LoadWeekEvents, Integration::Zep, true, 42)
-    }
-
-    fn enabled_settings() -> TelemetrySettings {
-        TelemetrySettings {
-            enabled: true,
-            install_id: Some("11111111-2222-4333-8444-555555555555".to_string()),
-        }
-    }
+    use crate::integrations::telemetry::test_support::{enabled, event, INSTALL_ID};
 
     #[test]
     fn records_nothing_while_telemetry_is_disabled() {
-        let (recorder, mut receiver) = TelemetryRecorder::for_test();
+        let (recorder, mut receiver) = TelemetryRecorder::channel();
         recorder.apply_settings(&TelemetrySettings::default());
 
-        recorder.record(test_event());
+        recorder.record(event(42));
 
         assert!(receiver.try_recv().is_err());
     }
 
     #[test]
     fn records_events_once_telemetry_is_enabled() {
-        let (recorder, mut receiver) = TelemetryRecorder::for_test();
-        recorder.apply_settings(&enabled_settings());
+        let (recorder, mut receiver) = TelemetryRecorder::channel();
+        recorder.apply_settings(&enabled());
 
-        recorder.record(test_event());
+        recorder.record(event(42));
 
         assert!(matches!(
             receiver.try_recv(),
@@ -171,9 +154,9 @@ mod tests {
 
     #[test]
     fn disabling_discards_pending_events() {
-        let (recorder, mut receiver) = TelemetryRecorder::for_test();
-        recorder.apply_settings(&enabled_settings());
-        recorder.record(test_event());
+        let (recorder, mut receiver) = TelemetryRecorder::channel();
+        recorder.apply_settings(&enabled());
+        recorder.record(event(42));
 
         recorder.set_enabled(false);
 
@@ -191,19 +174,19 @@ mod tests {
 
     #[test]
     fn records_nothing_after_being_disabled() {
-        let (recorder, mut receiver) = TelemetryRecorder::for_test();
-        recorder.apply_settings(&enabled_settings());
+        let (recorder, mut receiver) = TelemetryRecorder::channel();
+        recorder.apply_settings(&enabled());
         recorder.set_enabled(false);
         while receiver.try_recv().is_ok() {}
 
-        recorder.record(test_event());
+        recorder.record(event(42));
 
         assert!(receiver.try_recv().is_err());
     }
 
     #[test]
     fn install_id_is_generated_on_first_activation() {
-        let (recorder, _receiver) = TelemetryRecorder::for_test();
+        let (recorder, _receiver) = TelemetryRecorder::channel();
         recorder.apply_settings(&TelemetrySettings::default());
 
         let settings = recorder.set_enabled(true);
@@ -221,37 +204,37 @@ mod tests {
 
     #[test]
     fn install_id_is_stable_across_reloads() {
-        let (recorder, _receiver) = TelemetryRecorder::for_test();
-        recorder.apply_settings(&enabled_settings());
+        let (recorder, _receiver) = TelemetryRecorder::channel();
+        recorder.apply_settings(&enabled());
         let first = recorder.install_id();
 
-        recorder.apply_settings(&enabled_settings());
+        recorder.apply_settings(&enabled());
 
         assert_eq!(recorder.install_id(), first);
         assert_eq!(
             first.as_deref(),
-            Some("11111111-2222-4333-8444-555555555555")
+            Some(INSTALL_ID)
         );
     }
 
     #[test]
     fn reactivation_keeps_the_existing_install_id() {
-        let (recorder, _receiver) = TelemetryRecorder::for_test();
-        recorder.apply_settings(&enabled_settings());
+        let (recorder, _receiver) = TelemetryRecorder::channel();
+        recorder.apply_settings(&enabled());
 
         recorder.set_enabled(false);
         let settings = recorder.set_enabled(true);
 
         assert_eq!(
             settings.install_id.as_deref(),
-            Some("11111111-2222-4333-8444-555555555555")
+            Some(INSTALL_ID)
         );
     }
 
     #[test]
     fn install_id_is_not_derived_from_user_or_host_data() {
-        let (first_recorder, _first) = TelemetryRecorder::for_test();
-        let (second_recorder, _second) = TelemetryRecorder::for_test();
+        let (first_recorder, _first) = TelemetryRecorder::channel();
+        let (second_recorder, _second) = TelemetryRecorder::channel();
         first_recorder.apply_settings(&TelemetrySettings::default());
         second_recorder.apply_settings(&TelemetrySettings::default());
 

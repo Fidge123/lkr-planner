@@ -184,15 +184,9 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::integrations::local_store::types::{StoreError, StoreErrorCode, TelemetrySettings};
+    use crate::integrations::local_store::types::{StoreError, StoreErrorCode};
     use crate::integrations::telemetry::recorder::{TelemetryCommand, TelemetryRecorder};
-
-    fn enabled() -> TelemetrySettings {
-        TelemetrySettings {
-            enabled: true,
-            install_id: Some("11111111-2222-4333-8444-555555555555".to_string()),
-        }
-    }
+    use crate::integrations::telemetry::test_support::enabled;
 
     fn recorded(
         receiver: &mut tokio::sync::mpsc::Receiver<TelemetryCommand>,

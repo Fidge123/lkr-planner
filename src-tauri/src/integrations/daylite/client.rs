@@ -1,7 +1,8 @@
 use super::shared::{normalize_base_url, DayliteApiError, DayliteApiErrorCode};
 #[cfg(test)]
 use crate::integrations::http_record_replay::{
-    RecordReplayConfig, RecordedInteraction, RecordedRequest, RecordedResponse, VcrMode,
+    cassette_path_for_test, RecordReplayConfig, RecordedInteraction, RecordedRequest,
+    RecordedResponse, VcrMode,
 };
 use serde_json::Value;
 use std::future::Future;
@@ -339,13 +340,6 @@ fn to_recorded_request(request: &DayliteHttpRequest) -> RecordedRequest {
         query: request.query.clone(),
         body: request.body.clone(),
     }
-}
-
-#[cfg(test)]
-fn cassette_path_for_test(file_name: &str) -> std::path::PathBuf {
-    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../tests/cassettes")
-        .join(file_name)
 }
 
 #[cfg(test)]
