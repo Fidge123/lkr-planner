@@ -1,3 +1,4 @@
+import { CalendarDays } from "lucide-react";
 import { useEffect, useRef } from "react";
 import type {
   CalendarCellEvent,
@@ -7,7 +8,7 @@ import type {
 } from "../../generated/tauri";
 import type { ProjectCategoryColors } from "../../services/daylite-categories";
 import type { DropPreview } from "../hooks/use-appointment-drag";
-import { toLocalISODate } from "../util";
+import { getIsoWeek, toLocalISODate } from "../util";
 import { TimetableHeader } from "./timetable-header";
 import { TimetableRow } from "./timetable-row";
 
@@ -46,7 +47,12 @@ export function WeekTable({
     <table ref={gridRef} className="table table-fixed border-collapse">
       <thead className="text-base-content">
         <tr>
-          <th className="w-40 p-4 font-bold">Mitarbeiter</th>
+          <th className="w-40 p-4 font-bold">
+            <span className="flex items-center gap-1.5 text-primary">
+              <CalendarDays className="size-4" aria-hidden="true" />
+              KW {getIsoWeek(weekDays[0])}
+            </span>
+          </th>
           {weekDays.map((day) => (
             <TimetableHeader
               key={day.getTime()}
