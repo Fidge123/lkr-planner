@@ -7,6 +7,7 @@ import {
   setSystemTime,
 } from "bun:test";
 import {
+  getIsoWeek,
   getWeekDays,
   getWeekStart,
   isToday,
@@ -161,6 +162,35 @@ describe("util", () => {
       const shifted = shiftWeekDays(beforeDst, 1);
       expect(shifted.map(toLocalISODate)).toEqual(["2026-03-30", "2026-04-03"]);
       expect(shifted.every((day) => day.getHours() === 0)).toBe(true);
+    });
+  });
+
+  describe("getIsoWeek", () => {
+    it("numbers a week by the ISO 8601 rule that week 1 holds the first Thursday", () => {
+      expect(getIsoWeek(new Date(2026, 0, 1))).toBe(1);
+      expect(getIsoWeek(new Date(2025, 11, 29))).toBe(1);
+      expect(getIsoWeek(new Date(2026, 7, 17))).toBe(34);
+    });
+
+    it("keeps every day of a week on the same number", () => {
+      const numbers = getWeekDays(0, true).map(getIsoWeek);
+      expect(numbers).toEqual(Array(7).fill(numbers[0]));
+    });
+
+    it("counts the 53rd week of a long year across the year boundary", () => {
+      expect(getIsoWeek(new Date(2026, 11, 31))).toBe(53);
+      expect(getIsoWeek(new Date(2027, 0, 3))).toBe(53);
+      expect(getIsoWeek(new Date(2027, 0, 4))).toBe(1);
+    });
+
+    it("assigns the last days of a year to the next year's week 1", () => {
+      expect(getIsoWeek(new Date(2024, 11, 30))).toBe(1);
+      expect(getIsoWeek(new Date(2022, 11, 31))).toBe(52);
+    });
+
+    it("stays stable across a DST switch", () => {
+      expect(getIsoWeek(new Date(2026, 2, 30))).toBe(14);
+      expect(getIsoWeek(new Date(2026, 9, 26))).toBe(44);
     });
   });
 
