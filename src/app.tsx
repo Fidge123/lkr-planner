@@ -20,7 +20,6 @@ import { loadDayliteContacts } from "./services/daylite-contacts";
 function App() {
   const [weekOffset, setWeekOffset] = useState(0);
   const [showWeekend, setShowWeekend] = useState(false);
-  // Week and today highlight are derived from the current date at render time.
   useRerenderOnDayChange();
   const weekStart = getWeekStart(weekOffset, showWeekend);
   const planningAssignmentsState = usePlanningAssignments(weekStart);
