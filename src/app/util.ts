@@ -28,6 +28,15 @@ export function shiftWeekDays(days: Date[], weekOffset: number): Date[] {
   );
 }
 
+export function millisecondsUntilNextLocalMidnight(now: Date): number {
+  const nextMidnight = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate() + 1,
+  );
+  return nextMidnight.getTime() - now.getTime();
+}
+
 export function isToday(day: Date) {
   const today = new Date();
   return day.toDateString() === today.toDateString();

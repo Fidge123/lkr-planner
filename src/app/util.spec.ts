@@ -11,6 +11,7 @@ import {
   getWeekDays,
   getWeekStart,
   isToday,
+  millisecondsUntilNextLocalMidnight,
   shiftWeekDays,
   toLocalISODate,
 } from "./util";
@@ -206,6 +207,37 @@ describe("util", () => {
       expect(isToday(new Date(2026, 1, 1, 12, 34, 56))).toBe(false);
       expect(isToday(new Date(2026, 0, 2, 12, 34, 56))).toBe(false);
       expect(isToday(new Date(1970, 0, 1))).toBe(false);
+    });
+  });
+
+  describe("millisecondsUntilNextLocalMidnight", () => {
+    it("counts the time left in the current local day", () => {
+      expect(
+        millisecondsUntilNextLocalMidnight(new Date(2026, 0, 1, 23, 59, 59)),
+      ).toBe(1000);
+    });
+
+    it("lands on the next local midnight, DST switches included", () => {
+      for (const start of [
+        new Date(2026, 0, 1, 12, 34, 56),
+        new Date(2026, 2, 29, 0, 0, 0),
+        new Date(2026, 9, 25, 0, 0, 0),
+      ]) {
+        const next = new Date(
+          start.getTime() + millisecondsUntilNextLocalMidnight(start),
+        );
+        expect(toLocalISODate(next)).toBe(
+          toLocalISODate(
+            new Date(
+              start.getFullYear(),
+              start.getMonth(),
+              start.getDate() + 1,
+            ),
+          ),
+        );
+        expect(next.getHours()).toBe(0);
+        expect(next.getMinutes()).toBe(0);
+      }
     });
   });
 });
