@@ -24,7 +24,7 @@ The system SHALL address a Daylite project by the numeric identifier carried in 
 
 #### Scenario: Reference is translated to a deep link
 - **WHEN** a project reference of the form `/v1/projects/<id>` is opened
-- **THEN** the URL `daylite4://ShowObject/Project/<id>` is opened
+- **THEN** the URL `daylite://Command=ShowObject&Entity=Project&ID=<id>` is opened
 
 #### Scenario: Reference does not name a project
 - **WHEN** the reference does not have the form `/v1/projects/<id>` with a numeric id

@@ -1,12 +1,15 @@
-## 1. Verify the deep link against a real Daylite
+## 1. Confirm the id source
+
+The URL form is already confirmed against the installed Daylite.
+What is left is confirming that the id the app will pass, taken from the API reference, is the id the link wants.
 
 - [ ] 1.1 Pick a project visible in both the Daylite macOS app and the Daylite API, and note the numeric id from its `/v1/projects/<id>` reference
-- [ ] 1.2 Open `daylite4://ShowObject/Project/<id>` from the browser address bar or `open` in a terminal and confirm Daylite comes forward on that exact project
-- [ ] 1.3 Record the result in design.md; if the id does not address the project, stop here and reopen the design rather than continuing
+- [ ] 1.2 Open `daylite://Command=ShowObject&Entity=Project&ID=<id>` with that id and confirm Daylite comes forward on that same project
+- [ ] 1.3 If the id does not address the project, stop here and reopen the design rather than continuing
 
 ## 2. Deep Link Command (TDD)
 
-- [ ] 2.1 (red) Rust unit test: `/v1/projects/2035` translates to `daylite4://ShowObject/Project/2035`
+- [ ] 2.1 (red) Rust unit test: `/v1/projects/2035` translates to `daylite://Command=ShowObject&Entity=Project&ID=2035`
 - [ ] 2.2 (red) Rust unit test: a reference that is not `/v1/projects/<numeric id>` yields a German error instead of a URL
 - [ ] 2.3 (green) Implement the reference-to-URL translation as a pure function in `src-tauri/src/integrations/daylite/`
 - [ ] 2.4 (green) Add the `daylite_open_project` command wrapping the translation and `app.opener().open_url(url, None::<&str>)`

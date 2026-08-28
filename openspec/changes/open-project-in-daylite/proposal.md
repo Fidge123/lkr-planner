@@ -9,7 +9,7 @@ The card already carries everything needed to jump straight to the record, and D
 - The button is icon-only, borderless and transparent, and sits in an action area on the card so a second card action can join it later without further layout work.
 - The button is shown only on assignment cards whose Daylite project reference resolved.
   Bare events, absences, and assignments whose project could not be read carry no button.
-- A new Rust command builds the `daylite4://ShowObject/Project/<id>` URL from the card's project reference and hands it to the system, following ADR 0001: the frontend passes the reference and never constructs the URL.
+- A new Rust command builds the `daylite://Command=ShowObject&Entity=Project&ID=<id>` URL from the card's project reference and hands it to the system, following ADR 0001: the frontend passes the reference and never constructs the URL.
 - Whether Daylite is installed is not checked.
   An unregistered URL scheme is left to macOS, which reports it in its own dialog.
 - Pressing the action button neither opens the edit modal nor starts a drag.
