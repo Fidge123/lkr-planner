@@ -10,8 +10,17 @@ The system SHALL distinguish lkr-planner assignments from bare calendar events.
 
 #### Scenario: Assignment cards carry an action area
 - **WHEN** an assignment card is rendered
-- **THEN** its actions sit together on the right edge of the card as icon-only controls
+- **THEN** its actions sit together in one area of the card as icon-only controls in a fixed order
 - **AND** the card itself is not a control: the only things on it that can be triggered are the actions in that area
+
+#### Scenario: Action area in a column wide enough for it
+- **WHEN** the card's column leaves the title useful room beside the actions
+- **THEN** the action area sits on the right edge of the card
+
+#### Scenario: Action area in a narrow column
+- **WHEN** the column is too narrow for that
+- **THEN** the action area moves under the card's times, on its left edge
+- **AND** the title keeps the full height of the card beside both
 
 #### Scenario: The edit affordance is always available on an assignment
 - **WHEN** an assignment card is rendered, including one whose Daylite project could not be resolved
