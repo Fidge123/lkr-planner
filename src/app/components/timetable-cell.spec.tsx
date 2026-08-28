@@ -149,10 +149,19 @@ describe("TimetableCell", () => {
     expect(actionArea).toContain("shrink-0");
   });
 
-  it("leaves the title the widest part of the card", () => {
+  it("gives the title the card's only flexible column", () => {
     const html = renderCell({ events: [assignment()] });
 
-    expect(html).toContain('class="flex-1 min-w-0 font-medium"');
+    expect(html).toContain("grid-cols-[auto_minmax(0,1fr)_auto]");
+  });
+
+  it("moves the actions under the times once the column is narrow", () => {
+    const html = renderCell({ events: [assignment()] });
+
+    expect(html).toContain("@max-[10rem]:grid-cols-[auto_minmax(0,1fr)]");
+    expect(html).toContain("@max-[10rem]:col-start-1");
+    expect(html).toContain("@max-[10rem]:row-start-2");
+    expect(html).toContain("@max-[10rem]:row-span-2");
   });
 
   it("renders no Daylite action on an assignment with an unresolved project", () => {

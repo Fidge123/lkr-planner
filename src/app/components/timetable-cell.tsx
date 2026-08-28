@@ -66,7 +66,7 @@ export function TimetableCell({
       ref={setNodeRef}
       className={cellClass(highlight, isHoliday, isOver, conflict)}
     >
-      <ul className="flex flex-col gap-1 list-none">
+      <ul className="@container flex flex-col gap-1 list-none">
         {conflict ? (
           <li className="flex items-center gap-1 text-error text-xs font-medium">
             <TriangleAlert className="size-4 shrink-0" aria-hidden="true" />
@@ -237,15 +237,13 @@ export function AssignmentCardBody({
   return (
     <>
       <EventTime startTime={startTime} endTime={endTime} />
-      {isUnresolved ? (
-        <TriangleAlert
-          className="size-4 shrink-0 text-error"
-          aria-hidden="true"
-        />
-      ) : null}
-      <h4 className="flex-1 min-w-0 font-medium">
+      <h4 className="flex-1 min-w-0 font-medium break-words @max-[10rem]:row-span-2">
         {isUnresolved ? (
           <>
+            <TriangleAlert
+              className="inline size-4 mr-1 align-text-bottom text-error"
+              aria-hidden="true"
+            />
             <em className="font-normal opacity-70">Beschreibung für </em>
             {title}
             <em className="font-normal opacity-70">
@@ -299,12 +297,13 @@ function DraggableAssignmentCard({
   return (
     <div
       ref={setNodeRef}
-      className={`${assignmentCardClass} ${assignmentStripClass} text-base-content transition-[filter] hover:brightness-90 ${event.color} ${lifted ? "absolute inset-x-0 top-0 invisible pointer-events-none" : ""}`}
+      className={`${assignmentCardGridClass} ${assignmentStripClass} text-base-content transition-[filter] hover:brightness-90 ${event.color} ${lifted ? "absolute inset-x-0 top-0 invisible pointer-events-none" : ""}`}
       style={categoryStrip(event.categoryColor)}
     >
+      {/* Laid out by its children so the times and the title are grid items of the card itself, while the drag stays activated from both. */}
       <div
         ref={setActivatorNodeRef}
-        className={`flex flex-1 min-w-0 items-center gap-2 ${canDrag ? "cursor-grab" : ""}`}
+        className={`contents ${canDrag ? "cursor-grab" : ""}`}
         {...(canDrag
           ? { ...listeners, "aria-roledescription": "draggable" }
           : {})}
@@ -344,7 +343,11 @@ function DraggableAssignmentCard({
   );
 }
 
-const cardActionAreaClass = "flex flex-col shrink-0 gap-1";
+/** Times and title beside each other with the actions on the right edge, and, once the column is too narrow for that, the actions under the times with the title beside both. */
+const assignmentCardGridClass =
+  "grid grid-cols-[auto_minmax(0,1fr)_auto] @max-[10rem]:grid-cols-[auto_minmax(0,1fr)] items-center w-full gap-2 p-2 rounded-lg";
+const cardActionAreaClass =
+  "flex flex-col shrink-0 gap-1 col-start-3 row-start-1 @max-[10rem]:col-start-1 @max-[10rem]:row-start-2 @max-[10rem]:self-start";
 const cardActionClass = "btn btn-ghost btn-square btn-xs";
 
 interface CardProps {
