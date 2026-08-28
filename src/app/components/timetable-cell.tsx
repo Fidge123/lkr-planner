@@ -323,7 +323,7 @@ function DraggableAssignmentCard({
             aria-label="Einsatz bearbeiten"
             onClick={() => onEventClick(event)}
           >
-            <Pencil className="size-3" aria-hidden="true" />
+            <Pencil className="size-4" aria-hidden="true" />
           </button>
           {unresolved || !projectRef ? null : (
             <button
@@ -334,7 +334,7 @@ function DraggableAssignmentCard({
                 void openProjectInDaylite(projectRef);
               }}
             >
-              <ExternalLink className="size-3" aria-hidden="true" />
+              <ExternalLink className="size-4" aria-hidden="true" />
             </button>
           )}
         </div>
@@ -344,11 +344,10 @@ function DraggableAssignmentCard({
 }
 
 const assignmentCardGridClass =
-  "grid grid-cols-[auto_minmax(0,1fr)_auto] @max-[10rem]:grid-cols-[auto_minmax(0,1fr)] items-center w-full gap-2 p-2 rounded-lg";
+  "grid grid-cols-[auto_minmax(0,1fr)_auto] @max-[10rem]:grid-cols-[auto_minmax(0,1fr)] items-center w-full gap-2 py-2 px-1 rounded-lg";
 const cardActionAreaClass =
   "flex flex-col shrink-0 col-start-3 row-start-1 @max-[10rem]:col-start-1 @max-[10rem]:row-start-2 @max-[10rem]:self-start";
-/** Sized so three of them stack into a two-line title, which a taller `btn-xs` would outgrow. */
-const cardActionClass = "btn btn-ghost h-5 w-5 min-h-0 p-0";
+const cardActionClass = "btn btn-ghost h-5 w-5 min-h-0 p-0 opacity-70";
 
 interface CardProps {
   event: CellEvent;
