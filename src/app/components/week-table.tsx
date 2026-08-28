@@ -9,7 +9,7 @@ import type {
 import type { ProjectCategoryColors } from "../../services/daylite-categories";
 import type { DropPreview } from "../hooks/use-appointment-drag";
 import { getIsoWeek, toLocalISODate } from "../util";
-import { TimetableHeader } from "./timetable-header";
+import { stickyHeaderClass, TimetableHeader } from "./timetable-header";
 import { TimetableRow } from "./timetable-row";
 
 export function WeekTable({
@@ -47,7 +47,7 @@ export function WeekTable({
     <table ref={gridRef} className="table table-fixed border-collapse">
       <thead className="text-base-content">
         <tr>
-          <th className="w-40 p-4 font-bold">
+          <th className={`w-40 p-4 font-bold bg-base-100 ${stickyHeaderClass}`}>
             <span className="flex items-center gap-1.5 text-primary">
               <CalendarDays className="size-4" aria-hidden="true" />
               KW {getIsoWeek(weekDays[0])}
