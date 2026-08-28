@@ -26,6 +26,7 @@ Whatever a planner types into a time field is therefore gone by the next write o
 - One place in the VEVENT for each new field, chosen so a planner editing the event in ZEP or another CalDAV client sees something sensible.
 - No write path can silently drop a field: the fields travel together through `AssignmentWrite`, so adding one to the struct forces every caller to supply it.
 - The allocator keeps sole ownership of an assignment's times; entering times by hand steers one write rather than creating a second, competing source of truth.
+- Daylite keeps sole ownership of what a category is; the planner picks from the categories it defines and never invents one.
 
 **Non-Goals:**
 
@@ -39,6 +40,9 @@ Whatever a planner types into a time field is therefore gone by the next write o
 - Overlap detection between an assignment and the employee's bare or absence events.
 - Editing bare events or absences.
   They stay read-only, as they are today.
+- Creating a category, renaming one, or changing its color.
+  Those stay in Daylite.
+- A category that belongs to a single appointment instead of to its project.
 
 ## Decisions
 
@@ -83,6 +87,49 @@ The note is what remains after dropping the first line and any single blank line
 Alternatives considered.
 An `X-LKR-NOTE` property keeps the description clean but hides the note from every other calendar client, which is the main reason to store it on the event at all.
 Moving the project reference to an X-property and giving `DESCRIPTION` entirely to the note would be cleaner, but every assignment already on a calendar carries the reference in the description, so it would need a migration and would break older events.
+
+### The category is the project's, so the picker writes it to Daylite
+
+A category in this application is not a property of a calendar event.
+`resolve_event` takes it from the resolved Daylite project to color the card, and `fixed-appointment-protection` reads the same field to decide whether an event may be changed at all.
+The picker therefore writes where the category already lives: saving a picked category sends `PATCH /projects/<id>` with the category's name, the way `update_contact_ical_urls_core` patches a contact's urls today, and Daylite carries a project's category as a plain name on the record, so the name is what goes on the wire.
+
+Two consequences follow from writing the project rather than the event, and both are features rather than side effects.
+Every appointment of that project changes color, on every week and every employee, which is why the modal carries a German hint saying the category belongs to the project.
+And picking `"Termin FIX geplant"` makes the project a fixed appointment, which locks that assignment and every other one referencing the project, exactly as a category set in Daylite does today; picking another category releases them again.
+Nothing in the protection rules changes: they keep reading the project's category, and now the planner has a second place to set it.
+
+Alternatives considered.
+A category of its own on the event, stored in an X-property like the title override, keeps one appointment's color independent of the project and is the shape the title and the note take in this change.
+It is rejected because it forks what a category means: protection would keep following the project while the card followed the event, and a planner could recolor a fixed appointment to something that looks unfixed with nothing in Daylite recording it.
+Offering the category read-only, so the modal shows the project's category without letting it be changed, was the smaller change, but it leaves the planner with the same trip into Daylite that this change is meant to remove.
+
+### The calendar write goes first, and the category write refreshes the cached project
+
+A save that changes both the assignment and its category has to order the two writes, and only one order works.
+`update_assignment` refuses a write to a protected event, so a category write that landed first would make the assignment fixed and then refuse the very save that set it.
+The modal therefore writes the assignment to the calendar first and the category to Daylite second.
+
+A category write that fails after the calendar write succeeded leaves the calendar changes in place and reports the German error in the modal; the project keeps the category it had, so a retry is the whole recovery and there is no half-written state to repair.
+
+`project_cache` holds a resolved project for 30 seconds, which is long enough for the reload after a save to show the old color and, worse, the old protection verdict.
+So the write replaces the cache entry for the reference it touched instead of waiting the TTL out: the reload shows the new color, and an assignment just made fixed is refused from that moment.
+
+### The picker lists what Daylite offers, colorless categories included and retired ones left out
+
+`/categories?entity=project` is read into a name-to-color map today, and a category without a `hex_colour` is dropped, because a missing color is all the grid needs to know about it.
+A picker needs the names, so the read returns the list -- each category's name, its color when it has one, and whether it is still active -- and the frontend derives the color lookup it already had from that same list.
+One read serves the grid coloring, the project picker, and the category picker, and a category nobody gave a color is offered with the neutral color rather than being invisible.
+The list is sorted by name so it does not depend on the order the API happens to return.
+
+Categories with `is_active` false are not offered.
+Daylite keeps them so projects that still reference them stay colored, which is why they remain in the color lookup, but handing a planner a retired category to assign afresh spreads something its owner deliberately withdrew.
+
+The picker's first entry removes the category instead of setting one.
+A category picked by mistake would otherwise need a trip into Daylite to undo, which is the trip this change exists to remove, and a project carrying no category is an ordinary state: `resolve_event` already returns `None` for it and the card falls back to the neutral color.
+Removing is written as the same `PATCH /projects/<id>` with a null category, so it is one write path with one error message rather than two.
+
+It follows that removing the category of a project carrying `"Termin FIX geplant"` releases its appointments, exactly as picking another category does: protection asks whether the category equals the fixed one, and no category does not.
 
 ### Times entered by hand steer one write and are stored nowhere
 
@@ -157,6 +204,12 @@ Times entered by hand do not, and are not meant to.
 
 [Adjacent adjustment writes up to three events, so a partial failure leaves the day half-adjusted] → The neighbours go through `patch_event_slot`, the same multi-event path re-allocation already uses, so the failure mode is the one the planner already has for a failed re-slot: a reload shows the true state.
 
+[A planner reads the category picker as recoloring one appointment and repaints a project used across the whole grid] → The German hint under the picker says the category is the project's, and the reload after the save shows the project's other cards in the new color, which is the correction if the hint was missed.
+
+[Picking `"Termin FIX geplant"` locks the assignment the planner is editing] → That is what the category means, and the lock is undone the way every other one is: unlock the appointment and pick another category. The modal is the only new way in, not a new kind of lock.
+
+[Daylite may reject the category name, or expect a reference rather than a name] → The name written is one Daylite itself returned from `/categories`, and a rejection surfaces as the normalized German error rather than being swallowed. The request shape is pinned by a cassette test before the modal is built on it.
+
 [Skipping the even split for one write leaves a day overlapping until something re-allocates it] → That is the feature working; the state is legal iCal and the next ordinary write on that day tidies it.
 
 ## Migration Plan
@@ -165,3 +218,4 @@ No data migration.
 Events written before this change carry no `X-LKR-TITLE` and no note, both are optional, and nothing about how times are stored changes, so existing assignments load, save, and allocate exactly as they do today.
 An older build of the planner reading an event written by the new one shows the override as the card title only when the project fails to resolve and rewrites the event without the note, so a rollback loses titles and notes on the assignments touched after it.
 Entered times need no rollback story at all: they were never stored as anything but ordinary `DTSTART` and `DTEND`.
+A project's category is Daylite's data and is read the same way before and after this change, so a rollback simply removes the second place it can be set.

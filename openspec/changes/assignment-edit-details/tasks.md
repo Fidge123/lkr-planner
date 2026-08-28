@@ -60,13 +60,26 @@
 - [ ] 8.5 Render the title and note fields so the project field's Daylite name stays visible next to the title
 - [ ] 8.6 Add modal tests for each scenario in the `assignment-modal-crud` delta
 
-## 9. Drag paths
+## 9. Category
 
-- [ ] 9.1 Pass the dragged card's custom title with the title it replaced, and its note, into the reschedule and move writes in `use-appointment-drag`, without requested times or adjacent adjustment
-- [ ] 9.2 Add tests that a reschedule and a move both carry the details through and write the standard window
+- [ ] 9.1 Return the project categories from `/categories?entity=project` as a list carrying each category's name, its color, and whether it is still active, sorted by name
+- [ ] 9.2 Derive the name-to-color lookup in `services/daylite-categories.ts` from that one list, keeping retired categories in the lookup and out of the picker
+- [ ] 9.3 Add a Daylite command that sets a project's category by PATCHing `/projects/<id>` with the picked name, or with a null category when the category is removed, returning the normalized German error when Daylite rejects it
+- [ ] 9.4 Replace the cached project for the written reference so the next resolution returns the new category instead of waiting out the cache lifetime, with a test that a project just made fixed is refused by `refuse_protected_event`
+- [ ] 9.5 Record a cassette for the category list and the category write, and pin the request shape against it
+- [ ] 9.6 Add category state to `use-assignment-modal`, initialised from the assignment's resolved project category, holding no category for a project without one, and following the project when the planner picks a different one
+- [ ] 9.7 Send the category write only when the planner picked a different category or removed it, after the calendar write has succeeded, and show the German error in the modal when it fails while keeping the calendar changes
+- [ ] 9.8 Extend the dirty tracking so a category change marks the modal changed
+- [ ] 9.9 Render the picker with the German entry for no category first, then the active categories, each with its name and color swatch, the neutral swatch for a category without a color, and the German hint that the category belongs to the project, using DaisyUI form controls and no nested `div`/`span`
+- [ ] 9.10 Add modal tests for each scenario in the `assignment-modal-crud` category delta, including that picking `"Termin FIX geplant"` leaves the reopened modal protected and that picking another category or removing it releases the assignment
 
-## 10. Verification
+## 10. Drag paths
 
-- [ ] 10.1 Run `cargo test`, `bun test`, and the Biome check
-- [ ] 10.2 Exercise the write path against the disposable Radicale server in `caldav/write.rs` with an assignment carrying a title override, a note, and requested times with adjacent adjustment
-- [ ] 10.3 Run `bunx openspec validate assignment-edit-details --strict`
+- [ ] 10.1 Pass the dragged card's custom title with the title it replaced, and its note, into the reschedule and move writes in `use-appointment-drag`, without requested times or adjacent adjustment
+- [ ] 10.2 Add tests that a reschedule and a move both carry the details through and write the standard window
+
+## 11. Verification
+
+- [ ] 11.1 Run `cargo test`, `bun test`, and the Biome check
+- [ ] 11.2 Exercise the write path against the disposable Radicale server in `caldav/write.rs` with an assignment carrying a title override, a note, and requested times with adjacent adjustment
+- [ ] 11.3 Run `bunx openspec validate assignment-edit-details --strict`
