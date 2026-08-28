@@ -32,52 +32,48 @@ The system SHALL address a Daylite project by the numeric identifier carried in 
 - **AND** the failure is reported to the frontend as a German error message
 
 ### Requirement: Only cards with a resolved Daylite project offer the action
-The system SHALL show the action exclusively on assignment cards whose Daylite project reference was resolved against Daylite.
+The system SHALL show the Daylite action exclusively on assignment cards whose Daylite project reference was resolved against Daylite.
 
 #### Scenario: Resolved assignment
 - **WHEN** an assignment card carries a Daylite project reference and the project resolved
-- **THEN** the action is shown on the card
+- **THEN** the Daylite action is shown alongside the card's edit action
 
 #### Scenario: Unresolved assignment
 - **WHEN** an assignment card carries a Daylite project reference whose project could not be read, so the card shows the German placeholder note
-- **THEN** no action is shown on the card
+- **THEN** no Daylite action is shown
+- **AND** the card's edit action is still shown, so the assignment stays editable
 
 #### Scenario: Bare and absence events
 - **WHEN** a card is a bare calendar event or an absence
-- **THEN** no action is shown on the card
+- **THEN** no Daylite action is shown on the card
 
-### Requirement: Card action area
-The system SHALL place card actions in an area on the right edge of an assignment card, holding icon-only controls without a border or a background of their own.
+### Requirement: Appearance and placement of the Daylite action
+The system SHALL present the Daylite action as one of the icon-only controls in the assignment card's action area.
 
 #### Scenario: Appearance of the action
-- **WHEN** the action is shown on an assignment card
-- **THEN** it is an icon-only control on the right edge of the card
-- **AND** it carries no border and no background of its own
+- **WHEN** the Daylite action is shown on an assignment card
+- **THEN** it is an icon-only control carrying no border and no background of its own
 - **AND** it carries a German accessible name naming what it opens
 
+#### Scenario: Order within the action area
+- **WHEN** an assignment card shows both actions
+- **THEN** the edit action comes first and the Daylite action after it, in the same order on every card
+
 #### Scenario: Card title keeps its room
-- **WHEN** an assignment card shows the action area
-- **THEN** the card's title does not run underneath it
+- **WHEN** an assignment card shows its action area
+- **THEN** the card's title does not run underneath the actions
 - **AND** a title too long for the remaining width still wraps and grows the card vertically
 
-#### Scenario: Action area holds more than one action
-- **WHEN** a further card action is added later
-- **THEN** it takes its place in the same area alongside the existing one without the card being laid out differently
+### Requirement: The Daylite action is isolated from the card's other behavior
+The system SHALL keep triggering the Daylite action from causing anything else the card does.
 
-### Requirement: Card actions do not disturb card interaction
-The system SHALL keep the card's own click and drag behavior reachable and unchanged where the action is shown.
-
-#### Scenario: Triggering the action does not open the modal
-- **WHEN** the planner triggers a card action
+#### Scenario: Opening Daylite does not open the modal
+- **WHEN** the planner triggers the Daylite action
 - **THEN** the edit modal does not open
 
-#### Scenario: Triggering the action does not start a drag
-- **WHEN** the planner presses and moves the pointer on a card action
+#### Scenario: Opening Daylite does not start a drag
+- **WHEN** the planner presses and moves the pointer on the Daylite action
 - **THEN** no drag operation starts and the card stays in place
-
-#### Scenario: The rest of the card behaves as before
-- **WHEN** the planner clicks or drags the card outside the action area
-- **THEN** the edit modal opens, or the drag starts, exactly as it does today
 
 #### Scenario: Card being dragged
 - **WHEN** a card is the one currently being dragged and is lifted out of the cell's flow

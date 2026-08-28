@@ -8,9 +8,13 @@ The card already holds the reference.
 `CalendarCellEvent.projectRef` reaches the frontend as `/v1/projects/<id>`, written into the VEVENT `DESCRIPTION` by `build_ical_payload` and read back by `classify_event`.
 `CellEvent.projectStatus` is set only when the project was resolved against Daylite, which is what `isUnresolvedAssignment` in `src/app/types.ts` tests.
 
-The assignment card is itself a `<button>`.
-`DraggableAssignmentCard` renders one button carrying both the click that opens the edit modal and the dnd-kit drag listeners.
-A second control cannot be nested inside it.
+The assignment card is one button carrying two jobs.
+`DraggableAssignmentCard` renders a single `<button>` holding both the click that opens the edit modal and the dnd-kit drag listeners.
+Nothing can be placed inside it that is itself pressable, which is what this change unpicks.
+
+Keyboard dragging is not wired up.
+`page.tsx` registers only `PointerSensor`, so the `role="button"` and `tabIndex` that dnd-kit's `attributes` put on the card today buy no keyboard drag.
+Dropping them costs nothing that works.
 
 `tauri-plugin-opener` is already a dependency but only reachable from Rust.
 The npm package `@tauri-apps/plugin-opener` is not installed, and the plugin's injected click handler hard-codes the schemes it intercepts to `http:`, `https:`, `mailto:` and `tel:`.
@@ -28,13 +32,15 @@ No parameter for anything else is known, tab handling included.
 **Goals:**
 
 - The URL format lives in one place in Rust, so a future Daylite scheme change or a second entity type is a change to one function.
-- The action is added without changing how the card is clicked or dragged, so no existing grid behavior has to be re-tested for regressions.
-- The action area is a container from the start, so the second card action is a sibling rather than a re-layout.
+- The card's actions are siblings in the card's normal flow, so a third action is an added element rather than a re-layout.
+- Dragging keeps feeling the same to a planner, and pressing an action can never be mistaken for the start of one.
 
 **Non-Goals:**
 
 - Detecting whether Daylite is installed.
 - Deep links to anything other than a project.
+- Making the card keyboard-draggable.
+  It is not today, and this change neither adds nor removes that.
 - Reaching Daylite from the assignment modal, from a bare event, or from anywhere outside the grid card.
 - Influencing whether Daylite reuses a tab.
   It is not exposed by the URL scheme, so it is Daylite's preference to make, not ours.
@@ -65,39 +71,62 @@ Going through the JS package instead would have required adding the npm dependen
 Alternative considered and rejected: returning the URL from Rust and opening it in the frontend.
 It splits one operation across the boundary for no gain and still needs the scope entry.
 
-### An overlaid action area, not a restructured card
+### The card stops being a control, and its actions sit in its normal flow
 
-The action area is a sibling of the card button inside the existing `<li>`, positioned over the card's right edge, and the card button gains right padding so its title stops before the area begins.
+The card becomes a container laying out three things in a row: the times and title as before, then the edit action, then the Daylite action.
+Neither action is nested in anything pressable, so both are ordinary buttons and no propagation guard is needed to keep one from triggering the other.
 
-Nesting is not available: a `<button>` inside a `<button>` is invalid, and the card button is where both the modal click and the drag listeners sit.
-Being a sibling rather than a descendant also means dnd-kit never sees the pointer events on the action, so no `stopPropagation` guard is needed to keep a press on the action from starting a drag.
+Making the card a container rather than a button is what buys this.
+While it was a button, the only way to add a second control was to overlay it as a sibling positioned over the card's right edge, with reserved padding on the card so the title did not run underneath, because a `<button>` cannot contain a `<button>`.
+That arrangement worked for one action and got worse with each one added.
+In normal flow the row measures itself, the title's `flex-1 min-w-0` shrinks around whatever the actions need, and the narrow-column overlap it would otherwise have risked cannot happen.
 
-Alternative considered and rejected: splitting the card into a flex row whose label is the button and whose actions are siblings in normal flow.
-That moves the drag handle and the click target onto a smaller element, which changes drag behavior across the whole grid to add one button.
+The cost is that the card no longer announces itself as pressable, and a planner used to clicking anywhere on a card has to find the pencil.
+That is the change being asked for, and it is what makes the two actions distinguishable at all.
 
-The card's `lifted` state hides the card button while a drag is in flight, and the action area has to be hidden by the same flag.
-Otherwise it would be left visible in an `<li>` collapsed to zero height, floating over the row below.
+### `setNodeRef` on the card, `setActivatorNodeRef` on the body
 
-### Gate on the resolved project, not on the reference alone
+dnd-kit separates the element it measures from the element that starts a drag.
+`setNodeRef` goes on the card container, so the rect the drop logic and the overlay use still covers the whole card as it does today.
+`setActivatorNodeRef` and the drag `listeners` go on the body, the times-and-title region, so a press on either action is not a press on the drag activator.
 
-The action is rendered when `event.kind === "assignment"` and `isUnresolvedAssignment(event)` is false, which is the same predicate the grid already uses to decide whether a card is draggable.
+This is what keeps "pressing an action never starts a drag" true without a `stopPropagation` handler on each action, and it keeps the draggable area the part of the card a planner would grab anyway.
 
+dnd-kit's `attributes` are not spread as they are today.
+They carry `role="button"` and `tabIndex`, which on a card that is no longer a control would announce a control that does nothing.
+`aria-roledescription` is kept so the card still describes itself as draggable.
+Nothing is lost, because no `KeyboardSensor` is registered.
+
+Alternative considered and rejected: leaving the listeners on the container and calling `stopPropagation` on each action's pointer-down.
+It puts a guard on every action forever, and forgetting it on the third one is a bug that only shows up as an accidental drag.
+
+### The edit action is shown on every assignment, the Daylite action is not
+
+The edit action does not depend on Daylite being reachable, and withholding it would make an assignment whose project could not be read impossible to correct or delete.
+So it is shown whenever the card is an assignment.
+
+The Daylite action is shown only when `isUnresolvedAssignment(event)` is false.
 The deep link would technically work for an unresolved assignment, since it needs only the id and not the Daylite API.
 Showing it anyway was considered and rejected: an unresolved card already tells the planner that this reference could not be read, and offering a jump from a card in that state invites the reading that the app knows more about the project than it is showing.
 
-### `ExternalLink` from Lucide
+### Icons and their order
 
-The codebase already uses `ExternalLink` for the one control that leaves the app, the token link in `daylite-panel.tsx`, so the icon keeps its established meaning of "this opens somewhere else".
-`Link` reads as a chain and is the more literal icon for a link, but it is used in most icon sets for creating or holding a link rather than following one.
-Swapping it is a one-line change if the second card action makes a different pairing look better.
+Edit is Lucide `Pencil`, the Daylite jump is Lucide `ExternalLink`.
+`ExternalLink` already carries the meaning "this opens somewhere else" in this codebase, on the token link in `daylite-panel.tsx`.
+`Link` reads as a chain and is the more literal icon for a link, but in most icon sets it means making or holding a link rather than following one.
 
-### The deep link is never persisted
-
-The VEVENT `DESCRIPTION` keeps `daylite:/v1/projects/<id>`.
-It is load-bearing for `classify_event`, which reads the first description line to tell an assignment from a bare event, and it is what every write path reproduces.
-The deep link is derived when the button is pressed.
+Edit comes first because it is the action a planner reaches for most, and it is the one every assignment card has.
+Fixing the order at all is the point: a Daylite action that moves depending on whether it is present would put the pencil in a different place on neighbouring cards.
 
 ## Risks / Trade-offs
+
+The card loses its click target, which is a habit change for every planner using the app today.
+→ Nothing in the design softens it, by choice.
+Worth watching after the first release rather than pre-empting with a transitional affordance.
+
+The two icons sit on a card that can be narrow, and they are small pointer targets compared to the whole card.
+→ They share the card's full height in the flex row, so the target is taller than the icon.
+Check it against the narrowest column the grid produces.
 
 The URL form rests on a manual test rather than on documentation, so a future Daylite release could change it with nothing to warn us.
 The documented form has already gone stale once, which is how this one was found.
@@ -107,16 +136,13 @@ The documented form has already gone stale once, which is how this one was found
 → Accepted by decision.
 macOS shows its own dialog, and building an install check to replace it is explicitly out of scope.
 
-The action overlays the card rather than sharing its flow, so a very narrow column could put the icon over wrapped title text.
-→ The card button's right padding reserves the width, and a title that no longer fits wraps instead of running under the icon.
-Worth a look at the narrowest column the grid produces.
-
 ## Migration Plan
 
 None.
-The change is additive: no stored data, no calendar payload, and no existing command contract changes, so it needs no migration and is reverted by removing the command and the button.
+No stored data, no calendar payload, and no existing command contract changes.
+The Daylite half is reverted by removing the command and the action; the card restructuring is reverted by putting the click back on the card.
 
 ## Open Questions
 
-Whether the two card actions, once the second one exists, still read clearly as icons alone or want a tooltip.
-It changes neither the specs nor the task breakdown and is better answered with both buttons on screen.
+Whether the two actions read clearly as icons alone or want a tooltip.
+It changes neither the specs nor the task breakdown and is better answered with both on screen.
