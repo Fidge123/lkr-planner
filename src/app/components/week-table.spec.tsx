@@ -27,6 +27,16 @@ describe("WeekTable", () => {
     expect(renderTable()).toContain("KW 34");
   });
 
+  it("keeps the date row fixed at the top of the scrolling grid", () => {
+    const html = renderTable();
+    const headerCells = html.match(/<th [^>]*>/g) ?? [];
+    expect(headerCells.length).toBe(6);
+    for (const cell of headerCells) {
+      expect(cell).toContain("sticky");
+      expect(cell).toContain("top-0");
+    }
+  });
+
   it("follows the displayed week across the year boundary", () => {
     const html = renderTable({
       weekDays: [29, 30, 31].map((day) => new Date(2025, 11, day)),
