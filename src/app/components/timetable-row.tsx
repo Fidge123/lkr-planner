@@ -152,8 +152,7 @@ export function TimetableRow({
         )}
       </tr>
 
-      {/* Portalled to the body because the grid's scroll container is isolated: a stacking
-          context painted before the positioned header, which would otherwise cover the modal.
+      {/* The grid's scroll container is isolated, so a modal rendered inside it cannot paint over the header.
           The document guard is for the bun specs, which render this row through react-dom/server. */}
       {modalState === null || typeof document === "undefined"
         ? null

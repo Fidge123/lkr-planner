@@ -63,7 +63,7 @@ const bare = assignment({
 const editLabel = "Einsatz bearbeiten";
 const dayliteLabel = "Projekt in Daylite öffnen";
 
-/** Nothing inside the action buttons nests, so a non-greedy match is enough to read them back. */
+/** Reads back wrong if a button ever nests inside another. */
 function buttonContents(html: string): string[] {
   return [...html.matchAll(/<button\b[^>]*>(.*?)<\/button>/gs)].map(
     (match) => match[1],

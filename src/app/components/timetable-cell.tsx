@@ -300,7 +300,7 @@ function DraggableAssignmentCard({
       className={`${assignmentCardGridClass} ${assignmentStripClass} text-base-content transition-[filter] hover:brightness-90 ${event.color} ${lifted ? "absolute inset-x-0 top-0 invisible pointer-events-none" : ""}`}
       style={categoryStrip(event.categoryColor)}
     >
-      {/* Laid out by its children so the times and the title are grid items of the card itself, while the drag stays activated from both. */}
+      {/* `contents` so the times and the title are grid items of the card, with one wrapper still activating the drag. */}
       <div
         ref={setActivatorNodeRef}
         className={`contents ${canDrag ? "cursor-grab" : ""}`}
@@ -323,7 +323,7 @@ function DraggableAssignmentCard({
             aria-label="Einsatz bearbeiten"
             onClick={() => onEventClick(event)}
           >
-            <Pencil className="size-4" aria-hidden="true" />
+            <Pencil className="size-3" aria-hidden="true" />
           </button>
           {unresolved || !projectRef ? null : (
             <button
@@ -334,7 +334,7 @@ function DraggableAssignmentCard({
                 void openProjectInDaylite(projectRef);
               }}
             >
-              <ExternalLink className="size-4" aria-hidden="true" />
+              <ExternalLink className="size-3" aria-hidden="true" />
             </button>
           )}
         </div>
@@ -343,12 +343,12 @@ function DraggableAssignmentCard({
   );
 }
 
-/** Times and title beside each other with the actions on the right edge, and, once the column is too narrow for that, the actions under the times with the title beside both. */
 const assignmentCardGridClass =
   "grid grid-cols-[auto_minmax(0,1fr)_auto] @max-[10rem]:grid-cols-[auto_minmax(0,1fr)] items-center w-full gap-2 p-2 rounded-lg";
 const cardActionAreaClass =
-  "flex flex-col shrink-0 gap-1 col-start-3 row-start-1 @max-[10rem]:col-start-1 @max-[10rem]:row-start-2 @max-[10rem]:self-start";
-const cardActionClass = "btn btn-ghost btn-square btn-xs";
+  "flex flex-col shrink-0 col-start-3 row-start-1 @max-[10rem]:col-start-1 @max-[10rem]:row-start-2 @max-[10rem]:self-start";
+/** Sized so three of them stack into a two-line title, which a taller `btn-xs` would outgrow. */
+const cardActionClass = "btn btn-ghost h-3.5 w-6 min-h-0 p-0";
 
 interface CardProps {
   event: CellEvent;
