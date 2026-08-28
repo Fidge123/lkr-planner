@@ -1,11 +1,8 @@
-## 1. Confirm the id source
+## 1. Confirm the deep link against a real Daylite
 
-The URL form is already confirmed against the installed Daylite.
-What is left is confirming that the id the app will pass, taken from the API reference, is the id the link wants.
-
-- [ ] 1.1 Pick a project visible in both the Daylite macOS app and the Daylite API, and note the numeric id from its `/v1/projects/<id>` reference
-- [ ] 1.2 Open `daylite://Command=ShowObject&Entity=Project&ID=<id>` with that id and confirm Daylite comes forward on that same project
-- [ ] 1.3 If the id does not address the project, stop here and reopen the design rather than continuing
+- [x] 1.1 Pick a project visible in both the Daylite macOS app and the Daylite API, and note the numeric id from its `/v1/projects/<id>` reference
+- [x] 1.2 Open `daylite://Command=ShowObject&Entity=Project&ID=<id>` with that id and confirm Daylite comes forward on that same project
+- [x] 1.3 Record the confirmed URL form in design.md
 
 ## 2. Deep Link Command (TDD)
 

@@ -20,6 +20,7 @@ Daylite's published documentation is out of date on the deep link.
 Marketcircle's interactive reports documentation gives `daylite4://ShowObject/<Entity>/<ObjectID>`.
 That form no longer works.
 The form a current Daylite accepts, confirmed by hand against the installed app, is `daylite://Command=ShowObject&Entity=Project&ID=<id>`.
+The id in it is the numeric segment of the `/v1/projects/<id>` API reference, so the card carries the identifier the link wants without a lookup.
 No parameter for anything else is known, tab handling included.
 
 ## Goals / Non-Goals
@@ -42,8 +43,7 @@ No parameter for anything else is known, tab handling included.
 
 ### The URL form comes from testing, not from the documentation
 
-`daylite://Command=ShowObject&Entity=Project&ID=<id>` was arrived at by trying it against the installed Daylite.
-The `Entity` and `Command` names carry over from the documented `daylite4://` form, and the id is the numeric segment of the `/v1/projects/<id>` reference.
+`daylite://Command=ShowObject&Entity=Project&ID=<id>` was arrived at by trying it against the installed Daylite, with an id taken from a `/v1/projects/<id>` reference.
 
 Two things about this string invite a well-meant correction that would break it.
 It is not a query string: the parameters sit in the authority position, with no `?` after `daylite://`.
@@ -102,10 +102,6 @@ The deep link is derived when the button is pressed.
 The URL form rests on a manual test rather than on documentation, so a future Daylite release could change it with nothing to warn us.
 The documented form has already gone stale once, which is how this one was found.
 → Keep the URL in one Rust function so a later correction is a one-line change, and keep the format asserted in a unit test so the expected string is written down somewhere a reader will find it.
-
-The numeric id in the REST reference is taken to be the internal id the URL scheme expects.
-The shapes match and the link resolves, but the test that established the format may have used an id read out of Daylite rather than out of the API.
-→ Confirm once that an id taken from a `/v1/projects/<id>` reference opens that same project, before building on it.
 
 `open_url` launches detached, so a URL that no application handles produces no error the app can catch.
 → Accepted by decision.
