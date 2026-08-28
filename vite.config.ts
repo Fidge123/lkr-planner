@@ -19,7 +19,12 @@ export default defineConfig(async () => ({
         }
       : undefined,
     watch: {
-      ignored: ["**/src-tauri/**", "**/docs/**", "**/openspec/**", ".github/**"],
+      ignored: [
+        "**/src-tauri/**",
+        "**/docs/**",
+        "**/openspec/**",
+        ".github/**",
+      ],
     },
   },
 }));
