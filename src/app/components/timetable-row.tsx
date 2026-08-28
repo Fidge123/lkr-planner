@@ -1,5 +1,6 @@
 import { TriangleAlert } from "lucide-react";
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import {
   type CalendarCellEvent,
   commands,
@@ -151,15 +152,21 @@ export function TimetableRow({
         )}
       </tr>
 
-      {modalState !== null ? (
-        <AssignmentModal
-          assignment={modalState.assignment}
-          employeeReference={employee.self}
-          date={modalState.date}
-          onSave={handleSave}
-          onClose={() => setModalState(null)}
-        />
-      ) : null}
+      {/* Portalled to the body because the grid's scroll container is isolated: a stacking
+          context painted before the positioned header, which would otherwise cover the modal.
+          The document guard is for the bun specs, which render this row through react-dom/server. */}
+      {modalState === null || typeof document === "undefined"
+        ? null
+        : createPortal(
+            <AssignmentModal
+              assignment={modalState.assignment}
+              employeeReference={employee.self}
+              date={modalState.date}
+              onSave={handleSave}
+              onClose={() => setModalState(null)}
+            />,
+            document.body,
+          )}
     </>
   );
 }
