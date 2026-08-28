@@ -32,6 +32,10 @@ impl LocalStore {
 pub struct ApiEndpoints {
     pub daylite_base_url: String,
     pub planradar_base_url: String,
+    /// Account ID from PlanRadar Settings > Account, used as the `{customer_id}` path segment.
+    /// The matching API token belongs in the OS keychain, never here.
+    #[serde(default)]
+    pub planradar_customer_id: String,
     #[serde(default)]
     pub zep_caldav_root_url: String,
 }

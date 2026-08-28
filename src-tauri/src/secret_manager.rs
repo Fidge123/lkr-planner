@@ -66,6 +66,11 @@ pub fn get_token(service: &str, username: &str) -> Result<String, SecretError> {
     entry.get_password().map_err(map_keyring_error)
 }
 
+pub fn delete_token(service: &str, username: &str) -> Result<(), SecretError> {
+    let entry = Entry::new(service, username).map_err(map_keyring_error)?;
+    entry.delete_credential().map_err(map_keyring_error)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

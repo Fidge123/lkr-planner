@@ -28,13 +28,29 @@ The client should apply retry with backoff for transient failures and rate-limit
 ## Project creation
 
 Blank creation uses `POST /api/v1/{customer_id}/projects` with a `data.attributes` body.
-Known attributes include name, street, zipcode, city, country, description, start date and end date.
+Known attribute keys are `name`, `street`, `zipcode`, `city`, `country`, `description`, and the start/end dates.
+The Swagger documents the start and end dates under the hyphenated keys `drstart-date` and `drend-date` (the variants that carry descriptions and examples); the client sends those exact keys.
+Unknown attribute keys are silently ignored by the API (a 2xx is still returned), so a wrong key drops the value without any error, which is why the exact key spelling must be verified against a recorded create cassette.
+
+## Cassette recording and replay
+
+Cassette matching is exact on method, path, query, and body, so a replay test only matches a recorded interaction if it sends a byte-identical request.
+The recording harness builds its requests from the `vcr_fixtures` helpers in `planradar/projects.rs`, which read the `PLANRADAR_CUSTOMER_ID`, `PLANRADAR_VCR_PROJECT_ID`, and `PLANRADAR_VCR_NEW_PROJECT_NAME` variables and fall back to fixed literals.
+The replay tests instead rebuild their inputs from the cassette they replay, so they pass on any machine without access to the account the cassettes were recorded against.
 
 Copying a source project uses `POST /api/v1/{customer_id}/projects/{project_id}/copy_project`.
 This is the same copy feature offered in the Planradar UI.
 It takes a new `name` plus boolean toggles that select which aspects to copy:
 details, groups, ticket_types (forms), users, and components (layers).
 The copy is performed server-side, so field-level edits happen afterward via project update.
+
+Copying is asynchronous, confirmed by a live recording.
+The endpoint answers `202 Accepted` with a body of `{"job_id": "<uuid>"}` and no project payload, so the new project ID is not available when the call returns.
+The Swagger documents only the 404 and 406 responses for this endpoint, so this success shape cannot be derived from the spec.
+
+There is no job-status endpoint, so the returned `job_id` cannot be queried and serves only as a diagnostic identifier.
+Completion is observed by polling the project list, where newly created projects appear last.
+The client walks forward to the last page, scans it from the back for the copy's name, and polls every 3 seconds up to 10 times before returning a timeout error.
 
 ## Project read and list
 

@@ -155,3 +155,10 @@ impl Display for RecordReplayError {
         f.write_str(&self.message)
     }
 }
+
+/// Serializes every test that mutates `VCR_MODE`. All integration modules must share this one
+/// lock, or their env-mutating tests race across Cargo's parallel test threads.
+pub(crate) fn vcr_env_lock() -> &'static std::sync::Mutex<()> {
+    static VCR_ENV_LOCK: std::sync::OnceLock<std::sync::Mutex<()>> = std::sync::OnceLock::new();
+    VCR_ENV_LOCK.get_or_init(|| std::sync::Mutex::new(()))
+}

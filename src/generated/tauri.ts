@@ -16,6 +16,21 @@ export const commands = {
 	dayliteOpenProject: (projectRef: string) => typedError<null, string>(__TAURI_INVOKE("daylite_open_project", { projectRef })),
 	dayliteListContacts: () => typedError<PlanningContactRecord[], DayliteApiError>(__TAURI_INVOKE("daylite_list_contacts")),
 	dayliteListCachedContacts: () => typedError<PlanningContactRecord[], DayliteApiError>(__TAURI_INVOKE("daylite_list_cached_contacts")),
+	/**
+	 *  Stores the API token in the OS keychain and the non-secret base URL plus Customer ID in the
+	 *  local config store.
+	 */
+	planradarConnect: (request: PlanradarConnectRequest) => typedError<PlanradarConnectionStatus, PlanradarApiError>(__TAURI_INVOKE("planradar_connect", { request })),
+	planradarGetProjectStatus: (projectId: string) => typedError<PlanradarProject, PlanradarApiError>(__TAURI_INVOKE("planradar_get_project_status", { projectId })),
+	planradarListProjects: (input: PlanradarListProjectsInput) => typedError<PlanradarProject[], PlanradarApiError>(__TAURI_INVOKE("planradar_list_projects", { input })),
+	planradarCreateProject: (request: PlanradarCreateProjectRequest) => typedError<string, PlanradarApiError>(__TAURI_INVOKE("planradar_create_project", { request })),
+	/**
+	 *  Blocks until the copied project appears and returns its ID: Planradar copies asynchronously
+	 *  and offers no job-status endpoint, so completion is observed by polling the project list.
+	 *  Times out if the copy has not surfaced within the poll window.
+	 */
+	planradarCopyProject: (projectId: string, options: PlanradarCopyProjectOptions) => typedError<string, PlanradarApiError>(__TAURI_INVOKE("planradar_copy_project", { projectId, options })),
+	planradarReactivateProject: (projectId: string) => typedError<null, PlanradarApiError>(__TAURI_INVOKE("planradar_reactivate_project", { projectId })),
 	createAssignment: (input: CreateAssignmentInput) => typedError<string, string>(__TAURI_INVOKE("create_assignment", { input })),
 	updateAssignment: (input: UpdateAssignmentInput) => typedError<null, string>(__TAURI_INVOKE("update_assignment", { input })),
 	moveAssignment: (href: string, targetEmployeeReference: string, date: string, projectRef: string, projectName: string, orderIndex: number | null) => typedError<MoveAssignmentResult, string>(__TAURI_INVOKE("move_assignment", { href, targetEmployeeReference, date, projectRef, projectName, orderIndex })),
@@ -35,6 +50,11 @@ export const commands = {
 export type ApiEndpoints = {
 	dayliteBaseUrl: string,
 	planradarBaseUrl: string,
+	/**
+	 *  Account ID from PlanRadar Settings > Account, used as the `{customer_id}` path segment.
+	 *  The matching API token belongs in the OS keychain, never here.
+	 */
+	planradarCustomerId?: string,
 	zepCaldavRootUrl?: string,
 };
 
@@ -188,6 +208,62 @@ export type PlanningContactRecord = {
 	category?: string | null,
 	urls?: DayliteContactUrl[],
 };
+
+export type PlanradarApiError = {
+	code: PlanradarApiErrorCode,
+	httpStatus: number | null,
+	userMessage: string,
+	technicalMessage: string,
+};
+
+export type PlanradarApiErrorCode = "UNAUTHORIZED" | "RATE_LIMITED" | "SERVER_ERROR" | "MISSING_TOKEN" | "MISSING_CUSTOMER_ID" | "INVALID_CONFIGURATION" | "REQUEST_FAILED" | "INVALID_RESPONSE" | "NOT_FOUND" | "TIMEOUT";
+
+export type PlanradarConnectRequest = {
+	baseUrl: string,
+	customerId: string,
+	apiToken: string,
+};
+
+export type PlanradarConnectionStatus = {
+	hasToken: boolean,
+	customerId: string,
+};
+
+export type PlanradarCopyProjectOptions = {
+	name: string,
+	details?: boolean,
+	groups?: boolean,
+	/**  Forms in the Planradar UI. */
+	ticketTypes?: boolean,
+	users?: boolean,
+	/**  Layers in the Planradar UI. */
+	components?: boolean,
+};
+
+export type PlanradarCreateProjectRequest = {
+	name: string,
+	street?: string | null,
+	zipcode?: string | null,
+	city?: string | null,
+	country?: string | null,
+	description?: string | null,
+	startDate?: string | null,
+	endDate?: string | null,
+};
+
+export type PlanradarListProjectsInput = {
+	sort?: string | null,
+	page?: number | null,
+	pagesize?: number | null,
+};
+
+export type PlanradarProject = {
+	id: string,
+	name: string,
+	status: PlanradarProjectStatus,
+};
+
+export type PlanradarProjectStatus = "active" | "archived";
 
 export type StoreError = {
 	code: StoreErrorCode,

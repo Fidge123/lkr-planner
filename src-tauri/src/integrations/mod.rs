@@ -4,4 +4,5 @@ pub mod holidays;
 #[cfg(test)]
 pub(crate) mod http_record_replay;
 pub mod local_store;
+pub mod planradar;
 pub mod zep;
