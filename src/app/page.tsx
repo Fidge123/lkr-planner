@@ -175,20 +175,22 @@ export function PlanningGridTable({
     ? assignmentState.getCachedWeek(toLocalISODate(incomingDays[0]))
     : null;
 
-  // A gesture can only start at a scroll edge, so a grid too wide for the window is parked
-  // to one side; the incoming week has to arrive at the same offset or the columns jump on handover.
+  // A gesture can only start at a horizontal scroll edge, so a grid too wide for the window is parked
+  // to one side; the incoming week has to arrive at both offsets or the columns and rows jump on handover.
   const incomingRef = useRef<HTMLElement>(null);
   const hasIncoming = incomingDays !== null;
   // biome-ignore lint/correctness/useExhaustiveDependencies: hasIncoming marks the mount of the incoming week, not a value the effect body reads.
   useEffect(() => {
     if (incomingRef.current && scrollRef.current) {
       incomingRef.current.scrollLeft = scrollRef.current.scrollLeft;
+      incomingRef.current.scrollTop = scrollRef.current.scrollTop;
     }
   }, [hasIncoming]);
 
   return (
     <section className="w-full h-full relative overflow-hidden">
-      <section ref={scrollRef} className="w-full h-full overflow-auto">
+      {/* Isolated so the pinned date row, which has to outrank the cells it covers, stays under the week sliding in. */}
+      <section ref={scrollRef} className="w-full h-full overflow-auto isolate">
         <ReloadableAlert
           message={employeeErrorMessage}
           onReload={reloadEmployees}
