@@ -41,7 +41,7 @@ Whatever a planner types into a time field is therefore gone by the next write o
 - Editing bare events or absences.
   They stay read-only, as they are today.
 - Creating a category, renaming one, or changing its color.
-  Those stay in Daylite, and so does removing a project's category altogether.
+  Those stay in Daylite.
 - A category that belongs to a single appointment instead of to its project.
 
 ## Decisions
@@ -125,8 +125,11 @@ The list is sorted by name so it does not depend on the order the API happens to
 Categories with `is_active` false are not offered.
 Daylite keeps them so projects that still reference them stay colored, which is why they remain in the color lookup, but handing a planner a retired category to assign afresh spreads something its owner deliberately withdrew.
 
-Clearing a project's category is not offered either.
-The picker holds the categories Daylite has; a project that should carry none is a Daylite edit, and no planner has asked for it.
+The picker's first entry removes the category instead of setting one.
+A category picked by mistake would otherwise need a trip into Daylite to undo, which is the trip this change exists to remove, and a project carrying no category is an ordinary state: `resolve_event` already returns `None` for it and the card falls back to the neutral color.
+Removing is written as the same `PATCH /projects/<id>` with a null category, so it is one write path with one error message rather than two.
+
+It follows that removing the category of a project carrying `"Termin FIX geplant"` releases its appointments, exactly as picking another category does: protection asks whether the category equals the fixed one, and no category does not.
 
 ### Times entered by hand steer one write and are stored nowhere
 

@@ -1,13 +1,18 @@
 ## ADDED Requirements
 
 ### Requirement: Set a project's category
-The system SHALL set a Daylite project's category to one of the categories Daylite offers for projects.
+The system SHALL set a Daylite project's category to one of the categories Daylite offers for projects, and SHALL remove the category a project carries.
 Creating a category, renaming one, and changing a category's color stay Daylite's business and are not offered here.
 
 #### Scenario: Write the picked category
 - **WHEN** a project's category is set to a category Daylite offers
 - **THEN** the system sends `PATCH /projects/<id>` carrying that category's name
 - **AND** the write is reported as successful only once Daylite accepted it
+
+#### Scenario: Remove the category
+- **WHEN** a project's category is removed
+- **THEN** the system sends `PATCH /projects/<id>` carrying a null category
+- **AND** the project carries no category afterwards
 
 #### Scenario: Daylite rejects the write
 - **WHEN** Daylite rejects setting the category

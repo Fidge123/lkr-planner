@@ -19,7 +19,8 @@ Marking a job as a fixed appointment is the same story from the other side: the 
 - The edit modal gains a free-text note that is written into the event DESCRIPTION below the `daylite:` reference line, so it reaches every calendar client reading the event.
 - The edit modal gains a category picker holding the project categories Daylite offers, each shown with its name and its color, and saving gives the assignment's Daylite project the picked category.
   The category is the project's, so it applies to every appointment of that project, which a German hint in the modal says out loud.
-  A fixed appointment is one whose project carries the category `"Termin FIX geplant"`, so picking that category locks the assignment and picking another releases it.
+  The picker's first entry removes the project's category again, for a category picked by mistake.
+  A fixed appointment is one whose project carries the category `"Termin FIX geplant"`, so picking that category locks the assignment, and picking another or removing it releases it.
   Creating categories and editing their names or colors stays in Daylite.
 - Title override and note survive every write that rewrites the event: saving the modal, rescheduling by drag, moving to another employee, and slot re-allocation.
   **BREAKING** for `move_assignment`, `update_assignment`, and `create_assignment`: their inputs grow the new fields, and a caller that omits them drops the data.
@@ -35,7 +36,7 @@ None.
 - `assignment-modal-crud`: the modal edits date, start and end time, title, note, and the project's category in addition to the project itself, and its unsaved-changes and validation rules cover the new fields.
 - `slot-allocation`: a write can carry times entered by a planner instead of applying the even split, and can fit the day's adjacent assignments to them; those times last only until the day is next re-allocated.
 - `assignment-persistence`: assignment events carry a title override and a planner note, and every write path preserves them instead of rebuilding the VEVENT from the project alone.
-- `daylite-integration`: the project categories are read as a list carrying each category's name and color, and a project's category can be set.
+- `daylite-integration`: the project categories are read as a list carrying each category's name and color, and a project's category can be set and removed.
 - `fixed-appointment-protection`: a category set from the planner decides protection right away, instead of the category cached before the write.
 
 ## Impact

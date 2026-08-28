@@ -10,7 +10,7 @@ The system SHALL apply the protection rules to the category a project was just g
 - **AND** a following update, day change, or delete is refused with the German fixed-appointment message
 
 #### Scenario: Releasing the category releases the events
-- **WHEN** a project's category is changed from `"Termin FIX geplant"` to another category
+- **WHEN** a project's category is changed from `"Termin FIX geplant"` to another category, or removed altogether
 - **THEN** events referencing that project are no longer treated as protected
 - **AND** they can be edited, moved to another day, and deleted again
 

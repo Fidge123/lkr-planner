@@ -156,8 +156,8 @@ The modal SHALL let the planner attach free-text notes to an assignment, stored 
 - **THEN** it is still shown as an assignment card with its project's category color, not as a bare event
 
 ### Requirement: Edit the assignment category
-The modal SHALL let the planner give the assignment's Daylite project one of the categories Daylite offers, picked from a list showing each category with its name and its color.
-The category belongs to the project rather than to the single assignment, so it changes for every appointment of that project, and because a fixed appointment is one whose project carries the category `"Termin FIX geplant"`, picking that category locks the assignment and picking another releases it.
+The modal SHALL let the planner give the assignment's Daylite project one of the categories Daylite offers, picked from a list showing each category with its name and its color, and SHALL let the planner remove the category the project carries.
+The category belongs to the project rather than to the single assignment, so it changes for every appointment of that project, and because a fixed appointment is one whose project carries the category `"Termin FIX geplant"`, picking that category locks the assignment while picking another or removing it releases it.
 
 #### Scenario: The picker lists the categories Daylite offers
 - **WHEN** the modal is open
@@ -165,19 +165,28 @@ The category belongs to the project rather than to the single assignment, so it 
 - **AND** each is shown with its name and the color Daylite holds for it
 - **AND** a category Daylite gives no color is shown with the neutral color
 
+#### Scenario: The picker offers removing the category
+- **WHEN** the category picker is shown
+- **THEN** its first entry is a German option for no category
+- **AND** it is shown with the neutral color
+
 #### Scenario: Picker shows the project's current category
 - **WHEN** the modal opens for an assignment whose Daylite project carries a category
 - **THEN** that category is the selected one
 
 #### Scenario: Project without a category
 - **WHEN** the modal opens for an assignment whose Daylite project carries no category
-- **THEN** no category is selected
-- **AND** a German placeholder says so
+- **THEN** the entry for no category is the selected one
 
 #### Scenario: Save a category
 - **WHEN** the planner picks a different category and saves
 - **THEN** the assignment's Daylite project is given that category
 - **AND** the card is shown in the new category's color after the reload
+
+#### Scenario: Remove the category
+- **WHEN** the planner picks the entry for no category and saves
+- **THEN** the assignment's Daylite project carries no category afterwards
+- **AND** the card falls back to the neutral color after the reload
 
 #### Scenario: The planner is told the category belongs to the project
 - **WHEN** the category picker is shown
@@ -213,7 +222,7 @@ The category belongs to the project rather than to the single assignment, so it 
 - **AND** reopening the modal shows the German fixed-appointment notice with its unlock control
 
 #### Scenario: Picking another category releases the lock
-- **WHEN** the planner unlocks a protected assignment, picks another category, and saves
+- **WHEN** the planner unlocks a protected assignment, picks another category or the entry for no category, and saves
 - **THEN** the assignment is no longer protected
 - **AND** it can be edited, moved to another day, and deleted again
 

@@ -64,14 +64,14 @@
 
 - [ ] 9.1 Return the project categories from `/categories?entity=project` as a list carrying each category's name, its color, and whether it is still active, sorted by name
 - [ ] 9.2 Derive the name-to-color lookup in `services/daylite-categories.ts` from that one list, keeping retired categories in the lookup and out of the picker
-- [ ] 9.3 Add a Daylite command that sets a project's category by PATCHing `/projects/<id>` with the picked name, returning the normalized German error when Daylite rejects it
+- [ ] 9.3 Add a Daylite command that sets a project's category by PATCHing `/projects/<id>` with the picked name, or with a null category when the category is removed, returning the normalized German error when Daylite rejects it
 - [ ] 9.4 Replace the cached project for the written reference so the next resolution returns the new category instead of waiting out the cache lifetime, with a test that a project just made fixed is refused by `refuse_protected_event`
 - [ ] 9.5 Record a cassette for the category list and the category write, and pin the request shape against it
-- [ ] 9.6 Add category state to `use-assignment-modal`, initialised from the assignment's resolved project category and following the project when the planner picks a different one
-- [ ] 9.7 Send the category write only when the planner picked a different category, after the calendar write has succeeded, and show the German error in the modal when it fails while keeping the calendar changes
+- [ ] 9.6 Add category state to `use-assignment-modal`, initialised from the assignment's resolved project category, holding no category for a project without one, and following the project when the planner picks a different one
+- [ ] 9.7 Send the category write only when the planner picked a different category or removed it, after the calendar write has succeeded, and show the German error in the modal when it fails while keeping the calendar changes
 - [ ] 9.8 Extend the dirty tracking so a category change marks the modal changed
-- [ ] 9.9 Render the picker with the active categories, each with its name and color swatch, the neutral swatch for a category without a color, and the German hint that the category belongs to the project, using DaisyUI form controls and no nested `div`/`span`
-- [ ] 9.10 Add modal tests for each scenario in the `assignment-modal-crud` category delta, including that picking `"Termin FIX geplant"` leaves the reopened modal protected and that picking another category releases it
+- [ ] 9.9 Render the picker with the German entry for no category first, then the active categories, each with its name and color swatch, the neutral swatch for a category without a color, and the German hint that the category belongs to the project, using DaisyUI form controls and no nested `div`/`span`
+- [ ] 9.10 Add modal tests for each scenario in the `assignment-modal-crud` category delta, including that picking `"Termin FIX geplant"` leaves the reopened modal protected and that picking another category or removing it releases the assignment
 
 ## 10. Drag paths
 
