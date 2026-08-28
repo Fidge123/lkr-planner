@@ -1,0 +1,27 @@
+name: OpenSpec
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate specs and changes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Validate OpenSpec
+        run: bunx openspec validate --all --strict
+        env:
+          OPENSPEC_TELEMETRY: 0
