@@ -137,6 +137,24 @@ describe("TimetableCell", () => {
     expect(html.indexOf(editLabel)).toBeLessThan(html.indexOf(dayliteLabel));
   });
 
+  it("stacks the card actions in a column on the card's right edge", () => {
+    const html = renderCell({ events: [assignment()] });
+
+    const actionArea = html.slice(
+      html.lastIndexOf("<div", html.indexOf(editLabel)),
+      html.indexOf(editLabel),
+    );
+
+    expect(actionArea).toContain("flex-col");
+    expect(actionArea).toContain("shrink-0");
+  });
+
+  it("leaves the title the widest part of the card", () => {
+    const html = renderCell({ events: [assignment()] });
+
+    expect(html).toContain('class="flex-1 min-w-0 font-medium"');
+  });
+
   it("renders no Daylite action on an assignment with an unresolved project", () => {
     const html = renderCell({
       events: [assignment({ title: "Projekt Süd", projectStatus: null })],

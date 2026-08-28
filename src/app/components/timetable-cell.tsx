@@ -304,7 +304,7 @@ function DraggableAssignmentCard({
     >
       <div
         ref={setActivatorNodeRef}
-        className={`flex flex-1 min-w-0 items-center gap-4 ${canDrag ? "cursor-grab" : ""}`}
+        className={`flex flex-1 min-w-0 items-center gap-2 ${canDrag ? "cursor-grab" : ""}`}
         {...(canDrag
           ? { ...listeners, "aria-roledescription": "draggable" }
           : {})}
@@ -317,7 +317,7 @@ function DraggableAssignmentCard({
         />
       </div>
       {lifted ? null : (
-        <>
+        <div className={cardActionAreaClass}>
           <button
             type="button"
             className={cardActionClass}
@@ -338,13 +338,14 @@ function DraggableAssignmentCard({
               <ExternalLink className="size-4" aria-hidden="true" />
             </button>
           )}
-        </>
+        </div>
       )}
     </div>
   );
 }
 
-const cardActionClass = "btn btn-ghost btn-square btn-sm shrink-0";
+const cardActionAreaClass = "flex flex-col shrink-0 gap-1";
+const cardActionClass = "btn btn-ghost btn-square btn-xs";
 
 interface CardProps {
   event: CellEvent;
