@@ -41,6 +41,13 @@ A week with no cached assignments SHALL be shown as an empty grid with that week
 - **THEN** the week is shown with its day headers and without assignment cards
 - **AND** the assignments appear once the load for that week finishes
 
+#### Scenario: Prefetching never delays the active week
+- **GIVEN** the planning view loads the week the user is on
+- **WHEN** the neighbouring weeks are prefetched
+- **THEN** the prefetch is dispatched only after the active week has loaded
+- **AND** only after the user has stayed on that week for a short settling period
+- **AND** the prefetch is skipped when the user moved to another week meanwhile
+
 ### Requirement: A swipe past the commit threshold changes the week
 The system SHALL complete the gesture once the swipe ends, using how far the week was pulled in as the decision.
 A week pulled in by at least 20 percent of the grid width SHALL slide the rest of the way, cover the current week and become the displayed week.

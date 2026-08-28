@@ -97,11 +97,11 @@ export type DropOutcome =
   | { kind: "partialMove"; newHref: string; sourceHref: string }
   | { kind: "error"; message: string };
 
-export const edgeZoneWidth = 48;
-export const edgeDwellMs = 1000;
+const edgeZoneWidth = 48;
+const edgeDwellMs = 1000;
 // Without a cooldown the dwell restarts the instant it fires, so holding a
 // moment too long after a jump compounds into several weeks at once.
-export const edgeCooldownMs = 1000;
+const edgeCooldownMs = 1000;
 
 export function decideDropAction(
   source: AppointmentDragPayload,

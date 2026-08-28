@@ -28,6 +28,15 @@ export function shiftWeekDays(days: Date[], weekOffset: number): Date[] {
   );
 }
 
+export function millisecondsUntilNextLocalMidnight(now: Date): number {
+  const nextMidnight = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate() + 1,
+  );
+  return nextMidnight.getTime() - now.getTime();
+}
+
 export function isToday(day: Date) {
   const today = new Date();
   return day.toDateString() === today.toDateString();
@@ -44,4 +53,26 @@ export function toLocalISODate(date: Date): string {
   const m = String(date.getMonth() + 1).padStart(2, "0");
   const d = String(date.getDate()).padStart(2, "0");
   return `${y}-${m}-${d}`;
+}
+
+// ISO 8601: the week of a date is the week holding the Thursday of that date's week, and week 1 is the one holding 4 January.
+export function getIsoWeek(date: Date): number {
+  const thursday = thursdayOfWeek(date);
+  const firstThursday = thursdayOfWeek(new Date(thursday.getFullYear(), 0, 4));
+  const millisecondsPerWeek = 7 * 24 * 60 * 60 * 1000;
+  return (
+    1 +
+    Math.round(
+      (thursday.getTime() - firstThursday.getTime()) / millisecondsPerWeek,
+    )
+  );
+}
+
+function thursdayOfWeek(date: Date): Date {
+  const daysSinceMonday = (date.getDay() + 6) % 7;
+  return new Date(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate() + 3 - daysSinceMonday,
+  );
 }

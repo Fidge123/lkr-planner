@@ -35,8 +35,13 @@ The system SHALL distinguish lkr-planner assignments from bare calendar events.
 - **AND** it colors only the strip, leaving the card surface and its text unchanged
 
 #### Scenario: Assignment without a category color
-- **WHEN** a resolved Daylite project has no category or its category has no color
+- **WHEN** a resolved Daylite project has no category, or its category has no color
 - **THEN** the strip keeps its default muted color, the same one for every project status
+
+#### Scenario: Category color is joined where the card is rendered
+- **WHEN** an assignment card is rendered
+- **THEN** its strip color comes from looking the project's category up in the category color map
+- **AND** the map is read once for the whole session, so a recolored category appears after a reload or a restart
 
 #### Scenario: Bare events carry no strip
 - **WHEN** an event has no Daylite project reference
@@ -67,22 +72,18 @@ The system SHALL distinguish lkr-planner assignments from bare calendar events.
 ### Requirement: Daylite project resolution
 The system SHALL resolve project details for lkr-planner events.
 
-#### Scenario: Project found in cache
-- **WHEN** a VEVENT references a Daylite project
-- **AND** the project is present in the local Daylite cache
-- **THEN** the project name and category color are displayed from cache
-- **AND** the neutral color is used when no category color is cached
-
-#### Scenario: Project not in cache — API fallback
-- **WHEN** a VEVENT references a Daylite project
-- **AND** the project is not in the local cache
+#### Scenario: Project resolved from Daylite
+- **WHEN** a VEVENT references a Daylite project that is not held in the resolution cache
 - **THEN** the system queries the Daylite API for the project details including its category
-- **AND** displays the resolved name and category color on success
-- **AND** the neutral color is used when the project has no category color
+- **AND** displays the resolved name and category on success
+
+#### Scenario: Project served from the resolution cache
+- **WHEN** a VEVENT references a project resolved recently enough that its cache entry is still valid
+- **THEN** the name and category are displayed without a further API request
 
 #### Scenario: Project resolution fails
 - **WHEN** a VEVENT references a Daylite project
-- **AND** neither cache lookup nor API query succeeds
+- **AND** the query for it does not succeed
 - **THEN** the card keeps the event SUMMARY as its title and carries no project status
 - **AND** a red warning icon marks the card
 - **AND** the German note around the title, `"Beschreibung für "` and `" konnte nicht abgerufen werden"`, is shown in italics so the title stays distinguishable

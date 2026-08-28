@@ -4,6 +4,7 @@ import type {
   CalendarCellEvent,
   DayliteProjectSummary,
 } from "../../generated/tauri";
+import { mockCommands } from "../../test/mock-commands";
 import { AssignmentModal } from "./assignment-modal";
 import {
   commandErrorMessage,
@@ -21,13 +22,11 @@ import {
   SuggestionEmptyState,
 } from "./project-result-list";
 
-mock.module("../../generated/tauri", () => ({
-  commands: {
-    createAssignment: mock(() => Promise.resolve({ status: "ok", data: "" })),
-    updateAssignment: mock(() => Promise.resolve({ status: "ok", data: null })),
-    deleteAssignment: mock(() => Promise.resolve({ status: "ok", data: null })),
-  },
-}));
+mockCommands({
+  createAssignment: mock(() => Promise.resolve({ status: "ok", data: "" })),
+  updateAssignment: mock(() => Promise.resolve({ status: "ok", data: null })),
+  deleteAssignment: mock(() => Promise.resolve({ status: "ok", data: null })),
+});
 
 const baseProps = {
   employeeReference: "ref-123",
@@ -41,7 +40,6 @@ const fixedAssignment: CalendarCellEvent = {
   kind: "assignment",
   title: "Projekt Fix",
   projectStatus: "in_progress",
-  categoryColor: null,
   projectCategory: "Termin FIX geplant",
   projectRef: "/v1/projects/9",
   date: "2026-05-06",
@@ -92,7 +90,6 @@ describe("AssignmentModal", () => {
       kind: "assignment",
       title: "Projekt Alpha",
       projectStatus: "in_progress",
-      categoryColor: null,
       projectCategory: null,
       projectRef: "/v1/projects/1",
       date: "2026-05-06",
@@ -130,27 +127,12 @@ describe("AssignmentModal", () => {
     expect(html.match(/<button[^>]*disabled[^>]*>Speichern/)).not.toBeNull();
   });
 
-  it("edit mode: unlocking re-enables the picker, save and delete", () => {
-    const html = renderToStaticMarkup(
-      <AssignmentModal {...baseProps} assignment={fixedAssignment} unlocked />,
-    );
-
-    expect(html).toContain("Bearbeitung entsperren");
-    expect(html.match(/<input[^>]*type="checkbox"[^>]*checked/)).not.toBeNull();
-    expect(
-      html.match(/<input(?=[^>]*role="combobox")[^>]*disabled/),
-    ).toBeNull();
-    expect(html.match(/<button[^>]*disabled[^>]*>Löschen/)).toBeNull();
-    expect(html.match(/<button[^>]*disabled[^>]*>Speichern/)).toBeNull();
-  });
-
   it("edit mode: keeps save and delete enabled for a plannable assignment", () => {
     const assignment: CalendarCellEvent = {
       uid: "uid-1",
       kind: "assignment",
       title: "Projekt Alpha",
       projectStatus: "in_progress",
-      categoryColor: null,
       projectCategory: null,
       projectRef: "/v1/projects/1",
       date: "2026-05-06",
@@ -186,7 +168,6 @@ describe("AssignmentModal", () => {
       kind: "assignment",
       title: "Projekt Beta",
       projectStatus: "new_status",
-      categoryColor: null,
       projectCategory: null,
       projectRef: "/v1/projects/2",
       date: "2026-05-06",

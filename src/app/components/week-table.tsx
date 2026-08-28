@@ -1,3 +1,4 @@
+import { CalendarDays } from "lucide-react";
 import { useEffect, useRef } from "react";
 import type {
   CalendarCellEvent,
@@ -5,9 +6,10 @@ import type {
   Holiday,
   PlanningContactRecord,
 } from "../../generated/tauri";
+import type { ProjectCategoryColors } from "../../services/daylite-categories";
 import type { DropPreview } from "../hooks/use-appointment-drag";
-import { toLocalISODate } from "../util";
-import { TimetableHeader } from "./timetable-header";
+import { getIsoWeek, toLocalISODate } from "../util";
+import { stickyHeaderClass, TimetableHeader } from "./timetable-header";
 import { TimetableRow } from "./timetable-row";
 
 export function WeekTable({
@@ -16,6 +18,7 @@ export function WeekTable({
   employeeSettings,
   eventsByEmployee,
   errorsByEmployee,
+  categoryColors,
   holidays,
   isEmployeeLoading,
   dropPreview = null,
@@ -41,10 +44,20 @@ export function WeekTable({
   }, [eventsByEmployee]);
 
   return (
-    <table ref={gridRef} className="table table-fixed border-collapse">
+    // A card the pointer crosses mid-drag, or that an autoscroll slides under it, otherwise keeps its hover for good.
+    // dnd-kit measures rects rather than hit-testing, so it loses nothing by this.
+    <table
+      ref={gridRef}
+      className={`table table-fixed border-collapse ${draggedUid ? "pointer-events-none" : ""}`}
+    >
       <thead className="text-base-content">
         <tr>
-          <th className="w-40 p-4 font-bold">Mitarbeiter</th>
+          <th className={`w-40 p-4 font-bold bg-base-100 ${stickyHeaderClass}`}>
+            <span className="flex items-center gap-1.5 text-primary">
+              <CalendarDays className="size-4" aria-hidden="true" />
+              KW {getIsoWeek(weekDays[0])}
+            </span>
+          </th>
           {weekDays.map((day) => (
             <TimetableHeader
               key={day.getTime()}
@@ -61,6 +74,7 @@ export function WeekTable({
             employee={employee}
             calendarEvents={eventsByEmployee[employee.self] ?? []}
             calendarError={errorsByEmployee[employee.self] ?? null}
+            categoryColors={categoryColors}
             week={{ days: weekDays, holidayDates }}
             employeeSetting={
               employeeSettings.find(
@@ -94,6 +108,7 @@ export interface WeekTableProps {
   employeeSettings: EmployeeSetting[];
   eventsByEmployee: Record<string, CalendarCellEvent[]>;
   errorsByEmployee: Record<string, string>;
+  categoryColors: ProjectCategoryColors;
   holidays: Holiday[];
   isEmployeeLoading: boolean;
   dropPreview?: DropPreview | null;

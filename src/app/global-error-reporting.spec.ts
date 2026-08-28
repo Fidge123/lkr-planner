@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
 
 const mockReportFrontendError = mock(() => Promise.resolve());
+const realTelemetry = await import("../services/telemetry");
 
 mock.module("../services/telemetry", () => ({
+  ...realTelemetry,
   reportFrontendError: mockReportFrontendError,
 }));
 

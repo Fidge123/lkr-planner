@@ -69,7 +69,6 @@ function cellEvent(overrides: Partial<CalendarCellEvent>): CalendarCellEvent {
     kind: "assignment",
     title: "Projekt Nord",
     projectStatus: "in_progress",
-    categoryColor: null,
     projectCategory: null,
     projectRef: "/v1/projects/1",
     date: "2026-01-26",
@@ -102,6 +101,13 @@ describe("planning grid employee states", () => {
 
     expect(html).not.toContain("Geladene Projekte");
     expect(html).not.toContain("Keine Projekte gefunden");
+  });
+
+  it("keeps the pinned date row in its own stacking context so a swiped week covers it", () => {
+    const scrollContainer =
+      renderGrid().match(/<section class="[^"]*overflow-auto[^"]*"/)?.[0] ?? "";
+
+    expect(scrollContainer).toContain("isolate");
   });
 
   it("renders daylite-backed employee names instead of dummy employee names", () => {
@@ -184,9 +190,10 @@ describe("planning grid assignment states", () => {
   });
 
   it("renders lkr-planner assignment event in cell with its category color", () => {
-    const html = renderGrid(
-      withEvents([cellEvent({ categoryColor: "#8bc34a" })]),
-    );
+    const html = renderGrid({
+      ...withEvents([cellEvent({ projectCategory: "Bau" })]),
+      categoryColors: { Bau: "#8bc34a" },
+    });
 
     expect(html).toContain("Projekt Nord");
     expect(html).toContain("border-left-color:#8bc34a");
@@ -249,6 +256,7 @@ describe("planning grid drag-and-drop wiring", () => {
         employeeSettings={[]}
         hideNonPlannableEmployees={false}
         holidaysState={defaultHolidaysState}
+        categoryColors={{}}
         onOpenIcalDialog={() => {}}
         onNavigateWeek={() => {}}
         {...withEvents([

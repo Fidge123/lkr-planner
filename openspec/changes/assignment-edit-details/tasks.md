@@ -16,14 +16,14 @@
 ## 3. Requested times in the allocator
 
 - [ ] 3.1 Add an optional requested start and end to the day-planning input, and make `plan_slot_updates` write those times for the placed assignment and plan no even split for that day when they are present
-- [ ] 3.2 Leave the day's other assignments untouched on such a write, and keep today's behaviour unchanged when no times are requested
+- [ ] 3.2 Leave the day's other assignments untouched on such a write, and keep today's behavior unchanged when no times are requested
 - [ ] 3.3 Add allocator tests: requested times are written as given; the rest of the day keeps its times; times outside 08:00-16:00 are accepted; a write without requested times still splits the window
 
 ## 4. Adjacent adjustment
 
 - [ ] 4.1 Add an adjustment flag to the same input, emitting `SlotUpdate`s that set the preceding assignment's end to the requested start and the following assignment's start to the requested end
-- [ ] 4.2 Find the neighbours in the day's canonical order from `sequence_day`, skipping bare, absence, and holiday events, and skipping a neighbour that `can_patch_slot` rejects
-- [ ] 4.3 Refuse the whole write with a German error naming the conflicting assignment when the requested times would move a neighbour's start to or past its end
+- [ ] 4.2 Find the neighbors in the day's canonical order from `sequence_day`, skipping bare, absence, and holiday events, and skipping a neighbor that `can_patch_slot` rejects
+- [ ] 4.3 Refuse the whole write with a German error naming the conflicting assignment when the requested times would move a neighbor's start to or past its end
 - [ ] 4.4 Add tests for the three-assignment case, the first and last assignment of a day, a single-assignment day, the refusal, and a day where a bare event sits between two assignments
 
 ## 5. Transient by construction
@@ -44,8 +44,8 @@
 ## 7. Modal: date, times, and the checkbox
 
 - [ ] 7.1 Add the custom-title marker with the replaced title, `note`, and the event's times to `CellEvent` and `toCellEvent`, leaving `title` as the value to display
-- [ ] 7.2 Add date state to `use-assignment-modal`, initialised from the cell's day, validated on save with a German error, and passed to the write
-- [ ] 7.3 Add start and end time state, initialised from the event's times in edit mode and from the slot the new assignment would receive in create mode, validated so both are filled and end is after start, with German errors
+- [ ] 7.2 Add date state to `use-assignment-modal`, initialized from the cell's day, validated on save with a German error, and passed to the write
+- [ ] 7.3 Add start and end time state, initialized from the event's times in edit mode and from the slot the new assignment would receive in create mode, validated so both are filled and end is after start, with German errors
 - [ ] 7.4 Send the times as requested times only when the planner touched a time field in this dialog session, and allocate as today otherwise
 - [ ] 7.5 Disable the time fields with a German hint for an assignment `can_patch_slot` rejects
 - [ ] 7.6 Add the adjacent-adjustment checkbox, ticked by default, sent only alongside requested times
@@ -55,18 +55,31 @@
 
 - [ ] 8.1 Add title state, empty when the assignment carries no override, with the resolved project name as the field's placeholder, and left alone when the planner picks a different project
 - [ ] 8.2 Send an emptied title field as dropping the override, and any entered title as an override recording the project name it replaces
-- [ ] 8.3 Add note state, initialised from the event and passed to the write
+- [ ] 8.3 Add note state, initialized from the event and passed to the write
 - [ ] 8.4 Extend the dirty tracking so date, times, title, and note edits mark the modal changed, while the checkbox alone does not
 - [ ] 8.5 Render the title and note fields so the project field's Daylite name stays visible next to the title
 - [ ] 8.6 Add modal tests for each scenario in the `assignment-modal-crud` delta
 
-## 9. Drag paths
+## 9. Category
 
-- [ ] 9.1 Pass the dragged card's custom title with the title it replaced, and its note, into the reschedule and move writes in `use-appointment-drag`, without requested times or adjacent adjustment
-- [ ] 9.2 Add tests that a reschedule and a move both carry the details through and write the standard window
+- [ ] 9.1 Return the project categories from `/categories?entity=project` as a list carrying each category's name, its color, and whether it is still active, sorted by name
+- [ ] 9.2 Derive the name-to-color lookup in `services/daylite-categories.ts` from that one list, keeping retired categories in the lookup and out of the picker
+- [ ] 9.3 Add a Daylite command that sets a project's category by PATCHing `/projects/<id>` with the picked name, or with a null category when the category is removed, returning the normalized German error when Daylite rejects it
+- [ ] 9.4 Replace the cached project for the written reference so the next resolution returns the new category instead of waiting out the cache lifetime, with a test that a project just made fixed is refused by `refuse_protected_event`
+- [ ] 9.5 Record a cassette for the category list and the category write, and pin the request shape against it
+- [ ] 9.6 Add category state to `use-assignment-modal`, initialized from the assignment's resolved project category, holding no category for a project without one, and following the project when the planner picks a different one
+- [ ] 9.7 Send the category write only when the planner picked a different category or removed it, after the calendar write has succeeded, and show the German error in the modal when it fails while keeping the calendar changes
+- [ ] 9.8 Extend the dirty tracking so a category change marks the modal changed
+- [ ] 9.9 Render the picker with the German entry for no category first, then the active categories, each with its name and color swatch, the neutral swatch for a category without a color, and the German hint that the category belongs to the project, using DaisyUI form controls and no nested `div`/`span`
+- [ ] 9.10 Add modal tests for each scenario in the `assignment-modal-crud` category delta, including that picking `"Termin FIX geplant"` leaves the reopened modal protected and that picking another category or removing it releases the assignment
 
-## 10. Verification
+## 10. Drag paths
 
-- [ ] 10.1 Run `cargo test`, `bun test`, and the Biome check
-- [ ] 10.2 Exercise the write path against the disposable Radicale server in `caldav/write.rs` with an assignment carrying a title override, a note, and requested times with adjacent adjustment
-- [ ] 10.3 Run `bunx openspec validate assignment-edit-details --strict`
+- [ ] 10.1 Pass the dragged card's custom title with the title it replaced, and its note, into the reschedule and move writes in `use-appointment-drag`, without requested times or adjacent adjustment
+- [ ] 10.2 Add tests that a reschedule and a move both carry the details through and write the standard window
+
+## 11. Verification
+
+- [ ] 11.1 Run `cargo test`, `bun test`, and the Biome check
+- [ ] 11.2 Exercise the write path against the disposable Radicale server in `caldav/write.rs` with an assignment carrying a title override, a note, and requested times with adjacent adjustment
+- [ ] 11.3 Run `bunx openspec validate assignment-edit-details --strict`

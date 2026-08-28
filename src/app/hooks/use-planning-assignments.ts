@@ -105,9 +105,26 @@ export function usePlanningAssignments(
   }, []);
 
   useEffect(() => {
-    void loadActiveWeek(debouncedWeekStart);
-    void prefetchWeek(adjacentWeek(debouncedWeekStart, -7));
-    void prefetchWeek(adjacentWeek(debouncedWeekStart, 7));
+    let cancelled = false;
+    let idleTimer: ReturnType<typeof setTimeout> | undefined;
+    let settleIdle: (() => void) | undefined;
+    void loadWeekWithPrefetch({
+      weekStart: debouncedWeekStart,
+      loadActive: loadActiveWeek,
+      prefetch: prefetchWeek,
+      isCancelled: () => cancelled,
+      wait: (ms) =>
+        new Promise((resolve) => {
+          settleIdle = resolve;
+          idleTimer = setTimeout(resolve, ms);
+        }),
+    });
+    return () => {
+      cancelled = true;
+      clearTimeout(idleTimer);
+      // Clearing the timer alone leaves the sequence suspended on a promise nothing resolves.
+      settleIdle?.();
+    };
   }, [debouncedWeekStart, loadActiveWeek, prefetchWeek]);
 
   const reloadAssignments = useCallback(() => {
@@ -155,6 +172,39 @@ export function usePlanningAssignments(
       getCachedWeek,
     ],
   );
+}
+
+export interface WeekLoadSequence {
+  weekStart: string;
+  loadActive: (weekStart: string) => Promise<void>;
+  prefetch: (weekStart: string) => Promise<void>;
+  isCancelled: () => boolean;
+  wait: (ms: number) => Promise<void>;
+}
+
+const prefetchIdleMs = 400;
+
+/**
+ * A prefetch competes with the active week for CalDAV connections and Daylite requests.
+ * A started week load cannot be called off, so it waits for the user to settle first.
+ */
+export async function loadWeekWithPrefetch({
+  weekStart,
+  loadActive,
+  prefetch,
+  isCancelled,
+  wait,
+}: WeekLoadSequence): Promise<void> {
+  await loadActive(weekStart);
+  if (isCancelled()) return;
+
+  await wait(prefetchIdleMs);
+  if (isCancelled()) return;
+
+  await Promise.all([
+    prefetch(adjacentWeek(weekStart, -7)),
+    prefetch(adjacentWeek(weekStart, 7)),
+  ]);
 }
 
 function groupResults(entries: EmployeeWeekEvents[]): WeekData {

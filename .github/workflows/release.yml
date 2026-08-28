@@ -4,8 +4,13 @@ on:
   push:
     branches:
       - main
-    paths-ignore:
-      - "**.md"
+    paths:
+      - "**"
+      - "!**.md"
+      - "!docs/**"
+      - "!openspec/**"
+      - "!.github/**"
+      - ".github/workflows/release.yml"
 
 jobs:
   publish-tauri:

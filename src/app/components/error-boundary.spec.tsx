@@ -2,8 +2,10 @@ import { beforeEach, describe, expect, it, mock } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 
 const mockReportFrontendError = mock(() => Promise.resolve());
+const realTelemetry = await import("../../services/telemetry");
 
 mock.module("../../services/telemetry", () => ({
+  ...realTelemetry,
   reportFrontendError: mockReportFrontendError,
 }));
 

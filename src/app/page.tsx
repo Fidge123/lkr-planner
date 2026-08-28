@@ -15,6 +15,7 @@ import type {
   EmployeeSetting,
   PlanningContactRecord,
 } from "../generated/tauri";
+import type { ProjectCategoryColors } from "../services/daylite-categories";
 import { MoveReconciliationDialog } from "./components/move-reconciliation-dialog";
 import {
   AssignmentCardBody,
@@ -87,6 +88,7 @@ export function PlanningGrid({
   employeeSettings = [],
   hideNonPlannableEmployees = true,
   holidaysState,
+  categoryColors = {},
   onOpenIcalDialog = () => {},
   onNavigateWeek,
 }: Props) {
@@ -104,6 +106,7 @@ export function PlanningGrid({
       employeeSettings={employeeSettings}
       hideNonPlannableEmployees={hideNonPlannableEmployees}
       holidaysState={holidaysState ?? fallbackHolidaysState}
+      categoryColors={categoryColors}
       onOpenIcalDialog={onOpenIcalDialog}
       onNavigateWeek={onNavigateWeek}
     />
@@ -117,6 +120,7 @@ export function PlanningGridTable({
   employeeSettings,
   hideNonPlannableEmployees,
   holidaysState,
+  categoryColors,
   onOpenIcalDialog,
   onNavigateWeek,
 }: PlanningGridTableProps) {
@@ -171,20 +175,22 @@ export function PlanningGridTable({
     ? assignmentState.getCachedWeek(toLocalISODate(incomingDays[0]))
     : null;
 
-  // A gesture can only start at a scroll edge, so a grid too wide for the window is parked
-  // to one side; the incoming week has to arrive at the same offset or the columns jump on handover.
+  // A gesture can only start at a horizontal scroll edge, so a grid too wide for the window is parked to one side.
+  // The incoming week has to arrive at both offsets or the columns and rows jump on handover.
   const incomingRef = useRef<HTMLElement>(null);
   const hasIncoming = incomingDays !== null;
   // biome-ignore lint/correctness/useExhaustiveDependencies: hasIncoming marks the mount of the incoming week, not a value the effect body reads.
   useEffect(() => {
     if (incomingRef.current && scrollRef.current) {
       incomingRef.current.scrollLeft = scrollRef.current.scrollLeft;
+      incomingRef.current.scrollTop = scrollRef.current.scrollTop;
     }
   }, [hasIncoming]);
 
   return (
     <section className="w-full h-full relative overflow-hidden">
-      <section ref={scrollRef} className="w-full h-full overflow-auto">
+      {/* Isolated so the pinned date row, which outranks the cells it covers, stays under the week sliding in. */}
+      <section ref={scrollRef} className="w-full h-full overflow-auto isolate">
         <ReloadableAlert
           message={employeeErrorMessage}
           onReload={reloadEmployees}
@@ -227,6 +233,7 @@ export function PlanningGridTable({
             employeeSettings={employeeSettings}
             eventsByEmployee={eventsByEmployee}
             errorsByEmployee={errorsByEmployee}
+            categoryColors={categoryColors}
             holidays={holidays}
             isEmployeeLoading={isEmployeeLoading}
             dropPreview={drag.dropPreview}
@@ -270,6 +277,7 @@ export function PlanningGridTable({
               employeeSettings={employeeSettings}
               eventsByEmployee={incomingWeek?.eventsByEmployee ?? {}}
               errorsByEmployee={incomingWeek?.errorsByEmployee ?? {}}
+              categoryColors={categoryColors}
               holidays={holidays}
               isEmployeeLoading={isEmployeeLoading}
               onOpenIcalDialog={onOpenIcalDialog}
@@ -338,6 +346,7 @@ interface Props {
   employeeSettings?: EmployeeSetting[];
   hideNonPlannableEmployees?: boolean;
   holidaysState?: HolidaysState;
+  categoryColors?: ProjectCategoryColors;
   onOpenIcalDialog?: (employee: PlanningContactRecord) => void;
   onNavigateWeek?: (direction: -1 | 1) => void;
 }
@@ -349,6 +358,7 @@ export interface PlanningGridTableProps {
   employeeSettings: EmployeeSetting[];
   hideNonPlannableEmployees: boolean;
   holidaysState: HolidaysState;
+  categoryColors: ProjectCategoryColors;
   onOpenIcalDialog: (employee: PlanningContactRecord) => void;
   onNavigateWeek?: (direction: -1 | 1) => void;
 }

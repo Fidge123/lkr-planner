@@ -1,5 +1,6 @@
 import { TriangleAlert } from "lucide-react";
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import {
   type CalendarCellEvent,
   commands,
@@ -7,6 +8,7 @@ import {
   type PlanningContactRecord,
 } from "../../generated/tauri";
 import { recordLastAssignedProject } from "../../services/assignment-suggestions";
+import type { ProjectCategoryColors } from "../../services/daylite-categories";
 import type { DropPreview } from "../hooks/use-appointment-drag";
 import type { GhostSuggestion, ModalSaveAction } from "../next-day-quick-add";
 import { isGhostVisible, nextGhostState } from "../next-day-quick-add";
@@ -20,6 +22,7 @@ export function TimetableRow({
   employee,
   calendarEvents,
   calendarError,
+  categoryColors,
   week,
   employeeSetting,
   dropPreview = null,
@@ -122,7 +125,9 @@ export function TimetableRow({
             const rawDayEvents = calendarEvents.filter(
               (e) => e.date === isoDay,
             );
-            const dayEvents = rawDayEvents.map(toCellEvent);
+            const dayEvents = rawDayEvents.map((event) =>
+              toCellEvent(event, categoryColors),
+            );
             const suggestion =
               ghost && isGhostVisible(ghost, isoDay, rawDayEvents)
                 ? ghost
@@ -147,15 +152,20 @@ export function TimetableRow({
         )}
       </tr>
 
-      {modalState !== null ? (
-        <AssignmentModal
-          assignment={modalState.assignment}
-          employeeReference={employee.self}
-          date={modalState.date}
-          onSave={handleSave}
-          onClose={() => setModalState(null)}
-        />
-      ) : null}
+      {/* The grid's scroll container is isolated, so a modal rendered inside it cannot paint over the header.
+          The document guard is for the bun specs, which render this row through react-dom/server. */}
+      {modalState === null || typeof document === "undefined"
+        ? null
+        : createPortal(
+            <AssignmentModal
+              assignment={modalState.assignment}
+              employeeReference={employee.self}
+              date={modalState.date}
+              onSave={handleSave}
+              onClose={() => setModalState(null)}
+            />,
+            document.body,
+          )}
     </>
   );
 }
@@ -185,6 +195,7 @@ interface Props {
   employee: PlanningContactRecord;
   calendarEvents: CalendarCellEvent[];
   calendarError: string | null;
+  categoryColors: ProjectCategoryColors;
   week: {
     days: Date[];
     holidayDates: Set<string>;

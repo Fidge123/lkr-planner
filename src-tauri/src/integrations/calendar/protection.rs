@@ -14,7 +14,6 @@ pub(crate) async fn refuse_protected_event(
     override_protection: bool,
     lookup_project: impl AsyncFnOnce(String) -> Option<ResolvedProject>,
 ) -> Result<(), String> {
-    // An overridden write skips the lookups too, so it is cheaper than a checked one.
     if override_protection {
         return Ok(());
     }
@@ -236,7 +235,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_move_to_another_day_is_refused_and_takes_no_override() {
+    async fn a_move_of_a_fixed_appointment_to_another_day_is_refused() {
         let server = EventServer::spawn(PROTECTED_EVENT).await;
         let calls = Arc::new(Mutex::new(0));
 

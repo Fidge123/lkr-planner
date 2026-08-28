@@ -15,7 +15,7 @@
 
 - [x] 2.1 Write failing tests asserting slots are assigned in order-index order and that changing the index changes the slot
 - [x] 2.2 Change `allocate_slots` in `src-tauri/src/integrations/calendar/slots.rs` to sort by order index with the UID as tie-breaker, and carry the index through `plan_slot_updates`
-- [x] 2.3 Confirm the fixed window, non-overlap, "already in its slot" skip, and `extra_uid` behaviour are unchanged by the re-key
+- [x] 2.3 Confirm the fixed window, non-overlap, "already in its slot" skip, and `extra_uid` behavior are unchanged by the re-key
 - [x] 2.4 Verify visual order and allocated times agree across create/delete/reorder/move
 
 ## 3. Intra-day reorder via drag

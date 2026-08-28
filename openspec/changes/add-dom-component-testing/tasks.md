@@ -10,7 +10,8 @@
 - [ ] 2.1 Convert `assignment-modal.spec.tsx` to mount the modal and query by role and label, replacing every regular expression over HTML
 - [ ] 2.2 Establish whether `<dialog>` renders and behaves under happy-dom, and whether the `cancel` listener can be reached; record the answer for the ADR
 - [ ] 2.3 Add the interactive cases the file could not previously express: unlocking re-enables the picker, save and delete, and closing then reopening the modal locks it again
-- [ ] 2.4 Reach the delete-confirm and unsaved-changes states by clicking rather than by prop
+- [ ] 2.4 Assert what an unlocked write sends, not just what it renders: after clicking the unlock checkbox, saving calls `updateAssignment` with `overrideProtection: true` and deleting calls `deleteAssignment` with `true`. Nothing covers this today, so a regression to `false` would leave the unlock button inert with the suite green
+- [ ] 2.5 Reach the delete-confirm and unsaved-changes states by clicking rather than by prop
 
 ## 3. Remaining conversions
 
@@ -25,8 +26,8 @@
 
 ## 4. Drop the test-only props
 
-- [ ] 4.1 Remove `showDeleteConfirm`, `showUnsavedConfirm` and `unlocked` from `AssignmentModal`'s props
-- [ ] 4.2 Remove the matching `initialShowDeleteConfirm`, `initialShowUnsavedConfirm` and `initialUnlocked` inputs from `use-assignment-modal.ts`, keeping the open effect's resets
+- [ ] 4.1 Remove `showDeleteConfirm` and `showUnsavedConfirm` from `AssignmentModal`'s props. `unlocked` is already gone: it armed the protection override on every write, so it did not wait for the harness
+- [ ] 4.2 Remove the matching `initialShowDeleteConfirm` and `initialShowUnsavedConfirm` inputs from `use-assignment-modal.ts`, keeping the open effect's resets
 - [ ] 4.3 Confirm no component in `src` accepts a prop that only tests pass
 
 ## 5. Verification and documentation

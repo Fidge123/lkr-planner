@@ -40,7 +40,7 @@ The system SHALL allocate time slots for same-day assignments deterministically,
 - **GIVEN** 2 assignments for a day that carry the same order index
 - **WHEN** allocating time slots
 - **THEN** the one that starts earlier is ordered first
-- **AND** an identical start time is decided in favour of the longer assignment
+- **AND** an identical start time is decided in favor of the longer assignment
 - **AND** an identical start time and duration is decided by canonical UID
 - **AND** the allocation is still deterministic across runs
 

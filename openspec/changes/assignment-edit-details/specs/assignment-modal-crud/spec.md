@@ -155,6 +155,82 @@ The modal SHALL let the planner attach free-text notes to an assignment, stored 
 - **WHEN** an assignment with a note is loaded from the calendar
 - **THEN** it is still shown as an assignment card with its project's category color, not as a bare event
 
+### Requirement: Edit the assignment category
+The modal SHALL let the planner give the assignment's Daylite project one of the categories Daylite offers, picked from a list showing each category with its name and its color, and SHALL let the planner remove the category the project carries.
+The category belongs to the project rather than to the single assignment, so it changes for every appointment of that project, and because a fixed appointment is one whose project carries the category `"Termin FIX geplant"`, picking that category locks the assignment while picking another or removing it releases it.
+
+#### Scenario: The picker lists the categories Daylite offers
+- **WHEN** the modal is open
+- **THEN** a category picker offers the project categories loaded from Daylite
+- **AND** each is shown with its name and the color Daylite holds for it
+- **AND** a category Daylite gives no color is shown with the neutral color
+
+#### Scenario: The picker offers removing the category
+- **WHEN** the category picker is shown
+- **THEN** its first entry is a German option for no category
+- **AND** it is shown with the neutral color
+
+#### Scenario: Picker shows the project's current category
+- **WHEN** the modal opens for an assignment whose Daylite project carries a category
+- **THEN** that category is the selected one
+
+#### Scenario: Project without a category
+- **WHEN** the modal opens for an assignment whose Daylite project carries no category
+- **THEN** the entry for no category is the selected one
+
+#### Scenario: Save a category
+- **WHEN** the planner picks a different category and saves
+- **THEN** the assignment's Daylite project is given that category
+- **AND** the card is shown in the new category's color after the reload
+
+#### Scenario: Remove the category
+- **WHEN** the planner picks the entry for no category and saves
+- **THEN** the assignment's Daylite project carries no category afterwards
+- **AND** the card falls back to the neutral color after the reload
+
+#### Scenario: The planner is told the category belongs to the project
+- **WHEN** the category picker is shown
+- **THEN** a German hint explains that the category is the project's and applies to all of its appointments
+
+#### Scenario: Every appointment of the project follows the change
+- **WHEN** the planner changes the category of a project other assignments in the grid also reference
+- **THEN** those assignments are shown in the new category's color after the reload
+
+#### Scenario: Switching project shows that project's category
+- **WHEN** the planner picks a different project
+- **THEN** the picker shows the newly selected project's category
+
+#### Scenario: Saving without touching the category
+- **WHEN** the planner changes only the project, date, times, title, or note and saves
+- **THEN** nothing is written to Daylite
+- **AND** the project keeps the category it had
+
+#### Scenario: The category is written after the calendar changes
+- **WHEN** a save changes both the assignment and its category
+- **THEN** the assignment is written to the calendar first
+- **AND** the category is written to Daylite afterwards
+
+#### Scenario: Writing the category fails
+- **WHEN** writing the category to Daylite fails
+- **THEN** a German error message is shown in the modal
+- **AND** the assignment's calendar changes stay written
+- **AND** the project keeps the category it had
+
+#### Scenario: Picking the fixed category locks the assignment
+- **WHEN** the planner picks the category `"Termin FIX geplant"` and saves
+- **THEN** the assignment is protected from then on
+- **AND** reopening the modal shows the German fixed-appointment notice with its unlock control
+
+#### Scenario: Picking another category releases the lock
+- **WHEN** the planner unlocks a protected assignment, picks another category or the entry for no category, and saves
+- **THEN** the assignment is no longer protected
+- **AND** it can be edited, moved to another day, and deleted again
+
+#### Scenario: Create with a category
+- **WHEN** the planner picks a category before saving a new assignment
+- **THEN** the assignment is created
+- **AND** the project it references is given that category
+
 ## MODIFIED Requirements
 
 ### Requirement: Unsaved changes handling
@@ -166,7 +242,7 @@ The system SHALL handle unsaved changes properly.
 - **AND** user can save, discard, or cancel
 
 #### Scenario: Editing any field marks the modal dirty
-- **WHEN** the planner changes the project, the date, either time, the title, or the note
+- **WHEN** the planner changes the project, the date, either time, the title, the note, or the category
 - **THEN** closing the modal shows the unsaved-changes confirmation
 
 #### Scenario: Toggling the adjustment checkbox alone does not
@@ -199,6 +275,7 @@ The system SHALL allow editing an existing assignment, unless it is protected be
 #### Scenario: Save leaves untouched fields alone
 - **WHEN** the planner changes one field and saves
 - **THEN** the assignment's other fields -- project, date, times, title, note -- are written back unchanged
+- **AND** its Daylite project keeps the category it had
 - **AND** its position among the day's assignments is unchanged
 
 #### Scenario: Save fails

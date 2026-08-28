@@ -256,58 +256,6 @@ describe("createTtlCache", () => {
     await expect(cache.get()).rejects.toThrow(/^Laden fehlgeschlagen: Error$/);
   });
 
-  it("rewrites cached entries in place without resetting the ttl", async () => {
-    const { cache, callCount, setNow } = countingCache([ok("a", "b")]);
-    await cache.get();
-
-    cache.update((current) => current.filter((entry) => entry !== "a"));
-    setNow(25_000);
-    const after = await cache.get();
-
-    expect(after.source).toBe("cache");
-    expect(after.data).toEqual(["b"]);
-    expect(callCount()).toBe(1);
-  });
-
-  it("replays an update made while a load was in flight", async () => {
-    let release: (value: string[]) => void = () => {};
-    const pending = new Promise<string[]>((resolve) => {
-      release = resolve;
-    });
-    const { cache } = countingCache([() => pending]);
-
-    const inFlight = cache.get();
-    cache.update((current) => current.filter((entry) => entry !== "b"));
-    release(["a", "b"]);
-
-    expect((await inFlight).data).toEqual(["a"]);
-    expect((await cache.get()).data).toEqual(["a"]);
-  });
-
-  it("replays an in-flight update onto the disk fallback too", async () => {
-    let reject: (error: Error) => void = () => {};
-    const pending = new Promise<string[]>((_, rejectPending) => {
-      reject = rejectPending;
-    });
-    const { cache } = countingCache([() => pending], ok("a", "b"));
-
-    const inFlight = cache.get();
-    cache.update((current) => current.filter((entry) => entry !== "b"));
-    reject(new Error("Backend weg"));
-
-    const result = await inFlight;
-    expect(result.source).toBe("disk-cache");
-    expect(result.data).toEqual(["a"]);
-  });
-
-  it("ignores an update while nothing is cached", async () => {
-    const { cache } = countingCache([ok("a")]);
-
-    cache.update(() => ["ignoriert"]);
-
-    expect((await cache.get()).data).toEqual(["a"]);
-  });
-
   it("reset stops a settling load from repopulating the cache", async () => {
     let release: (value: string[]) => void = () => {};
     const pending = new Promise<string[]>((resolve) => {

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { mockCommands } from "../test/mock-commands";
 import {
   loadTelemetrySettings,
   reportFrontendError,
@@ -19,13 +20,11 @@ const mockSetEnabled = mock((next: boolean) => {
 });
 const mockCaptureFrontendError = mock(() => Promise.resolve(null));
 
-mock.module("../generated/tauri", () => ({
-  commands: {
-    telemetryGetSettings: mockGetSettings,
-    telemetrySetEnabled: mockSetEnabled,
-    telemetryCaptureFrontendError: mockCaptureFrontendError,
-  },
-}));
+mockCommands({
+  telemetryGetSettings: mockGetSettings,
+  telemetrySetEnabled: mockSetEnabled,
+  telemetryCaptureFrontendError: mockCaptureFrontendError,
+});
 
 describe("telemetry service", () => {
   beforeEach(() => {

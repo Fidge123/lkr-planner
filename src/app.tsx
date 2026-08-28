@@ -6,7 +6,9 @@ import { EmployeeIcalDialog } from "./app/components/employee-ical-dialog";
 import { SettingsDialog } from "./app/components/settings/settings-dialog";
 import { usePlanningAssignments } from "./app/hooks/use-planning-assignments";
 import { usePlanningEmployees } from "./app/hooks/use-planning-employees";
+import { useProjectCategoryColors } from "./app/hooks/use-project-category-colors";
 import { useReloadDataMenu } from "./app/hooks/use-reload-data-menu";
+import { useRerenderOnDayChange } from "./app/hooks/use-rerender-on-day-change";
 import { useZepCalendars } from "./app/hooks/use-zep-calendars";
 import { PlanningGrid } from "./app/page";
 import { getWeekStart } from "./app/util";
@@ -18,9 +20,11 @@ import { loadDayliteContacts } from "./services/daylite-contacts";
 function App() {
   const [weekOffset, setWeekOffset] = useState(0);
   const [showWeekend, setShowWeekend] = useState(false);
+  useRerenderOnDayChange();
   const weekStart = getWeekStart(weekOffset, showWeekend);
   const planningAssignmentsState = usePlanningAssignments(weekStart);
   const planningEmployeesState = usePlanningEmployees();
+  const categoryColors = useProjectCategoryColors();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [icalDialogEmployee, setIcalDialogEmployee] =
     useState<PlanningContactRecord | null>(null);
@@ -166,6 +170,7 @@ function App() {
           assignmentState={planningAssignmentsState}
           employeeState={planningEmployeesState}
           employeeSettings={employeeSettings}
+          categoryColors={categoryColors}
           hideNonPlannableEmployees={hideNonPlannableEmployees}
           onOpenIcalDialog={handleOpenIcalDialog}
           onNavigateWeek={handleNavigateWeek}
