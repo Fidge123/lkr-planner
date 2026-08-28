@@ -16,14 +16,14 @@
 ## 3. Requested times in the allocator
 
 - [ ] 3.1 Add an optional requested start and end to the day-planning input, and make `plan_slot_updates` write those times for the placed assignment and plan no even split for that day when they are present
-- [ ] 3.2 Leave the day's other assignments untouched on such a write, and keep today's behaviour unchanged when no times are requested
+- [ ] 3.2 Leave the day's other assignments untouched on such a write, and keep today's behavior unchanged when no times are requested
 - [ ] 3.3 Add allocator tests: requested times are written as given; the rest of the day keeps its times; times outside 08:00-16:00 are accepted; a write without requested times still splits the window
 
 ## 4. Adjacent adjustment
 
 - [ ] 4.1 Add an adjustment flag to the same input, emitting `SlotUpdate`s that set the preceding assignment's end to the requested start and the following assignment's start to the requested end
-- [ ] 4.2 Find the neighbours in the day's canonical order from `sequence_day`, skipping bare, absence, and holiday events, and skipping a neighbour that `can_patch_slot` rejects
-- [ ] 4.3 Refuse the whole write with a German error naming the conflicting assignment when the requested times would move a neighbour's start to or past its end
+- [ ] 4.2 Find the neighbors in the day's canonical order from `sequence_day`, skipping bare, absence, and holiday events, and skipping a neighbor that `can_patch_slot` rejects
+- [ ] 4.3 Refuse the whole write with a German error naming the conflicting assignment when the requested times would move a neighbor's start to or past its end
 - [ ] 4.4 Add tests for the three-assignment case, the first and last assignment of a day, a single-assignment day, the refusal, and a day where a bare event sits between two assignments
 
 ## 5. Transient by construction

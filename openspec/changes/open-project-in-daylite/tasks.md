@@ -40,11 +40,11 @@
 
 ## 7. Interaction and Appearance
 
-- [ ] 7.1 In a dev build, confirm the edit action opens the modal and the Daylite action opens Daylite, neither triggering the other
+- [x] 7.1 In a dev build, confirm the edit action opens the modal and the Daylite action opens Daylite, neither triggering the other
 - [x] 7.2 In a dev build, confirm pressing and moving on either action starts no drag, and that dragging the card by its body still reschedules and reassigns as before
 - [x] 7.3 Confirm clicking the card body does nothing
 - [x] 7.4 Check the narrowest column the grid produces: a long title wraps, the two icons stay on the right edge, and neither overlaps the title
-- [ ] 7.5 Confirm both actions carry no border and no background, and are distinguishable on hover from the card's own hover indicator
+- [x] 7.5 Confirm both actions carry no border and no background, and are distinguishable on hover from the card's own hover indicator
 
 ## 8. Close Out
 

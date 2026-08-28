@@ -348,7 +348,7 @@ const assignmentCardGridClass =
 const cardActionAreaClass =
   "flex flex-col shrink-0 col-start-3 row-start-1 @max-[10rem]:col-start-1 @max-[10rem]:row-start-2 @max-[10rem]:self-start";
 /** Sized so three of them stack into a two-line title, which a taller `btn-xs` would outgrow. */
-const cardActionClass = "btn btn-ghost h-3.5 w-6 min-h-0 p-0";
+const cardActionClass = "btn btn-ghost h-5 w-5 min-h-0 p-0";
 
 interface CardProps {
   event: CellEvent;
