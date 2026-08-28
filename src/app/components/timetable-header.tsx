@@ -18,7 +18,7 @@ export function TimetableHeader({ day, holiday }: Props) {
   );
 }
 
-// A collapsed table paints its borders itself, so the row's bottom border stays behind when the header pins; the shadow redraws it.
+// A collapsed table paints its borders itself, so the shadow redraws the bottom border the pinned row leaves behind.
 export const stickyHeaderClass =
   "sticky top-0 z-10 shadow-[0_1px_0_0_var(--color-base-300)]";
 
