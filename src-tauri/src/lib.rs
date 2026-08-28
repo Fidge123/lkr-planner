@@ -19,6 +19,7 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         integrations::daylite::projects::daylite_search_projects,
         integrations::daylite::projects::daylite_query_overdue_projects,
         integrations::daylite::categories::daylite_project_category_colors,
+        integrations::daylite::deep_link::daylite_open_project,
         integrations::daylite::contacts::commands::daylite_list_contacts,
         integrations::daylite::contacts::commands::daylite_list_cached_contacts,
         integrations::calendar::commands::create_assignment,

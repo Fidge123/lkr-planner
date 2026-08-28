@@ -1,7 +1,7 @@
 ## Why
 
 Component tests render with `renderToStaticMarkup`, which produces the first render and nothing else: effects never run, state never changes, and no event can be dispatched.
-Every interactive behaviour is therefore untestable, and the gap is not theoretical.
+Every interactive behavior is therefore untestable, and the gap is not theoretical.
 `allow-fixed-appointment-override` specifies that reopening the modal drops the unlock, and that scenario shipped without a test because there is no way to express it.
 The modal is permanently mounted per employee row, so the reset is the only thing standing between an unlock and its leaking onto the next assignment opened in that row.
 
@@ -14,7 +14,7 @@ Each new interactive state adds another prop to the public interface of a compon
 
 - Add a DOM environment to `bun test` so components can be mounted, interacted with and asserted against as they behave, not just as they first render.
 - Add a React testing library so tests query rendered output by role and label instead of matching HTML with regular expressions.
-- Convert the eight `renderToStaticMarkup` spec files to the new harness, and cover the interactive behaviour each one currently cannot reach.
+- Convert the eight `renderToStaticMarkup` spec files to the new harness, and cover the interactive behavior each one currently cannot reach.
 - Remove the test-only initial-state props from `AssignmentModal` once its states are reachable by interaction.
 - Record the testing layers as an ADR, so it is clear which level a new test belongs at.
 

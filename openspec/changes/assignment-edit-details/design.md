@@ -17,7 +17,7 @@ A custom title therefore cannot simply be written to `SUMMARY` and expected to a
 
 Times are not the event's to keep.
 `plan_slot_updates` re-derives every participating assignment's `DTSTART` and `DTEND` from its position in the day and rewrites them on every create, update, and delete on that day.
-Whatever a planner types into a time field is therefore gone by the next write on that day, and that is the accepted behaviour here rather than a problem to solve.
+Whatever a planner types into a time field is therefore gone by the next write on that day, and that is the accepted behavior here rather than a problem to solve.
 
 ## Goals / Non-Goals
 
@@ -155,16 +155,16 @@ A per-employee working-time profile that shifts the window is the better long-te
 
 The checkbox is handled where the allocation already lives: `plan_slot_updates` gains a mode that, instead of splitting the window, takes the edited assignment's requested times and emits `SlotUpdate`s for the assignment immediately before and immediately after it in the day's order.
 The predecessor's end becomes the new start and the successor's start becomes the new end.
-Neighbours are found in the day's canonical order from `sequence_day`, so "adjacent" means the adjacent assignment, skipping bare, absence, and holiday events -- consistent with everything else the allocator does.
+Neighbors are found in the day's canonical order from `sequence_day`, so "adjacent" means the adjacent assignment, skipping bare, absence, and holiday events -- consistent with everything else the allocator does.
 
-Both neighbours are written through `patch_event_slot`, which is the existing multi-event write path and preserves foreign properties.
-A neighbour the allocator cannot rewrite safely is skipped rather than refused: it was already outside the allocator's reach.
+Both neighbors are written through `patch_event_slot`, which is the existing multi-event write path and preserves foreign properties.
+A neighbor the allocator cannot rewrite safely is skipped rather than refused: it was already outside the allocator's reach.
 
-The refusal case is a squeeze, not an overlap: if the new times would move a neighbour's start to or past its own end, the whole save is refused rather than writing a zero-length or inverted event.
-Refusing beats clamping because a clamped neighbour silently loses its duration, and beats cascading because a cascade can push a chain of assignments off the end of the day.
+The refusal case is a squeeze, not an overlap: if the new times would move a neighbor's start to or past its own end, the whole save is refused rather than writing a zero-length or inverted event.
+Refusing beats clamping because a clamped neighbor silently loses its duration, and beats cascading because a cascade can push a chain of assignments off the end of the day.
 
 Defaulting the checkbox to ticked follows from what the day looks like otherwise: leave it off and an entered time turns a tidy day into one with a gap and an overlap, which is a surprising result for the planner who only wanted a later start.
-The fitted neighbours are as transient as the times that caused them, so the day's next rearrangement tidies everything back to the split at once.
+The fitted neighbors are as transient as the times that caused them, so the day's next rearrangement tidies everything back to the split at once.
 
 ### Folding, and the property order it forces
 
@@ -194,7 +194,7 @@ Times entered by hand do not, and are not meant to.
 
 ## Risks / Trade-offs
 
-[A planner sets a time, a colleague adds an assignment to that day, and the time is silently gone] → The behaviour is deliberate, so the mitigation is telling the truth in the UI: the German hint next to the time fields says the times hold until the day is next rearranged. If planners still find it surprising in use, the pinned design is the escalation, not a patch on this one.
+[A planner sets a time, a colleague adds an assignment to that day, and the time is silently gone] → The behavior is deliberate, so the mitigation is telling the truth in the UI: the German hint next to the time fields says the times hold until the day is next rearranged. If planners still find it surprising in use, the pinned design is the escalation, not a patch on this one.
 
 [Entering a time leaves the day with a gap and an overlap] → The checkbox closes it and is ticked by default, and the day's cards are ordered by order index rather than by time, so an overlap does not reorder the grid.
 
@@ -202,7 +202,7 @@ Times entered by hand do not, and are not meant to.
 
 [The `icalendar` crate may not unescape `\n` in `DESCRIPTION` the way `classify_event`'s `lines()` assumes] → Verified by a test before the note is built on top of it; if it does not, unescaping moves into the parse step.
 
-[Adjacent adjustment writes up to three events, so a partial failure leaves the day half-adjusted] → The neighbours go through `patch_event_slot`, the same multi-event path re-allocation already uses, so the failure mode is the one the planner already has for a failed re-slot: a reload shows the true state.
+[Adjacent adjustment writes up to three events, so a partial failure leaves the day half-adjusted] → The neighbors go through `patch_event_slot`, the same multi-event path re-allocation already uses, so the failure mode is the one the planner already has for a failed re-slot: a reload shows the true state.
 
 [A planner reads the category picker as recoloring one appointment and repaints a project used across the whole grid] → The German hint under the picker says the category is the project's, and the reload after the save shows the project's other cards in the new color, which is the correction if the hint was missed.
 

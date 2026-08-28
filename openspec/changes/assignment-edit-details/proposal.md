@@ -13,7 +13,7 @@ Marking a job as a fixed appointment is the same story from the other side: the 
   They are not recorded as manual, so the day's next rearrangement -- another assignment created or deleted, a reorder, a drag -- returns every assignment on it to its share of the 08:00-16:00 window.
   A German hint in the modal says so, because times that quietly disappear later are otherwise indistinguishable from a bug.
 - The edit modal gains a checkbox, on by default, that adjusts the day's adjacent assignments to the times just entered: the assignment before ends where this one now starts, the assignment after starts where this one now ends, so the day is left free of gaps and overlaps.
-  The fitted neighbours are as transient as the times that caused them.
+  The fitted neighbors are as transient as the times that caused them.
 - The edit modal gains a title field, shown alongside the project field so the custom title and the Daylite project name are both visible.
   An empty title field means no override and the Daylite project name is used, including when it is renamed in Daylite; a title typed into the field replaces it everywhere the assignment is shown.
 - The edit modal gains a free-text note that is written into the event DESCRIPTION below the `daylite:` reference line, so it reaches every calendar client reading the event.

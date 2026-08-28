@@ -44,7 +44,12 @@ export function WeekTable({
   }, [eventsByEmployee]);
 
   return (
-    <table ref={gridRef} className="table table-fixed border-collapse">
+    // A card the pointer crosses mid-drag, or that an autoscroll slides under it, otherwise keeps its hover for good.
+    // dnd-kit measures rects rather than hit-testing, so it loses nothing by this.
+    <table
+      ref={gridRef}
+      className={`table table-fixed border-collapse ${draggedUid ? "pointer-events-none" : ""}`}
+    >
       <thead className="text-base-content">
         <tr>
           <th className={`w-40 p-4 font-bold bg-base-100 ${stickyHeaderClass}`}>

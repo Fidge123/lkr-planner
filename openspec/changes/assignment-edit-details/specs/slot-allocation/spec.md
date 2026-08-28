@@ -65,10 +65,10 @@ The system SHALL NOT record that an assignment's times were set by hand.
 - **AND** an assignment written before this change is treated no differently
 
 ### Requirement: Adjust adjacent assignments to requested times
-The system SHALL be able to fit a day's neighbouring assignments to times a planner has just entered, so the day is left without gaps or overlaps between them, and SHALL be able to write the times without touching the neighbours.
-The neighbours' fitted times last exactly as long as the requested times do.
+The system SHALL be able to fit a day's neighboring assignments to times a planner has just entered, so the day is left without gaps or overlaps between them, and SHALL be able to write the times without touching the neighbors.
+The neighbors' fitted times last exactly as long as the requested times do.
 
-#### Scenario: Neighbours are fitted to the requested times
+#### Scenario: Neighbors are fitted to the requested times
 - **GIVEN** a day holds three assignments at 08:00-10:40, 10:40-13:20, and 13:20-16:00
 - **WHEN** the middle one is written with the requested times 11:00-14:00 and adjacent adjustment requested
 - **THEN** the first assignment is written as 08:00-11:00
@@ -77,7 +77,7 @@ The neighbours' fitted times last exactly as long as the requested times do.
 #### Scenario: Without adjustment requested
 - **WHEN** the middle assignment of the same day is written with 11:00-14:00 and no adjacent adjustment
 - **THEN** only that assignment's times change
-- **AND** the neighbours keep their times, leaving a gap before it and an overlap after it
+- **AND** the neighbors keep their times, leaving a gap before it and an overlap after it
 
 #### Scenario: First and last assignment of the day
 - **WHEN** the day's first assignment is written with adjacent adjustment requested
@@ -88,25 +88,25 @@ The neighbours' fitted times last exactly as long as the requested times do.
 - **WHEN** the only assignment of a day is written with requested times and adjacent adjustment
 - **THEN** no other event is written
 
-#### Scenario: Adjustment would leave a neighbour without duration
-- **WHEN** the requested times would push a neighbour's start to or past its end
+#### Scenario: Adjustment would leave a neighbor without duration
+- **WHEN** the requested times would push a neighbor's start to or past its end
 - **THEN** the write is refused with a German error message naming the conflicting assignment
-- **AND** neither the edited assignment nor its neighbours are changed
+- **AND** neither the edited assignment nor its neighbors are changed
 
 #### Scenario: Adjustment never touches non-assignments
 - **GIVEN** a day contains bare, absence, or holiday events between two assignments
 - **WHEN** adjacent adjustment runs
 - **THEN** those events are left untouched
-- **AND** the neighbours it fits are the adjacent assignments, not the adjacent events
+- **AND** the neighbors it fits are the adjacent assignments, not the adjacent events
 
-#### Scenario: A neighbour that cannot be rewritten safely is skipped
+#### Scenario: A neighbor that cannot be rewritten safely is skipped
 - **GIVEN** the assignment adjacent to the edited one is excluded from re-slotting because it cannot be rewritten safely
 - **WHEN** adjacent adjustment runs
-- **THEN** that neighbour is left untouched
+- **THEN** that neighbor is left untouched
 - **AND** the edited assignment is still written with its requested times
 
-#### Scenario: Fitted neighbours are lost with the requested times
-- **GIVEN** a day was written with requested times and fitted neighbours
+#### Scenario: Fitted neighbors are lost with the requested times
+- **GIVEN** a day was written with requested times and fitted neighbors
 - **WHEN** anything triggers a re-allocation of that day
 - **THEN** every assignment on it returns to its share of the even split
 
