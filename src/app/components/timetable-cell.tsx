@@ -192,7 +192,7 @@ function DropPreviewCard({ title }: { title: string }) {
     <li aria-hidden="true">
       <span
         data-drop-preview="true"
-        className={`${assignmentCardClass} h-[3.25rem] border-2 border-dashed border-primary bg-primary/10 text-base-content/70 pointer-events-none`}
+        className={`${assignmentCardClass} h-13 border-2 border-dashed border-primary bg-primary/10 text-base-content/70 pointer-events-none`}
       >
         <h4 className="flex-1 min-w-0 font-medium">{title}</h4>
       </span>
@@ -209,7 +209,7 @@ interface Props {
   suggestion?: GhostSuggestion;
   /** Where the in-flight drag would land; null unless this cell is the target. */
   dropPreview?: DropPreview | null;
-  /** UID of the card being dragged, so it is not counted as its own neighbour. */
+  /** UID of the card being dragged, so it is not counted as its own neighbor. */
   draggedUid?: string | null;
   onAddClick: () => void;
   onEventClick: (event: CellEvent) => void;
@@ -237,7 +237,7 @@ export function AssignmentCardBody({
   return (
     <>
       <EventTime startTime={startTime} endTime={endTime} />
-      <h4 className="flex-1 min-w-0 font-medium break-words @max-[10rem]:row-span-2">
+      <h4 className="flex-1 min-w-0 font-medium wrap-break-words @max-[10rem]:row-span-2">
         {isUnresolved ? (
           <>
             <TriangleAlert

@@ -44,8 +44,8 @@
 ## 7. Modal: date, times, and the checkbox
 
 - [ ] 7.1 Add the custom-title marker with the replaced title, `note`, and the event's times to `CellEvent` and `toCellEvent`, leaving `title` as the value to display
-- [ ] 7.2 Add date state to `use-assignment-modal`, initialised from the cell's day, validated on save with a German error, and passed to the write
-- [ ] 7.3 Add start and end time state, initialised from the event's times in edit mode and from the slot the new assignment would receive in create mode, validated so both are filled and end is after start, with German errors
+- [ ] 7.2 Add date state to `use-assignment-modal`, initialized from the cell's day, validated on save with a German error, and passed to the write
+- [ ] 7.3 Add start and end time state, initialized from the event's times in edit mode and from the slot the new assignment would receive in create mode, validated so both are filled and end is after start, with German errors
 - [ ] 7.4 Send the times as requested times only when the planner touched a time field in this dialog session, and allocate as today otherwise
 - [ ] 7.5 Disable the time fields with a German hint for an assignment `can_patch_slot` rejects
 - [ ] 7.6 Add the adjacent-adjustment checkbox, ticked by default, sent only alongside requested times
@@ -55,7 +55,7 @@
 
 - [ ] 8.1 Add title state, empty when the assignment carries no override, with the resolved project name as the field's placeholder, and left alone when the planner picks a different project
 - [ ] 8.2 Send an emptied title field as dropping the override, and any entered title as an override recording the project name it replaces
-- [ ] 8.3 Add note state, initialised from the event and passed to the write
+- [ ] 8.3 Add note state, initialized from the event and passed to the write
 - [ ] 8.4 Extend the dirty tracking so date, times, title, and note edits mark the modal changed, while the checkbox alone does not
 - [ ] 8.5 Render the title and note fields so the project field's Daylite name stays visible next to the title
 - [ ] 8.6 Add modal tests for each scenario in the `assignment-modal-crud` delta
@@ -67,7 +67,7 @@
 - [ ] 9.3 Add a Daylite command that sets a project's category by PATCHing `/projects/<id>` with the picked name, or with a null category when the category is removed, returning the normalized German error when Daylite rejects it
 - [ ] 9.4 Replace the cached project for the written reference so the next resolution returns the new category instead of waiting out the cache lifetime, with a test that a project just made fixed is refused by `refuse_protected_event`
 - [ ] 9.5 Record a cassette for the category list and the category write, and pin the request shape against it
-- [ ] 9.6 Add category state to `use-assignment-modal`, initialised from the assignment's resolved project category, holding no category for a project without one, and following the project when the planner picks a different one
+- [ ] 9.6 Add category state to `use-assignment-modal`, initialized from the assignment's resolved project category, holding no category for a project without one, and following the project when the planner picks a different one
 - [ ] 9.7 Send the category write only when the planner picked a different category or removed it, after the calendar write has succeeded, and show the German error in the modal when it fails while keeping the calendar changes
 - [ ] 9.8 Extend the dirty tracking so a category change marks the modal changed
 - [ ] 9.9 Render the picker with the German entry for no category first, then the active categories, each with its name and color swatch, the neutral swatch for a category without a color, and the German hint that the category belongs to the project, using DaisyUI form controls and no nested `div`/`span`
