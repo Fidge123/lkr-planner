@@ -1,7 +1,8 @@
 import { useDraggable, useDroppable } from "@dnd-kit/core";
-import { TriangleAlert } from "lucide-react";
+import { ExternalLink, Pencil, TriangleAlert } from "lucide-react";
 import type { ReactNode } from "react";
 import { useRef } from "react";
+import { openProjectInDaylite } from "../../services/daylite-deep-link";
 import { assignmentPositions, sortCellEvents } from "../cell-order";
 import type {
   AppointmentDragPayload,
@@ -288,30 +289,62 @@ function DraggableAssignmentCard({
   };
   const unresolved = isUnresolvedAssignment(event);
   const canDrag = Boolean(event.href) && !unresolved;
-  const { attributes, listeners, setNodeRef } = useDraggable({
+  const { listeners, setActivatorNodeRef, setNodeRef } = useDraggable({
     id: `assignment-${employeeRef}-${event.uid}`,
     data: payload,
     disabled: !canDrag,
   });
+  const projectRef = event.projectRef;
 
   return (
-    <button
+    <div
       ref={setNodeRef}
-      type="button"
-      className={`btn btn-block h-auto justify-start ${assignmentCardClass} ${assignmentStripClass} text-base-content transition-[filter] hover:brightness-90 active:brightness-75 ${event.color} ${lifted ? "absolute inset-x-0 top-0 invisible pointer-events-none" : ""}`}
+      className={`${assignmentCardClass} ${assignmentStripClass} text-base-content transition-[filter] hover:brightness-90 ${event.color} ${lifted ? "absolute inset-x-0 top-0 invisible pointer-events-none" : ""}`}
       style={categoryStrip(event.categoryColor)}
-      onClick={() => onEventClick(event)}
-      {...(canDrag ? { ...listeners, ...attributes } : {})}
     >
-      <AssignmentCardBody
-        startTime={event.startTime}
-        endTime={event.endTime}
-        title={event.title}
-        isUnresolved={unresolved}
-      />
-    </button>
+      <div
+        ref={setActivatorNodeRef}
+        className={`flex flex-1 min-w-0 items-center gap-4 ${canDrag ? "cursor-grab" : ""}`}
+        {...(canDrag
+          ? { ...listeners, "aria-roledescription": "draggable" }
+          : {})}
+      >
+        <AssignmentCardBody
+          startTime={event.startTime}
+          endTime={event.endTime}
+          title={event.title}
+          isUnresolved={unresolved}
+        />
+      </div>
+      {lifted ? null : (
+        <>
+          <button
+            type="button"
+            className={cardActionClass}
+            aria-label="Einsatz bearbeiten"
+            onClick={() => onEventClick(event)}
+          >
+            <Pencil className="size-4" aria-hidden="true" />
+          </button>
+          {unresolved || !projectRef ? null : (
+            <button
+              type="button"
+              className={cardActionClass}
+              aria-label="Projekt in Daylite öffnen"
+              onClick={() => {
+                void openProjectInDaylite(projectRef);
+              }}
+            >
+              <ExternalLink className="size-4" aria-hidden="true" />
+            </button>
+          )}
+        </>
+      )}
+    </div>
   );
 }
+
+const cardActionClass = "btn btn-ghost btn-square btn-sm shrink-0";
 
 interface CardProps {
   event: CellEvent;

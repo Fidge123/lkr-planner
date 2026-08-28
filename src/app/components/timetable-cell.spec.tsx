@@ -60,6 +60,16 @@ const bare = assignment({
   orderIndex: null,
 });
 
+const editLabel = "Einsatz bearbeiten";
+const dayliteLabel = "Projekt in Daylite öffnen";
+
+/** Nothing inside the action buttons nests, so a non-greedy match is enough to read them back. */
+function buttonContents(html: string): string[] {
+  return [...html.matchAll(/<button\b[^>]*>(.*?)<\/button>/gs)].map(
+    (match) => match[1],
+  );
+}
+
 describe("TimetableCell", () => {
   it("empty cell renders a clickable add affordance", () => {
     const html = renderCell();
@@ -91,12 +101,65 @@ describe("TimetableCell", () => {
     expect(html).toContain("Aufgabe hinzufügen");
   });
 
-  it("assigned cell renders as clickable with assignment data", () => {
+  it("assigned cell renders its assignment data", () => {
     const html = renderCell({ events: [assignment()] });
 
     expect(html).toContain("Bauprojekt Nord");
-    expect(html).toContain("<button");
-    expect(html).toContain('type="button"');
+  });
+
+  it("makes the card itself no control around its times and title", () => {
+    const html = renderCell({ events: [assignment()] });
+
+    expect(buttonContents(html)).not.toContainEqual(
+      expect.stringContaining("Bauprojekt Nord"),
+    );
+    expect(buttonContents(html)).not.toContainEqual(
+      expect.stringContaining("08:00"),
+    );
+  });
+
+  it("renders an edit action on an assignment card", () => {
+    expect(renderCell({ events: [assignment()] })).toContain(editLabel);
+  });
+
+  it("renders the edit action on an assignment with an unresolved project", () => {
+    const html = renderCell({
+      events: [assignment({ title: "Projekt Süd", projectStatus: null })],
+    });
+
+    expect(html).toContain(editLabel);
+  });
+
+  it("renders the Daylite action after the edit action on a resolved assignment", () => {
+    const html = renderCell({ events: [assignment()] });
+
+    expect(html).toContain(dayliteLabel);
+    expect(html.indexOf(editLabel)).toBeLessThan(html.indexOf(dayliteLabel));
+  });
+
+  it("renders no Daylite action on an assignment with an unresolved project", () => {
+    const html = renderCell({
+      events: [assignment({ title: "Projekt Süd", projectStatus: null })],
+    });
+
+    expect(html).not.toContain(dayliteLabel);
+  });
+
+  it("renders no action area on bare and absence events", () => {
+    const html = renderCell({ events: [bare, absence] });
+
+    expect(html).not.toContain(editLabel);
+    expect(html).not.toContain(dayliteLabel);
+  });
+
+  it("renders no actions on the card being dragged", () => {
+    const html = renderCell({
+      events: [assignment()],
+      draggedUid: "uid-1",
+    });
+
+    expect(html).not.toContain(editLabel);
+    expect(html).not.toContain(dayliteLabel);
   });
 
   it("renders a suggestion with reduced opacity and a dashed border", () => {
@@ -141,7 +204,6 @@ describe("TimetableCell", () => {
     });
 
     expect(html).not.toContain('aria-roledescription="draggable"');
-    expect(html).toContain("<button");
   });
 
   it("marks an unresolved assignment with a red warning icon", () => {

@@ -13,6 +13,7 @@ export const commands = {
 	dayliteSearchProjects: (input: DayliteSearchInput) => typedError<DayliteSearchResult<DayliteProjectSummary>, DayliteApiError>(__TAURI_INVOKE("daylite_search_projects", { input })),
 	dayliteQueryOverdueProjects: () => typedError<DayliteProjectSummary[], DayliteApiError>(__TAURI_INVOKE("daylite_query_overdue_projects")),
 	dayliteProjectCategoryColors: () => typedError<{ [key in string]: string }, DayliteApiError>(__TAURI_INVOKE("daylite_project_category_colors")),
+	dayliteOpenProject: (projectRef: string) => typedError<null, string>(__TAURI_INVOKE("daylite_open_project", { projectRef })),
 	dayliteListContacts: () => typedError<PlanningContactRecord[], DayliteApiError>(__TAURI_INVOKE("daylite_list_contacts")),
 	dayliteListCachedContacts: () => typedError<PlanningContactRecord[], DayliteApiError>(__TAURI_INVOKE("daylite_list_cached_contacts")),
 	createAssignment: (input: CreateAssignmentInput) => typedError<string, string>(__TAURI_INVOKE("create_assignment", { input })),
