@@ -85,13 +85,15 @@ pub async fn move_assignment(
         &handle,
         Operation::MoveAssignment,
         Integration::Zep,
-        move_assignment_inner(app,
+        move_assignment_inner(
+            app,
             href,
             target_employee_reference,
             date,
             project_ref,
             project_name,
-            order_index),
+            order_index,
+        ),
     )
     .await
 }
@@ -131,7 +133,6 @@ pub async fn delete_assignment(
     )
     .await
 }
-
 
 async fn load_week_events_inner(
     app: tauri::AppHandle,
@@ -334,8 +335,8 @@ async fn create_assignment_inner(
     app: tauri::AppHandle,
     input: CreateAssignmentInput,
 ) -> Result<String, String> {
-    let store =
-        crate::integrations::local_store::load_local_store(app.clone()).map_err(|e| e.user_message)?;
+    let store = crate::integrations::local_store::load_local_store(app.clone())
+        .map_err(|e| e.user_message)?;
 
     let calendar_url = resolve_employee_calendar_url(&store, &input.employee_reference)?;
 
@@ -488,8 +489,8 @@ async fn reorder_assignment_inner(
     date: String,
     order_index: u32,
 ) -> Result<(), String> {
-    let store =
-        crate::integrations::local_store::load_local_store(app.clone()).map_err(|e| e.user_message)?;
+    let store = crate::integrations::local_store::load_local_store(app.clone())
+        .map_err(|e| e.user_message)?;
     let session = load_caldav_session(&app, &store)?;
 
     reorder_assignment_core(&session, &href, &uid, &date, order_index).await

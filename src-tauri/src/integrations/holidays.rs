@@ -144,7 +144,10 @@ fn is_cache_entry_fresh(
     (today - fetched).num_days() <= CACHE_REFRESH_DAYS
 }
 
-async fn fetch_holidays_from_api(app: &tauri::AppHandle, year: i32) -> Result<Vec<Holiday>, String> {
+async fn fetch_holidays_from_api(
+    app: &tauri::AppHandle,
+    year: i32,
+) -> Result<Vec<Holiday>, String> {
     let url = format!("{NAGER_BASE_URL}/{year}/DE");
     fetch_from_url(Some(app), &url).await
 }

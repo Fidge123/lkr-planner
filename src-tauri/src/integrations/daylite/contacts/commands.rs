@@ -46,8 +46,7 @@ async fn daylite_list_contacts_inner(
     app: tauri::AppHandle,
 ) -> Result<Vec<PlanningContactRecord>, DayliteApiError> {
     let mut store = load_store_or_error(app.clone())?;
-    let client =
-        DayliteApiClient::new(&store.api_endpoints.daylite_base_url)?.with_telemetry(&app);
+    let client = DayliteApiClient::new(&store.api_endpoints.daylite_base_url)?.with_telemetry(&app);
     let contacts =
         with_daylite_tokens(&client, |tokens| list_contacts_core(&client, tokens)).await?;
 

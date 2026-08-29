@@ -290,5 +290,4 @@ mod tests {
 
         assert!(sink.batches().iter().all(|batch| batch.len() <= BATCH_SIZE));
     }
-
 }

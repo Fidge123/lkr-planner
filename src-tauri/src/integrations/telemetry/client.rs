@@ -183,10 +183,7 @@ mod tests {
             .batch_payload(vec![event(42)], &context())
             .expect("a configured client builds a payload");
 
-        assert_eq!(
-            payload["batch"][0]["distinct_id"],
-            INSTALL_ID
-        );
+        assert_eq!(payload["batch"][0]["distinct_id"], INSTALL_ID);
     }
 
     #[tokio::test]

@@ -211,10 +211,7 @@ mod tests {
         recorder.apply_settings(&enabled());
 
         assert_eq!(recorder.install_id(), first);
-        assert_eq!(
-            first.as_deref(),
-            Some(INSTALL_ID)
-        );
+        assert_eq!(first.as_deref(), Some(INSTALL_ID));
     }
 
     #[test]
@@ -225,10 +222,7 @@ mod tests {
         recorder.set_enabled(false);
         let settings = recorder.set_enabled(true);
 
-        assert_eq!(
-            settings.install_id.as_deref(),
-            Some(INSTALL_ID)
-        );
+        assert_eq!(settings.install_id.as_deref(), Some(INSTALL_ID));
     }
 
     #[test]

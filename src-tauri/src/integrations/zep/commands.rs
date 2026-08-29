@@ -53,9 +53,7 @@ pub async fn zep_load_credentials(
 
 #[tauri::command]
 #[specta::specta]
-pub async fn zep_discover_calendars(
-    app: tauri::AppHandle,
-) -> Result<Vec<ZepCalendar>, ZepError> {
+pub async fn zep_discover_calendars(app: tauri::AppHandle) -> Result<Vec<ZepCalendar>, ZepError> {
     let handle = app.clone();
     observe(
         &handle,
@@ -120,7 +118,9 @@ fn zep_save_credentials_inner(
     Ok(())
 }
 
-fn zep_load_credentials_inner(app: tauri::AppHandle) -> Result<Option<ZepCredentialsInfo>, ZepError> {
+fn zep_load_credentials_inner(
+    app: tauri::AppHandle,
+) -> Result<Option<ZepCredentialsInfo>, ZepError> {
     let store = crate::integrations::local_store::load_local_store(app)?;
 
     let root_url = store.api_endpoints.zep_caldav_root_url.trim().to_string();

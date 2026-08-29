@@ -484,7 +484,10 @@ fn refuse_absence_calendar(
 
     session.record_failure(
         Operation::CaldavWrite,
-        RequestFailure::new("ABSENCE_CALENDAR_REFUSED", format!("refused {operation} write")),
+        RequestFailure::new(
+            "ABSENCE_CALENDAR_REFUSED",
+            format!("refused {operation} write"),
+        ),
     );
     Err("Einsätze können nicht in einen Abwesenheitskalender geschrieben werden.".to_string())
 }

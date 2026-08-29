@@ -22,15 +22,27 @@ pub fn load_local_store(app: tauri::AppHandle) -> Result<LocalStore, StoreError>
             )
         })?;
 
-    load_store_from_path(&store_path)
-        .inspect_err(|error| record_failure(&app, Operation::LoadLocalStore, Integration::LocalStore, error))
+    load_store_from_path(&store_path).inspect_err(|error| {
+        record_failure(
+            &app,
+            Operation::LoadLocalStore,
+            Integration::LocalStore,
+            error,
+        )
+    })
 }
 
 #[tauri::command]
 #[specta::specta]
 pub fn save_local_store(app: tauri::AppHandle, store: LocalStore) -> Result<(), StoreError> {
-    save_store_internal(&app, store)
-        .inspect_err(|error| record_failure(&app, Operation::SaveLocalStore, Integration::LocalStore, error))
+    save_store_internal(&app, store).inspect_err(|error| {
+        record_failure(
+            &app,
+            Operation::SaveLocalStore,
+            Integration::LocalStore,
+            error,
+        )
+    })
 }
 
 pub(crate) fn save_store_internal(

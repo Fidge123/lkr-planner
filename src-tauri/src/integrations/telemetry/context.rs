@@ -29,8 +29,8 @@ fn os_version() -> &'static str {
 mod tests {
     use super::*;
     use crate::integrations::telemetry::client::PostHogClient;
-    use crate::integrations::telemetry::test_support::INSTALL_ID;
     use crate::integrations::telemetry::events::{Integration, Operation, TelemetryEvent};
+    use crate::integrations::telemetry::test_support::INSTALL_ID;
 
     #[test]
     fn context_reports_the_app_version_from_the_crate_metadata() {

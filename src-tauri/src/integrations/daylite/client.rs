@@ -4,13 +4,13 @@ use crate::integrations::http_record_replay::{
     cassette_path_for_test, RecordReplayConfig, RecordedInteraction, RecordedRequest,
     RecordedResponse, VcrMode,
 };
-use serde_json::Value;
-use std::future::Future;
-use std::pin::Pin;
 use crate::integrations::telemetry::events::{Integration, Operation};
 use crate::integrations::telemetry::observe::observe_with;
 use crate::integrations::telemetry::recorder::TelemetryRecorder;
 use crate::integrations::telemetry::state::TelemetryState;
+use serde_json::Value;
+use std::future::Future;
+use std::pin::Pin;
 use tauri::Manager;
 use tauri_plugin_http::reqwest;
 use tauri_plugin_http::reqwest::header::AUTHORIZATION;

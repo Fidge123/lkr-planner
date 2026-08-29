@@ -5,14 +5,16 @@ const saveErrorMessage =
   "Die Diagnose-Einstellung konnte nicht gespeichert werden.";
 
 export async function loadTelemetrySettings(): Promise<boolean> {
-  return (await commands.telemetryGetSettings()).enabled;
+  return (await commands.telemetryGetSettings()).enabled ?? false;
 }
 
 export async function saveTelemetryEnabled(enabled: boolean): Promise<boolean> {
-  return unwrapCommandResult(
-    await commands.telemetrySetEnabled(enabled),
-    saveErrorMessage,
-  ).enabled;
+  return (
+    unwrapCommandResult(
+      await commands.telemetrySetEnabled(enabled),
+      saveErrorMessage,
+    ).enabled ?? false
+  );
 }
 
 /// Reporting an error must never produce a second error the user sees.

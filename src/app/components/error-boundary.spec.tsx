@@ -1,19 +1,16 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
+import { mockCommands } from "../../test/mock-commands";
 
-const mockReportFrontendError = mock(() => Promise.resolve());
-const realTelemetry = await import("../../services/telemetry");
+const mockCaptureFrontendError = mock(() => Promise.resolve(null));
 
-mock.module("../../services/telemetry", () => ({
-  ...realTelemetry,
-  reportFrontendError: mockReportFrontendError,
-}));
+mockCommands({ telemetryCaptureFrontendError: mockCaptureFrontendError });
 
 const { AppErrorBoundary } = await import("./error-boundary");
 
 describe("AppErrorBoundary", () => {
   beforeEach(() => {
-    mockReportFrontendError.mockClear();
+    mockCaptureFrontendError.mockClear();
   });
 
   it("renders its children while nothing failed", () => {
@@ -41,14 +38,14 @@ describe("AppErrorBoundary", () => {
     expect(html).toContain("Es ist ein unerwarteter Fehler aufgetreten");
   });
 
-  it("reports the render error through the telemetry service", () => {
+  it("reports the render error through the telemetry command", () => {
     const boundary = new AppErrorBoundary({ children: null });
 
     boundary.componentDidCatch(new TypeError("x is not a function"), {
       componentStack: "\n    at PlanningGrid\n    at App",
     });
 
-    expect(mockReportFrontendError).toHaveBeenCalledWith({
+    expect(mockCaptureFrontendError).toHaveBeenCalledWith({
       source: "render",
       name: "TypeError",
       message: "x is not a function",

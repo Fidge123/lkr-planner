@@ -1,12 +1,9 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { mockCommands } from "../test/mock-commands";
 
-const mockReportFrontendError = mock(() => Promise.resolve());
-const realTelemetry = await import("../services/telemetry");
+const mockCaptureFrontendError = mock(() => Promise.resolve(null));
 
-mock.module("../services/telemetry", () => ({
-  ...realTelemetry,
-  reportFrontendError: mockReportFrontendError,
-}));
+mockCommands({ telemetryCaptureFrontendError: mockCaptureFrontendError });
 
 const { installGlobalErrorReporting } = await import(
   "./global-error-reporting"
@@ -14,7 +11,7 @@ const { installGlobalErrorReporting } = await import(
 
 describe("global error reporting", () => {
   beforeEach(() => {
-    mockReportFrontendError.mockClear();
+    mockCaptureFrontendError.mockClear();
   });
 
   it("reports an uncaught error with its name and message", () => {
@@ -25,7 +22,7 @@ describe("global error reporting", () => {
     event.error = new RangeError("out of range");
     target.dispatchEvent(event);
 
-    expect(mockReportFrontendError).toHaveBeenCalledWith({
+    expect(mockCaptureFrontendError).toHaveBeenCalledWith({
       source: "uncaughtError",
       name: "RangeError",
       message: "out of range",
@@ -43,7 +40,7 @@ describe("global error reporting", () => {
     event.reason = new Error("load failed");
     target.dispatchEvent(event);
 
-    expect(mockReportFrontendError).toHaveBeenCalledWith({
+    expect(mockCaptureFrontendError).toHaveBeenCalledWith({
       source: "unhandledRejection",
       name: "Error",
       message: "load failed",
@@ -61,7 +58,7 @@ describe("global error reporting", () => {
     event.reason = "kaputt";
     target.dispatchEvent(event);
 
-    expect(mockReportFrontendError).toHaveBeenCalledWith({
+    expect(mockCaptureFrontendError).toHaveBeenCalledWith({
       source: "unhandledRejection",
       name: "UnknownError",
       message: "kaputt",
@@ -78,6 +75,6 @@ describe("global error reporting", () => {
     event.error = new Error("boom");
     target.dispatchEvent(event);
 
-    expect(mockReportFrontendError).not.toHaveBeenCalled();
+    expect(mockCaptureFrontendError).not.toHaveBeenCalled();
   });
 });
