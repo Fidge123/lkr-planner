@@ -1,16 +1,24 @@
 use super::shared::{normalize_base_url, DayliteApiError, DayliteApiErrorCode};
 #[cfg(test)]
 use crate::integrations::http_record_replay::{
-    RecordReplayConfig, RecordedInteraction, RecordedRequest, RecordedResponse, VcrMode,
+    cassette_path_for_test, RecordReplayConfig, RecordedInteraction, RecordedRequest,
+    RecordedResponse, VcrMode,
 };
+use crate::integrations::telemetry::events::{Integration, Operation};
+use crate::integrations::telemetry::observe::observe_with;
+use crate::integrations::telemetry::recorder::TelemetryRecorder;
+use crate::integrations::telemetry::state::TelemetryState;
 use serde_json::Value;
 use std::future::Future;
 use std::pin::Pin;
+use tauri::Manager;
 use tauri_plugin_http::reqwest;
 use tauri_plugin_http::reqwest::header::AUTHORIZATION;
 
 pub(super) struct DayliteApiClient {
     transport: Box<dyn DayliteHttpTransport>,
+    /// Absent in tests and before the telemetry state is registered.
+    telemetry: Option<std::sync::Arc<TelemetryRecorder>>,
 }
 
 impl DayliteApiClient {
@@ -18,12 +26,24 @@ impl DayliteApiClient {
         let transport = ReqwestTransport::new(base_url)?;
         Ok(Self {
             transport: Box::new(transport),
+            telemetry: None,
         })
+    }
+
+    pub(super) fn with_telemetry(mut self, app: &tauri::AppHandle) -> Self {
+        self.telemetry = app
+            .try_state::<TelemetryState>()
+            .map(|state| std::sync::Arc::clone(state.recorder()));
+
+        self
     }
 
     #[cfg(test)]
     pub(super) fn with_transport(transport: Box<dyn DayliteHttpTransport>) -> Self {
-        Self { transport }
+        Self {
+            transport,
+            telemetry: None,
+        }
     }
 
     /// Points at a port nothing listens on, so a cassette miss fails fast instead
@@ -51,7 +71,13 @@ impl DayliteApiClient {
         &self,
         request: DayliteHttpRequest,
     ) -> Result<DayliteHttpResponse, DayliteApiError> {
-        self.transport.send(request).await
+        observe_with(
+            self.telemetry.as_deref(),
+            Operation::DayliteRequest,
+            Integration::Daylite,
+            self.transport.send(request),
+        )
+        .await
     }
 
     #[cfg(test)]
@@ -61,6 +87,7 @@ impl DayliteApiClient {
     ) -> Result<Self, DayliteApiError> {
         Ok(Self {
             transport: Box::new(ReqwestTransport::new_with_record_replay(base_url, config)?),
+            telemetry: None,
         })
     }
 }
@@ -313,13 +340,6 @@ fn to_recorded_request(request: &DayliteHttpRequest) -> RecordedRequest {
         query: request.query.clone(),
         body: request.body.clone(),
     }
-}
-
-#[cfg(test)]
-fn cassette_path_for_test(file_name: &str) -> std::path::PathBuf {
-    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../tests/cassettes")
-        .join(file_name)
 }
 
 #[cfg(test)]

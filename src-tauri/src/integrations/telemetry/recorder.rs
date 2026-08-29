@@ -1,0 +1,240 @@
+use super::events::TelemetryEvent;
+use crate::integrations::local_store::types::TelemetrySettings;
+use std::sync::Mutex;
+use tokio::sync::{mpsc, oneshot};
+
+const COMMAND_CHANNEL_CAPACITY: usize = 256;
+
+#[derive(Debug)]
+pub enum TelemetryCommand {
+    Record(Box<TelemetryEvent>),
+    DiscardPending,
+    Shutdown(oneshot::Sender<()>),
+}
+
+#[derive(Debug, Default)]
+struct ConsentState {
+    enabled: bool,
+    install_id: Option<String>,
+}
+
+/// Consent is cached here; the store is read at startup and written on change.
+pub struct TelemetryRecorder {
+    state: Mutex<ConsentState>,
+    sender: mpsc::Sender<TelemetryCommand>,
+}
+
+impl TelemetryRecorder {
+    pub fn new(sender: mpsc::Sender<TelemetryCommand>) -> Self {
+        Self {
+            state: Mutex::new(ConsentState::default()),
+            sender,
+        }
+    }
+
+    pub fn channel() -> (Self, mpsc::Receiver<TelemetryCommand>) {
+        let (sender, receiver) = mpsc::channel(COMMAND_CHANNEL_CAPACITY);
+        (Self::new(sender), receiver)
+    }
+
+    pub fn apply_settings(&self, settings: &TelemetrySettings) {
+        let mut state = self.lock();
+        state.enabled = settings.enabled;
+        if settings.install_id.is_some() {
+            state.install_id = settings.install_id.clone();
+        }
+    }
+
+    pub fn set_enabled(&self, enabled: bool) -> TelemetrySettings {
+        let settings = {
+            let mut state = self.lock();
+            state.enabled = enabled;
+            if enabled && state.install_id.is_none() {
+                state.install_id = Some(generate_install_id());
+            }
+
+            TelemetrySettings {
+                enabled: state.enabled,
+                install_id: state.install_id.clone(),
+            }
+        };
+
+        if !enabled {
+            self.send(TelemetryCommand::DiscardPending);
+        }
+
+        settings
+    }
+
+    pub fn settings(&self) -> TelemetrySettings {
+        let state = self.lock();
+        TelemetrySettings {
+            enabled: state.enabled,
+            install_id: state.install_id.clone(),
+        }
+    }
+
+    pub fn install_id(&self) -> Option<String> {
+        self.lock().install_id.clone()
+    }
+
+    pub fn record(&self, event: TelemetryEvent) {
+        if !self.ensure_active() {
+            return;
+        }
+
+        self.send(TelemetryCommand::Record(Box::new(event)));
+    }
+
+    /// Lets shutdown bound its wait instead of guessing.
+    pub fn shutdown(&self) -> oneshot::Receiver<()> {
+        let (sender, receiver) = oneshot::channel();
+        self.send(TelemetryCommand::Shutdown(sender));
+
+        receiver
+    }
+
+    /// A store enabled by an older build can lack an identifier.
+    fn ensure_active(&self) -> bool {
+        let mut state = self.lock();
+        if !state.enabled {
+            return false;
+        }
+
+        if state.install_id.is_none() {
+            state.install_id = Some(generate_install_id());
+        }
+
+        true
+    }
+
+    /// Dropping beats back-pressure on a user-facing operation.
+    fn send(&self, command: TelemetryCommand) {
+        let _ = self.sender.try_send(command);
+    }
+
+    fn lock(&self) -> std::sync::MutexGuard<'_, ConsentState> {
+        self.state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+}
+
+fn generate_install_id() -> String {
+    uuid::Uuid::new_v4().to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::integrations::telemetry::test_support::{enabled, event, INSTALL_ID};
+
+    #[test]
+    fn records_nothing_while_telemetry_is_disabled() {
+        let (recorder, mut receiver) = TelemetryRecorder::channel();
+        recorder.apply_settings(&TelemetrySettings::default());
+
+        recorder.record(event(42));
+
+        assert!(receiver.try_recv().is_err());
+    }
+
+    #[test]
+    fn records_events_once_telemetry_is_enabled() {
+        let (recorder, mut receiver) = TelemetryRecorder::channel();
+        recorder.apply_settings(&enabled());
+
+        recorder.record(event(42));
+
+        assert!(matches!(
+            receiver.try_recv(),
+            Ok(TelemetryCommand::Record(_))
+        ));
+    }
+
+    #[test]
+    fn disabling_discards_pending_events() {
+        let (recorder, mut receiver) = TelemetryRecorder::channel();
+        recorder.apply_settings(&enabled());
+        recorder.record(event(42));
+
+        recorder.set_enabled(false);
+
+        let mut commands = Vec::new();
+        while let Ok(command) = receiver.try_recv() {
+            commands.push(command);
+        }
+
+        assert!(matches!(
+            commands.last(),
+            Some(TelemetryCommand::DiscardPending)
+        ));
+        assert!(!recorder.settings().enabled);
+    }
+
+    #[test]
+    fn records_nothing_after_being_disabled() {
+        let (recorder, mut receiver) = TelemetryRecorder::channel();
+        recorder.apply_settings(&enabled());
+        recorder.set_enabled(false);
+        while receiver.try_recv().is_ok() {}
+
+        recorder.record(event(42));
+
+        assert!(receiver.try_recv().is_err());
+    }
+
+    #[test]
+    fn install_id_is_generated_on_first_activation() {
+        let (recorder, _receiver) = TelemetryRecorder::channel();
+        recorder.apply_settings(&TelemetrySettings::default());
+
+        let settings = recorder.set_enabled(true);
+
+        let install_id = settings.install_id.expect("activation should mint an id");
+        assert_eq!(install_id.len(), 36);
+        assert_eq!(
+            uuid::Uuid::parse_str(&install_id)
+                .unwrap()
+                .get_version_num(),
+            4
+        );
+        assert_eq!(recorder.install_id(), Some(install_id));
+    }
+
+    #[test]
+    fn install_id_is_stable_across_reloads() {
+        let (recorder, _receiver) = TelemetryRecorder::channel();
+        recorder.apply_settings(&enabled());
+        let first = recorder.install_id();
+
+        recorder.apply_settings(&enabled());
+
+        assert_eq!(recorder.install_id(), first);
+        assert_eq!(first.as_deref(), Some(INSTALL_ID));
+    }
+
+    #[test]
+    fn reactivation_keeps_the_existing_install_id() {
+        let (recorder, _receiver) = TelemetryRecorder::channel();
+        recorder.apply_settings(&enabled());
+
+        recorder.set_enabled(false);
+        let settings = recorder.set_enabled(true);
+
+        assert_eq!(settings.install_id.as_deref(), Some(INSTALL_ID));
+    }
+
+    #[test]
+    fn install_id_is_not_derived_from_user_or_host_data() {
+        let (first_recorder, _first) = TelemetryRecorder::channel();
+        let (second_recorder, _second) = TelemetryRecorder::channel();
+        first_recorder.apply_settings(&TelemetrySettings::default());
+        second_recorder.apply_settings(&TelemetrySettings::default());
+
+        let first = first_recorder.set_enabled(true).install_id;
+        let second = second_recorder.set_enabled(true).install_id;
+
+        assert_ne!(first, second);
+    }
+}
