@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { CellEvent } from "../types";
-import { TimetableCell } from "./timetable-cell";
+import { assignmentStripClass, TimetableCell } from "./timetable-cell";
 
 function assignment(overrides: Partial<CellEvent> = {}): CellEvent {
   return {
@@ -25,7 +25,7 @@ function renderCell(
 ): string {
   return renderToStaticMarkup(
     <TimetableCell
-      highlight={false}
+      isToday={false}
       events={[]}
       onAddClick={() => {}}
       onEventClick={() => {}}
@@ -62,6 +62,8 @@ const bare = assignment({
 
 const editLabel = "Einsatz bearbeiten";
 const dayliteLabel = "Projekt in Daylite öffnen";
+const highlightLabel = "Projekt hervorheben";
+const markerClass = "bg-(--color-highlight-marker)";
 
 /** Reads back wrong if a button ever nests inside another. */
 function buttonContents(html: string): string[] {
@@ -396,3 +398,115 @@ describe("TimetableCell drop preview", () => {
     expect(renderPreview()).not.toContain("drop-preview");
   });
 });
+
+describe("TimetableCell highlighting", () => {
+  const projectRef = "/v1/projects/1";
+  const otherProject = assignment({
+    uid: "uid-other",
+    title: "Halle 4 Umbau",
+    projectRef: "/v1/projects/2",
+  });
+  const unresolved = assignment({ uid: "uid-unresolved", projectStatus: null });
+
+  it("offers the highlight toggle on an assignment card", () => {
+    const html = renderCell({ events: [assignment()] });
+
+    expect(html).toContain(highlightLabel);
+  });
+
+  it("offers the toggle on an unresolved assignment, whose Daylite link is suppressed", () => {
+    const html = renderCell({ events: [unresolved] });
+
+    expect(html).toContain(highlightLabel);
+    expect(html).not.toContain(dayliteLabel);
+  });
+
+  it("offers no toggle on a bare event card", () => {
+    const html = renderCell({ events: [bare] });
+
+    expect(html).not.toContain(highlightLabel);
+  });
+
+  it("offers no toggle on an absence card", () => {
+    const html = renderCell({ events: [absence] });
+
+    expect(html).not.toContain(highlightLabel);
+  });
+
+  it("reads the toggle as pressed on a highlighted card", () => {
+    const html = renderCell({
+      events: [assignment()],
+      activeHighlight: projectRef,
+    });
+
+    expect(html).toContain('aria-pressed="true"');
+  });
+
+  it("reads the toggle as unpressed on a card of another project", () => {
+    const html = renderCell({
+      events: [otherProject],
+      activeHighlight: projectRef,
+    });
+
+    expect(html).toContain('aria-pressed="false"');
+    expect(html).not.toContain('aria-pressed="true"');
+  });
+
+  it("marks the title of a matching card", () => {
+    const html = renderCell({
+      events: [assignment()],
+      activeHighlight: projectRef,
+    });
+
+    expect(html).toContain(markerClass);
+  });
+
+  it("marks the title of a matching unresolved card", () => {
+    const html = renderCell({
+      events: [unresolved],
+      activeHighlight: projectRef,
+    });
+
+    expect(html).toContain(markerClass);
+  });
+
+  it("leaves a card of another project unmarked", () => {
+    const html = renderCell({
+      events: [otherProject],
+      activeHighlight: projectRef,
+    });
+
+    expect(html).not.toContain(markerClass);
+  });
+
+  it("marks nothing while no highlight is active", () => {
+    const html = renderCell({ events: [assignment(), otherProject] });
+
+    expect(html).not.toContain(markerClass);
+  });
+
+  it("keeps the card's background and category strip while it is highlighted", () => {
+    const html = renderCell({
+      events: [assignment({ categoryColor: "#8bc34a" })],
+      activeHighlight: projectRef,
+    });
+
+    expect(html).toContain("bg-base-200");
+    expect(html).toContain("border-left-color:#8bc34a");
+    expect(html).toContain(assignmentStripClass);
+  });
+
+  it("adds no ring of its own to a highlighted card", () => {
+    const highlighted = renderCell({
+      events: [assignment()],
+      activeHighlight: projectRef,
+    });
+    const plain = renderCell({ events: [assignment()] });
+
+    expect(countRings(highlighted)).toBe(countRings(plain));
+  });
+});
+
+function countRings(html: string): number {
+  return [...html.matchAll(/\bring-2\b/g)].length;
+}
