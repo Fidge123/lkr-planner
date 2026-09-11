@@ -3,7 +3,8 @@
 ### Requirement: Highlight toggle on assignment cards
 The system SHALL offer a highlight toggle among the action buttons of every assignment card, including assignments whose Daylite project could not be resolved.
 Bare event cards and absence cards SHALL NOT offer it.
-The toggle carries a German label naming what it matches, and reads as pressed while its card is highlighted.
+The toggle carries a German label naming what it matches.
+While its card is highlighted the toggle reads as pressed, both visibly and to assistive technology, so that it is apparent that activating it again clears the highlight.
 
 #### Scenario: Assignment card offers the toggle
 - **WHEN** a card for an assignment is rendered
@@ -21,9 +22,18 @@ The toggle carries a German label naming what it matches, and reads as pressed w
 - **WHEN** a card for an absence is rendered
 - **THEN** it has no highlight toggle
 
-#### Scenario: Active toggle reads as pressed
+#### Scenario: Active toggle reads as pressed to assistive technology
 - **WHEN** a highlight is active
 - **THEN** the toggle on every highlighted card reads as pressed to assistive technology
+
+#### Scenario: Active toggle is visibly pressed
+- **WHEN** a highlight is active
+- **THEN** the toggle on every highlighted card is visibly distinct from the same toggle on an unhighlighted card
+
+#### Scenario: Toggles of unmatched cards stay unpressed
+- **GIVEN** a highlight is active
+- **WHEN** a card does not match it
+- **THEN** its toggle reads as unpressed
 
 ### Requirement: Matching by Daylite project reference
 The system SHALL treat two events as the same work when both carry a Daylite project reference and the two references are equal.

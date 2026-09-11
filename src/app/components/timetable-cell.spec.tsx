@@ -433,6 +433,35 @@ describe("TimetableCell highlighting", () => {
     expect(html).not.toContain(highlightLabel);
   });
 
+  it("shows the toggle as pressed on a highlighted card", () => {
+    const html = renderCell({
+      events: [assignment()],
+      activeHighlight: projectRef,
+    });
+
+    expect(highlightToggle(html)).toContain("btn-active");
+  });
+
+  it("shows the toggle unpressed on a card of another project", () => {
+    const html = renderCell({
+      events: [otherProject],
+      activeHighlight: projectRef,
+    });
+
+    expect(highlightToggle(html)).not.toContain("btn-active");
+  });
+
+  it("does not dim the toggle while its card is highlighted", () => {
+    const highlighted = renderCell({
+      events: [assignment()],
+      activeHighlight: projectRef,
+    });
+    const plain = renderCell({ events: [assignment()] });
+
+    expect(highlightToggle(highlighted)).not.toContain("opacity-70");
+    expect(highlightToggle(plain)).toContain("opacity-70");
+  });
+
   it("reads the toggle as pressed on a highlighted card", () => {
     const html = renderCell({
       events: [assignment()],
@@ -506,6 +535,13 @@ describe("TimetableCell highlighting", () => {
     expect(countRings(highlighted)).toBe(countRings(plain));
   });
 });
+
+/** The toggle's own tag, so its state classes can be read apart from the other action buttons. */
+function highlightToggle(html: string): string {
+  return (
+    html.match(/<button[^>]*aria-label="Projekt hervorheben"[^>]*>/)?.[0] ?? ""
+  );
+}
 
 function countRings(html: string): number {
   return [...html.matchAll(/\bring-2\b/g)].length;

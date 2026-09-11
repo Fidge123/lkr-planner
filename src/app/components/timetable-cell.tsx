@@ -360,7 +360,7 @@ function DraggableAssignmentCard({
           )}
           <button
             type="button"
-            className={cardActionClass}
+            className={highlighted ? cardActionPressedClass : cardActionClass}
             aria-label="Projekt hervorheben"
             aria-pressed={highlighted}
             onClick={() => onToggleHighlight(event)}
@@ -378,6 +378,8 @@ const assignmentCardGridClass =
 const cardActionAreaClass =
   "flex flex-col shrink-0 col-start-3 row-start-1 @max-[10rem]:col-start-1 @max-[10rem]:row-start-2 @max-[10rem]:self-start";
 const cardActionClass = "btn btn-ghost h-5 w-5 min-h-0 p-0 opacity-70";
+// Spelled out rather than composed so the class names survive Tailwind's static scan of the source.
+const cardActionPressedClass = "btn btn-ghost h-5 w-5 min-h-0 p-0 btn-active";
 
 interface CardProps {
   event: CellEvent;
