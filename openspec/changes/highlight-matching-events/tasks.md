@@ -1,33 +1,40 @@
 ## 0. Preconditions
 
-- [ ] 0.1 The "open project in Daylite" change is implemented, so cards carry an action button row and the full-card click has been replaced
+- [x] 0.1 The "open project in Daylite" change is implemented, so assignment cards carry an action button row and the full-card click has been replaced
 
-## 1. Highlight key
+## 1. Free the word "highlight"
 
-- [ ] 1.1 Write failing tests for the key derived from a `CellEvent`: the project reference for an assignment, the trimmed title for a bare event, none for an absence, and no match between an assignment and a bare event that read alike
-- [ ] 1.2 Add the key derivation to `src/app/types.ts`
+- [ ] 1.1 Rename the `highlight` prop of `TimetableCell` to `isToday`, in the signature, the `Props` interface, the `cellClass` parameter, the `timetable-row.tsx` call site, and the `timetable-cell.spec.tsx` render helper
+- [ ] 1.2 Confirm `bun test` still passes, so the rename lands as a rename and nothing else
 
-## 2. Highlight color
+## 2. Highlight key
 
-- [ ] 2.1 Add a theme-level color token for the highlight ring to `src/app.css`, in the light and the dark theme
-- [ ] 2.2 Verify its separation from the drop-target blue, the conflict red, and the three absence hues in both themes with the dataviz palette checks
+- [ ] 2.1 Write failing tests for the key derived from a `CellEvent`: the Daylite project reference for an assignment, resolved or not, and none for a bare event or an absence
+- [ ] 2.2 Write a failing test that two events without a project reference do not match, so bare events and absences are not grouped with each other
+- [ ] 2.3 Add the key derivation and the match test to `src/app/types.ts`
 
-## 3. Toggle on the card
+## 3. Marker color
 
-- [ ] 3.1 Write failing tests asserting the toggle renders on assignment and bare cards, not on absence cards, and reads as pressed while its card is highlighted
-- [ ] 3.2 Add the toggle to the card action buttons in `src/app/components/timetable-cell.tsx` with a Lucide icon and a German label
-- [ ] 3.3 Write failing tests for the ring on matching cards and for the card's own background and category strip surviving it
-- [ ] 3.4 Render the ring on cards whose key matches the active one
+- [ ] 3.1 Add a blue marker color token to `src/app.css`, with its own value inside the `corporate` and the `business` theme block
+- [ ] 3.2 Verify the title stays legible over the marker in both themes, and that the marker is distinguishable from the current day's `bg-primary/10` column tint
 
-## 4. Grid state
+## 4. Toggle and marker on the card
 
-- [ ] 4.1 Write failing tests for the toggle semantics: activating on an unhighlighted card replaces the active highlight, activating on a highlighted card clears it
-- [ ] 4.2 Hold the active key in `PlanningGridTable` and thread it and the toggle handler through `week-table.tsx` and `timetable-row.tsx` to the cells, along the path `dropPreview` and `draggedUid` take
-- [ ] 4.3 Write a failing test for the highlight clearing when the grid shows another week
-- [ ] 4.4 Clear the active key when the rendered week start changes, the way `TimetableRow` clears its ghost
+- [ ] 4.1 Write failing tests asserting the toggle renders on assignment cards including unresolved ones, not on bare or absence cards, and reads as pressed while its card is highlighted
+- [ ] 4.2 Add the toggle to the card action buttons in `src/app/components/timetable-cell.tsx` with a Lucide icon and a German label, guarded by the event kind rather than by the condition that hides the Daylite deep-link button
+- [ ] 4.3 Write failing tests for the marker behind the title of matching cards, and for the card's background, category strip and outline surviving it
+- [ ] 4.4 Render the marker behind the title of cards whose key matches the active one
 
-## 5. Verification
+## 5. Grid state
 
-- [ ] 5.1 Add a grid-level test with mocked commands covering a highlight across several employees and days of one week
-- [ ] 5.2 Verify the highlight survives a reload of the visible week and follows a card dragged to another employee or day
-- [ ] 5.3 Verify a highlight whose matching events are all deleted marks nothing and leaves the grid otherwise unchanged
+- [ ] 5.1 Write failing tests for the toggle semantics as a pure transition, the way `nextGhostState` is tested: activating on an unhighlighted card replaces the active highlight, activating on a highlighted card clears it
+- [ ] 5.2 Add the transition as a pure function and hold the active key in `PlanningGridTable`, threading it and the toggle handler through `week-table.tsx` and `timetable-row.tsx` to the cells, along the path `dropPreview` and `draggedUid` take
+- [ ] 5.3 Write a failing test for the highlight clearing when the grid shows another week
+- [ ] 5.4 Clear the active key when the rendered week start changes, comparing against the `weekStart` `PlanningGridTable` already derives, the way `TimetableRow` clears its ghost
+
+## 6. Verification
+
+- [ ] 6.1 Add a grid-level test with mocked commands covering a highlight across several employees and days of one week, including a matching card in the current day's column
+- [ ] 6.2 Verify the highlight survives a reload of the visible week and follows a card dragged to another employee or day
+- [ ] 6.3 Verify a highlight whose matching events are all deleted marks nothing and leaves the grid otherwise unchanged
+- [ ] 6.4 Verify the week sliding in during a trackpad swipe renders unhighlighted
