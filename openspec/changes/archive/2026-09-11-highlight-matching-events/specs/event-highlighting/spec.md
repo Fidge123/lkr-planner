@@ -1,30 +1,43 @@
 ## ADDED Requirements
 
-### Requirement: Highlight toggle on event cards
-The system SHALL offer a highlight toggle among the action buttons of every assignment and bare event card.
-Absence cards SHALL NOT offer it.
-The toggle carries a German label naming what it matches, and reads as pressed while its card is highlighted.
+### Requirement: Highlight toggle on assignment cards
+The system SHALL offer a highlight toggle among the action buttons of every assignment card, including assignments whose Daylite project could not be resolved.
+Bare event cards and absence cards SHALL NOT offer it.
+The toggle carries a German label naming what it matches.
+While its card is highlighted the toggle reads as pressed, both visibly and to assistive technology, so that it is apparent that activating it again clears the highlight.
 
 #### Scenario: Assignment card offers the toggle
 - **WHEN** a card for an assignment is rendered
 - **THEN** its action buttons include a highlight toggle
 
-#### Scenario: Bare event card offers the toggle
+#### Scenario: Unresolved assignment card offers the toggle
+- **WHEN** a card for an assignment whose Daylite project could not be resolved is rendered
+- **THEN** its action buttons include a highlight toggle, even though the button that opens the project in Daylite is suppressed
+
+#### Scenario: Bare event card offers no toggle
 - **WHEN** a card for a bare event is rendered
-- **THEN** its action buttons include a highlight toggle
+- **THEN** it has no highlight toggle
 
 #### Scenario: Absence card offers no toggle
 - **WHEN** a card for an absence is rendered
 - **THEN** it has no highlight toggle
 
-#### Scenario: Active toggle reads as pressed
+#### Scenario: Active toggle reads as pressed to assistive technology
 - **WHEN** a highlight is active
 - **THEN** the toggle on every highlighted card reads as pressed to assistive technology
 
-### Requirement: Matching by project reference or title
-The system SHALL treat two events as the same work when they have the same kind and the same identifier for that kind.
-An assignment is identified by its Daylite project reference, a bare event by its title compared after trimming, and an absence by nothing.
-An assignment and a bare event SHALL NOT match each other.
+#### Scenario: Active toggle is visibly pressed
+- **WHEN** a highlight is active
+- **THEN** the toggle on every highlighted card is visibly distinct from the same toggle on an unhighlighted card
+
+#### Scenario: Toggles of unmatched cards stay unpressed
+- **GIVEN** a highlight is active
+- **WHEN** a card does not match it
+- **THEN** its toggle reads as unpressed
+
+### Requirement: Matching by Daylite project reference
+The system SHALL treat two events as the same work when both carry a Daylite project reference and the two references are equal.
+An event without a Daylite project reference SHALL NOT match any event, including another event without one.
 
 #### Scenario: Assignments of the same project match
 - **WHEN** the highlight is activated on an assignment
@@ -45,18 +58,10 @@ An assignment and a bare event SHALL NOT match each other.
 - **WHEN** the highlight is activated on it
 - **THEN** every assignment holding the same reference is highlighted, resolved or not
 
-#### Scenario: Bare events with the same title match
-- **WHEN** the highlight is activated on a bare event
-- **THEN** every bare event in the week whose trimmed title is identical is highlighted
-
-#### Scenario: A bare event does not match an assignment
-- **GIVEN** a bare event whose title equals the name of a Daylite project scheduled in the same week
-- **WHEN** the highlight is activated on that bare event
-- **THEN** the assignments of that project are not highlighted
-
-#### Scenario: Absences are never highlighted
+#### Scenario: Bare events and absences never match each other
+- **GIVEN** the week holds several bare events and several absences, none of which carry a Daylite project reference
 - **WHEN** any highlight is active
-- **THEN** no absence card is highlighted
+- **THEN** no bare event card and no absence card is highlighted
 
 ### Requirement: Highlight scope
 The system SHALL apply an active highlight to the cards of every employee row and every visible day of the week on screen.
@@ -119,18 +124,29 @@ The system SHALL clear the highlight when the grid shows another week, and SHALL
 - **THEN** no highlight is active
 
 ### Requirement: Highlight appearance
-The system SHALL mark a highlighted card with a ring in a color reserved for highlighting, distinguishable from the drop-target and conflict rings and from the absence colors in the light and the dark theme.
-The card's own colors, including the Daylite category strip, SHALL remain visible.
+The system SHALL mark a highlighted card with a colored marker behind its title text, in a color reserved for highlighting and defined separately for the light and the dark theme.
+The title SHALL remain legible over the marker in both themes.
+The card's box SHALL be unchanged, including its background color and its Daylite category strip.
 
-#### Scenario: Highlighted card is ringed
+#### Scenario: Highlighted card carries a marker behind its title
 - **WHEN** a card matches the active highlight
-- **THEN** it is rendered with the highlight ring
+- **THEN** its title is rendered over the highlight marker
 
-#### Scenario: The highlight ring is not the drop-target or conflict ring
+#### Scenario: The card's box survives the highlight
+- **WHEN** a card is highlighted
+- **THEN** its background color, its Daylite category strip, and its outline are unchanged
+
+#### Scenario: The marker does not replace the drop-target or conflict ring
 - **GIVEN** a highlight is active
 - **WHEN** a cell is a drop target or holds an absence conflict
-- **THEN** the cell's ring and the cards' highlight ring are distinguishable
+- **THEN** the cell keeps its ring and the highlighted cards inside it keep their markers
 
-#### Scenario: Card colors survive the highlight
-- **WHEN** a card is highlighted
-- **THEN** its background color and its Daylite category strip are unchanged
+#### Scenario: The marker is legible in the current day's column
+- **GIVEN** a highlight is active
+- **WHEN** a matching card sits in the column of the current day, which is tinted with the primary color
+- **THEN** the marker is distinguishable from that tint
+
+#### Scenario: The current day's column is still tinted
+- **GIVEN** the grid renders the week containing the current day
+- **WHEN** no highlight is active
+- **THEN** that day's column is tinted as before

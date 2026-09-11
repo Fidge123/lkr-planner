@@ -8,6 +8,7 @@ import type {
 } from "../../generated/tauri";
 import type { ProjectCategoryColors } from "../../services/daylite-categories";
 import type { DropPreview } from "../hooks/use-appointment-drag";
+import type { CellEvent } from "../types";
 import { getIsoWeek, toLocalISODate } from "../util";
 import { stickyHeaderClass, TimetableHeader } from "./timetable-header";
 import { TimetableRow } from "./timetable-row";
@@ -23,8 +24,10 @@ export function WeekTable({
   isEmployeeLoading,
   dropPreview = null,
   draggedUid = null,
+  activeHighlight = null,
   onOpenIcalDialog,
   onReloadAssignments,
+  onToggleHighlight,
 }: WeekTableProps) {
   const holidayByDate = new Map(holidays.map((h) => [h.date, h.name]));
   const holidayDates = new Set(holidays.map((h) => h.date));
@@ -83,8 +86,10 @@ export function WeekTable({
             }
             dropPreview={dropPreview}
             draggedUid={draggedUid}
+            activeHighlight={activeHighlight}
             onOpenIcalDialog={onOpenIcalDialog}
             onReloadAssignments={onReloadAssignments}
+            onToggleHighlight={onToggleHighlight}
           />
         ))}
         {!isEmployeeLoading && employees.length === 0 ? (
@@ -113,6 +118,8 @@ export interface WeekTableProps {
   isEmployeeLoading: boolean;
   dropPreview?: DropPreview | null;
   draggedUid?: string | null;
+  activeHighlight?: string | null;
   onOpenIcalDialog: (employee: PlanningContactRecord) => void;
   onReloadAssignments: () => void;
+  onToggleHighlight?: (event: CellEvent) => void;
 }

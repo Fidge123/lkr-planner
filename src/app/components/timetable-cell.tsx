@@ -1,5 +1,5 @@
 import { useDraggable, useDroppable } from "@dnd-kit/core";
-import { ExternalLink, Pencil, TriangleAlert } from "lucide-react";
+import { ExternalLink, Highlighter, Pencil, TriangleAlert } from "lucide-react";
 import type { ReactNode } from "react";
 import { useRef } from "react";
 import { openProjectInDaylite } from "../../services/daylite-deep-link";
@@ -14,11 +14,12 @@ import {
   type CellEvent,
   hasAbsenceConflict,
   hasAllDayAbsence,
+  isHighlighted,
   isUnresolvedAssignment,
 } from "../types";
 
 export function TimetableCell({
-  highlight = false,
+  isToday = false,
   isHoliday = false,
   employeeRef = "",
   date = "",
@@ -26,9 +27,11 @@ export function TimetableCell({
   suggestion,
   dropPreview = null,
   draggedUid = null,
+  activeHighlight = null,
   onAddClick,
   onEventClick,
   onSuggestionClick,
+  onToggleHighlight = () => {},
 }: Props) {
   const orderedEvents = sortCellEvents(events);
   const positions = assignmentPositions(orderedEvents);
@@ -64,7 +67,7 @@ export function TimetableCell({
   return (
     <td
       ref={setNodeRef}
-      className={cellClass(highlight, isHoliday, isOver, conflict)}
+      className={cellClass(isToday, isHoliday, isOver, conflict)}
     >
       <ul className="@container flex flex-col gap-1 list-none">
         {conflict ? (
@@ -120,7 +123,9 @@ export function TimetableCell({
                 date={date}
                 position={positions.get(event.uid) ?? 0}
                 lifted={event.uid === draggedUid}
+                highlighted={isHighlighted(event, activeHighlight)}
                 onEventClick={onEventClick}
+                onToggleHighlight={onToggleHighlight}
               />
             </li>
           ),
@@ -201,7 +206,7 @@ function DropPreviewCard({ title }: { title: string }) {
 }
 
 interface Props {
-  highlight: boolean;
+  isToday: boolean;
   isHoliday?: boolean;
   employeeRef?: string;
   date?: string;
@@ -211,9 +216,12 @@ interface Props {
   dropPreview?: DropPreview | null;
   /** UID of the card being dragged, so it is not counted as its own neighbor. */
   draggedUid?: string | null;
+  /** Highlight key the planner picked; cards matching it are marked. */
+  activeHighlight?: string | null;
   onAddClick: () => void;
   onEventClick: (event: CellEvent) => void;
   onSuggestionClick?: (suggestion: GhostSuggestion) => void;
+  onToggleHighlight?: (event: CellEvent) => void;
 }
 
 export const assignmentCardClass =
@@ -233,7 +241,13 @@ export function AssignmentCardBody({
   endTime,
   title,
   isUnresolved = false,
+  highlighted = false,
 }: BodyProps) {
+  const name = highlighted ? (
+    <span className={highlightMarkerClass}>{title}</span>
+  ) : (
+    title
+  );
   return (
     <>
       <EventTime startTime={startTime} endTime={endTime} />
@@ -245,25 +259,29 @@ export function AssignmentCardBody({
               aria-hidden="true"
             />
             <em className="font-normal opacity-70">Beschreibung für </em>
-            {title}
+            {name}
             <em className="font-normal opacity-70">
               {" "}
               konnte nicht abgerufen werden
             </em>
           </>
         ) : (
-          title
+          name
         )}
       </h4>
     </>
   );
 }
 
+/** Spelled out rather than interpolated so the class names survive Tailwind's static scan of the source. */
+const highlightMarkerClass = "rounded-sm px-0.5 bg-(--color-highlight-marker)";
+
 interface BodyProps {
   startTime: string | null;
   endTime: string | null;
   title: string;
   isUnresolved?: boolean;
+  highlighted?: boolean;
 }
 
 function DraggableAssignmentCard({
@@ -272,7 +290,9 @@ function DraggableAssignmentCard({
   date,
   position,
   lifted = false,
+  highlighted = false,
   onEventClick,
+  onToggleHighlight,
 }: CardProps) {
   const payload: AppointmentDragPayload = {
     uid: event.uid,
@@ -313,6 +333,7 @@ function DraggableAssignmentCard({
           endTime={event.endTime}
           title={event.title}
           isUnresolved={unresolved}
+          highlighted={highlighted}
         />
       </div>
       {lifted ? null : (
@@ -337,6 +358,15 @@ function DraggableAssignmentCard({
               <ExternalLink className="size-4" aria-hidden="true" />
             </button>
           )}
+          <button
+            type="button"
+            className={highlighted ? cardActionPressedClass : cardActionClass}
+            aria-label="Projekt hervorheben"
+            aria-pressed={highlighted}
+            onClick={() => onToggleHighlight(event)}
+          >
+            <Highlighter className="size-4" aria-hidden="true" />
+          </button>
         </div>
       )}
     </div>
@@ -348,6 +378,8 @@ const assignmentCardGridClass =
 const cardActionAreaClass =
   "flex flex-col shrink-0 col-start-3 row-start-1 @max-[10rem]:col-start-1 @max-[10rem]:row-start-2 @max-[10rem]:self-start";
 const cardActionClass = "btn btn-ghost h-5 w-5 min-h-0 p-0 opacity-70";
+// Spelled out rather than composed so the class names survive Tailwind's static scan of the source.
+const cardActionPressedClass = "btn btn-ghost h-5 w-5 min-h-0 p-0 btn-active";
 
 interface CardProps {
   event: CellEvent;
@@ -356,7 +388,9 @@ interface CardProps {
   position: number;
   /** Out of the cell's flow while this card is the one being dragged. */
   lifted?: boolean;
+  highlighted?: boolean;
   onEventClick: (event: CellEvent) => void;
+  onToggleHighlight: (event: CellEvent) => void;
 }
 
 function EventTime({ startTime, endTime }: TimeProps) {
@@ -375,14 +409,14 @@ interface TimeProps {
 }
 
 function cellClass(
-  highlight: boolean,
+  isToday: boolean,
   isHoliday: boolean,
   isDropTarget: boolean,
   conflict: boolean,
 ): string {
   const base = isHoliday
     ? "align-top p-2 bg-base-200/60"
-    : highlight
+    : isToday
       ? "align-top p-2 bg-primary/10"
       : "align-top p-2";
   if (isDropTarget) return `${base} ring-2 ring-inset ring-primary`;
