@@ -1,8 +1,24 @@
+use crate::integrations::telemetry::events::{Integration, Operation};
+use crate::integrations::telemetry::observe::observe;
 use tauri_plugin_opener::OpenerExt;
 
 #[tauri::command]
 #[specta::specta]
-pub fn daylite_open_project(app: tauri::AppHandle, project_ref: String) -> Result<(), String> {
+pub async fn daylite_open_project(
+    app: tauri::AppHandle,
+    project_ref: String,
+) -> Result<(), String> {
+    let handle = app.clone();
+    observe(
+        &handle,
+        Operation::DayliteOpenProject,
+        Integration::Daylite,
+        async { daylite_open_project_inner(app, project_ref) },
+    )
+    .await
+}
+
+fn daylite_open_project_inner(app: tauri::AppHandle, project_ref: String) -> Result<(), String> {
     let url = project_deep_link_url(&project_ref)?;
     app.opener()
         .open_url(url, None::<&str>)

@@ -1,12 +1,14 @@
 import { useState } from "react";
 import { DayliteSettingsPanel } from "./daylite-panel";
 import { DisplaySettingsPanel } from "./display-panel";
+import { TelemetrySettingsPanel } from "./telemetry-panel";
 import { ZepSettingsPanel } from "./zep-panel";
 
 const sections = [
   { id: "daylite", label: "Daylite" },
   { id: "zep", label: "ZEP" },
   { id: "display", label: "Anzeige" },
+  { id: "telemetry", label: "Diagnose" },
 ] as const;
 
 type SettingsSection = (typeof sections)[number]["id"];
@@ -57,6 +59,8 @@ export function SettingsDialog({
             <DayliteSettingsPanel onClose={onClose} />
           ) : activeSection === "zep" ? (
             <ZepSettingsPanel onClose={onClose} />
+          ) : activeSection === "telemetry" ? (
+            <TelemetrySettingsPanel onClose={onClose} />
           ) : (
             <DisplaySettingsPanel
               onClose={onClose}

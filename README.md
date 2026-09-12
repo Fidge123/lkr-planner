@@ -26,6 +26,7 @@ The backlog is now centered on Planradar project linking, assignment modal quali
 - Weekend visibility toggle for the planning table
 - CalDAV synchronization for assignment create/update/delete operations
 - Record/replay HTTP (VCR) testing infrastructure for integration tests
+- Opt-in anonymous error and performance telemetry to PostHog, configurable under settings "Diagnose"
 - ADR-based architecture documentation in [docs/adr](/Users/flori/dev/lkr-planner/docs/adr)
 
 ### Planned / In Backlog

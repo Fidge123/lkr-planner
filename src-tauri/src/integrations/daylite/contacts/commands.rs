@@ -9,14 +9,44 @@ use crate::integrations::daylite::client::DayliteApiClient;
 use crate::integrations::daylite::shared::{
     load_store_or_error, save_store_or_error, with_daylite_tokens, DayliteApiError,
 };
+use crate::integrations::telemetry::events::{Integration, Operation};
+use crate::integrations::telemetry::observe::observe;
 
 #[tauri::command]
 #[specta::specta]
 pub async fn daylite_list_contacts(
     app: tauri::AppHandle,
 ) -> Result<Vec<PlanningContactRecord>, DayliteApiError> {
+    let handle = app.clone();
+    observe(
+        &handle,
+        Operation::DayliteListContacts,
+        Integration::Daylite,
+        daylite_list_contacts_inner(app),
+    )
+    .await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn daylite_list_cached_contacts(
+    app: tauri::AppHandle,
+) -> Result<Vec<PlanningContactRecord>, DayliteApiError> {
+    let handle = app.clone();
+    observe(
+        &handle,
+        Operation::DayliteListCachedContacts,
+        Integration::Daylite,
+        async { daylite_list_cached_contacts_inner(app) },
+    )
+    .await
+}
+
+async fn daylite_list_contacts_inner(
+    app: tauri::AppHandle,
+) -> Result<Vec<PlanningContactRecord>, DayliteApiError> {
     let mut store = load_store_or_error(app.clone())?;
-    let client = DayliteApiClient::new(&store.api_endpoints.daylite_base_url)?;
+    let client = DayliteApiClient::new(&store.api_endpoints.daylite_base_url)?.with_telemetry(&app);
     let contacts =
         with_daylite_tokens(&client, |tokens| list_contacts_core(&client, tokens)).await?;
 
@@ -33,9 +63,7 @@ pub async fn daylite_list_contacts(
     Ok(contacts)
 }
 
-#[tauri::command]
-#[specta::specta]
-pub fn daylite_list_cached_contacts(
+fn daylite_list_cached_contacts_inner(
     app: tauri::AppHandle,
 ) -> Result<Vec<PlanningContactRecord>, DayliteApiError> {
     let store = load_store_or_error(app)?;

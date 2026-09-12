@@ -256,8 +256,8 @@ pub(super) async fn run_daylite_command<T>(
     app: tauri::AppHandle,
     operation: impl AsyncFn(&DayliteApiClient, DayliteTokenState) -> Result<T, DayliteApiError>,
 ) -> Result<T, DayliteApiError> {
-    let store = load_store_or_error(app)?;
-    let client = DayliteApiClient::new(&store.api_endpoints.daylite_base_url)?;
+    let store = load_store_or_error(app.clone())?;
+    let client = DayliteApiClient::new(&store.api_endpoints.daylite_base_url)?.with_telemetry(&app);
     with_daylite_tokens(&client, |tokens| operation(&client, tokens)).await
 }
 
