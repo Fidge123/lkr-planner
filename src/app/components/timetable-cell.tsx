@@ -340,7 +340,7 @@ function DraggableAssignmentCard({
         <div className={cardActionAreaClass}>
           <button
             type="button"
-            className={cardActionClass}
+            className={`${cardActionClass} rounded-tr-md`}
             aria-label="Einsatz bearbeiten"
             onClick={() => onEventClick(event)}
           >
@@ -360,7 +360,7 @@ function DraggableAssignmentCard({
           )}
           <button
             type="button"
-            className={highlighted ? cardActionPressedClass : cardActionClass}
+            className={`${highlighted ? cardActionPressedClass : cardActionClass} rounded-br-md`}
             aria-label="Projekt hervorheben"
             aria-pressed={highlighted}
             onClick={() => onToggleHighlight(event)}
@@ -374,12 +374,16 @@ function DraggableAssignmentCard({
 }
 
 const assignmentCardGridClass =
-  "grid grid-cols-[auto_minmax(0,1fr)_auto] @max-[10rem]:grid-cols-[auto_minmax(0,1fr)] items-center w-full gap-2 py-2 px-1 rounded-lg";
+  "grid grid-cols-[auto_minmax(0,1fr)_auto] @max-[10rem]:grid-cols-[auto_minmax(0,1fr)] items-center w-full gap-2 py-2 pl-1 pr-px rounded-lg overflow-hidden";
+// The column pulls back the card's vertical padding so the buttons run its full height, leaving the 1px `py-px` as their only margin to the card's edges.
+// Under the narrow layout it sits below the times instead of on the edge, where that pull would drag it out of the card.
 const cardActionAreaClass =
-  "flex flex-col shrink-0 col-start-3 row-start-1 @max-[10rem]:col-start-1 @max-[10rem]:row-start-2 @max-[10rem]:self-start";
-const cardActionClass = "btn btn-ghost h-5 w-5 min-h-0 p-0 opacity-70";
+  "flex flex-col shrink-0 self-stretch -my-2 py-px col-start-3 row-start-1 @max-[10rem]:col-start-1 @max-[10rem]:row-start-2 @max-[10rem]:self-start @max-[10rem]:my-0";
+const cardActionClass =
+  "btn btn-ghost h-6 w-6 min-h-0 p-0 opacity-70 rounded-none";
 // Spelled out rather than composed so the class names survive Tailwind's static scan of the source.
-const cardActionPressedClass = "btn btn-ghost h-5 w-5 min-h-0 p-0 btn-active";
+const cardActionPressedClass =
+  "btn btn-ghost h-6 w-6 min-h-0 p-0 rounded-none btn-active";
 
 interface CardProps {
   event: CellEvent;
