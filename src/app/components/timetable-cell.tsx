@@ -375,8 +375,6 @@ function DraggableAssignmentCard({
 
 const assignmentCardGridClass =
   "grid grid-cols-[auto_minmax(0,1fr)_auto] @max-[10rem]:grid-cols-[auto_minmax(0,1fr)] items-center w-full gap-2 py-2 pl-1 pr-px rounded-lg overflow-hidden";
-// The column pulls back the card's vertical padding so the buttons run its full height, leaving the 1px `py-px` as their only margin to the card's edges.
-// Under the narrow layout it sits below the times instead of on the edge, where that pull would drag it out of the card.
 const cardActionAreaClass =
   "flex flex-col shrink-0 self-stretch -my-2 py-px col-start-3 row-start-1 @max-[10rem]:col-start-1 @max-[10rem]:row-start-2 @max-[10rem]:self-start @max-[10rem]:my-0";
 const cardActionClass =

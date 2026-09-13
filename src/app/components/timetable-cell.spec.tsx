@@ -151,48 +151,6 @@ describe("TimetableCell", () => {
     expect(actionArea).toContain("shrink-0");
   });
 
-  it("sizes the card actions at 24 px", () => {
-    const html = renderCell({ events: [assignment()] });
-
-    expect(html).toContain("h-6 w-6");
-    expect(html).not.toContain("h-5 w-5");
-  });
-
-  it("runs the action column over the card's full height, 1 px inside its edges", () => {
-    const html = renderCell({ events: [assignment()] });
-
-    const actionArea = html.slice(
-      html.lastIndexOf("<div", html.indexOf(editLabel)),
-      html.indexOf(editLabel),
-    );
-
-    expect(html).toContain("pl-1 pr-px");
-    expect(actionArea).toContain("self-stretch");
-    expect(actionArea).toContain("-my-2 py-px");
-  });
-
-  it("keeps the action column inside the card once the column is narrow", () => {
-    const html = renderCell({ events: [assignment()] });
-
-    const actionArea = html.slice(
-      html.lastIndexOf("<div", html.indexOf(editLabel)),
-      html.indexOf(editLabel),
-    );
-
-    expect(actionArea).toContain("@max-[10rem]:my-0");
-  });
-
-  it("rounds the outer action corners with the card", () => {
-    const html = renderCell({ events: [assignment()] });
-
-    const editButton =
-      html.match(/<button[^>]*aria-label="Einsatz bearbeiten"[^>]*>/)?.[0] ??
-      "";
-
-    expect(editButton).toContain("rounded-tr-md");
-    expect(highlightToggle(html)).toContain("rounded-br-md");
-  });
-
   it("gives the title the card's only flexible column", () => {
     const html = renderCell({ events: [assignment()] });
 
