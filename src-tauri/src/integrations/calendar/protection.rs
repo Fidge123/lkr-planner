@@ -100,6 +100,8 @@ mod tests {
 
     const PROTECTED_EVENT: &str = "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:uid-1\r\nSUMMARY:Projekt Nord\r\nDESCRIPTION:daylite:/v1/projects/3001\r\nDTSTART;VALUE=DATE:20260506\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
 
+    const UNREADABLE_EVENT: &str = "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:uid-1\r\nSUMMARY:Projekt Nord\r\nDTSTART;VALUE=DATE:20260506\r\nEND:VEVENT\r\nEND:VCALENDA";
+
     /// Serves one event to every GET and records how often it was asked.
     struct EventServer {
         base_url: String,
@@ -187,6 +189,23 @@ mod tests {
 
         assert!(result.is_ok());
         assert_eq!(server.count(), 0);
+        assert_eq!(*calls.lock().unwrap(), 0);
+    }
+
+    #[tokio::test]
+    async fn an_unreadable_event_does_not_block_the_write() {
+        let server = EventServer::spawn(UNREADABLE_EVENT).await;
+        let calls = Arc::new(Mutex::new(0));
+
+        let result = refuse_protected_event(
+            &session(&server.base_url),
+            "/cal/uid-1.ics",
+            false,
+            lookup(Some(FIXED_APPOINTMENT_CATEGORY), calls.clone()),
+        )
+        .await;
+
+        assert_eq!(result, Ok(()));
         assert_eq!(*calls.lock().unwrap(), 0);
     }
 

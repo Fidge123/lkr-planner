@@ -79,6 +79,7 @@ fn build_report_body(start: &str, end: &str) -> String {
     )
 }
 
+/// One resource the server stored corrupted is skipped so the rest of the week still loads.
 fn parse_caldav_report(xml_text: &str) -> Result<Vec<RawVEvent>, String> {
     let doc = roxmltree::Document::parse(xml_text)
         .map_err(|e| format!("XML konnte nicht geparst werden: {e}"))?;
@@ -114,7 +115,13 @@ fn parse_caldav_report(xml_text: &str) -> Result<Vec<RawVEvent>, String> {
                     .unwrap_or("")
                     .to_string();
 
-                let mut parsed = parse_ical_events(text)?;
+                let mut parsed = match parse_ical_events(text) {
+                    Ok(parsed) => parsed,
+                    Err(e) => {
+                        eprintln!("calendar: skipping unreadable resource '{href}': {e}");
+                        continue;
+                    }
+                };
                 for event in &mut parsed {
                     event.href = href.clone();
                     event.etag = etag.clone();
@@ -308,5 +315,50 @@ END:VCALENDAR
         assert_eq!(events[0].href, "/calendars/user/calendar/ev1.ics");
         assert_eq!(events[1].uid, "uid-2");
         assert_eq!(events[1].href, "/calendars/user/calendar/ev2.ics");
+    }
+
+    #[test]
+    fn parse_caldav_report_skips_an_unreadable_entry_and_keeps_the_others() {
+        let xml = r#"<?xml version="1.0" encoding="utf-8"?>
+<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
+  <d:response>
+    <d:href>/calendars/user/calendar/broken.ics</d:href>
+    <d:propstat>
+      <d:prop>
+        <c:calendar-data>BEGIN:VCALENDAR
+BEGIN:VEVENT
+UID:uid-broken
+SUMMARY:Kaputt
+DTSTART;VALUE=DATE:20260505
+END:VEVENT
+END:VCALENDA</c:calendar-data>
+      </d:prop>
+    </d:propstat>
+  </d:response>
+  <d:response>
+    <d:href>/calendars/user/calendar/ev2.ics</d:href>
+    <d:propstat>
+      <d:prop>
+        <c:calendar-data>BEGIN:VCALENDAR
+BEGIN:VEVENT
+UID:uid-2
+SUMMARY:Zwei
+DTSTART;VALUE=DATE:20260506
+END:VEVENT
+END:VCALENDAR
+</c:calendar-data>
+      </d:prop>
+    </d:propstat>
+  </d:response>
+</d:multistatus>"#;
+
+        let events = parse_caldav_report(xml).unwrap();
+
+        assert_eq!(
+            events.len(),
+            1,
+            "one corrupt resource must not fail the week"
+        );
+        assert_eq!(events[0].uid, "uid-2");
     }
 }

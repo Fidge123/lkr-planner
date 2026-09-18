@@ -51,6 +51,8 @@ async fn fetch_event_date(
 }
 
 /// lkr-planner writes one VEVENT per resource, so the first component is authoritative.
+/// A resource whose iCal the server stored corrupted reads as `None` rather than failing, so it
+/// stays deletable.
 async fn fetch_event(
     session: &CaldavSession,
     resource_url: &str,
@@ -75,7 +77,13 @@ async fn fetch_event(
         .text()
         .await
         .map_err(|e| format!("Einsatz konnte nicht gelesen werden: {e}"))?;
-    let events = parse_ical_events(&ical_text)?;
+    let events = match parse_ical_events(&ical_text) {
+        Ok(events) => events,
+        Err(e) => {
+            eprintln!("calendar: {resource_url} could not be parsed: {e}");
+            return Ok(None);
+        }
+    };
     let Some(event) = events.into_iter().next() else {
         eprintln!("calendar: {resource_url} contained no readable VEVENT");
         return Ok(None);
