@@ -19,7 +19,6 @@ pub(crate) struct CaldavSession {
     pub(crate) password: String,
     pub(crate) base_url: String,
     pub(crate) absence_urls: Vec<String>,
-    /// Absent in tests and before the telemetry state is registered.
     pub(crate) telemetry: Option<Arc<TelemetryRecorder>>,
 }
 

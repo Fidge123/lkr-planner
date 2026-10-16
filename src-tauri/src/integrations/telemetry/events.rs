@@ -131,7 +131,6 @@ impl TelemetryEvent {
     }
 }
 
-/// A closed dimension; a code originating outside the backend is sanitized.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ErrorCode(String);
 

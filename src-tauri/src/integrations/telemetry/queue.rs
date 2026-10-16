@@ -90,7 +90,7 @@ pub async fn run_flush_task<S: EventSink>(mut receiver: Receiver<TelemetryComman
     flush(&mut buffer, &mut retry, &sink).await;
 }
 
-/// A stale measurement is not worth a persistent retry queue, so one retry then drop.
+/// A stale measurement is not worth a retry queue, so a failed batch is retried once.
 async fn flush<S: EventSink>(
     buffer: &mut EventBuffer,
     retry: &mut Option<Vec<TelemetryEvent>>,

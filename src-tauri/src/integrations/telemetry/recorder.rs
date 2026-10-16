@@ -86,7 +86,6 @@ impl TelemetryRecorder {
         self.send(TelemetryCommand::Record(Box::new(event)));
     }
 
-    /// Lets shutdown bound its wait instead of guessing.
     pub fn shutdown(&self) -> oneshot::Receiver<()> {
         let (sender, receiver) = oneshot::channel();
         self.send(TelemetryCommand::Shutdown(sender));
@@ -94,7 +93,6 @@ impl TelemetryRecorder {
         receiver
     }
 
-    /// A store enabled by an older build can lack an identifier.
     fn ensure_active(&self) -> bool {
         let mut state = self.lock();
         if !state.enabled {

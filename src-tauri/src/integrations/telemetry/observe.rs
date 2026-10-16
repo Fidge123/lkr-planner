@@ -9,7 +9,6 @@ use std::sync::Arc;
 use std::time::Instant;
 use tauri::Manager;
 
-/// The closed set of dimensions an error contributes to an event.
 pub trait TelemetryError {
     fn error_code(&self) -> ErrorCode;
     fn technical_message(&self) -> Option<&str>;
@@ -118,7 +117,7 @@ impl TelemetryError for RequestFailure {
     }
 }
 
-/// Failure only: the command wrapping this site already reports a duration.
+/// Records the failure without a duration, for sites `observe` cannot wrap.
 pub fn record_failure<E: TelemetryError>(
     app: &tauri::AppHandle,
     operation: Operation,

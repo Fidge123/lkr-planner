@@ -97,8 +97,8 @@ fn redact_credential_values(message: &str) -> String {
     redacted
 }
 
-/// Covers `key=value`, `key: value` and JSON's `"key":"value"`; an unterminated
-/// quoted value runs to the end.
+/// Covers `key=value`, `key: value` and JSON's `"key":"value"`.
+/// An unterminated quoted value, such as a truncated token, runs to the end.
 fn credential_value(after_key: &str) -> Option<(usize, usize)> {
     let mut index = usize::from(after_key.starts_with(['"', '\'']));
     index += leading_blanks(&after_key[index..]);

@@ -17,7 +17,6 @@ use tauri_plugin_http::reqwest::header::AUTHORIZATION;
 
 pub(super) struct DayliteApiClient {
     transport: Box<dyn DayliteHttpTransport>,
-    /// Absent in tests and before the telemetry state is registered.
     telemetry: Option<std::sync::Arc<TelemetryRecorder>>,
 }
 

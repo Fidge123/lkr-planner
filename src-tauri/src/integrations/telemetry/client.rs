@@ -6,7 +6,7 @@ use tauri_plugin_http::reqwest;
 
 pub const POSTHOG_ENDPOINT: &str = "https://eu.i.posthog.com/batch/";
 
-/// Absent in development and CI builds, which makes the client inert there.
+/// Without a key at build time the client sends nothing.
 const BUILD_TIME_API_KEY: Option<&str> = option_env!("POSTHOG_API_KEY");
 
 pub struct PostHogClient {
