@@ -1,7 +1,10 @@
 use std::future::Future;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{OnceLock, RwLock};
 
-use super::shared::{store_daylite_tokens, DayliteApiError, DayliteTokenState};
+use super::shared::{
+    store_daylite_tokens, DayliteApiError, DayliteApiErrorCode, DayliteTokenState,
+};
 
 /// A leased token has to outlive the whole operation: nothing refreshes mid-request.
 const LEASE_MIN_REMAINING_MS: u64 = 60_000;
@@ -27,6 +30,7 @@ pub(super) struct TokenSession {
     rotation: tokio::sync::Mutex<()>,
     min_remaining_ms: u64,
     persist: Persist,
+    closing: AtomicBool,
 }
 
 impl TokenSession {
@@ -36,6 +40,7 @@ impl TokenSession {
             rotation: tokio::sync::Mutex::new(()),
             min_remaining_ms,
             persist,
+            closing: AtomicBool::new(false),
         }
     }
 
@@ -103,15 +108,30 @@ impl TokenSession {
         Fut: Future<Output = Result<DayliteTokenState, DayliteApiError>>,
     {
         let _guard = self.rotation.lock().await;
+        self.ensure_open()?;
         let tokens = mint().await?;
         Ok(self.publish(tokens)?.tokens)
     }
 
     /// Exiting mid-rotation would strand the keychain on a refresh token Daylite already retired.
-    /// Waits out an in-flight rotation and blocks later ones for the rest of the process.
+    /// Flags before queueing, so callers already waiting for the lock cannot start a rotation either.
     pub(super) async fn close(&self) -> Result<(), DayliteApiError> {
-        std::mem::forget(self.rotation.lock().await);
+        self.closing.store(true, Ordering::SeqCst);
+        let _guard = self.rotation.lock().await;
         self.persist_pending()
+    }
+
+    fn ensure_open(&self) -> Result<(), DayliteApiError> {
+        if !self.closing.load(Ordering::SeqCst) {
+            return Ok(());
+        }
+
+        Err(DayliteApiError::new(
+            DayliteApiErrorCode::RequestFailed,
+            None,
+            "Die Anwendung wird beendet.",
+            "Daylite-Token-Rotation nach Beginn des Beendens abgelehnt.",
+        ))
     }
 
     async fn rotate_locked<F, Fut>(&self, rotate: F) -> Result<TokenLease, DayliteApiError>
@@ -119,6 +139,7 @@ impl TokenSession {
         F: Fn(DayliteTokenState) -> Fut,
         Fut: Future<Output = Result<DayliteTokenState, DayliteApiError>>,
     {
+        self.ensure_open()?;
         let current = self.current_tokens().unwrap_or_default();
         let rotated = rotate(current).await?;
         self.publish(rotated)
@@ -204,10 +225,8 @@ pub(super) fn token_session() -> &'static TokenSession {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::integrations::daylite::shared::DayliteApiErrorCode;
-    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    use std::sync::atomic::AtomicUsize;
     use std::sync::{Arc, Mutex};
-    use std::time::Duration;
 
     fn tokens(access: &str, expires_at_ms: Option<u64>) -> DayliteTokenState {
         DayliteTokenState {
@@ -518,11 +537,92 @@ mod tests {
         closing.await.unwrap().expect("close should succeed");
         assert_eq!(keychain.stored(), vec!["rotated"]);
 
-        let later = tokio::time::timeout(
-            Duration::from_millis(50),
-            session.lease(1_000_000, |_| async { unreachable!("session is closed") }),
-        )
-        .await;
-        assert!(later.is_err());
+        session
+            .lease(1_000_000, |_| async { unreachable!("session is closed") })
+            .await
+            .expect_err("a closed session should not rotate");
+    }
+
+    #[tokio::test]
+    async fn a_lease_queued_before_close_does_not_rotate_after_a_failed_rotation() {
+        let session = Arc::new(session_with(tokens("at", None)));
+        let rotations = Arc::new(AtomicUsize::new(0));
+        let (respond, response) = tokio::sync::oneshot::channel::<()>();
+        let response = Arc::new(Mutex::new(Some(response)));
+
+        let spawn_lease = |session: Arc<TokenSession>| {
+            let rotations = rotations.clone();
+            let response = response.clone();
+            tokio::spawn(async move {
+                session
+                    .lease(100_000, |_| {
+                        rotations.fetch_add(1, Ordering::SeqCst);
+                        let response = response.lock().unwrap().take();
+                        async move {
+                            response.expect("rotates once").await.unwrap();
+                            Err(DayliteApiError::new(
+                                DayliteApiErrorCode::Timeout,
+                                None,
+                                "Zeitüberschreitung",
+                                "timeout",
+                            ))
+                        }
+                    })
+                    .await
+            })
+        };
+        let inflight = spawn_lease(session.clone());
+        tokio::task::yield_now().await;
+        let queued = spawn_lease(session.clone());
+        tokio::task::yield_now().await;
+        let closing = {
+            let session = session.clone();
+            tokio::spawn(async move { session.close().await })
+        };
+        tokio::task::yield_now().await;
+
+        respond.send(()).unwrap();
+        inflight.await.unwrap().expect_err("rotation fails");
+        queued
+            .await
+            .unwrap()
+            .expect_err("a closing session should not rotate");
+        closing.await.unwrap().expect("close should succeed");
+
+        assert_eq!(rotations.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn a_closed_session_does_not_adopt() {
+        let session = session_with(tokens("at", None));
+        session.close().await.expect("close should succeed");
+
+        session
+            .adopt(|| async { unreachable!("session is closed") })
+            .await
+            .expect_err("a closed session should not adopt");
+    }
+
+    #[tokio::test]
+    async fn keeps_adopted_tokens_the_keychain_refused() {
+        let keychain = Arc::new(Keychain::default());
+        let session = session_backed_by(tokens("at", None), keychain.clone());
+        keychain.refuses.store(true, Ordering::SeqCst);
+
+        session
+            .adopt(|| async { Ok(tokens("minted", Some(900_000))) })
+            .await
+            .expect_err("a refused keychain write should surface");
+
+        keychain.refuses.store(false, Ordering::SeqCst);
+        let lease = session
+            .lease(100_000, |_| async {
+                unreachable!("adopted tokens are kept")
+            })
+            .await
+            .expect("lease should succeed once the keychain accepts");
+
+        assert_eq!(lease.tokens.access_token, "minted");
+        assert_eq!(keychain.stored(), vec!["minted"]);
     }
 }

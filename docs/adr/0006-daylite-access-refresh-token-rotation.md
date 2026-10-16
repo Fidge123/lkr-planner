@@ -55,7 +55,11 @@ Two paths allowed that.
   The session now holds the rotated pair in memory before persisting it and marks it unpersisted until the write succeeds.
   While it is unpersisted, a lease retries the write under the rotation lock and fails with the keychain error instead of handing out the token, so the keychain heals as soon as access is granted.
 - Exiting while a rotation was in flight, including the restart that installs an update, could drop the response after Daylite had already rotated.
-  On `RunEvent::Exit` the app now waits, bounded by a timeout, for the rotation lock, persists any pending pair, and keeps the lock so no rotation starts afterwards.
+  On `RunEvent::Exit` the app now marks the session as closing, waits, bounded by a timeout, for the rotation lock, and persists any pending pair.
+  A closing session refuses to start a rotation or connect, including for callers that were already queued for the lock, so a failed in-flight rotation cannot hand the lock to a fresh one while the exit timeout runs out.
+
+Connecting saves the Daylite base URL after the refresh token is minted and before the session adopts the new pair.
+A pair kept in memory after a refused keychain write therefore always matches the stored base URL.
 
 A crash or power loss between Daylite's response and the keychain write still loses the new pair, because the server-side rotation cannot be made atomic with the local write.
 
