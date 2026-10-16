@@ -53,4 +53,12 @@
       Make `projects_path` return `Result` and validate, mirroring `project_path`.
 - [ ] 8.3 Stop returning raw Planradar response bodies to the frontend.
       `missing_field_error` and `normalize_http_error` embed up to 400 characters of the response body in `technical_message`, which is serialized to the frontend, and project payloads carry an `access-token` attribute plus customer addresses.
+      The same `technical_message` is now sent as the `message` of telemetry error events; redaction removes the `access-token` value but keeps project names and addresses by design.
       Log the payload instead, or restrict the diagnostic to a whitelist of keys.
+
+## 9. Telemetry
+
+- [x] 9.1 (red) Test that `PlanradarApiError` maps to a telemetry error code, message, and HTTP status
+- [x] 9.2 (green) Add the `Planradar` integration and Planradar operations, and implement `TelemetryError` for `PlanradarApiError`
+- [x] 9.3 (red) Test that every Planradar request attempt is recorded, and that an unsuccessful HTTP status counts as a failed request while still being returned to the caller
+- [x] 9.4 (green) Record per-request telemetry in `PlanradarApiClient` and wrap every Planradar command in `observe`

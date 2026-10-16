@@ -3,6 +3,7 @@ use super::recorder::TelemetryRecorder;
 use super::state::TelemetryState;
 use crate::integrations::daylite::shared::DayliteApiError;
 use crate::integrations::local_store::types::StoreError;
+use crate::integrations::planradar::shared::PlanradarApiError;
 use crate::integrations::zep::types::ZepError;
 use std::future::Future;
 use std::sync::Arc;
@@ -38,6 +39,20 @@ impl TelemetryError for ZepError {
 }
 
 impl TelemetryError for DayliteApiError {
+    fn error_code(&self) -> ErrorCode {
+        ErrorCode::from_enum(&self.code)
+    }
+
+    fn technical_message(&self) -> Option<&str> {
+        Some(&self.technical_message)
+    }
+
+    fn http_status(&self) -> Option<u16> {
+        self.http_status
+    }
+}
+
+impl TelemetryError for PlanradarApiError {
     fn error_code(&self) -> ErrorCode {
         ErrorCode::from_enum(&self.code)
     }
@@ -183,6 +198,7 @@ where
 mod tests {
     use super::*;
     use crate::integrations::local_store::types::{StoreError, StoreErrorCode};
+    use crate::integrations::planradar::shared::{PlanradarApiError, PlanradarApiErrorCode};
     use crate::integrations::telemetry::recorder::TelemetryRecorder;
     use crate::integrations::telemetry::test_support::{enabled, recorded};
 
@@ -265,6 +281,39 @@ mod tests {
             "Projekt Musterbau konnte nicht geladen werden: token=[redacted]"
         );
         assert_eq!(events[1].properties()["code"], "COMMAND_FAILED");
+    }
+
+    #[tokio::test]
+    async fn a_planradar_error_carries_its_code_and_status() {
+        let (recorder, mut receiver) = TelemetryRecorder::channel();
+        recorder.apply_settings(&enabled());
+
+        let result: Result<u8, PlanradarApiError> = observe_with(
+            Some(&recorder),
+            Operation::PlanradarGetProjectStatus,
+            Integration::Planradar,
+            async {
+                Err(PlanradarApiError {
+                    code: PlanradarApiErrorCode::NotFound,
+                    http_status: Some(404),
+                    user_message: "Das angeforderte Planradar-Projekt wurde nicht gefunden."
+                        .to_string(),
+                    technical_message:
+                        "Planradar request failed for /api/v1/1234/projects/42 with status=404"
+                            .to_string(),
+                })
+            },
+        )
+        .await;
+
+        assert!(result.is_err());
+        let events = recorded(&mut receiver);
+        assert_eq!(events[1].properties()["code"], "NOT_FOUND");
+        assert_eq!(events[1].properties()["http_status"], 404);
+        assert_eq!(
+            events[1].properties()["message"],
+            "Planradar request failed for /api/v1/1234/projects/42 with status=404"
+        );
     }
 
     #[tokio::test]

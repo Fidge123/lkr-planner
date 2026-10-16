@@ -3,6 +3,8 @@ use super::shared::{
     load_api_token, load_config, load_store_or_error, parse_success_json_body, truncate_for_log,
     validate_path_segment, PlanradarApiError, PlanradarApiErrorCode,
 };
+use crate::integrations::telemetry::events::{Integration, Operation};
+use crate::integrations::telemetry::observe::observe;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 use specta::Type;
@@ -115,8 +117,17 @@ pub async fn planradar_get_project_status(
     app: tauri::AppHandle,
     project_id: String,
 ) -> Result<PlanradarProject, PlanradarApiError> {
-    let (client, token, customer_id) = build_client(app)?;
-    read_project_status_core(&client, &token, &customer_id, &project_id).await
+    let handle = app.clone();
+    observe(
+        &handle,
+        Operation::PlanradarGetProjectStatus,
+        Integration::Planradar,
+        async move {
+            let (client, token, customer_id) = build_client(app)?;
+            read_project_status_core(&client, &token, &customer_id, &project_id).await
+        },
+    )
+    .await
 }
 
 #[tauri::command]
@@ -125,8 +136,17 @@ pub async fn planradar_list_projects(
     app: tauri::AppHandle,
     input: PlanradarListProjectsInput,
 ) -> Result<Vec<PlanradarProject>, PlanradarApiError> {
-    let (client, token, customer_id) = build_client(app)?;
-    list_projects_core(&client, &token, &customer_id, &input).await
+    let handle = app.clone();
+    observe(
+        &handle,
+        Operation::PlanradarListProjects,
+        Integration::Planradar,
+        async move {
+            let (client, token, customer_id) = build_client(app)?;
+            list_projects_core(&client, &token, &customer_id, &input).await
+        },
+    )
+    .await
 }
 
 #[tauri::command]
@@ -135,8 +155,17 @@ pub async fn planradar_create_project(
     app: tauri::AppHandle,
     request: PlanradarCreateProjectRequest,
 ) -> Result<String, PlanradarApiError> {
-    let (client, token, customer_id) = build_client(app)?;
-    create_project_core(&client, &token, &customer_id, &request).await
+    let handle = app.clone();
+    observe(
+        &handle,
+        Operation::PlanradarCreateProject,
+        Integration::Planradar,
+        async move {
+            let (client, token, customer_id) = build_client(app)?;
+            create_project_core(&client, &token, &customer_id, &request).await
+        },
+    )
+    .await
 }
 
 /// Blocks until the copied project appears and returns its ID: Planradar copies asynchronously
@@ -149,15 +178,24 @@ pub async fn planradar_copy_project(
     project_id: String,
     options: PlanradarCopyProjectOptions,
 ) -> Result<String, PlanradarApiError> {
-    let (client, token, customer_id) = build_client(app)?;
-    copy_project_and_await_core(
-        &client,
-        &token,
-        &customer_id,
-        &project_id,
-        &options,
-        COPY_POLL_INTERVAL,
-        COPY_POLL_MAX_ATTEMPTS,
+    let handle = app.clone();
+    observe(
+        &handle,
+        Operation::PlanradarCopyProject,
+        Integration::Planradar,
+        async move {
+            let (client, token, customer_id) = build_client(app)?;
+            copy_project_and_await_core(
+                &client,
+                &token,
+                &customer_id,
+                &project_id,
+                &options,
+                COPY_POLL_INTERVAL,
+                COPY_POLL_MAX_ATTEMPTS,
+            )
+            .await
+        },
     )
     .await
 }
@@ -168,8 +206,17 @@ pub async fn planradar_reactivate_project(
     app: tauri::AppHandle,
     project_id: String,
 ) -> Result<(), PlanradarApiError> {
-    let (client, token, customer_id) = build_client(app)?;
-    reactivate_project_core(&client, &token, &customer_id, &project_id).await
+    let handle = app.clone();
+    observe(
+        &handle,
+        Operation::PlanradarReactivateProject,
+        Integration::Planradar,
+        async move {
+            let (client, token, customer_id) = build_client(app)?;
+            reactivate_project_core(&client, &token, &customer_id, &project_id).await
+        },
+    )
+    .await
 }
 
 /// Returns the client plus the two per-request values every command needs: the API token and the
@@ -177,10 +224,10 @@ pub async fn planradar_reactivate_project(
 fn build_client(
     app: tauri::AppHandle,
 ) -> Result<(PlanradarApiClient, String, String), PlanradarApiError> {
-    let store = load_store_or_error(app)?;
+    let store = load_store_or_error(app.clone())?;
     let config = load_config(&store)?;
     let token = load_api_token()?;
-    let client = PlanradarApiClient::new(&config.base_url)?;
+    let client = PlanradarApiClient::new(&config.base_url)?.with_telemetry(&app);
     Ok((client, token, config.customer_id))
 }
 

@@ -1,14 +1,21 @@
-use super::shared::{normalize_base_url, PlanradarApiError, PlanradarApiErrorCode};
+use super::shared::{
+    normalize_base_url, normalize_http_error, PlanradarApiError, PlanradarApiErrorCode,
+};
 #[cfg(test)]
 use crate::integrations::http_record_replay::{
     RecordReplayConfig, RecordedInteraction, RecordedRequest, RecordedResponse, VcrMode,
 };
+use crate::integrations::telemetry::events::{ErrorCode, Integration, Operation};
+use crate::integrations::telemetry::observe::{observe_with, TelemetryError};
+use crate::integrations::telemetry::recorder::TelemetryRecorder;
+use crate::integrations::telemetry::state::TelemetryState;
 use serde_json::Value;
 use std::collections::VecDeque;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
+use tauri::Manager;
 use tauri_plugin_http::reqwest;
 use tokio::sync::Mutex;
 
@@ -201,6 +208,7 @@ pub(super) struct PlanradarApiClient {
     transport: Box<dyn PlanradarHttpTransport>,
     retry: RetryPolicy,
     rate_limiter: RateLimiter,
+    telemetry: Option<Arc<TelemetryRecorder>>,
 }
 
 impl PlanradarApiClient {
@@ -210,7 +218,22 @@ impl PlanradarApiClient {
             transport: Box::new(transport),
             retry: RetryPolicy::standard(),
             rate_limiter: RateLimiter::global(),
+            telemetry: None,
         })
+    }
+
+    pub(super) fn with_telemetry(mut self, app: &tauri::AppHandle) -> Self {
+        self.telemetry = app
+            .try_state::<TelemetryState>()
+            .map(|state| Arc::clone(state.recorder()));
+
+        self
+    }
+
+    #[cfg(test)]
+    pub(super) fn with_recorder(mut self, recorder: Arc<TelemetryRecorder>) -> Self {
+        self.telemetry = Some(recorder);
+        self
     }
 
     #[cfg(test)]
@@ -227,6 +250,7 @@ impl PlanradarApiClient {
             transport,
             retry,
             rate_limiter: RateLimiter::disabled(),
+            telemetry: None,
         }
     }
 
@@ -243,6 +267,7 @@ impl PlanradarApiClient {
             transport: Box::new(transport),
             retry: RetryPolicy::immediate(0),
             rate_limiter: RateLimiter::disabled(),
+            telemetry: None,
         })
     }
 
@@ -260,6 +285,7 @@ impl PlanradarApiClient {
             transport: Box::new(transport),
             retry: RetryPolicy::standard(),
             rate_limiter: RateLimiter::global(),
+            telemetry: None,
         })
     }
 
@@ -285,7 +311,7 @@ impl PlanradarApiClient {
             // Inside the loop: retries are real requests and must count against the budget.
             self.rate_limiter.acquire(deadline).await?;
 
-            let result = self.transport.send(request).await;
+            let result = self.send_observed(request).await;
 
             if matches!(&result, Ok(response) if response.status == 429) {
                 self.rate_limiter.record_rate_limit_hit().await;
@@ -305,6 +331,70 @@ impl PlanradarApiClient {
             backoff_delay(self.retry.base_delay_ms, attempt).await;
             attempt += 1;
         }
+    }
+
+    /// An HTTP error status is returned as a response, so it is only a failure for telemetry here.
+    async fn send_observed(
+        &self,
+        request: PlanradarHttpRequest,
+    ) -> Result<PlanradarHttpResponse, PlanradarApiError> {
+        let path = request.path.clone();
+        let outcome = observe_with(
+            self.telemetry.as_deref(),
+            Operation::PlanradarRequest,
+            Integration::Planradar,
+            async {
+                let response = self
+                    .transport
+                    .send(request)
+                    .await
+                    .map_err(RequestFailure::Transport)?;
+                if (200..300).contains(&response.status) {
+                    return Ok(response);
+                }
+
+                Err(RequestFailure::Status {
+                    error: normalize_http_error(response.status, &response.body, &path),
+                    response,
+                })
+            },
+        )
+        .await;
+
+        match outcome {
+            Ok(response) | Err(RequestFailure::Status { response, .. }) => Ok(response),
+            Err(RequestFailure::Transport(error)) => Err(error),
+        }
+    }
+}
+
+enum RequestFailure {
+    Transport(PlanradarApiError),
+    Status {
+        error: PlanradarApiError,
+        response: PlanradarHttpResponse,
+    },
+}
+
+impl RequestFailure {
+    fn error(&self) -> &PlanradarApiError {
+        match self {
+            Self::Transport(error) | Self::Status { error, .. } => error,
+        }
+    }
+}
+
+impl TelemetryError for RequestFailure {
+    fn error_code(&self) -> ErrorCode {
+        self.error().error_code()
+    }
+
+    fn technical_message(&self) -> Option<&str> {
+        self.error().technical_message()
+    }
+
+    fn http_status(&self) -> Option<u16> {
+        self.error().http_status()
     }
 }
 
@@ -582,6 +672,7 @@ pub(super) fn cassette_path_for_test(file_name: &str) -> std::path::PathBuf {
 mod tests {
     use super::*;
     use crate::integrations::planradar::test_support::{mock_client_with_retry, mock_response};
+    use crate::integrations::telemetry::test_support::{enabled_recorder, recorded};
     use std::collections::VecDeque;
     use std::time::Instant;
 
@@ -843,6 +934,108 @@ mod tests {
 
             assert_eq!(response.status, 404);
             assert_eq!(transport.requests().len(), 1);
+        });
+    }
+
+    #[test]
+    fn a_successful_request_is_recorded_as_one_completion() {
+        tauri::async_runtime::block_on(async {
+            let (recorder, mut receiver) = enabled_recorder();
+            let (client, _transport) = mock_client_with_retry(
+                vec![Ok(mock_response(200, r#"{"data":[]}"#))],
+                RetryPolicy::immediate(0),
+            );
+            let client = client.with_recorder(recorder);
+
+            client
+                .send_request(PlanradarHttpMethod::Get, "/x", vec![], None, None)
+                .await
+                .expect("request should succeed");
+
+            let events = recorded(&mut receiver);
+            assert_eq!(events.len(), 1);
+            assert_eq!(events[0].properties()["operation"], "planradar_request");
+            assert_eq!(events[0].properties()["integration"], "planradar");
+            assert_eq!(events[0].properties()["success"], true);
+        });
+    }
+
+    #[test]
+    fn an_unsuccessful_status_is_recorded_as_a_failure_but_still_returned() {
+        tauri::async_runtime::block_on(async {
+            let (recorder, mut receiver) = enabled_recorder();
+            let (client, _transport) = mock_client_with_retry(
+                vec![Ok(mock_response(404, "Project Not Found"))],
+                RetryPolicy::immediate(0),
+            );
+            let client = client.with_recorder(recorder);
+
+            let response = client
+                .send_request(PlanradarHttpMethod::Get, "/x", vec![], None, None)
+                .await
+                .expect("an HTTP error status is a response, not a transport error");
+            assert_eq!(response.status, 404);
+
+            let events = recorded(&mut receiver);
+            assert_eq!(events.len(), 2);
+            assert_eq!(events[0].properties()["success"], false);
+            assert_eq!(events[0].properties()["http_status"], 404);
+            assert_eq!(events[1].name(), "error_occurred");
+            assert_eq!(events[1].properties()["code"], "NOT_FOUND");
+            assert_eq!(events[1].properties()["http_status"], 404);
+        });
+    }
+
+    #[test]
+    fn a_transport_error_is_recorded_with_its_code() {
+        tauri::async_runtime::block_on(async {
+            let (recorder, mut receiver) = enabled_recorder();
+            let (client, _transport) = mock_client_with_retry(
+                vec![Err(PlanradarApiError::new(
+                    PlanradarApiErrorCode::Timeout,
+                    None,
+                    "Zeitüberschreitung bei der Planradar-Anfrage.",
+                    "Zeitüberschreitung bei /x",
+                ))],
+                RetryPolicy::immediate(0),
+            );
+            let client = client.with_recorder(recorder);
+
+            client
+                .send_request(PlanradarHttpMethod::Get, "/x", vec![], None, None)
+                .await
+                .expect_err("a transport error should surface");
+
+            let events = recorded(&mut receiver);
+            assert_eq!(events[1].properties()["code"], "TIMEOUT");
+            assert!(!events[1].properties().contains_key("http_status"));
+        });
+    }
+
+    #[test]
+    fn every_retry_attempt_is_recorded() {
+        tauri::async_runtime::block_on(async {
+            let (recorder, mut receiver) = enabled_recorder();
+            let (client, _transport) = mock_client_with_retry(
+                vec![
+                    Ok(mock_response(503, "down")),
+                    Ok(mock_response(200, r#"{"ok":true}"#)),
+                ],
+                RetryPolicy::immediate(1),
+            );
+            let client = client.with_recorder(recorder);
+
+            client
+                .send_request(PlanradarHttpMethod::Get, "/x", vec![], None, None)
+                .await
+                .expect("retry should succeed");
+
+            let completions: Vec<_> = recorded(&mut receiver)
+                .into_iter()
+                .filter(|event| event.name() == "operation_completed")
+                .map(|event| event.properties()["success"].as_bool())
+                .collect();
+            assert_eq!(completions, vec![Some(false), Some(true)]);
         });
     }
 }

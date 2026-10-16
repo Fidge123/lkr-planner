@@ -5,6 +5,8 @@ use super::shared::{
     store_api_token, PlanradarApiError, PlanradarApiErrorCode, PreviousToken,
 };
 use crate::integrations::local_store::LocalStore;
+use crate::integrations::telemetry::events::{Integration, Operation};
+use crate::integrations::telemetry::observe::observe;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
@@ -31,30 +33,39 @@ pub async fn planradar_connect(
     app: tauri::AppHandle,
     request: PlanradarConnectRequest,
 ) -> Result<PlanradarConnectionStatus, PlanradarApiError> {
-    let credentials = validate_connect_request(&request)?;
+    let handle = app.clone();
+    observe(
+        &handle,
+        Operation::PlanradarConnect,
+        Integration::Planradar,
+        async move {
+            let credentials = validate_connect_request(&request)?;
 
-    // Probe before persisting: a single-record list authenticates the token and exercises the
-    // Customer ID path segment.
-    let client = PlanradarApiClient::new(&credentials.base_url)?;
-    list_projects_core(
-        &client,
-        &credentials.api_token,
-        &credentials.customer_id,
-        &PlanradarListProjectsInput {
-            pagesize: Some(1),
-            ..PlanradarListProjectsInput::default()
+            // Probe before persisting: a single-record list authenticates the token and
+            // exercises the Customer ID path segment.
+            let client = PlanradarApiClient::new(&credentials.base_url)?.with_telemetry(&app);
+            list_projects_core(
+                &client,
+                &credentials.api_token,
+                &credentials.customer_id,
+                &PlanradarListProjectsInput {
+                    pagesize: Some(1),
+                    ..PlanradarListProjectsInput::default()
+                },
+            )
+            .await
+            .map_err(remap_probe_error)?;
+
+            persist_credentials(&TauriConnectionStore { app }, &credentials)?;
+
+            Ok(PlanradarConnectionStatus {
+                // Not re-read: a transient keychain error must not fail a persisted connect.
+                has_token: true,
+                customer_id: credentials.customer_id,
+            })
         },
     )
     .await
-    .map_err(remap_probe_error)?;
-
-    persist_credentials(&TauriConnectionStore { app }, &credentials)?;
-
-    Ok(PlanradarConnectionStatus {
-        // Not re-read from the keychain: a transient read error must not fail a persisted connect.
-        has_token: true,
-        customer_id: credentials.customer_id,
-    })
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

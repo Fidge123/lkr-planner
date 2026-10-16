@@ -26,7 +26,14 @@ pub enum Operation {
     ZepTestCredentials,
     ZepDiscoverCalendars,
     ZepSaveAndTestCalendar,
+    PlanradarConnect,
+    PlanradarGetProjectStatus,
+    PlanradarListProjects,
+    PlanradarCreateProject,
+    PlanradarCopyProject,
+    PlanradarReactivateProject,
     DayliteRequest,
+    PlanradarRequest,
     CaldavRead,
     CaldavWrite,
     CaldavProjectLookup,
@@ -43,6 +50,7 @@ pub enum Integration {
     Daylite,
     Zep,
     Holidays,
+    Planradar,
     LocalStore,
     Keychain,
     Frontend,
@@ -181,6 +189,11 @@ mod tests {
             "daylite_search_projects"
         );
         assert_eq!(dimension(&Operation::CaldavWrite), "caldav_write");
+        assert_eq!(
+            dimension(&Operation::PlanradarCopyProject),
+            "planradar_copy_project"
+        );
+        assert_eq!(dimension(&Operation::PlanradarRequest), "planradar_request");
     }
 
     #[test]
@@ -239,5 +252,6 @@ mod tests {
         assert_eq!(dimension(&Integration::LocalStore), "local_store");
         assert_eq!(dimension(&Integration::Keychain), "keychain");
         assert_eq!(dimension(&Integration::Frontend), "frontend");
+        assert_eq!(dimension(&Integration::Planradar), "planradar");
     }
 }
