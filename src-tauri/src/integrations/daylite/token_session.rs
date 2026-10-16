@@ -1,10 +1,12 @@
 use std::future::Future;
 use std::sync::{OnceLock, RwLock};
 
-use super::shared::{DayliteApiError, DayliteTokenState};
+use super::shared::{store_daylite_tokens, DayliteApiError, DayliteTokenState};
 
 /// A leased token has to outlive the whole operation: nothing refreshes mid-request.
 const LEASE_MIN_REMAINING_MS: u64 = 60_000;
+
+type Persist = Box<dyn Fn(&DayliteTokenState) -> Result<(), DayliteApiError> + Send + Sync>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct TokenLease {
@@ -15,6 +17,7 @@ pub(super) struct TokenLease {
 struct SessionState {
     tokens: DayliteTokenState,
     generation: u64,
+    persisted: bool,
 }
 
 /// Only rotation is serialized: Daylite invalidates a refresh token as it issues the next.
@@ -23,14 +26,16 @@ pub(super) struct TokenSession {
     state: RwLock<Option<SessionState>>,
     rotation: tokio::sync::Mutex<()>,
     min_remaining_ms: u64,
+    persist: Persist,
 }
 
 impl TokenSession {
-    fn new(min_remaining_ms: u64) -> Self {
+    fn new(min_remaining_ms: u64, persist: Persist) -> Self {
         Self {
             state: RwLock::new(None),
             rotation: tokio::sync::Mutex::new(()),
             min_remaining_ms,
+            persist,
         }
     }
 
@@ -40,6 +45,7 @@ impl TokenSession {
             *state = Some(SessionState {
                 tokens,
                 generation: 0,
+                persisted: true,
             });
         }
     }
@@ -62,6 +68,7 @@ impl TokenSession {
         }
 
         let _guard = self.rotation.lock().await;
+        self.persist_pending()?;
         // Another task may have rotated while this one waited for the lock.
         if let Some(lease) = self.fresh_lease(now_ms) {
             return Ok(lease);
@@ -81,6 +88,7 @@ impl TokenSession {
         Fut: Future<Output = Result<DayliteTokenState, DayliteApiError>>,
     {
         let _guard = self.rotation.lock().await;
+        self.persist_pending()?;
         if let Some(lease) = self.lease_newer_than(stale.generation) {
             return Ok(lease);
         }
@@ -96,7 +104,14 @@ impl TokenSession {
     {
         let _guard = self.rotation.lock().await;
         let tokens = mint().await?;
-        Ok(self.publish(tokens).tokens)
+        Ok(self.publish(tokens)?.tokens)
+    }
+
+    /// Exiting mid-rotation would strand the keychain on a refresh token Daylite already retired.
+    /// Waits out an in-flight rotation and blocks later ones for the rest of the process.
+    pub(super) async fn close(&self) -> Result<(), DayliteApiError> {
+        std::mem::forget(self.rotation.lock().await);
+        self.persist_pending()
     }
 
     async fn rotate_locked<F, Fut>(&self, rotate: F) -> Result<TokenLease, DayliteApiError>
@@ -106,18 +121,41 @@ impl TokenSession {
     {
         let current = self.current_tokens().unwrap_or_default();
         let rotated = rotate(current).await?;
-        Ok(self.publish(rotated))
+        self.publish(rotated)
     }
 
-    fn publish(&self, tokens: DayliteTokenState) -> TokenLease {
-        let mut state = self.state.write().expect("token session poisoned");
-        let generation = state.as_ref().map(|s| s.generation + 1).unwrap_or(1);
-        *state = Some(SessionState {
-            tokens: tokens.clone(),
-            generation,
-        });
+    /// Held in memory before persisting: once rotated, the previous refresh token is dead server-side.
+    fn publish(&self, tokens: DayliteTokenState) -> Result<TokenLease, DayliteApiError> {
+        let lease = {
+            let mut state = self.state.write().expect("token session poisoned");
+            let generation = state.as_ref().map(|s| s.generation + 1).unwrap_or(1);
+            *state = Some(SessionState {
+                tokens: tokens.clone(),
+                generation,
+                persisted: false,
+            });
+            TokenLease { tokens, generation }
+        };
 
-        TokenLease { tokens, generation }
+        self.persist_pending()?;
+        Ok(lease)
+    }
+
+    /// Callers hold the rotation lock, so writes cannot land out of order.
+    fn persist_pending(&self) -> Result<(), DayliteApiError> {
+        let Some(pending) = self.lease_if(|state| !state.persisted) else {
+            return Ok(());
+        };
+        (self.persist)(&pending.tokens)?;
+
+        let mut state = self.state.write().expect("token session poisoned");
+        if let Some(state) = state
+            .as_mut()
+            .filter(|state| state.generation == pending.generation)
+        {
+            state.persisted = true;
+        }
+        Ok(())
     }
 
     fn current_tokens(&self) -> Option<DayliteTokenState> {
@@ -126,7 +164,9 @@ impl TokenSession {
     }
 
     fn fresh_lease(&self, now_ms: u64) -> Option<TokenLease> {
-        self.lease_if(|state| has_life_left(&state.tokens, now_ms, self.min_remaining_ms))
+        self.lease_if(|state| {
+            state.persisted && has_life_left(&state.tokens, now_ms, self.min_remaining_ms)
+        })
     }
 
     fn lease_newer_than(&self, generation: u64) -> Option<TokenLease> {
@@ -157,13 +197,17 @@ fn has_life_left(tokens: &DayliteTokenState, now_ms: u64, min_remaining_ms: u64)
 
 pub(super) fn token_session() -> &'static TokenSession {
     static SESSION: OnceLock<TokenSession> = OnceLock::new();
-    SESSION.get_or_init(|| TokenSession::new(LEASE_MIN_REMAINING_MS))
+    SESSION
+        .get_or_init(|| TokenSession::new(LEASE_MIN_REMAINING_MS, Box::new(store_daylite_tokens)))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::atomic::{AtomicUsize, Ordering};
+    use crate::integrations::daylite::shared::DayliteApiErrorCode;
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    use std::sync::{Arc, Mutex};
+    use std::time::Duration;
 
     fn tokens(access: &str, expires_at_ms: Option<u64>) -> DayliteTokenState {
         DayliteTokenState {
@@ -174,7 +218,41 @@ mod tests {
     }
 
     fn session_with(seeded: DayliteTokenState) -> TokenSession {
-        let session = TokenSession::new(60_000);
+        session_backed_by(seeded, Arc::new(Keychain::default()))
+    }
+
+    #[derive(Default)]
+    struct Keychain {
+        stored: Mutex<Vec<String>>,
+        refuses: AtomicBool,
+    }
+
+    impl Keychain {
+        fn stored(&self) -> Vec<String> {
+            self.stored.lock().unwrap().clone()
+        }
+    }
+
+    fn session_backed_by(seeded: DayliteTokenState, keychain: Arc<Keychain>) -> TokenSession {
+        let session = TokenSession::new(
+            60_000,
+            Box::new(move |tokens: &DayliteTokenState| {
+                if keychain.refuses.load(Ordering::SeqCst) {
+                    return Err(DayliteApiError::new(
+                        DayliteApiErrorCode::ServerError,
+                        None,
+                        "Keychain verweigert",
+                        "denied",
+                    ));
+                }
+                keychain
+                    .stored
+                    .lock()
+                    .unwrap()
+                    .push(tokens.access_token.clone());
+                Ok(())
+            }),
+        );
         session.seed(seeded);
         session
     }
@@ -319,5 +397,132 @@ mod tests {
             .await
             .expect("lease should succeed");
         assert_eq!(lease.tokens.access_token, "rotated");
+    }
+
+    #[tokio::test]
+    async fn persists_rotated_tokens() {
+        let keychain = Arc::new(Keychain::default());
+        let session = session_backed_by(tokens("at", None), keychain.clone());
+
+        session
+            .lease(100_000, |_| async { Ok(tokens("rotated", Some(900_000))) })
+            .await
+            .expect("lease should succeed");
+
+        assert_eq!(keychain.stored(), vec!["rotated"]);
+    }
+
+    #[tokio::test]
+    async fn persists_adopted_tokens() {
+        let keychain = Arc::new(Keychain::default());
+        let session = session_backed_by(tokens("at", None), keychain.clone());
+
+        session
+            .adopt(|| async { Ok(tokens("minted", Some(900_000))) })
+            .await
+            .expect("adopt should succeed");
+
+        assert_eq!(keychain.stored(), vec!["minted"]);
+    }
+
+    #[tokio::test]
+    async fn keeps_rotated_tokens_the_keychain_refused_and_persists_them_later() {
+        let keychain = Arc::new(Keychain::default());
+        let session = session_backed_by(tokens("at", None), keychain.clone());
+        keychain.refuses.store(true, Ordering::SeqCst);
+
+        session
+            .lease(100_000, |_| async { Ok(tokens("rotated", Some(900_000))) })
+            .await
+            .expect_err("a refused keychain write should surface");
+        session
+            .lease(100_000, |_| async {
+                unreachable!("rotated tokens are kept")
+            })
+            .await
+            .expect_err("tokens stay unleased while unpersisted");
+
+        keychain.refuses.store(false, Ordering::SeqCst);
+        let lease = session
+            .lease(100_000, |_| async {
+                unreachable!("rotated tokens are kept")
+            })
+            .await
+            .expect("lease should succeed once the keychain accepts");
+
+        assert_eq!(lease.tokens.access_token, "rotated");
+        assert_eq!(keychain.stored(), vec!["rotated"]);
+    }
+
+    #[tokio::test]
+    async fn renew_persists_tokens_the_keychain_refused_instead_of_rotating_again() {
+        let keychain = Arc::new(Keychain::default());
+        let session = session_backed_by(tokens("at", Some(900_000)), keychain.clone());
+        let stale = session
+            .lease(100_000, |_| async { unreachable!("token is fresh") })
+            .await
+            .expect("lease should succeed");
+        keychain.refuses.store(true, Ordering::SeqCst);
+        session
+            .renew(&stale, |_| async { Ok(tokens("rotated", Some(1_800_000))) })
+            .await
+            .expect_err("a refused keychain write should surface");
+
+        keychain.refuses.store(false, Ordering::SeqCst);
+        let renewed = session
+            .renew(&stale, |_| async {
+                unreachable!("rotated tokens are kept")
+            })
+            .await
+            .expect("renew should succeed once the keychain accepts");
+
+        assert_eq!(renewed.tokens.access_token, "rotated");
+        assert_eq!(keychain.stored(), vec!["rotated"]);
+    }
+
+    #[tokio::test]
+    async fn close_waits_for_an_inflight_rotation_and_blocks_later_ones() {
+        let keychain = Arc::new(Keychain::default());
+        let session = Arc::new(session_backed_by(tokens("at", None), keychain.clone()));
+        let (respond, response) = tokio::sync::oneshot::channel::<()>();
+        let response = Mutex::new(Some(response));
+
+        let inflight = {
+            let session = session.clone();
+            tokio::spawn(async move {
+                session
+                    .lease(100_000, |_| {
+                        let response = response.lock().unwrap().take();
+                        async move {
+                            response.expect("rotates once").await.unwrap();
+                            Ok(tokens("rotated", Some(900_000)))
+                        }
+                    })
+                    .await
+            })
+        };
+        tokio::task::yield_now().await;
+
+        let closing = {
+            let session = session.clone();
+            tokio::spawn(async move { session.close().await })
+        };
+        tokio::task::yield_now().await;
+        assert!(!closing.is_finished());
+
+        respond.send(()).unwrap();
+        inflight
+            .await
+            .unwrap()
+            .expect("inflight rotation should finish");
+        closing.await.unwrap().expect("close should succeed");
+        assert_eq!(keychain.stored(), vec!["rotated"]);
+
+        let later = tokio::time::timeout(
+            Duration::from_millis(50),
+            session.lease(1_000_000, |_| async { unreachable!("session is closed") }),
+        )
+        .await;
+        assert!(later.is_err());
     }
 }
