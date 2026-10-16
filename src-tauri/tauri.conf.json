@@ -28,8 +28,7 @@
     "icon": [
       "icons/icon.png",
       "icons/icon.svg",
-      "icons/icon.icns",
-      "icons/icon.ico"
+      "icons/icon.icns"
     ],
     "macOS": {
       "dmg": {

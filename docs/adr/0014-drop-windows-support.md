@@ -26,6 +26,7 @@ Every `zip` release below 9.0.3 has been yanked after the October 2026 extractio
 
 - Support macOS and Linux only; Linux stays because development and CI run there.
 - Remove `windows-native-keyring-store`, the Windows branch of `secret_manager::init`, the `windows_subsystem` attribute, and the Windows entry in the desktop capability.
+- Remove the `icon.ico` Windows icon from the bundle configuration and from icon regeneration.
 - Depend on `tauri-plugin-updater` with `default-features = false` and only the `rustls-tls` and `system-proxy` features.
 
 ## Consequences
@@ -33,4 +34,4 @@ Every `zip` release below 9.0.3 has been yanked after the October 2026 extractio
 - `zip` no longer appears in `Cargo.lock`, and dependency updates need no workaround.
 - macOS updates are unaffected because the updater always includes the tar and gzip support for `.app.tar.gz` on macOS.
 - Shipping Linux builds with compressed AppImage updates requires re-enabling the updater's `zip` feature.
-- Adding Windows support later requires restoring the Windows credential store and the `zip` feature.
+- Adding Windows support later requires restoring the Windows credential store, the `zip` feature, and the `icon.ico` generation.
