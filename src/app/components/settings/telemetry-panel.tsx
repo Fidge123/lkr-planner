@@ -57,12 +57,19 @@ export function TelemetrySettingsPanel({ onClose }: Props) {
       </label>
 
       <p className="mt-4 text-sm text-base-content/70">
-        Es werden anonyme Fehler- und Leistungsdaten übertragen, damit
-        wiederkehrende Störungen und langsame Abläufe erkannt werden können.
+        Es werden Fehler- und Leistungsdaten an den Analysedienst PostHog
+        (Server in der EU) übertragen, damit Störungen und langsame Abläufe
+        erkannt und behoben werden können.
       </p>
 
       <p className="mt-2 text-sm text-base-content/70">
-        Keine Projekt-, Kontakt- oder Zugangsdaten werden übertragen.
+        Fehlerberichte enthalten technische Details wie Fehlermeldungen und
+        aufgerufene Adressen und können Projekt- oder Mitarbeiternamen
+        enthalten. Zusätzlich wird die IP-Adresse übermittelt.
+      </p>
+
+      <p className="mt-2 text-sm text-base-content/70">
+        Passwörter, Zugangsschlüssel und Tokens werden nie übertragen.
       </p>
 
       <section className="mt-6 flex items-center justify-end">

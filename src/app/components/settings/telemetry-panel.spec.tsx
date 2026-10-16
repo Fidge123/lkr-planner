@@ -18,7 +18,18 @@ describe("TelemetrySettingsPanel", () => {
       <TelemetrySettingsPanel onClose={() => {}} />,
     );
 
-    expect(html).toContain("anonyme Fehler- und Leistungsdaten");
+    expect(html).toContain("Fehler- und Leistungsdaten");
+    expect(html).toContain("technische Details");
+    expect(html).toContain("Projekt- oder Mitarbeiternamen");
+    expect(html).toContain("IP-Adresse");
+  });
+
+  it("no longer calls the transmitted data anonymous", () => {
+    const html = renderToStaticMarkup(
+      <TelemetrySettingsPanel onClose={() => {}} />,
+    );
+
+    expect(html).not.toContain("anonym");
   });
 
   it("describes in German what is never transmitted", () => {
@@ -26,7 +37,9 @@ describe("TelemetrySettingsPanel", () => {
       <TelemetrySettingsPanel onClose={() => {}} />,
     );
 
-    expect(html).toContain("Keine Projekt-, Kontakt- oder Zugangsdaten");
+    expect(html).toContain(
+      "Passwörter, Zugangsschlüssel und Tokens werden nie übertragen.",
+    );
   });
 
   it("shows telemetry as disabled before the stored state is loaded", () => {

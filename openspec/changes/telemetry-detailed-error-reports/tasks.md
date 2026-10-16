@@ -12,8 +12,8 @@
 
 ## 3. Consent text
 
-- [ ] 3.1 Update `src/app/components/settings/telemetry-panel.spec.tsx` for the new German text
-- [ ] 3.2 Rewrite the German consent text in `telemetry-panel.tsx`, satisfying the tests
+- [x] 3.1 Update `src/app/components/settings/telemetry-panel.spec.tsx` for the new German text
+- [x] 3.2 Rewrite the German consent text in `telemetry-panel.tsx`, satisfying the tests
 
 ## 4. Documentation
 
