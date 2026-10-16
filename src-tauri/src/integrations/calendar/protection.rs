@@ -231,10 +231,15 @@ mod tests {
     #[tokio::test]
     async fn an_unreadable_event_does_not_block_the_write() {
         let server = EventServer::spawn(UNREADABLE_EVENT).await;
+        let (recorder, mut receiver) = enabled_recorder();
+        let caldav = CaldavSession {
+            telemetry: Some(recorder),
+            ..session(&server.base_url)
+        };
         let calls = Arc::new(Mutex::new(0));
 
         let result = refuse_protected_event(
-            &session(&server.base_url),
+            &caldav,
             "/cal/uid-1.ics",
             false,
             lookup(Some(FIXED_APPOINTMENT_CATEGORY), calls.clone()),
@@ -243,6 +248,8 @@ mod tests {
 
         assert_eq!(result, Ok(()));
         assert_eq!(*calls.lock().unwrap(), 0);
+        let events = recorded(&mut receiver);
+        assert_eq!(events[0].properties()["code"], "UNREADABLE_ICAL");
     }
 
     #[tokio::test]
