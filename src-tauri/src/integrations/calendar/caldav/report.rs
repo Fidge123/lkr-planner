@@ -4,6 +4,8 @@ use tauri_plugin_http::reqwest::Method;
 use super::super::ical::parse_ical_events;
 use super::super::types::RawVEvent;
 use super::write::CaldavSession;
+use crate::integrations::telemetry::events::Operation;
+use crate::integrations::telemetry::observe::RequestFailure;
 
 pub(crate) async fn fetch_calendar_events(
     session: &CaldavSession,
@@ -52,7 +54,7 @@ pub(super) async fn fetch_events_in_range(
         .await
         .map_err(|e| format!("Kalenderantwort konnte nicht gelesen werden: {e}"))?;
 
-    parse_caldav_report(&xml_text)
+    parse_caldav_report(session, &xml_text)
         .map_err(|e| format!("Kalenderantwort konnte nicht verarbeitet werden: {e}"))
 }
 
@@ -79,7 +81,8 @@ fn build_report_body(start: &str, end: &str) -> String {
     )
 }
 
-fn parse_caldav_report(xml_text: &str) -> Result<Vec<RawVEvent>, String> {
+/// An unreadable resource is skipped so one corrupt event cannot fail the whole week.
+fn parse_caldav_report(session: &CaldavSession, xml_text: &str) -> Result<Vec<RawVEvent>, String> {
     let doc = roxmltree::Document::parse(xml_text)
         .map_err(|e| format!("XML konnte nicht geparst werden: {e}"))?;
 
@@ -114,7 +117,16 @@ fn parse_caldav_report(xml_text: &str) -> Result<Vec<RawVEvent>, String> {
                     .unwrap_or("")
                     .to_string();
 
-                let mut parsed = parse_ical_events(text)?;
+                let mut parsed = match parse_ical_events(text) {
+                    Ok(parsed) => parsed,
+                    Err(e) => {
+                        session.record_failure(
+                            Operation::CaldavRead,
+                            RequestFailure::new("UNREADABLE_ICAL", format!("{href}: {e}")),
+                        );
+                        continue;
+                    }
+                };
                 for event in &mut parsed {
                     event.href = href.clone();
                     event.etag = etag.clone();
@@ -202,6 +214,21 @@ fn parse_calendar_href_by_name(xml_text: &str, display_name: &str) -> Option<Str
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::integrations::telemetry::recorder::TelemetryRecorder;
+    use crate::integrations::telemetry::test_support::{enabled_recorder, recorded};
+    use std::sync::Arc;
+    use tauri_plugin_http::reqwest;
+
+    fn session(telemetry: Option<Arc<TelemetryRecorder>>) -> CaldavSession {
+        CaldavSession {
+            client: reqwest::Client::new(),
+            username: "user".to_string(),
+            password: "pass".to_string(),
+            base_url: "https://zep.example".to_string(),
+            absence_urls: Vec::new(),
+            telemetry,
+        }
+    }
 
     #[test]
     fn parse_caldav_report_returns_href_with_each_event() {
@@ -224,7 +251,7 @@ END:VCALENDAR
   </d:response>
 </d:multistatus>"#;
 
-        let events = parse_caldav_report(xml).unwrap();
+        let events = parse_caldav_report(&session(None), xml).unwrap();
 
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].uid, "test-uid-1");
@@ -255,7 +282,7 @@ END:VCALENDAR
   </d:response>
 </d:multistatus>"#;
 
-        let events = parse_caldav_report(xml).unwrap();
+        let events = parse_caldav_report(&session(None), xml).unwrap();
 
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].etag, "\"etag-123\"");
@@ -301,12 +328,69 @@ END:VCALENDAR
   </d:response>
 </d:multistatus>"#;
 
-        let events = parse_caldav_report(xml).unwrap();
+        let events = parse_caldav_report(&session(None), xml).unwrap();
 
         assert_eq!(events.len(), 2);
         assert_eq!(events[0].uid, "uid-1");
         assert_eq!(events[0].href, "/calendars/user/calendar/ev1.ics");
         assert_eq!(events[1].uid, "uid-2");
         assert_eq!(events[1].href, "/calendars/user/calendar/ev2.ics");
+    }
+
+    #[test]
+    fn parse_caldav_report_skips_an_unreadable_entry_and_keeps_the_others() {
+        let xml = r#"<?xml version="1.0" encoding="utf-8"?>
+<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
+  <d:response>
+    <d:href>/calendars/user/calendar/broken.ics</d:href>
+    <d:propstat>
+      <d:prop>
+        <c:calendar-data>BEGIN:VCALENDAR
+BEGIN:VEVENT
+UID:uid-broken
+SUMMARY:Kaputt
+DTSTART;VALUE=DATE:20260505
+END:VEVENT
+END:VCALENDA</c:calendar-data>
+      </d:prop>
+    </d:propstat>
+  </d:response>
+  <d:response>
+    <d:href>/calendars/user/calendar/ev2.ics</d:href>
+    <d:propstat>
+      <d:prop>
+        <c:calendar-data>BEGIN:VCALENDAR
+BEGIN:VEVENT
+UID:uid-2
+SUMMARY:Zwei
+DTSTART;VALUE=DATE:20260506
+END:VEVENT
+END:VCALENDAR
+</c:calendar-data>
+      </d:prop>
+    </d:propstat>
+  </d:response>
+</d:multistatus>"#;
+
+        let (recorder, mut receiver) = enabled_recorder();
+
+        let events = parse_caldav_report(&session(Some(recorder)), xml).unwrap();
+
+        assert_eq!(
+            events.len(),
+            1,
+            "one corrupt resource must not fail the week"
+        );
+        assert_eq!(events[0].uid, "uid-2");
+        let reported = recorded(&mut receiver);
+        assert_eq!(reported[0].properties()["code"], "UNREADABLE_ICAL");
+        assert!(
+            reported[0].properties()["message"]
+                .as_str()
+                .expect("message should be a string")
+                .starts_with("/calendars/user/calendar/broken.ics:"),
+            "the skipped resource must be named: {:?}",
+            reported[0].properties()["message"]
+        );
     }
 }

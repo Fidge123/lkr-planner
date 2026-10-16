@@ -74,6 +74,7 @@ async fn fetch_event_date(
 }
 
 /// lkr-planner writes one VEVENT per resource, so the first component is authoritative.
+/// A resource whose stored iCal does not parse reads as `None`, so it stays deletable.
 async fn fetch_event(
     session: &CaldavSession,
     resource_url: &str,
@@ -98,7 +99,16 @@ async fn fetch_event(
         .text()
         .await
         .map_err(|e| format!("Einsatz konnte nicht gelesen werden: {e}"))?;
-    let events = parse_ical_events(&ical_text)?;
+    let events = match parse_ical_events(&ical_text) {
+        Ok(events) => events,
+        Err(e) => {
+            session.record_failure(
+                Operation::CaldavRead,
+                RequestFailure::new("UNREADABLE_ICAL", format!("{resource_url}: {e}")),
+            );
+            return Ok(None);
+        }
+    };
     let Some(event) = events.into_iter().next() else {
         session.record_failure(
             Operation::CaldavRead,
