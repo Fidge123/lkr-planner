@@ -30,23 +30,26 @@ The Planradar list endpoint (`GET .../projects`) supports `sort`, `page`, and `p
 - **AND** the client returns one page per call (pagination is caller-driven, not aggregated)
 
 ### Requirement: Project create
-The system SHALL provide functionality to create new Planradar projects, either blank or copied from a source project.
-
-Blank creation uses the create-project endpoint with project attributes (name, address, dates, description) and completes synchronously.
-Copying uses the dedicated copy-project endpoint with a new name and per-aspect toggles for details, groups, ticket types (forms), users, and components (layers).
-Copying is performed asynchronously by Planradar: the endpoint answers `202 Accepted` with a job handle, so the copied project does not exist yet when the call returns.
-Planradar exposes no job-status endpoint, so the client observes completion by polling the project list, where new projects appear last.
+The system SHALL create a blank Planradar project synchronously from the provided project attributes.
 
 #### Scenario: Create a blank project
 - **WHEN** user creates a project without a source project
-- **THEN** a new project is created from the provided attributes
+- **THEN** a new project is created via the create-project endpoint from the provided attributes (name, address, dates, description)
 - **AND** the new project ID is returned
+
+### Requirement: Project copy
+The system SHALL copy a source Planradar project and return the copied project's ID once Planradar has finished the asynchronous copy.
 
 #### Scenario: Copy from a source project
 - **WHEN** user creates a project from a source project
-- **THEN** the source project is copied via the copy-project endpoint with the new name and selected aspect toggles
-- **AND** the client polls the project list until the copied project appears
+- **THEN** the source project is copied via the copy-project endpoint with the new name and the selected aspect toggles for details, groups, ticket types (forms), users, and components (layers)
 - **AND** the new project ID is returned
+
+#### Scenario: Copy completes asynchronously
+- **GIVEN** the copy-project endpoint answered `202 Accepted` with a job handle
+- **AND** Planradar exposes no job-status endpoint
+- **WHEN** the client waits for the copy
+- **THEN** it polls the project list, where new projects appear last, until the copied project appears
 
 #### Scenario: Copy does not complete in time
 - **WHEN** the copied project has not appeared within the poll window
