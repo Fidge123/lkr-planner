@@ -17,12 +17,12 @@
 
 ## 4. Documentation
 
-- [ ] 4.1 Write ADR 0014 and mark the data minimization decision in ADR 0013 as superseded
-- [ ] 4.2 Update the Purpose of the main telemetry spec and the README feature entry
-- [ ] 4.3 Run `bun run test:docs`
+- [x] 4.1 Write ADR 0014 and mark the data minimization decision in ADR 0013 as superseded
+- [x] 4.2 Update the Purpose of the main telemetry spec and the README feature entry
+- [x] 4.3 Run `bun run test:docs`
 
 ## 5. Verification
 
-- [ ] 5.1 Run `cargo fmt -- --check`, `cargo clippy --all-targets -- -D warnings` and `cargo test` in `src-tauri`
-- [ ] 5.2 Run `bun test`, `bun run build` and `bunx biome ci .`
-- [ ] 5.3 Run `bunx openspec validate telemetry-detailed-error-reports --strict`
+- [x] 5.1 Run `cargo fmt -- --check`, `cargo clippy --all-targets -- -D warnings` and `cargo test` in `src-tauri`
+- [x] 5.2 Run `bun test`, `bun run build` and `bunx biome ci .`
+- [x] 5.3 Run `bunx openspec validate telemetry-detailed-error-reports --strict`

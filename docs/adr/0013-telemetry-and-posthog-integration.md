@@ -1,6 +1,6 @@
 # ADR 0013: Telemetry and PostHog Integration
 
-- Status: Accepted
+- Status: Accepted, data minimization superseded by ADR 0014
 - Date: 2026-08-15
 
 ## Context

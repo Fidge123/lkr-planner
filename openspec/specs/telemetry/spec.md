@@ -1,6 +1,6 @@
 ## Purpose
 
-Make failures and slow operations in a distributed desktop app observable to the maintainer by sending anonymous, opt-in error and performance events to PostHog, without ever transmitting personal or business data.
+Make failures and slow operations in a distributed desktop app observable to the maintainer by sending opt-in error and performance events to PostHog with enough detail to diagnose them remotely, without ever transmitting credentials.
 
 ## Requirements
 
