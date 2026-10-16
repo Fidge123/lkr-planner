@@ -34,14 +34,9 @@ const iconsDir = join(projectRoot, "src-tauri", "icons");
 const swiftHelperPath = join(import.meta.dir, "extract-app-icon-glyph.swift");
 const iconSvgPath = join(iconsDir, "icon.svg");
 const iconPngPath = join(iconsDir, "icon.png");
-const iconIcoPath = join(iconsDir, "icon.ico");
 const iconIcnsPath = join(iconsDir, "icon.icns");
 
 export const validationRasterSizes = [16, 32, 64, 128, 256, 512, 1024];
-const icoValidationRasterSizes = [16, 24, 32, 48, 64, 256];
-const generatedValidationRasterSizes = Array.from(
-  new Set([...validationRasterSizes, ...icoValidationRasterSizes]),
-).sort((left, right) => left - right);
 
 function formatNumber(value: number): string {
   const rounded = Math.round(value * 1000) / 1000;
@@ -155,7 +150,7 @@ async function generateValidationRasters(outputDir: string) {
     iconSvgPath,
     "-o",
     outputDir,
-    ...generatedValidationRasterSizes.flatMap((size) => ["-p", `${size}`]),
+    ...validationRasterSizes.flatMap((size) => ["-p", `${size}`]),
   ]);
 }
 
@@ -190,42 +185,9 @@ function compareImages(
   }
 }
 
-function extractIcoFrameBySize(
-  icoPath: string,
-  size: number,
-  outputPath: string,
-) {
-  const { stdout } = runCommand("magick", [
-    "identify",
-    "-format",
-    "%p %w %h\n",
-    icoPath,
-  ]);
-
-  const frameLine = stdout
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .find((line) => {
-      const [frameIndexText, widthText, heightText] = line.split(" ");
-      return (
-        Number.parseInt(frameIndexText, 10) >= 0 &&
-        Number.parseInt(widthText, 10) === size &&
-        Number.parseInt(heightText, 10) === size
-      );
-    });
-
-  if (!frameLine) {
-    throw new Error(`Unable to locate a ${size}px frame in ${icoPath}.`);
-  }
-
-  const frameIndex = frameLine.split(" ")[0];
-  runCommand("magick", [`${icoPath}[${frameIndex}]`, outputPath]);
-}
-
 function createValidationRasterMap(outputDir: string): Map<number, string> {
   return new Map(
-    generatedValidationRasterSizes.map((size) => [
+    validationRasterSizes.map((size) => [
       size,
       join(outputDir, `${size}x${size}.png`),
     ]),
@@ -266,17 +228,6 @@ async function validateOutputs(
 
     compareImages(svgRasterPath, icnsRasterPath, `icon.icns ${size}px`);
   }
-
-  for (const size of icoValidationRasterSizes) {
-    const svgRasterPath = rasterBySize.get(size);
-    if (!svgRasterPath) {
-      throw new Error(`Missing SVG raster for ${size}px.`);
-    }
-
-    const extractedIcoPath = join(tempDir, `icon-${size}.ico.png`);
-    extractIcoFrameBySize(iconIcoPath, size, extractedIcoPath);
-    compareImages(svgRasterPath, extractedIcoPath, `icon.ico ${size}px`);
-  }
 }
 
 async function main() {
@@ -293,14 +244,13 @@ async function main() {
     await generateValidationRasters(validationRastersDir);
 
     await copyFile(join(generatedIconsDir, "icon.png"), iconPngPath);
-    await copyFile(join(generatedIconsDir, "icon.ico"), iconIcoPath);
     await copyFile(join(generatedIconsDir, "icon.icns"), iconIcnsPath);
 
     const rasterBySize = createValidationRasterMap(validationRastersDir);
     await validateOutputs(tempDir, rasterBySize);
 
     console.log(
-      `Regenerated icon.svg, icon.png, icon.ico and icon.icns with ${glyph.fontName}. Validation passed for ${validationRasterSizes.join(", ")} px.`,
+      `Regenerated icon.svg, icon.png and icon.icns with ${glyph.fontName}. Validation passed for ${validationRasterSizes.join(", ")} px.`,
     );
   } finally {
     await rm(tempDir, { force: true, recursive: true });

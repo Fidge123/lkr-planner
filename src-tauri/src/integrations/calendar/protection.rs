@@ -1,6 +1,8 @@
 use super::caldav::{fetch_event_by_href, CaldavSession};
 use super::events::parse_daylite_reference;
 use crate::integrations::daylite::projects::{ResolvedProject, FIXED_APPOINTMENT_CATEGORY};
+use crate::integrations::telemetry::events::Operation;
+use crate::integrations::telemetry::observe::RequestFailure;
 
 pub(crate) const FIXED_APPOINTMENT_MESSAGE: &str = "Dieser Termin ist als 'Termin FIX geplant' gesperrt und kann nicht geändert, auf einen anderen Tag verschoben oder gelöscht werden.";
 
@@ -22,7 +24,7 @@ pub(crate) async fn refuse_protected_event(
     };
 
     let (project_ref, project) =
-        resolve_project_link(href, &event.description, lookup_project).await;
+        resolve_project_link(session, &event.description, lookup_project).await;
     refuse(is_protected_event(project_ref.as_deref(), project.as_ref()))
 }
 
@@ -38,7 +40,7 @@ pub(crate) async fn refuse_protected_day_change(
     };
 
     let (project_ref, project) =
-        resolve_project_link(href, &event.description, lookup_project).await;
+        resolve_project_link(session, &event.description, lookup_project).await;
     refuse(protects_day_change(
         &event.dtstart,
         target_date,
@@ -48,7 +50,7 @@ pub(crate) async fn refuse_protected_day_change(
 }
 
 async fn resolve_project_link(
-    href: &str,
+    session: &CaldavSession,
     description: &str,
     lookup_project: impl AsyncFnOnce(String) -> Option<ResolvedProject>,
 ) -> (Option<String>, Option<ResolvedProject>) {
@@ -57,8 +59,14 @@ async fn resolve_project_link(
         Some(reference) => lookup_project(reference).await,
         None => None,
     };
-    if project_ref.is_some() && project.is_none() {
-        eprintln!("calendar: project lookup failed for {href}, treating the event as unprotected");
+    if let (Some(reference), None) = (&project_ref, &project) {
+        session.record_failure(
+            Operation::CaldavProjectLookup,
+            RequestFailure::new(
+                "PROJECT_LOOKUP_FAILED",
+                format!("project lookup for {reference} failed, treating the event as unprotected"),
+            ),
+        );
     }
     (project_ref, project)
 }
@@ -91,6 +99,7 @@ fn is_protected_event(project_ref: Option<&str>, project: Option<&ResolvedProjec
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::integrations::telemetry::test_support::{enabled_recorder, recorded};
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
     use tauri_plugin_http::reqwest;
@@ -152,6 +161,7 @@ mod tests {
 
     fn session(base_url: &str) -> CaldavSession {
         CaldavSession {
+            telemetry: None,
             client: reqwest::Client::builder()
                 .timeout(Duration::from_secs(5))
                 .build()
@@ -172,6 +182,32 @@ mod tests {
             *calls.lock().unwrap() += 1;
             Some(project(category))
         }
+    }
+
+    #[tokio::test]
+    async fn a_failed_project_lookup_reports_the_project_reference() {
+        let server = EventServer::spawn(PROTECTED_EVENT).await;
+        let (recorder, mut receiver) = enabled_recorder();
+        let session = CaldavSession {
+            telemetry: Some(recorder),
+            ..session(&server.base_url)
+        };
+
+        let result = refuse_protected_event(
+            &session,
+            "/cal/uid-1.ics",
+            false,
+            |_reference: String| async { None::<ResolvedProject> },
+        )
+        .await;
+
+        assert!(result.is_ok());
+        let events = recorded(&mut receiver);
+        assert_eq!(events[0].properties()["code"], "PROJECT_LOOKUP_FAILED");
+        assert_eq!(
+            events[0].properties()["message"],
+            "project lookup for /v1/projects/3001 failed, treating the event as unprotected"
+        );
     }
 
     #[tokio::test]

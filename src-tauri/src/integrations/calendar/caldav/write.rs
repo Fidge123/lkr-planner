@@ -6,6 +6,10 @@ use super::super::ical::{build_ical_payload, parse_ical_events};
 use super::super::slots::{full_window, plan_slot_updates, DayPlacement, DayPlan, SlotUpdate};
 use super::super::types::{MoveAssignmentResult, RawVEvent};
 use super::report::fetch_events_in_range;
+use crate::integrations::telemetry::events::{Integration, Operation, TelemetryEvent};
+use crate::integrations::telemetry::observe::{RequestFailure, TelemetryError};
+use crate::integrations::telemetry::recorder::TelemetryRecorder;
+use std::sync::Arc;
 
 const MAX_REALLOCATE_ATTEMPTS: u32 = 3;
 
@@ -15,6 +19,25 @@ pub(crate) struct CaldavSession {
     pub(crate) password: String,
     pub(crate) base_url: String,
     pub(crate) absence_urls: Vec<String>,
+    pub(crate) telemetry: Option<Arc<TelemetryRecorder>>,
+}
+
+impl CaldavSession {
+    pub(crate) fn record_failure(&self, operation: Operation, failure: RequestFailure) {
+        let Some(recorder) = &self.telemetry else {
+            return;
+        };
+
+        recorder.record(
+            TelemetryEvent::error_occurred(
+                operation,
+                Integration::Zep,
+                failure.error_code(),
+                failure.technical_message(),
+            )
+            .with_http_status(failure.http_status()),
+        );
+    }
 }
 
 pub(crate) struct AssignmentWrite {
@@ -85,7 +108,13 @@ async fn fetch_event(
         }
     };
     let Some(event) = events.into_iter().next() else {
-        eprintln!("calendar: {resource_url} contained no readable VEVENT");
+        session.record_failure(
+            Operation::CaldavRead,
+            RequestFailure::new(
+                "INVALID_RESPONSE",
+                format!("{resource_url} contained no readable VEVENT"),
+            ),
+        );
         return Ok(None);
     };
     Ok(Some(event))
@@ -167,7 +196,10 @@ async fn put_slot_updates(
 /// The next write on this day converges anyway.
 async fn reallocate_day_best_effort(session: &CaldavSession, calendar_url: &str, date: &str) {
     if let Err(e) = replan_day_until_settled(session, calendar_url, date, None).await {
-        eprintln!("calendar: re-allocation for {date} failed (converges on the next write): {e}");
+        session.record_failure(
+            Operation::CaldavWrite,
+            RequestFailure::new("REALLOCATION_FAILED", e.to_string()),
+        );
     }
 }
 
@@ -192,7 +224,10 @@ async fn plan_day_for_pending_write(
             }),
         )),
         Err(e) => {
-            eprintln!("calendar: day fetch before write failed, using full window: {e}");
+            session.record_failure(
+                Operation::CaldavRead,
+                RequestFailure::new("DAY_FETCH_FAILED", e.to_string()),
+            );
             None
         }
     }
@@ -371,7 +406,10 @@ pub(crate) async fn delete_assignment_core(
     let event_date = match fetch_event_date(session, &resource_url).await {
         Ok(d) => d,
         Err(e) => {
-            eprintln!("calendar: could not read event before delete, skipping re-allocation: {e}");
+            session.record_failure(
+                Operation::CaldavRead,
+                RequestFailure::new("PRE_DELETE_READ_FAILED", e.to_string()),
+            );
             None
         }
     };
@@ -454,7 +492,13 @@ fn refuse_absence_calendar(
         return Ok(());
     }
 
-    eprintln!("calendar: refused {operation} write to absence calendar URL '{target_url}'");
+    session.record_failure(
+        Operation::CaldavWrite,
+        RequestFailure::new(
+            "ABSENCE_CALENDAR_REFUSED",
+            format!("refused {operation} write to absence calendar {target_url}"),
+        ),
+    );
     Err("Einsätze können nicht in einen Abwesenheitskalender geschrieben werden.".to_string())
 }
 
@@ -493,6 +537,7 @@ fn targets_absence_calendar(target_url: &str, absence_urls: &[String]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::integrations::telemetry::test_support::{enabled_recorder, recorded};
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -602,6 +647,7 @@ mod tests {
 
     fn move_session(base_url: &str, absence_urls: Vec<String>) -> CaldavSession {
         CaldavSession {
+            telemetry: None,
             client: test_client(),
             username: "user".to_string(),
             password: "pass".to_string(),
@@ -705,6 +751,26 @@ mod tests {
         assert!(
             requests.iter().all(|(method, _)| method != "DELETE"),
             "source must not be deleted when the create fails: {requests:?}"
+        );
+    }
+
+    #[test]
+    fn a_refused_absence_calendar_write_reports_the_target_calendar() {
+        let (recorder, mut receiver) = enabled_recorder();
+        let absence_calendar = "https://zep.example/caldav/emp-1-absence/";
+        let session = CaldavSession {
+            telemetry: Some(recorder),
+            ..move_session("https://zep.example", vec![absence_calendar.to_string()])
+        };
+
+        let result = refuse_absence_calendar(&session, absence_calendar, "create");
+
+        assert!(result.is_err());
+        let events = recorded(&mut receiver);
+        assert_eq!(events[0].properties()["code"], "ABSENCE_CALENDAR_REFUSED");
+        assert_eq!(
+            events[0].properties()["message"],
+            format!("refused create write to absence calendar {absence_calendar}")
         );
     }
 
@@ -974,6 +1040,7 @@ mod tests {
         seed_radicale_calendar(&server, "neuburg", "neuburg-termine").await;
 
         let session = CaldavSession {
+            telemetry: None,
             client: direct_client(),
             username: "testuser".to_string(),
             password: "testpass".to_string(),

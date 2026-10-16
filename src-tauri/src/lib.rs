@@ -1,5 +1,5 @@
 use tauri::menu::{Menu, MenuItem, Submenu};
-use tauri::Emitter;
+use tauri::{Emitter, Manager};
 use tauri_plugin_updater::UpdaterExt;
 
 mod integrations;
@@ -32,6 +32,9 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         integrations::zep::commands::zep_test_credentials,
         integrations::zep::commands::zep_discover_calendars,
         integrations::zep::commands::zep_save_and_test_calendar,
+        integrations::telemetry::commands::telemetry_get_settings,
+        integrations::telemetry::commands::telemetry_set_enabled,
+        integrations::telemetry::commands::telemetry_capture_frontend_error,
     ])
 }
 
@@ -46,17 +49,19 @@ fn export_bindings(specta_builder: &tauri_specta::Builder<tauri::Wry>) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let started_at = std::time::Instant::now();
     let specta_builder = specta_builder();
 
     #[cfg(debug_assertions)]
     export_bindings(&specta_builder);
 
-    tauri::Builder::default()
-        .setup(|app| {
+    let app = tauri::Builder::default()
+        .setup(move |app| {
             if let Err(error) = secret_manager::init() {
                 eprintln!("Failed to initialize credential store: {error}");
             }
 
+            start_telemetry(app.handle(), started_at);
             install_reload_data_menu(app.handle())?;
 
             let handle = app.handle().clone();
@@ -78,8 +83,51 @@ pub fn run() {
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(specta_builder.invoke_handler())
-        .run(tauri::generate_context!())
+        .build(tauri::generate_context!())
         .expect("error while running tauri application");
+
+    app.run(|app_handle, event| {
+        if matches!(event, tauri::RunEvent::Exit) {
+            flush_telemetry_before_exit(app_handle);
+        }
+    });
+}
+
+const TELEMETRY_EXIT_FLUSH_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(2);
+
+fn start_telemetry(app: &tauri::AppHandle, started_at: std::time::Instant) {
+    let (state, flush_task) = integrations::telemetry::state::TelemetryState::start();
+
+    if let Ok(store) = integrations::local_store::load_local_store(app.clone()) {
+        state.apply_settings(&store.telemetry);
+    }
+
+    state.record(
+        integrations::telemetry::events::TelemetryEvent::app_started(
+            started_at.elapsed().as_millis() as u64,
+        ),
+    );
+
+    app.manage(state);
+    tauri::async_runtime::spawn(flush_task);
+}
+
+fn flush_telemetry_before_exit(app: &tauri::AppHandle) {
+    let acknowledgement = app
+        .state::<integrations::telemetry::state::TelemetryState>()
+        .shutdown();
+
+    wait_for_telemetry_flush(acknowledgement, TELEMETRY_EXIT_FLUSH_TIMEOUT);
+}
+
+fn wait_for_telemetry_flush(
+    acknowledgement: tokio::sync::oneshot::Receiver<()>,
+    timeout: std::time::Duration,
+) {
+    // The timeout must be created inside the runtime; constructing it on the caller panics.
+    let _ = tauri::async_runtime::block_on(async move {
+        tokio::time::timeout(timeout, acknowledgement).await
+    });
 }
 
 fn install_reload_data_menu(app: &tauri::AppHandle) -> tauri::Result<()> {
@@ -142,6 +190,30 @@ fn format_update_error<E: std::fmt::Display>(result: Result<(), E>) -> Option<St
     result
         .err()
         .map(|error| format!("Update check failed in background task: {error}"))
+}
+
+#[cfg(test)]
+mod telemetry_exit_flush {
+    use super::wait_for_telemetry_flush;
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn returns_once_acknowledged_outside_a_runtime() {
+        let (sender, receiver) = tokio::sync::oneshot::channel();
+        sender.send(()).unwrap();
+
+        wait_for_telemetry_flush(receiver, Duration::from_secs(5));
+    }
+
+    #[test]
+    fn gives_up_after_timeout_outside_a_runtime() {
+        let (_sender, receiver) = tokio::sync::oneshot::channel::<()>();
+        let started = Instant::now();
+
+        wait_for_telemetry_flush(receiver, Duration::from_millis(50));
+
+        assert!(started.elapsed() < Duration::from_secs(5));
+    }
 }
 
 #[cfg(test)]

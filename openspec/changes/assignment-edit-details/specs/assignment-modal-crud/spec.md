@@ -157,7 +157,7 @@ The modal SHALL let the planner attach free-text notes to an assignment, stored 
 
 ### Requirement: Edit the assignment category
 The modal SHALL let the planner give the assignment's Daylite project one of the categories Daylite offers, picked from a list showing each category with its name and its color, and SHALL let the planner remove the category the project carries.
-The category belongs to the project rather than to the single assignment, so it changes for every appointment of that project, and because a fixed appointment is one whose project carries the category `"Termin FIX geplant"`, picking that category locks the assignment while picking another or removing it releases it.
+The category belongs to the project, so it changes for every appointment of that project and decides whether the assignment is fixed.
 
 #### Scenario: The picker lists the categories Daylite offers
 - **WHEN** the modal is open

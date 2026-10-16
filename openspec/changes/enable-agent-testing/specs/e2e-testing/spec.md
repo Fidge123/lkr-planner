@@ -31,8 +31,8 @@ Tests SHALL register stubs before navigation (via `page.addInitScript`) so `invo
 
 ### Requirement: Mock stubs are type-checked against the generated bindings
 The system SHALL type the mock registry and its fixtures against the generated command bindings (`src/generated/tauri.ts`), which are the source of truth derived from the Rust backend.
-Registering a stub for a command SHALL require a return value assignable to that command's generated return type, so a stub that does not match the real shape fails type checking (`bun test` / `tsc`) rather than passing silently.
-Reusable typed fixture builders SHALL be provided for the commands the tests depend on, so the expected shape is defined in one place and drift surfaces as a single compile error when the Rust types change and the bindings are regenerated.
+Registering a stub for a command SHALL require a return value assignable to that command's generated return type.
+Reusable typed fixture builders SHALL be provided for the commands the tests depend on, so each expected shape is defined in one place.
 
 #### Scenario: Mismatched stub fails type checking
 - **WHEN** a test registers a stub for `"load_local_store"` whose value is missing a field required by the generated `LocalStore` type

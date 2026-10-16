@@ -98,8 +98,8 @@ The system SHALL re-allocate same-day slots whenever an assignment is created, u
 
 ### Requirement: Exclude assignments that cannot be rewritten safely
 The system SHALL leave an assignment untouched when rewriting its times could produce invalid iCal or destroy information the assignment carries.
-This applies to an event whose end is expressed via DURATION, a resource holding more than one VEVENT, a folded DTSTART or DTEND, an event that belongs to a repeating series, an event that does not start and end on the same day, and an event without a CalDAV resource URL.
-Such an event takes no share of the window, so the remaining assignments are still spread across the full window and may overlap it.
+This applies to an event ending via DURATION, a resource with several VEVENTs, a folded DTSTART or DTEND, a repeating event, a multi-day event, and an event without a CalDAV resource URL.
+Such an event takes no share of the window.
 
 #### Scenario: Excluded assignment keeps its times
 - **GIVEN** a day contains an assignment whose end is expressed via DURATION
