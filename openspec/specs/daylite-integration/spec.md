@@ -38,7 +38,7 @@ Daylite cannot resolve a set of references in one search, so a week costs one re
 - **THEN** the cached project is returned without a further API request
 
 #### Scenario: Concurrent resolution of one project reference
-- **GIVEN** the same project reference is resolved concurrently, as a week and its prefetched neighbours do
+- **GIVEN** the same project reference is resolved concurrently, as a week and its prefetched neighbors do
 - **WHEN** no valid cache entry exists
 - **THEN** one API request is dispatched
 - **AND** every caller receives its result

@@ -13,8 +13,8 @@
     "windows": [
       {
         "title": "Richter Labortechnik",
-        "width": 1536,
-        "height": 1024
+        "width": 2100,
+        "height": 1400
       }
     ],
     "security": {
@@ -25,12 +25,7 @@
     "active": true,
     "createUpdaterArtifacts": true,
     "targets": "all",
-    "icon": [
-      "icons/icon.png",
-      "icons/icon.svg",
-      "icons/icon.icns",
-      "icons/icon.ico"
-    ],
+    "icon": ["icons/icon.png", "icons/icon.svg", "icons/icon.icns"],
     "macOS": {
       "dmg": {
         "appPosition": {

@@ -4,6 +4,8 @@ use super::shared::{
     adopt_daylite_tokens, load_store_or_error, normalize_base_url, save_store_or_error,
     DayliteApiError, DayliteRefreshTokenRequest, DayliteTokenSyncStatus,
 };
+use crate::integrations::telemetry::events::{Integration, Operation};
+use crate::integrations::telemetry::observe::observe;
 
 #[tauri::command]
 #[specta::specta]
@@ -11,8 +13,22 @@ pub async fn daylite_connect_refresh_token(
     app: tauri::AppHandle,
     request: DayliteRefreshTokenRequest,
 ) -> Result<DayliteTokenSyncStatus, DayliteApiError> {
+    let handle = app.clone();
+    observe(
+        &handle,
+        Operation::DayliteConnectRefreshToken,
+        Integration::Daylite,
+        daylite_connect_refresh_token_inner(app, request),
+    )
+    .await
+}
+
+async fn daylite_connect_refresh_token_inner(
+    app: tauri::AppHandle,
+    request: DayliteRefreshTokenRequest,
+) -> Result<DayliteTokenSyncStatus, DayliteApiError> {
     let base_url = normalize_base_url(&request.base_url)?;
-    let client = DayliteApiClient::new(&base_url)?;
+    let client = DayliteApiClient::new(&base_url)?.with_telemetry(&app);
 
     let token_state =
         adopt_daylite_tokens(|| refresh_tokens(&client, request.refresh_token)).await?;

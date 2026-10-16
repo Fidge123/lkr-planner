@@ -1,3 +1,4 @@
+import { CalendarDays } from "lucide-react";
 import { useEffect, useRef } from "react";
 import type {
   CalendarCellEvent,
@@ -7,8 +8,9 @@ import type {
 } from "../../generated/tauri";
 import type { ProjectCategoryColors } from "../../services/daylite-categories";
 import type { DropPreview } from "../hooks/use-appointment-drag";
-import { toLocalISODate } from "../util";
-import { TimetableHeader } from "./timetable-header";
+import type { CellEvent } from "../types";
+import { getIsoWeek, toLocalISODate } from "../util";
+import { stickyHeaderClass, TimetableHeader } from "./timetable-header";
 import { TimetableRow } from "./timetable-row";
 
 export function WeekTable({
@@ -22,8 +24,10 @@ export function WeekTable({
   isEmployeeLoading,
   dropPreview = null,
   draggedUid = null,
+  activeHighlight = null,
   onOpenIcalDialog,
   onReloadAssignments,
+  onToggleHighlight,
 }: WeekTableProps) {
   const holidayByDate = new Map(holidays.map((h) => [h.date, h.name]));
   const holidayDates = new Set(holidays.map((h) => h.date));
@@ -43,10 +47,20 @@ export function WeekTable({
   }, [eventsByEmployee]);
 
   return (
-    <table ref={gridRef} className="table table-fixed border-collapse">
+    // A card the pointer crosses mid-drag, or that an autoscroll slides under it, otherwise keeps its hover for good.
+    // dnd-kit measures rects rather than hit-testing, so it loses nothing by this.
+    <table
+      ref={gridRef}
+      className={`table table-fixed border-collapse ${draggedUid ? "pointer-events-none" : ""}`}
+    >
       <thead className="text-base-content">
         <tr>
-          <th className="w-40 p-4 font-bold">Mitarbeiter</th>
+          <th className={`w-40 p-4 font-bold bg-base-100 ${stickyHeaderClass}`}>
+            <span className="flex items-center gap-1.5 text-primary">
+              <CalendarDays className="size-4" aria-hidden="true" />
+              KW {getIsoWeek(weekDays[0])}
+            </span>
+          </th>
           {weekDays.map((day) => (
             <TimetableHeader
               key={day.getTime()}
@@ -72,8 +86,10 @@ export function WeekTable({
             }
             dropPreview={dropPreview}
             draggedUid={draggedUid}
+            activeHighlight={activeHighlight}
             onOpenIcalDialog={onOpenIcalDialog}
             onReloadAssignments={onReloadAssignments}
+            onToggleHighlight={onToggleHighlight}
           />
         ))}
         {!isEmployeeLoading && employees.length === 0 ? (
@@ -102,6 +118,8 @@ export interface WeekTableProps {
   isEmployeeLoading: boolean;
   dropPreview?: DropPreview | null;
   draggedUid?: string | null;
+  activeHighlight?: string | null;
   onOpenIcalDialog: (employee: PlanningContactRecord) => void;
   onReloadAssignments: () => void;
+  onToggleHighlight?: (event: CellEvent) => void;
 }

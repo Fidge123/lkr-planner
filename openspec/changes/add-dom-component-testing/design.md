@@ -72,7 +72,7 @@ It is already gone, and the render assertion it stood in for is task 2.3.
 ## Risks / Trade-offs
 
 - [happy-dom's `<dialog>` support may be partial, and the modals under test are `<dialog>` elements] → The components render `<dialog open>` declaratively rather than calling `showModal()`, so the common path should work. Convert `assignment-modal.spec.tsx` first: it is the heaviest user of dialogs, so it either clears the risk early or exposes it before the other 7 files are touched.
-- [The `cancel` event the modal listens for is browser behaviour that a DOM shim may not emit] → Dispatch the event directly rather than simulating Escape; if that path cannot be reached at all, leave it to the Playwright layer and say so in the ADR.
+- [The `cancel` event the modal listens for is browser behavior that a DOM shim may not emit] → Dispatch the event directly rather than simulating Escape; if that path cannot be reached at all, leave it to the Playwright layer and say so in the ADR.
 - [React 19 `act` warnings can turn async state updates into noisy or flaky tests] → Await Testing Library's `findBy*` queries for anything that resolves a mocked command, rather than asserting straight after the click.
 - [Every spec file pays the DOM start-up cost, including the 22 that need none] → Accepted: one preload is simpler than two runner configurations, and the cost is start-up only. Revisit if the suite's wall time becomes noticeable.
 - [Three more devDependencies on the frontend] → Accepted, and bounded: they are test-only and two of them are the de facto standard for this job.

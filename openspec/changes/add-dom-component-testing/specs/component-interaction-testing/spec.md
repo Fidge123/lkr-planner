@@ -1,6 +1,6 @@
 ## Purpose
 
-Lets component tests exercise a component the way a user does, so behaviour that only appears after an effect, a state change or an event can be asserted instead of assumed.
+Lets component tests exercise a component the way a user does, so behavior that only appears after an effect, a state change or an event can be asserted instead of assumed.
 
 ## ADDED Requirements
 

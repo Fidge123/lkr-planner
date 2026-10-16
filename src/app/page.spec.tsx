@@ -103,6 +103,13 @@ describe("planning grid employee states", () => {
     expect(html).not.toContain("Keine Projekte gefunden");
   });
 
+  it("keeps the pinned date row in its own stacking context so a swiped week covers it", () => {
+    const scrollContainer =
+      renderGrid().match(/<section class="[^"]*overflow-auto[^"]*"/)?.[0] ?? "";
+
+    expect(scrollContainer).toContain("isolate");
+  });
+
   it("renders daylite-backed employee names instead of dummy employee names", () => {
     const html = renderGrid({
       employeeState: { ...defaultEmployeeState, employees: [employee] },

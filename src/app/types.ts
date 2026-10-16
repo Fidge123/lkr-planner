@@ -47,6 +47,41 @@ export function isUnresolvedAssignment(event: CellEvent): boolean {
   return event.projectRef !== null && !event.projectStatus;
 }
 
+/** What a card is highlighted by. Null for bare events and absences, which are not highlightable. */
+export function highlightKey(event: CellEvent): string | null {
+  return event.kind === "assignment" ? event.projectRef : null;
+}
+
+export function isHighlighted(
+  event: CellEvent,
+  activeKey: string | null,
+): boolean {
+  // Bare events and absences all key to null, so an equality test alone would group them with each other.
+  return activeKey !== null && highlightKey(event) === activeKey;
+}
+
+export function nextHighlight(
+  current: string | null,
+  key: string | null,
+): string | null {
+  if (key === null) return current;
+  return current === key ? null : key;
+}
+
+/** A highlight belongs to the week it was activated in and applies to no other. */
+export interface ActiveHighlight {
+  key: string;
+  weekStart: string;
+}
+
+export function activeHighlightForWeek(
+  highlight: ActiveHighlight | null,
+  weekStart: string,
+): string | null {
+  if (!highlight || highlight.weekStart !== weekStart) return null;
+  return highlight.key;
+}
+
 /** The backend expands a multi-day absence into per-day events without a start time. */
 export function hasAllDayAbsence(events: CellEvent[]): boolean {
   return events.some(

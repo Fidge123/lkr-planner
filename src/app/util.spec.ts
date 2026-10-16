@@ -7,9 +7,11 @@ import {
   setSystemTime,
 } from "bun:test";
 import {
+  getIsoWeek,
   getWeekDays,
   getWeekStart,
   isToday,
+  millisecondsUntilNextLocalMidnight,
   shiftWeekDays,
   toLocalISODate,
 } from "./util";
@@ -164,6 +166,35 @@ describe("util", () => {
     });
   });
 
+  describe("getIsoWeek", () => {
+    it("numbers a week by the ISO 8601 rule that week 1 holds the first Thursday", () => {
+      expect(getIsoWeek(new Date(2026, 0, 1))).toBe(1);
+      expect(getIsoWeek(new Date(2025, 11, 29))).toBe(1);
+      expect(getIsoWeek(new Date(2026, 7, 17))).toBe(34);
+    });
+
+    it("keeps every day of a week on the same number", () => {
+      const numbers = getWeekDays(0, true).map(getIsoWeek);
+      expect(numbers).toEqual(Array(7).fill(numbers[0]));
+    });
+
+    it("counts the 53rd week of a long year across the year boundary", () => {
+      expect(getIsoWeek(new Date(2026, 11, 31))).toBe(53);
+      expect(getIsoWeek(new Date(2027, 0, 3))).toBe(53);
+      expect(getIsoWeek(new Date(2027, 0, 4))).toBe(1);
+    });
+
+    it("assigns the last days of a year to the next year's week 1", () => {
+      expect(getIsoWeek(new Date(2024, 11, 30))).toBe(1);
+      expect(getIsoWeek(new Date(2022, 11, 31))).toBe(52);
+    });
+
+    it("stays stable across a DST switch", () => {
+      expect(getIsoWeek(new Date(2026, 2, 30))).toBe(14);
+      expect(getIsoWeek(new Date(2026, 9, 26))).toBe(44);
+    });
+  });
+
   describe("isToday", () => {
     it("should return true for today", () => {
       expect(isToday(new Date())).toBe(true);
@@ -176,6 +207,37 @@ describe("util", () => {
       expect(isToday(new Date(2026, 1, 1, 12, 34, 56))).toBe(false);
       expect(isToday(new Date(2026, 0, 2, 12, 34, 56))).toBe(false);
       expect(isToday(new Date(1970, 0, 1))).toBe(false);
+    });
+  });
+
+  describe("millisecondsUntilNextLocalMidnight", () => {
+    it("counts the time left in the current local day", () => {
+      expect(
+        millisecondsUntilNextLocalMidnight(new Date(2026, 0, 1, 23, 59, 59)),
+      ).toBe(1000);
+    });
+
+    it("lands on the next local midnight, DST switches included", () => {
+      for (const start of [
+        new Date(2026, 0, 1, 12, 34, 56),
+        new Date(2026, 2, 29, 0, 0, 0),
+        new Date(2026, 9, 25, 0, 0, 0),
+      ]) {
+        const next = new Date(
+          start.getTime() + millisecondsUntilNextLocalMidnight(start),
+        );
+        expect(toLocalISODate(next)).toBe(
+          toLocalISODate(
+            new Date(
+              start.getFullYear(),
+              start.getMonth(),
+              start.getDate() + 1,
+            ),
+          ),
+        );
+        expect(next.getHours()).toBe(0);
+        expect(next.getMinutes()).toBe(0);
+      }
     });
   });
 });

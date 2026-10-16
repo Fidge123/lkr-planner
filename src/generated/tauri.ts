@@ -13,6 +13,7 @@ export const commands = {
 	dayliteSearchProjects: (input: DayliteSearchInput) => typedError<DayliteSearchResult<DayliteProjectSummary>, DayliteApiError>(__TAURI_INVOKE("daylite_search_projects", { input })),
 	dayliteQueryOverdueProjects: () => typedError<DayliteProjectSummary[], DayliteApiError>(__TAURI_INVOKE("daylite_query_overdue_projects")),
 	dayliteProjectCategoryColors: () => typedError<{ [key in string]: string }, DayliteApiError>(__TAURI_INVOKE("daylite_project_category_colors")),
+	dayliteOpenProject: (projectRef: string) => typedError<null, string>(__TAURI_INVOKE("daylite_open_project", { projectRef })),
 	dayliteListContacts: () => typedError<PlanningContactRecord[], DayliteApiError>(__TAURI_INVOKE("daylite_list_contacts")),
 	dayliteListCachedContacts: () => typedError<PlanningContactRecord[], DayliteApiError>(__TAURI_INVOKE("daylite_list_cached_contacts")),
 	/**
@@ -43,6 +44,9 @@ export const commands = {
 	zepTestCredentials: (rootUrl: string, username: string, password: string) => typedError<ZepCredentialTestResult, ZepError>(__TAURI_INVOKE("zep_test_credentials", { rootUrl, username, password })),
 	zepDiscoverCalendars: () => typedError<ZepCalendar[], ZepError>(__TAURI_INVOKE("zep_discover_calendars")),
 	zepSaveAndTestCalendar: (dayliteContactReference: string, source: IcalSource, calendarUrl: string | null) => typedError<ZepCalendarTestResult, ZepError>(__TAURI_INVOKE("zep_save_and_test_calendar", { dayliteContactReference, source, calendarUrl })),
+	telemetryGetSettings: () => __TAURI_INVOKE<TelemetrySettings>("telemetry_get_settings"),
+	telemetrySetEnabled: (enabled: boolean) => typedError<TelemetrySettings, StoreError>(__TAURI_INVOKE("telemetry_set_enabled", { enabled })),
+	telemetryCaptureFrontendError: (error: FrontendErrorInput) => __TAURI_INVOKE<void>("telemetry_capture_frontend_error", { error }),
 };
 
 /* Types */
@@ -174,6 +178,15 @@ export type EmployeeWeekEvents = {
 	error: string | null,
 };
 
+export type FrontendErrorInput = {
+	source: FrontendErrorSource,
+	name: string,
+	message: string,
+	context: string | null,
+};
+
+export type FrontendErrorSource = "render" | "uncaughtError" | "unhandledRejection";
+
 export type Holiday = {
 	date: string,
 	name: string,
@@ -193,6 +206,7 @@ export type LocalStore = {
 	displaySettings?: DisplaySettings,
 	dayliteCache: DayliteCache,
 	holidayCache?: HolidayCacheEntry[],
+	telemetry?: TelemetrySettings,
 };
 
 /**  CalDAV has no atomic cross-collection move, so the target copy is created first and the source deleted afterwards, which can leave a partial move. */
@@ -271,6 +285,11 @@ export type StoreError = {
 };
 
 export type StoreErrorCode = "READ_FAILED" | "WRITE_FAILED" | "CORRUPT_FILE" | "MISSING_FIELDS";
+
+export type TelemetrySettings = {
+	enabled?: boolean,
+	installId?: string | null,
+};
 
 export type UpdateAssignmentInput = {
 	href: string,

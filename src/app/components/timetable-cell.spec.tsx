@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { CellEvent } from "../types";
-import { TimetableCell } from "./timetable-cell";
+import { assignmentStripClass, TimetableCell } from "./timetable-cell";
 
 function assignment(overrides: Partial<CellEvent> = {}): CellEvent {
   return {
@@ -25,7 +25,7 @@ function renderCell(
 ): string {
   return renderToStaticMarkup(
     <TimetableCell
-      highlight={false}
+      isToday={false}
       events={[]}
       onAddClick={() => {}}
       onEventClick={() => {}}
@@ -60,6 +60,18 @@ const bare = assignment({
   orderIndex: null,
 });
 
+const editLabel = "Einsatz bearbeiten";
+const dayliteLabel = "Projekt in Daylite öffnen";
+const highlightLabel = "Projekt hervorheben";
+const markerClass = "bg-(--color-highlight-marker)";
+
+/** Reads back wrong if a button ever nests inside another. */
+function buttonContents(html: string): string[] {
+  return [...html.matchAll(/<button\b[^>]*>(.*?)<\/button>/gs)].map(
+    (match) => match[1],
+  );
+}
+
 describe("TimetableCell", () => {
   it("empty cell renders a clickable add affordance", () => {
     const html = renderCell();
@@ -91,12 +103,92 @@ describe("TimetableCell", () => {
     expect(html).toContain("Aufgabe hinzufügen");
   });
 
-  it("assigned cell renders as clickable with assignment data", () => {
+  it("assigned cell renders its assignment data", () => {
     const html = renderCell({ events: [assignment()] });
 
     expect(html).toContain("Bauprojekt Nord");
-    expect(html).toContain("<button");
-    expect(html).toContain('type="button"');
+  });
+
+  it("makes the card itself no control around its times and title", () => {
+    const html = renderCell({ events: [assignment()] });
+
+    expect(buttonContents(html)).not.toContainEqual(
+      expect.stringContaining("Bauprojekt Nord"),
+    );
+    expect(buttonContents(html)).not.toContainEqual(
+      expect.stringContaining("08:00"),
+    );
+  });
+
+  it("renders an edit action on an assignment card", () => {
+    expect(renderCell({ events: [assignment()] })).toContain(editLabel);
+  });
+
+  it("renders the edit action on an assignment with an unresolved project", () => {
+    const html = renderCell({
+      events: [assignment({ title: "Projekt Süd", projectStatus: null })],
+    });
+
+    expect(html).toContain(editLabel);
+  });
+
+  it("renders the Daylite action after the edit action on a resolved assignment", () => {
+    const html = renderCell({ events: [assignment()] });
+
+    expect(html).toContain(dayliteLabel);
+    expect(html.indexOf(editLabel)).toBeLessThan(html.indexOf(dayliteLabel));
+  });
+
+  it("stacks the card actions in a column on the card's right edge", () => {
+    const html = renderCell({ events: [assignment()] });
+
+    const actionArea = html.slice(
+      html.lastIndexOf("<div", html.indexOf(editLabel)),
+      html.indexOf(editLabel),
+    );
+
+    expect(actionArea).toContain("flex-col");
+    expect(actionArea).toContain("shrink-0");
+  });
+
+  it("gives the title the card's only flexible column", () => {
+    const html = renderCell({ events: [assignment()] });
+
+    expect(html).toContain("grid-cols-[auto_minmax(0,1fr)_auto]");
+  });
+
+  it("moves the actions under the times once the column is narrow", () => {
+    const html = renderCell({ events: [assignment()] });
+
+    expect(html).toContain("@max-[10rem]:grid-cols-[auto_minmax(0,1fr)]");
+    expect(html).toContain("@max-[10rem]:col-start-1");
+    expect(html).toContain("@max-[10rem]:row-start-2");
+    expect(html).toContain("@max-[10rem]:row-span-2");
+  });
+
+  it("renders no Daylite action on an assignment with an unresolved project", () => {
+    const html = renderCell({
+      events: [assignment({ title: "Projekt Süd", projectStatus: null })],
+    });
+
+    expect(html).not.toContain(dayliteLabel);
+  });
+
+  it("renders no action area on bare and absence events", () => {
+    const html = renderCell({ events: [bare, absence] });
+
+    expect(html).not.toContain(editLabel);
+    expect(html).not.toContain(dayliteLabel);
+  });
+
+  it("renders no actions on the card being dragged", () => {
+    const html = renderCell({
+      events: [assignment()],
+      draggedUid: "uid-1",
+    });
+
+    expect(html).not.toContain(editLabel);
+    expect(html).not.toContain(dayliteLabel);
   });
 
   it("renders a suggestion with reduced opacity and a dashed border", () => {
@@ -141,7 +233,6 @@ describe("TimetableCell", () => {
     });
 
     expect(html).not.toContain('aria-roledescription="draggable"');
-    expect(html).toContain("<button");
   });
 
   it("marks an unresolved assignment with a red warning icon", () => {
@@ -307,3 +398,151 @@ describe("TimetableCell drop preview", () => {
     expect(renderPreview()).not.toContain("drop-preview");
   });
 });
+
+describe("TimetableCell highlighting", () => {
+  const projectRef = "/v1/projects/1";
+  const otherProject = assignment({
+    uid: "uid-other",
+    title: "Halle 4 Umbau",
+    projectRef: "/v1/projects/2",
+  });
+  const unresolved = assignment({ uid: "uid-unresolved", projectStatus: null });
+
+  it("offers the highlight toggle on an assignment card", () => {
+    const html = renderCell({ events: [assignment()] });
+
+    expect(html).toContain(highlightLabel);
+  });
+
+  it("offers the toggle on an unresolved assignment, whose Daylite link is suppressed", () => {
+    const html = renderCell({ events: [unresolved] });
+
+    expect(html).toContain(highlightLabel);
+    expect(html).not.toContain(dayliteLabel);
+  });
+
+  it("offers no toggle on a bare event card", () => {
+    const html = renderCell({ events: [bare] });
+
+    expect(html).not.toContain(highlightLabel);
+  });
+
+  it("offers no toggle on an absence card", () => {
+    const html = renderCell({ events: [absence] });
+
+    expect(html).not.toContain(highlightLabel);
+  });
+
+  it("shows the toggle as pressed on a highlighted card", () => {
+    const html = renderCell({
+      events: [assignment()],
+      activeHighlight: projectRef,
+    });
+
+    expect(highlightToggle(html)).toContain("btn-active");
+  });
+
+  it("shows the toggle unpressed on a card of another project", () => {
+    const html = renderCell({
+      events: [otherProject],
+      activeHighlight: projectRef,
+    });
+
+    expect(highlightToggle(html)).not.toContain("btn-active");
+  });
+
+  it("does not dim the toggle while its card is highlighted", () => {
+    const highlighted = renderCell({
+      events: [assignment()],
+      activeHighlight: projectRef,
+    });
+    const plain = renderCell({ events: [assignment()] });
+
+    expect(highlightToggle(highlighted)).not.toContain("opacity-70");
+    expect(highlightToggle(plain)).toContain("opacity-70");
+  });
+
+  it("reads the toggle as pressed on a highlighted card", () => {
+    const html = renderCell({
+      events: [assignment()],
+      activeHighlight: projectRef,
+    });
+
+    expect(html).toContain('aria-pressed="true"');
+  });
+
+  it("reads the toggle as unpressed on a card of another project", () => {
+    const html = renderCell({
+      events: [otherProject],
+      activeHighlight: projectRef,
+    });
+
+    expect(html).toContain('aria-pressed="false"');
+    expect(html).not.toContain('aria-pressed="true"');
+  });
+
+  it("marks the title of a matching card", () => {
+    const html = renderCell({
+      events: [assignment()],
+      activeHighlight: projectRef,
+    });
+
+    expect(html).toContain(markerClass);
+  });
+
+  it("marks the title of a matching unresolved card", () => {
+    const html = renderCell({
+      events: [unresolved],
+      activeHighlight: projectRef,
+    });
+
+    expect(html).toContain(markerClass);
+  });
+
+  it("leaves a card of another project unmarked", () => {
+    const html = renderCell({
+      events: [otherProject],
+      activeHighlight: projectRef,
+    });
+
+    expect(html).not.toContain(markerClass);
+  });
+
+  it("marks nothing while no highlight is active", () => {
+    const html = renderCell({ events: [assignment(), otherProject] });
+
+    expect(html).not.toContain(markerClass);
+  });
+
+  it("keeps the card's background and category strip while it is highlighted", () => {
+    const html = renderCell({
+      events: [assignment({ categoryColor: "#8bc34a" })],
+      activeHighlight: projectRef,
+    });
+
+    expect(html).toContain("bg-base-200");
+    expect(html).toContain("border-left-color:#8bc34a");
+    expect(html).toContain(assignmentStripClass);
+  });
+
+  it("adds no ring of its own to a highlighted card", () => {
+    const highlighted = renderCell({
+      events: [assignment()],
+      activeHighlight: projectRef,
+    });
+    const plain = renderCell({ events: [assignment()] });
+
+    expect(countRings(highlighted)).toBe(countRings(plain));
+  });
+});
+
+/** The toggle's own tag, so its state classes can be read apart from the other action buttons. */
+function highlightToggle(html: string): string {
+  return (
+    html.match(/<button[^>]*aria-label="Projekt hervorheben"[^>]*>/)?.[0] ?? ""
+  );
+}
+
+function countRings(html: string): number {
+  return [...html.matchAll(/\bring-2\b/g)].length;
+}

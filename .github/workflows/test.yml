@@ -76,3 +76,5 @@ jobs:
 
       - name: Run rust tests
         run: cargo test --manifest-path src-tauri/Cargo.toml
+        env:
+          POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}

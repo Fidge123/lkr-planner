@@ -1,6 +1,14 @@
 import { describe, expect, it } from "bun:test";
 import type { CalendarCellEvent } from "../generated/tauri";
-import { type CellEvent, hasAbsenceConflict, toCellEvent } from "./types";
+import {
+  activeHighlightForWeek,
+  type CellEvent,
+  hasAbsenceConflict,
+  highlightKey,
+  isHighlighted,
+  nextHighlight,
+  toCellEvent,
+} from "./types";
 
 const categoryColors = { Bau: "#8bc34a" };
 
@@ -215,5 +223,104 @@ describe("toCellEvent assignment colors", () => {
 
     expect(absence.categoryColor).toBeNull();
     expect(bare.categoryColor).toBeNull();
+  });
+});
+
+describe("highlightKey", () => {
+  it("keys an assignment by its Daylite project reference", () => {
+    const event = cellEvent({ projectRef: "/v1/projects/42" });
+
+    expect(highlightKey(event)).toBe("/v1/projects/42");
+  });
+
+  it("keys an unresolved assignment by its reference as well", () => {
+    const event = cellEvent({
+      projectRef: "/v1/projects/42",
+      projectStatus: null,
+    });
+
+    expect(highlightKey(event)).toBe("/v1/projects/42");
+  });
+
+  it("gives a bare event no key", () => {
+    expect(highlightKey(cellEvent({ kind: "bare", title: "Werkstatt" }))).toBe(
+      null,
+    );
+  });
+
+  it("gives an absence no key", () => {
+    expect(highlightKey(cellEvent({ kind: "absence", title: "UB" }))).toBe(
+      null,
+    );
+  });
+});
+
+describe("isHighlighted", () => {
+  it("highlights an assignment holding the active reference", () => {
+    const event = cellEvent({ projectRef: "/v1/projects/42" });
+
+    expect(isHighlighted(event, "/v1/projects/42")).toBe(true);
+  });
+
+  it("leaves an assignment of another project alone", () => {
+    const event = cellEvent({ projectRef: "/v1/projects/7" });
+
+    expect(isHighlighted(event, "/v1/projects/42")).toBe(false);
+  });
+
+  it("highlights nothing while no highlight is active", () => {
+    const event = cellEvent({ projectRef: "/v1/projects/42" });
+
+    expect(isHighlighted(event, null)).toBe(false);
+  });
+
+  it("never highlights events without a reference, even against each other", () => {
+    const bare = cellEvent({ kind: "bare", title: "Werkstatt" });
+    const absence = cellEvent({ kind: "absence", title: "UB" });
+
+    expect(isHighlighted(bare, null)).toBe(false);
+    expect(isHighlighted(absence, null)).toBe(false);
+    expect(isHighlighted(bare, highlightKey(absence))).toBe(false);
+    expect(isHighlighted(absence, highlightKey(bare))).toBe(false);
+  });
+});
+
+describe("nextHighlight", () => {
+  it("activates a highlight from nothing", () => {
+    expect(nextHighlight(null, "/v1/projects/42")).toBe("/v1/projects/42");
+  });
+
+  it("replaces an active highlight with another project", () => {
+    expect(nextHighlight("/v1/projects/7", "/v1/projects/42")).toBe(
+      "/v1/projects/42",
+    );
+  });
+
+  it("clears the highlight when the active project is picked again", () => {
+    expect(nextHighlight("/v1/projects/42", "/v1/projects/42")).toBe(null);
+  });
+
+  it("leaves the highlight untouched for an event without a reference", () => {
+    expect(nextHighlight("/v1/projects/42", null)).toBe("/v1/projects/42");
+    expect(nextHighlight(null, null)).toBe(null);
+  });
+});
+
+describe("activeHighlightForWeek", () => {
+  const highlight = { key: "/v1/projects/42", weekStart: "2026-09-07" };
+
+  it("applies a highlight in the week it was activated in", () => {
+    expect(activeHighlightForWeek(highlight, "2026-09-07")).toBe(
+      "/v1/projects/42",
+    );
+  });
+
+  it("drops it in any other week", () => {
+    expect(activeHighlightForWeek(highlight, "2026-09-14")).toBe(null);
+    expect(activeHighlightForWeek(highlight, "2026-08-31")).toBe(null);
+  });
+
+  it("applies nothing when no highlight was activated", () => {
+    expect(activeHighlightForWeek(null, "2026-09-07")).toBe(null);
   });
 });

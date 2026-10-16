@@ -22,7 +22,7 @@ The system SHALL allow assignment cards (`kind: "assignment"`) in the planning g
 - **THEN** the card is not draggable until the project data is available
 - **AND** clicking the card still opens the edit modal
 
-#### Scenario: Click still opens the edit modal
+#### Scenario: Pressing the card without passing the drag threshold
 - **WHEN** the user clicks an assignment card without moving past the activation threshold
 - **THEN** the edit modal opens as before
 

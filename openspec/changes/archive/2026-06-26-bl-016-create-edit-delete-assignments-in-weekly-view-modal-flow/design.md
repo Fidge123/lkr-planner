@@ -65,7 +65,7 @@ This change implements the assignment modal for creating, editing, and deleting 
 ### Edit Mode Project Picker
 **Decision**: Edit mode renders the same `<select>` picker as create mode, pre-populated from `CalendarCellEvent.projectRef`
 - `projectRef` (the Daylite reference stored in DESCRIPTION) is surfaced through the Rust type and TypeScript bindings
-- On open, `selectedProjectRef` is initialised from `assignment.projectRef`
+- On open, `selectedProjectRef` is initialized from `assignment.projectRef`
 - The user can change or keep the project; the picker behaves identically in both modes
 
 ### Project Picker

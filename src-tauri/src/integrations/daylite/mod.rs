@@ -3,6 +3,7 @@ mod auth_flow;
 pub mod categories;
 mod client;
 pub mod contacts;
+pub mod deep_link;
 mod project_cache;
 pub mod projects;
 #[cfg(test)]

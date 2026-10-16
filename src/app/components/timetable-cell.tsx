@@ -1,7 +1,8 @@
 import { useDraggable, useDroppable } from "@dnd-kit/core";
-import { TriangleAlert } from "lucide-react";
+import { ExternalLink, Highlighter, Pencil, TriangleAlert } from "lucide-react";
 import type { ReactNode } from "react";
 import { useRef } from "react";
+import { openProjectInDaylite } from "../../services/daylite-deep-link";
 import { assignmentPositions, sortCellEvents } from "../cell-order";
 import type {
   AppointmentDragPayload,
@@ -13,11 +14,12 @@ import {
   type CellEvent,
   hasAbsenceConflict,
   hasAllDayAbsence,
+  isHighlighted,
   isUnresolvedAssignment,
 } from "../types";
 
 export function TimetableCell({
-  highlight = false,
+  isToday = false,
   isHoliday = false,
   employeeRef = "",
   date = "",
@@ -25,9 +27,11 @@ export function TimetableCell({
   suggestion,
   dropPreview = null,
   draggedUid = null,
+  activeHighlight = null,
   onAddClick,
   onEventClick,
   onSuggestionClick,
+  onToggleHighlight = () => {},
 }: Props) {
   const orderedEvents = sortCellEvents(events);
   const positions = assignmentPositions(orderedEvents);
@@ -63,9 +67,9 @@ export function TimetableCell({
   return (
     <td
       ref={setNodeRef}
-      className={cellClass(highlight, isHoliday, isOver, conflict)}
+      className={cellClass(isToday, isHoliday, isOver, conflict)}
     >
-      <ul className="flex flex-col gap-1 list-none">
+      <ul className="@container flex flex-col gap-1 list-none">
         {conflict ? (
           <li className="flex items-center gap-1 text-error text-xs font-medium">
             <TriangleAlert className="size-4 shrink-0" aria-hidden="true" />
@@ -119,7 +123,9 @@ export function TimetableCell({
                 date={date}
                 position={positions.get(event.uid) ?? 0}
                 lifted={event.uid === draggedUid}
+                highlighted={isHighlighted(event, activeHighlight)}
                 onEventClick={onEventClick}
+                onToggleHighlight={onToggleHighlight}
               />
             </li>
           ),
@@ -191,7 +197,7 @@ function DropPreviewCard({ title }: { title: string }) {
     <li aria-hidden="true">
       <span
         data-drop-preview="true"
-        className={`${assignmentCardClass} h-[3.25rem] border-2 border-dashed border-primary bg-primary/10 text-base-content/70 pointer-events-none`}
+        className={`${assignmentCardClass} h-13 border-2 border-dashed border-primary bg-primary/10 text-base-content/70 pointer-events-none`}
       >
         <h4 className="flex-1 min-w-0 font-medium">{title}</h4>
       </span>
@@ -200,7 +206,7 @@ function DropPreviewCard({ title }: { title: string }) {
 }
 
 interface Props {
-  highlight: boolean;
+  isToday: boolean;
   isHoliday?: boolean;
   employeeRef?: string;
   date?: string;
@@ -208,11 +214,14 @@ interface Props {
   suggestion?: GhostSuggestion;
   /** Where the in-flight drag would land; null unless this cell is the target. */
   dropPreview?: DropPreview | null;
-  /** UID of the card being dragged, so it is not counted as its own neighbour. */
+  /** UID of the card being dragged, so it is not counted as its own neighbor. */
   draggedUid?: string | null;
+  /** Highlight key the planner picked; cards matching it are marked. */
+  activeHighlight?: string | null;
   onAddClick: () => void;
   onEventClick: (event: CellEvent) => void;
   onSuggestionClick?: (suggestion: GhostSuggestion) => void;
+  onToggleHighlight?: (event: CellEvent) => void;
 }
 
 export const assignmentCardClass =
@@ -232,39 +241,47 @@ export function AssignmentCardBody({
   endTime,
   title,
   isUnresolved = false,
+  highlighted = false,
 }: BodyProps) {
+  const name = highlighted ? (
+    <span className={highlightMarkerClass}>{title}</span>
+  ) : (
+    title
+  );
   return (
     <>
       <EventTime startTime={startTime} endTime={endTime} />
-      {isUnresolved ? (
-        <TriangleAlert
-          className="size-4 shrink-0 text-error"
-          aria-hidden="true"
-        />
-      ) : null}
-      <h4 className="flex-1 min-w-0 font-medium">
+      <h4 className="flex-1 min-w-0 font-medium wrap-break-words @max-[10rem]:row-span-2">
         {isUnresolved ? (
           <>
+            <TriangleAlert
+              className="inline size-4 mr-1 align-text-bottom text-error"
+              aria-hidden="true"
+            />
             <em className="font-normal opacity-70">Beschreibung für </em>
-            {title}
+            {name}
             <em className="font-normal opacity-70">
               {" "}
               konnte nicht abgerufen werden
             </em>
           </>
         ) : (
-          title
+          name
         )}
       </h4>
     </>
   );
 }
 
+/** Spelled out rather than interpolated so the class names survive Tailwind's static scan of the source. */
+const highlightMarkerClass = "rounded-sm px-0.5 bg-(--color-highlight-marker)";
+
 interface BodyProps {
   startTime: string | null;
   endTime: string | null;
   title: string;
   isUnresolved?: boolean;
+  highlighted?: boolean;
 }
 
 function DraggableAssignmentCard({
@@ -273,7 +290,9 @@ function DraggableAssignmentCard({
   date,
   position,
   lifted = false,
+  highlighted = false,
   onEventClick,
+  onToggleHighlight,
 }: CardProps) {
   const payload: AppointmentDragPayload = {
     uid: event.uid,
@@ -288,30 +307,81 @@ function DraggableAssignmentCard({
   };
   const unresolved = isUnresolvedAssignment(event);
   const canDrag = Boolean(event.href) && !unresolved;
-  const { attributes, listeners, setNodeRef } = useDraggable({
+  const { listeners, setActivatorNodeRef, setNodeRef } = useDraggable({
     id: `assignment-${employeeRef}-${event.uid}`,
     data: payload,
     disabled: !canDrag,
   });
+  const projectRef = event.projectRef;
 
   return (
-    <button
+    <div
       ref={setNodeRef}
-      type="button"
-      className={`btn btn-block h-auto justify-start ${assignmentCardClass} ${assignmentStripClass} text-base-content transition-[filter] hover:brightness-90 active:brightness-75 ${event.color} ${lifted ? "absolute inset-x-0 top-0 invisible pointer-events-none" : ""}`}
+      className={`${assignmentCardGridClass} ${assignmentStripClass} text-base-content transition-[filter] hover:brightness-90 ${event.color} ${lifted ? "absolute inset-x-0 top-0 invisible pointer-events-none" : ""}`}
       style={categoryStrip(event.categoryColor)}
-      onClick={() => onEventClick(event)}
-      {...(canDrag ? { ...listeners, ...attributes } : {})}
     >
-      <AssignmentCardBody
-        startTime={event.startTime}
-        endTime={event.endTime}
-        title={event.title}
-        isUnresolved={unresolved}
-      />
-    </button>
+      {/* `contents` so the times and the title are grid items of the card, with one wrapper still activating the drag. */}
+      <div
+        ref={setActivatorNodeRef}
+        className={`contents ${canDrag ? "cursor-grab" : ""}`}
+        {...(canDrag
+          ? { ...listeners, "aria-roledescription": "draggable" }
+          : {})}
+      >
+        <AssignmentCardBody
+          startTime={event.startTime}
+          endTime={event.endTime}
+          title={event.title}
+          isUnresolved={unresolved}
+          highlighted={highlighted}
+        />
+      </div>
+      {lifted ? null : (
+        <div className={cardActionAreaClass}>
+          <button
+            type="button"
+            className={`${cardActionClass} rounded-tr-md`}
+            aria-label="Einsatz bearbeiten"
+            onClick={() => onEventClick(event)}
+          >
+            <Pencil className="size-4" aria-hidden="true" />
+          </button>
+          {unresolved || !projectRef ? null : (
+            <button
+              type="button"
+              className={cardActionClass}
+              aria-label="Projekt in Daylite öffnen"
+              onClick={() => {
+                void openProjectInDaylite(projectRef);
+              }}
+            >
+              <ExternalLink className="size-4" aria-hidden="true" />
+            </button>
+          )}
+          <button
+            type="button"
+            className={`${highlighted ? cardActionPressedClass : cardActionClass} rounded-br-md`}
+            aria-label="Projekt hervorheben"
+            aria-pressed={highlighted}
+            onClick={() => onToggleHighlight(event)}
+          >
+            <Highlighter className="size-4" aria-hidden="true" />
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
+
+const assignmentCardGridClass =
+  "grid grid-cols-[auto_minmax(0,1fr)_auto] @max-[10rem]:grid-cols-[auto_minmax(0,1fr)] items-center w-full gap-2 py-2 pl-1 pr-px rounded-lg overflow-hidden";
+const cardActionAreaClass =
+  "flex flex-col shrink-0 self-stretch -my-2 py-px col-start-3 row-start-1 @max-[10rem]:col-start-1 @max-[10rem]:row-start-2 @max-[10rem]:self-start @max-[10rem]:my-0";
+const cardActionClass =
+  "btn btn-ghost h-6 w-6 min-h-0 p-0 opacity-70 rounded-none";
+// Spelled out rather than composed so the class names survive Tailwind's static scan of the source.
+const cardActionPressedClass =
+  "btn btn-ghost h-6 w-6 min-h-0 p-0 rounded-none btn-active";
 
 interface CardProps {
   event: CellEvent;
@@ -320,7 +390,9 @@ interface CardProps {
   position: number;
   /** Out of the cell's flow while this card is the one being dragged. */
   lifted?: boolean;
+  highlighted?: boolean;
   onEventClick: (event: CellEvent) => void;
+  onToggleHighlight: (event: CellEvent) => void;
 }
 
 function EventTime({ startTime, endTime }: TimeProps) {
@@ -339,14 +411,14 @@ interface TimeProps {
 }
 
 function cellClass(
-  highlight: boolean,
+  isToday: boolean,
   isHoliday: boolean,
   isDropTarget: boolean,
   conflict: boolean,
 ): string {
   const base = isHoliday
     ? "align-top p-2 bg-base-200/60"
-    : highlight
+    : isToday
       ? "align-top p-2 bg-primary/10"
       : "align-top p-2";
   if (isDropTarget) return `${base} ring-2 ring-inset ring-primary`;

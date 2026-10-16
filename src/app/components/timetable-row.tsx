@@ -1,5 +1,6 @@
 import { TriangleAlert } from "lucide-react";
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import {
   type CalendarCellEvent,
   commands,
@@ -26,8 +27,10 @@ export function TimetableRow({
   employeeSetting,
   dropPreview = null,
   draggedUid = null,
+  activeHighlight = null,
   onOpenIcalDialog,
   onReloadAssignments,
+  onToggleHighlight,
 }: Props) {
   const showWarning = needsAttention(employeeSetting);
   const [modalState, setModalState] = useState<ModalState | null>(null);
@@ -134,7 +137,7 @@ export function TimetableRow({
             return (
               <TimetableCell
                 key={day.toISOString()}
-                highlight={isToday(day)}
+                isToday={isToday(day)}
                 isHoliday={week.holidayDates.has(isoDay)}
                 employeeRef={employee.self}
                 date={isoDay}
@@ -142,24 +145,31 @@ export function TimetableRow({
                 suggestion={suggestion}
                 dropPreview={dropPreview}
                 draggedUid={draggedUid}
+                activeHighlight={activeHighlight}
                 onAddClick={() => openCreateModal(isoDay)}
                 onEventClick={(event) => openEditModal(isoDay, event)}
                 onSuggestionClick={handleSuggestionClick}
+                onToggleHighlight={onToggleHighlight}
               />
             );
           })
         )}
       </tr>
 
-      {modalState !== null ? (
-        <AssignmentModal
-          assignment={modalState.assignment}
-          employeeReference={employee.self}
-          date={modalState.date}
-          onSave={handleSave}
-          onClose={() => setModalState(null)}
-        />
-      ) : null}
+      {/* The grid's scroll container is isolated, so a modal rendered inside it cannot paint over the header.
+          The document guard is for the bun specs, which render this row through react-dom/server. */}
+      {modalState === null || typeof document === "undefined"
+        ? null
+        : createPortal(
+            <AssignmentModal
+              assignment={modalState.assignment}
+              employeeReference={employee.self}
+              date={modalState.date}
+              onSave={handleSave}
+              onClose={() => setModalState(null)}
+            />,
+            document.body,
+          )}
     </>
   );
 }
@@ -197,6 +207,8 @@ interface Props {
   employeeSetting: EmployeeSetting | null;
   dropPreview?: DropPreview | null;
   draggedUid?: string | null;
+  activeHighlight?: string | null;
   onOpenIcalDialog: (employee: PlanningContactRecord) => void;
   onReloadAssignments: () => void;
+  onToggleHighlight?: (event: CellEvent) => void;
 }
