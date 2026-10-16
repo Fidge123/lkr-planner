@@ -8,4 +8,4 @@ pub mod recorder;
 pub mod redact;
 pub mod state;
 #[cfg(test)]
-mod test_support;
+pub(crate) mod test_support;

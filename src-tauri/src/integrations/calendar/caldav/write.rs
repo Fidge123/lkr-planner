@@ -103,7 +103,10 @@ async fn fetch_event(
     let Some(event) = events.into_iter().next() else {
         session.record_failure(
             Operation::CaldavRead,
-            RequestFailure::new("INVALID_RESPONSE", "resource contained no readable VEVENT"),
+            RequestFailure::new(
+                "INVALID_RESPONSE",
+                format!("{resource_url} contained no readable VEVENT"),
+            ),
         );
         return Ok(None);
     };
@@ -486,7 +489,7 @@ fn refuse_absence_calendar(
         Operation::CaldavWrite,
         RequestFailure::new(
             "ABSENCE_CALENDAR_REFUSED",
-            format!("refused {operation} write"),
+            format!("refused {operation} write to absence calendar {target_url}"),
         ),
     );
     Err("Einsätze können nicht in einen Abwesenheitskalender geschrieben werden.".to_string())
@@ -527,6 +530,7 @@ fn targets_absence_calendar(target_url: &str, absence_urls: &[String]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::integrations::telemetry::test_support::{enabled_recorder, recorded};
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -740,6 +744,26 @@ mod tests {
         assert!(
             requests.iter().all(|(method, _)| method != "DELETE"),
             "source must not be deleted when the create fails: {requests:?}"
+        );
+    }
+
+    #[test]
+    fn a_refused_absence_calendar_write_reports_the_target_calendar() {
+        let (recorder, mut receiver) = enabled_recorder();
+        let absence_calendar = "https://zep.example/caldav/emp-1-absence/";
+        let session = CaldavSession {
+            telemetry: Some(recorder),
+            ..move_session("https://zep.example", vec![absence_calendar.to_string()])
+        };
+
+        let result = refuse_absence_calendar(&session, absence_calendar, "create");
+
+        assert!(result.is_err());
+        let events = recorded(&mut receiver);
+        assert_eq!(events[0].properties()["code"], "ABSENCE_CALENDAR_REFUSED");
+        assert_eq!(
+            events[0].properties()["message"],
+            format!("refused create write to absence calendar {absence_calendar}")
         );
     }
 

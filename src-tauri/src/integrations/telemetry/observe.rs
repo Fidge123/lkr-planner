@@ -52,14 +52,13 @@ impl TelemetryError for DayliteApiError {
     }
 }
 
-/// The string is the German user message and can name a project, so it is not sent.
 impl TelemetryError for String {
     fn error_code(&self) -> ErrorCode {
         ErrorCode::from_enum(&"COMMAND_FAILED")
     }
 
     fn technical_message(&self) -> Option<&str> {
-        None
+        Some(self)
     }
 }
 
@@ -185,21 +184,8 @@ where
 mod tests {
     use super::*;
     use crate::integrations::local_store::types::{StoreError, StoreErrorCode};
-    use crate::integrations::telemetry::recorder::{TelemetryCommand, TelemetryRecorder};
-    use crate::integrations::telemetry::test_support::enabled;
-
-    fn recorded(
-        receiver: &mut tokio::sync::mpsc::Receiver<TelemetryCommand>,
-    ) -> Vec<TelemetryEvent> {
-        let mut events = Vec::new();
-        while let Ok(command) = receiver.try_recv() {
-            if let TelemetryCommand::Record(event) = command {
-                events.push(*event);
-            }
-        }
-
-        events
-    }
+    use crate::integrations::telemetry::recorder::TelemetryRecorder;
+    use crate::integrations::telemetry::test_support::{enabled, recorded};
 
     #[tokio::test]
     async fn a_successful_operation_emits_one_completion_event() {
@@ -258,7 +244,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_string_error_carries_no_message_at_all() {
+    async fn a_string_error_carries_its_message_without_credentials() {
         let (recorder, mut receiver) = TelemetryRecorder::channel();
         recorder.apply_settings(&enabled());
 
@@ -266,14 +252,19 @@ mod tests {
             Some(&recorder),
             Operation::LoadWeekEvents,
             Integration::Zep,
-            async { Err("Projekt Musterbau konnte nicht geladen werden".to_string()) },
+            async {
+                Err("Projekt Musterbau konnte nicht geladen werden: token=s3cret".to_string())
+            },
         )
         .await;
 
         assert!(result.is_err());
         let events = recorded(&mut receiver);
         assert_eq!(events[1].name(), "error_occurred");
-        assert!(!events[1].properties().contains_key("message"));
+        assert_eq!(
+            events[1].properties()["message"],
+            "Projekt Musterbau konnte nicht geladen werden: token=[redacted]"
+        );
         assert_eq!(events[1].properties()["code"], "COMMAND_FAILED");
     }
 

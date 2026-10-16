@@ -6,9 +6,9 @@
 
 ## 2. Error detail
 
-- [ ] 2.1 Write a failing test that a command failing with a `String` error transmits its message
-- [ ] 2.2 Transmit the message for `String` command errors in `observe.rs`
-- [ ] 2.3 Restore the resource URL, the target calendar URL and the project reference at the CalDAV and project lookup failure sites
+- [x] 2.1 Write a failing test that a command failing with a `String` error transmits its message
+- [x] 2.2 Transmit the message for `String` command errors in `observe.rs`
+- [x] 2.3 Restore the resource URL, the target calendar URL and the project reference at the CalDAV and project lookup failure sites
 
 ## 3. Consent text
 
