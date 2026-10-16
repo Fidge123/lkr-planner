@@ -202,23 +202,17 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg_attr(not(posthog_api_key), ignore = "POSTHOG_API_KEY not set")]
     async fn delivers_a_batch_to_the_live_posthog_api() {
         const LIVE_TEST_INSTALL_ID: &str = "lkr-planner-integration-test";
-        let Some(api_key) = std::env::var("POSTHOG_API_KEY")
-            .ok()
-            .filter(|key| !key.is_empty())
-        else {
-            eprintln!("skipping delivers_a_batch_to_the_live_posthog_api: POSTHOG_API_KEY not set");
-            return;
-        };
-        let client = PostHogClient::with_api_key(Some(&api_key));
+        let client = PostHogClient::from_build_config();
+        let context = EventContext::current(LIVE_TEST_INSTALL_ID.to_string());
+        assert!(
+            client.batch_payload(vec![event(42)], &context).is_some(),
+            "the build carries no PostHog key, so nothing would be sent"
+        );
 
-        let result = client
-            .send(
-                vec![event(42)],
-                &EventContext::current(LIVE_TEST_INSTALL_ID.to_string()),
-            )
-            .await;
+        let result = client.send(vec![event(42)], &context).await;
 
         assert_eq!(
             result,
