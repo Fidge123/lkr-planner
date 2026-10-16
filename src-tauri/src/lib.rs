@@ -117,10 +117,17 @@ fn flush_telemetry_before_exit(app: &tauri::AppHandle) {
         .state::<integrations::telemetry::state::TelemetryState>()
         .shutdown();
 
-    let _ = tauri::async_runtime::block_on(tokio::time::timeout(
-        TELEMETRY_EXIT_FLUSH_TIMEOUT,
-        acknowledgement,
-    ));
+    wait_for_telemetry_flush(acknowledgement, TELEMETRY_EXIT_FLUSH_TIMEOUT);
+}
+
+fn wait_for_telemetry_flush(
+    acknowledgement: tokio::sync::oneshot::Receiver<()>,
+    timeout: std::time::Duration,
+) {
+    // The timeout must be created inside the runtime; constructing it on the caller panics.
+    let _ = tauri::async_runtime::block_on(async move {
+        tokio::time::timeout(timeout, acknowledgement).await
+    });
 }
 
 fn install_reload_data_menu(app: &tauri::AppHandle) -> tauri::Result<()> {
@@ -183,6 +190,30 @@ fn format_update_error<E: std::fmt::Display>(result: Result<(), E>) -> Option<St
     result
         .err()
         .map(|error| format!("Update check failed in background task: {error}"))
+}
+
+#[cfg(test)]
+mod telemetry_exit_flush {
+    use super::wait_for_telemetry_flush;
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn returns_once_acknowledged_outside_a_runtime() {
+        let (sender, receiver) = tokio::sync::oneshot::channel();
+        sender.send(()).unwrap();
+
+        wait_for_telemetry_flush(receiver, Duration::from_secs(5));
+    }
+
+    #[test]
+    fn gives_up_after_timeout_outside_a_runtime() {
+        let (_sender, receiver) = tokio::sync::oneshot::channel::<()>();
+        let started = Instant::now();
+
+        wait_for_telemetry_flush(receiver, Duration::from_millis(50));
+
+        assert!(started.elapsed() < Duration::from_secs(5));
+    }
 }
 
 #[cfg(test)]
