@@ -22,7 +22,7 @@ Telemetry is opt-in and has not shipped in a release yet.
 ### Redact credentials, keep everything else
 
 The sanitizer stays the single boundary every free-text field passes through, but it now removes only values that grant access.
-It recognises a credential by its key rather than its shape: a key whose last segment is token, password, passwort, secret, key, authorization or auth, followed by `=` or `:`, in plain text, URL query strings and JSON.
+It recognises a credential by its key rather than its shape: a key whose last segment is token, password, passwort, passwd, secret, key, apikey, authorization or auth, followed by `=` or `:`, in plain text, URL query strings and JSON.
 Recognising by key catches the Daylite refresh token, which travels as a `refresh_token` query parameter that the HTTP client's error text repeats, and the tokens inside a refresh response body.
 Recognising secrets by shape, such as long random strings, was rejected because it misses short secrets and redacts IDs that debugging needs.
 

@@ -251,10 +251,10 @@ mod tests {
         assert!(events[0].properties().contains_key("duration_ms"));
         assert_eq!(events[1].name(), "error_occurred");
         assert_eq!(events[1].properties()["code"], "WRITE_FAILED");
-        assert!(!events[1].properties()["message"]
-            .as_str()
-            .unwrap()
-            .contains("flori"));
+        assert_eq!(
+            events[1].properties()["message"],
+            "Datei konnte nicht geschrieben werden (/Users/flori/store.json)"
+        );
     }
 
     #[tokio::test]

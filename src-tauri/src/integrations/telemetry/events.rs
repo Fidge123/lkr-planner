@@ -185,7 +185,7 @@ mod tests {
     }
 
     #[test]
-    fn event_built_from_zep_error_transmits_no_calendar_url() {
+    fn event_built_from_zep_error_keeps_the_calendar_url() {
         let error = ZepError::new(
             ZepErrorCode::NotFound,
             "Der Kalender wurde nicht gefunden.",
@@ -199,11 +199,12 @@ mod tests {
             Some(&error.technical_message),
         );
 
-        let payload = serde_json::to_string(event.properties()).expect("payload should serialize");
-        assert!(!payload.contains("zep.de"));
-        assert!(!payload.contains("emp-1-primary"));
-        assert!(payload.contains("PROPFIND"));
-        assert!(payload.contains("404"));
+        assert_eq!(
+            event.properties().get("message"),
+            Some(&Value::String(
+                "PROPFIND https://app.zep.de/caldav/admin/emp-1-primary/ returned 404".to_string()
+            ))
+        );
         assert_eq!(
             event.properties().get("code"),
             Some(&Value::String("NOT_FOUND".to_string()))

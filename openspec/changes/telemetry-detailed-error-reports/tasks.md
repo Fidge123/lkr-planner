@@ -1,8 +1,8 @@
 ## 1. Secret removal
 
-- [ ] 1.1 Rewrite the tests in `src-tauri/src/integrations/telemetry/redact.rs` for the new rules: URLs, paths and e-mail addresses retained; credentials removed from plain-text pairs, URL query strings, JSON with and without spaces, truncated JSON, a URL's authority, and bearer values; words that merely end in a credential name retained
-- [ ] 1.2 Implement the new rules in `redact.rs`, satisfying the tests
-- [ ] 1.3 Update the event and observe tests that asserted URLs and paths were removed
+- [x] 1.1 Rewrite the tests in `src-tauri/src/integrations/telemetry/redact.rs` for the new rules: URLs, paths and e-mail addresses retained; credentials removed from plain-text pairs, URL query strings, JSON with and without spaces, truncated JSON, a URL's authority, and bearer values; words that merely end in a credential name retained
+- [x] 1.2 Implement the new rules in `redact.rs`, satisfying the tests
+- [x] 1.3 Update the event and observe tests that asserted URLs and paths were removed
 
 ## 2. Error detail
 
