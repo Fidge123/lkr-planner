@@ -27,8 +27,10 @@ export function TimetableRow({
   employeeSetting,
   dropPreview = null,
   draggedUid = null,
+  activeHighlight = null,
   onOpenIcalDialog,
   onReloadAssignments,
+  onToggleHighlight,
 }: Props) {
   const showWarning = needsAttention(employeeSetting);
   const [modalState, setModalState] = useState<ModalState | null>(null);
@@ -135,7 +137,7 @@ export function TimetableRow({
             return (
               <TimetableCell
                 key={day.toISOString()}
-                highlight={isToday(day)}
+                isToday={isToday(day)}
                 isHoliday={week.holidayDates.has(isoDay)}
                 employeeRef={employee.self}
                 date={isoDay}
@@ -143,9 +145,11 @@ export function TimetableRow({
                 suggestion={suggestion}
                 dropPreview={dropPreview}
                 draggedUid={draggedUid}
+                activeHighlight={activeHighlight}
                 onAddClick={() => openCreateModal(isoDay)}
                 onEventClick={(event) => openEditModal(isoDay, event)}
                 onSuggestionClick={handleSuggestionClick}
+                onToggleHighlight={onToggleHighlight}
               />
             );
           })
@@ -203,6 +207,8 @@ interface Props {
   employeeSetting: EmployeeSetting | null;
   dropPreview?: DropPreview | null;
   draggedUid?: string | null;
+  activeHighlight?: string | null;
   onOpenIcalDialog: (employee: PlanningContactRecord) => void;
   onReloadAssignments: () => void;
+  onToggleHighlight?: (event: CellEvent) => void;
 }

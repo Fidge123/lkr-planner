@@ -9,7 +9,7 @@ import {
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type {
   EmployeeSetting,
@@ -31,6 +31,8 @@ import { type HolidaysState, useHolidays } from "./hooks/use-holidays";
 import type { PlanningAssignmentsState } from "./hooks/use-planning-assignments";
 import { usePlanningEmployees } from "./hooks/use-planning-employees";
 import { useWeekSwipe } from "./hooks/use-week-swipe";
+import type { ActiveHighlight, CellEvent } from "./types";
+import { activeHighlightForWeek, highlightKey, nextHighlight } from "./types";
 import { getWeekDays, shiftWeekDays, toLocalISODate } from "./util";
 import { swipeSettleMs } from "./week-swipe";
 
@@ -153,6 +155,15 @@ export function PlanningGridTable({
   });
   const isDragActive = drag.activePayload !== null;
   const weekStart = toLocalISODate(weekDays[0]);
+
+  const [highlight, setHighlight] = useState<ActiveHighlight | null>(null);
+  const activeHighlight = activeHighlightForWeek(highlight, weekStart);
+  // Deriving keeps the highlight out of other weeks; dropping it keeps navigating back from restoring it.
+  if (highlight && activeHighlight === null) setHighlight(null);
+  const toggleHighlight = (event: CellEvent) => {
+    const key = nextHighlight(activeHighlight, highlightKey(event));
+    setHighlight(key === null ? null : { key, weekStart });
+  };
   const {
     eventsByEmployee,
     errorsByEmployee,
@@ -238,8 +249,10 @@ export function PlanningGridTable({
             isEmployeeLoading={isEmployeeLoading}
             dropPreview={drag.dropPreview}
             draggedUid={drag.activePayload?.uid ?? null}
+            activeHighlight={activeHighlight}
             onOpenIcalDialog={onOpenIcalDialog}
             onReloadAssignments={reloadAssignments}
+            onToggleHighlight={toggleHighlight}
           />
           {/* The document guard is not about Tauri: bun tests render this grid
               through react-dom/server, where portals and `document` do not exist. */}
