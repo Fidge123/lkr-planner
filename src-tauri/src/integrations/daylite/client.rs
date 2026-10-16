@@ -1,11 +1,13 @@
-use super::shared::{normalize_base_url, DayliteApiError, DayliteApiErrorCode};
+use super::shared::{
+    normalize_base_url, normalize_http_error, DayliteApiError, DayliteApiErrorCode,
+};
 #[cfg(test)]
 use crate::integrations::http_record_replay::{
     cassette_path_for_test, RecordReplayConfig, RecordedInteraction, RecordedRequest,
     RecordedResponse, VcrMode,
 };
-use crate::integrations::telemetry::events::{Integration, Operation};
-use crate::integrations::telemetry::observe::observe_with;
+use crate::integrations::telemetry::events::{ErrorCode, Integration, Operation};
+use crate::integrations::telemetry::observe::{observe_with, TelemetryError};
 use crate::integrations::telemetry::recorder::TelemetryRecorder;
 use crate::integrations::telemetry::state::TelemetryState;
 use serde_json::Value;
@@ -70,13 +72,33 @@ impl DayliteApiClient {
         &self,
         request: DayliteHttpRequest,
     ) -> Result<DayliteHttpResponse, DayliteApiError> {
-        observe_with(
+        let path = request.path.clone();
+        let result = observe_with(
             self.telemetry.as_deref(),
             Operation::DayliteRequest,
             Integration::Daylite,
-            self.transport.send(request),
+            async {
+                let response = self
+                    .transport
+                    .send(request)
+                    .await
+                    .map_err(RequestFailure::Transport)?;
+                if (200..300).contains(&response.status) {
+                    Ok(response)
+                } else {
+                    Err(RequestFailure::Status {
+                        error: normalize_http_error(response.status, &response.body, &path),
+                        response,
+                    })
+                }
+            },
         )
-        .await
+        .await;
+
+        match result {
+            Ok(response) | Err(RequestFailure::Status { response, .. }) => Ok(response),
+            Err(RequestFailure::Transport(error)) => Err(error),
+        }
     }
 
     #[cfg(test)]
@@ -88,6 +110,37 @@ impl DayliteApiClient {
             transport: Box::new(ReqwestTransport::new_with_record_replay(base_url, config)?),
             telemetry: None,
         })
+    }
+}
+
+/// Callers map unsuccessful statuses themselves, so `Status` is only a failure for telemetry.
+enum RequestFailure {
+    Transport(DayliteApiError),
+    Status {
+        error: DayliteApiError,
+        response: DayliteHttpResponse,
+    },
+}
+
+impl RequestFailure {
+    fn error(&self) -> &DayliteApiError {
+        match self {
+            Self::Transport(error) | Self::Status { error, .. } => error,
+        }
+    }
+}
+
+impl TelemetryError for RequestFailure {
+    fn error_code(&self) -> ErrorCode {
+        self.error().error_code()
+    }
+
+    fn technical_message(&self) -> Option<&str> {
+        self.error().technical_message()
+    }
+
+    fn http_status(&self) -> Option<u16> {
+        self.error().http_status()
     }
 }
 
@@ -344,6 +397,7 @@ fn to_recorded_request(request: &DayliteHttpRequest) -> RecordedRequest {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::integrations::telemetry::test_support::{enabled_recorder, recorded};
     use std::fs;
     use std::path::{Path, PathBuf};
     use std::sync::{Mutex, OnceLock};
@@ -445,6 +499,95 @@ mod tests {
             std::env::remove_var("VCR_MODE");
         }
         assert_eq!(VcrMode::from_env(), VcrMode::Replay);
+    }
+
+    #[tokio::test]
+    async fn an_unsuccessful_status_is_recorded_as_a_failure_but_still_returned() {
+        let (recorder, mut receiver) = enabled_recorder();
+        let client = DayliteApiClient {
+            transport: Box::new(FixedResponseTransport(DayliteHttpResponse {
+                status: 404,
+                body: "not found".to_string(),
+            })),
+            telemetry: Some(recorder),
+        };
+
+        let response = client
+            .send_request(DayliteHttpRequest::new(DayliteHttpMethod::Get, "/projects"))
+            .await
+            .expect("an unsuccessful status should still be returned");
+
+        assert_eq!(response.status, 404);
+        assert_eq!(response.body, "not found");
+        let events = recorded(&mut receiver);
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[0].name(), "operation_completed");
+        assert_eq!(events[0].properties()["success"], false);
+        assert_eq!(events[0].properties()["http_status"], 404);
+        assert_eq!(events[1].name(), "error_occurred");
+        assert_eq!(events[1].properties()["code"], "REQUEST_FAILED");
+        assert_eq!(events[1].properties()["http_status"], 404);
+    }
+
+    #[tokio::test]
+    async fn a_server_error_is_recorded_with_its_mapped_code() {
+        let (recorder, mut receiver) = enabled_recorder();
+        let client = DayliteApiClient {
+            transport: Box::new(FixedResponseTransport(DayliteHttpResponse {
+                status: 500,
+                body: String::new(),
+            })),
+            telemetry: Some(recorder),
+        };
+
+        let response = client
+            .send_request(DayliteHttpRequest::new(DayliteHttpMethod::Get, "/projects"))
+            .await
+            .expect("a server error status should still be returned");
+
+        assert_eq!(response.status, 500);
+        let events = recorded(&mut receiver);
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[0].properties()["success"], false);
+        assert_eq!(events[0].properties()["http_status"], 500);
+        assert_eq!(events[1].properties()["code"], "SERVER_ERROR");
+        assert_eq!(events[1].properties()["http_status"], 500);
+    }
+
+    #[tokio::test]
+    async fn a_successful_status_is_recorded_as_a_single_completion() {
+        let (recorder, mut receiver) = enabled_recorder();
+        let client = DayliteApiClient {
+            transport: Box::new(FixedResponseTransport(DayliteHttpResponse {
+                status: 200,
+                body: "{}".to_string(),
+            })),
+            telemetry: Some(recorder),
+        };
+
+        let response = client
+            .send_request(DayliteHttpRequest::new(DayliteHttpMethod::Get, "/projects"))
+            .await
+            .expect("a successful request should be returned");
+
+        assert_eq!(response.status, 200);
+        let events = recorded(&mut receiver);
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].name(), "operation_completed");
+        assert_eq!(events[0].properties()["success"], true);
+        assert!(!events[0].properties().contains_key("http_status"));
+    }
+
+    struct FixedResponseTransport(DayliteHttpResponse);
+
+    impl DayliteHttpTransport for FixedResponseTransport {
+        fn send<'a>(
+            &'a self,
+            _request: DayliteHttpRequest,
+        ) -> BoxFuture<'a, Result<DayliteHttpResponse, DayliteApiError>> {
+            let response = self.0.clone();
+            Box::pin(async move { Ok(response) })
+        }
     }
 
     fn cassette_path(file_name: &str) -> PathBuf {
