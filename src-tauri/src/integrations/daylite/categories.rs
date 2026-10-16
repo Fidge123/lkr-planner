@@ -5,6 +5,8 @@ use serde::Deserialize;
 use super::auth_flow::send_authenticated_json;
 use super::client::{DayliteApiClient, DayliteHttpMethod, DayliteHttpRequest};
 use super::shared::{run_daylite_command, DayliteApiError, DayliteTokenState};
+use crate::integrations::telemetry::events::{Integration, Operation};
+use crate::integrations::telemetry::observe::observe;
 
 #[derive(Debug, Clone, Deserialize)]
 struct DayliteCategoryDto {
@@ -39,6 +41,19 @@ impl DayliteCategoryListDto {
 #[tauri::command]
 #[specta::specta]
 pub async fn daylite_project_category_colors(
+    app: tauri::AppHandle,
+) -> Result<HashMap<String, String>, DayliteApiError> {
+    let handle = app.clone();
+    observe(
+        &handle,
+        Operation::DayliteProjectCategoryColors,
+        Integration::Daylite,
+        daylite_project_category_colors_inner(app),
+    )
+    .await
+}
+
+async fn daylite_project_category_colors_inner(
     app: tauri::AppHandle,
 ) -> Result<HashMap<String, String>, DayliteApiError> {
     run_daylite_command(app, async |client, tokens| {

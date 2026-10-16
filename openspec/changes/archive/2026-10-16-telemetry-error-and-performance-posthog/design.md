@@ -8,7 +8,7 @@ Constraints that shape the approach:
 - Errors already travel as structured payloads (`StoreError`, `ZepError`, and siblings) carrying `code`, `user_message`, and `technical_message`, so an event taxonomy can reuse `code` as an enumerated dimension without inventing one.
 - Failure sites today are `eprintln!` calls in `daylite/projects.rs`, `calendar/caldav/write.rs`, `calendar/protection.rs`, `holidays.rs`, and `lib.rs`; these are the natural instrumentation points.
 - `uuid` (v4), `reqwest` (via `tauri-plugin-http`), `tokio`, `serde`, and `chrono` are already dependencies, so no new crate is required.
-- The repository has a record/replay HTTP harness (`integrations/http_record_replay.rs`) used for integration tests, which the capture request can reuse.
+- No recorded PostHog interaction exists, so the capture request is verified by a live delivery test that runs only when a project key is available.
 - PostHog's free tier allows one million events per month, which bounds how finely operations may be instrumented.
 - The application and its users are German, so the EU-hosted PostHog region is the appropriate target.
 
@@ -17,7 +17,7 @@ Constraints that shape the approach:
 **Goals:**
 
 - One instrumentation helper that wraps an operation and emits both its duration and its failure, so a call site is annotated once rather than twice.
-- A single redaction boundary that every outbound event passes through, so data minimization is enforced structurally instead of by reviewer discipline.
+- A single redaction boundary that every outbound event passes through, so credential removal is enforced structurally instead of by reviewer discipline.
 - Telemetry that is inert by construction in tests, local development, and builds without a project key.
 
 **Non-Goals:**
@@ -65,8 +65,15 @@ Sprinkling separate `record_duration` and `record_error` calls was rejected beca
 
 ### Redaction as a constructor invariant
 
-Event payloads are built only through constructors that run every free-text field through a sanitizer stripping URLs, file paths, bearer tokens, and e-mail addresses before the value is stored on the event.
+Event payloads are built only through constructors that run every free-text field through a sanitizer before the value is stored on the event.
 The raw `technical_message` never reaches an event field unsanitized, so a new call site cannot leak by forgetting to sanitize.
+
+The sanitizer removes only credentials: bearer and basic values, user credentials in a URL, and values whose key ends in token, password, passwort, passwd, secret, key, apikey, authorization, or auth, in plain text, URL query strings, and JSON.
+Everything else, including URLs, file paths, e-mail addresses, and the messages of commands that fail with only a German user message, is kept, because diagnosing a user's problem remotely needs to know which request failed against which server.
+Redacting URLs, paths, and messages as well was rejected because a report like "Zeitüberschreitung bei [redacted]" names neither the request nor the server.
+Credentials are recognised by key rather than by shape, because the Daylite refresh token travels as a URL query parameter that HTTP errors repeat, and token refresh errors embed the response body as JSON.
+Recognising long random strings was rejected because it misses short secrets and redacts IDs that debugging needs.
+A value cut off by log truncation is redacted to the end of the message.
 
 Structured dimensions (integration, operation, error code, HTTP status, duration) are typed and carry no free text at all.
 The alternative, sanitizing at serialization time, was rejected because it invites a future "just this once" field that bypasses the serializer path.
@@ -99,7 +106,8 @@ The error boundary renders a German fallback message, so an uncaught render erro
 ## Risks / Trade-offs
 
 - [Opt-in default means most installs report nothing, so the data may be too sparse to spot a regression] → Accept for now; the settings copy explains the benefit, and the default can be revisited once the legal basis for opt-out is settled.
-- [A new call site adds a free-text field that leaks business data] → Constructors sanitize on entry, and a unit test asserts that a technical message containing a URL, a path, and a token comes out redacted.
+- [Error reports contain personal and business data such as project names, e-mail addresses, and the IP address that PostHog records] → Collected only after opt-in under a German text that names these categories.
+- [A new call site embeds a credential under a key name outside the list] → Constructors sanitize on entry, unit tests cover credentials in plain text, URL query strings, JSON, URL authorities, and truncated bodies, and a new credential needs its key name added.
 - [The PostHog key is extractable from the shipped binary] → Accepted; the key is write-only ingestion and cannot read captured data. A leaked key permits event spam into the project, which is recoverable by rotating it.
 - [Instrumentation noise in command bodies obscures the domain logic] → One wrapping call per command, with the enum and helper in the telemetry module, keeps the diff at the boundary rather than inside the logic.
 - [Duration measurements include cache hits and therefore mix two populations] → The performance event carries the operation name only; distinguishing a cached from an uncached load is left to a later change if the data proves ambiguous.

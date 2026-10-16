@@ -1,3 +1,22 @@
+use crate::integrations::telemetry::events::{Integration, Operation};
+use crate::integrations::telemetry::observe::{observe, record_failure, RequestFailure};
+
+#[tauri::command]
+#[specta::specta]
+pub async fn get_holidays_for_week(
+    app: tauri::AppHandle,
+    week_start: String,
+) -> Result<Vec<Holiday>, String> {
+    let handle = app.clone();
+    observe(
+        &handle,
+        Operation::GetHolidaysForWeek,
+        Integration::Holidays,
+        get_holidays_for_week_inner(app, week_start),
+    )
+    .await
+}
+
 use chrono::{Datelike, NaiveDate};
 use serde::{Deserialize, Serialize};
 use specta::Type;
@@ -24,9 +43,7 @@ struct NagerHoliday {
     counties: Option<Vec<String>>,
 }
 
-#[tauri::command]
-#[specta::specta]
-pub async fn get_holidays_for_week(
+async fn get_holidays_for_week_inner(
     app: tauri::AppHandle,
     week_start: String,
 ) -> Result<Vec<Holiday>, String> {
@@ -56,7 +73,7 @@ pub async fn get_holidays_for_week(
 
         if needs_fetch {
             fetched_any = true;
-            let fetched = fetch_holidays_from_api(year).await?;
+            let fetched = fetch_holidays_from_api(&app, year).await?;
             let cached = fetched
                 .iter()
                 .map(|h| crate::integrations::local_store::CachedHoliday {
@@ -127,38 +144,55 @@ fn is_cache_entry_fresh(
     (today - fetched).num_days() <= CACHE_REFRESH_DAYS
 }
 
-async fn fetch_holidays_from_api(year: i32) -> Result<Vec<Holiday>, String> {
+async fn fetch_holidays_from_api(
+    app: &tauri::AppHandle,
+    year: i32,
+) -> Result<Vec<Holiday>, String> {
     let url = format!("{NAGER_BASE_URL}/{year}/DE");
-    fetch_from_url(&url).await
+    fetch_from_url(Some(app), &url).await
 }
 
-async fn fetch_from_url(url: &str) -> Result<Vec<Holiday>, String> {
+async fn fetch_from_url(app: Option<&tauri::AppHandle>, url: &str) -> Result<Vec<Holiday>, String> {
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(REQUEST_TIMEOUT_SECS))
         .build()
         .map_err(|_| "Feiertage konnten nicht geladen werden".to_string())?;
 
     let response = client.get(url).send().await.map_err(|e| {
-        eprintln!("holidays: HTTP request to {url} failed: {e}");
+        record_request_failure(app, RequestFailure::new("REQUEST_FAILED", e.to_string()));
         "Feiertage konnten nicht geladen werden".to_string()
     })?;
 
     if !response.status().is_success() {
-        eprintln!("holidays: Nager API returned status {}", response.status());
+        record_request_failure(
+            app,
+            RequestFailure::with_status("UNEXPECTED_STATUS", response.status().as_u16()),
+        );
         return Err("Feiertage konnten nicht geladen werden".to_string());
     }
 
     let body = response.text().await.map_err(|e| {
-        eprintln!("holidays: reading response body failed: {e}");
+        record_request_failure(app, RequestFailure::new("BODY_READ_FAILED", e.to_string()));
         "Feiertage konnten nicht geladen werden".to_string()
     })?;
 
     let nager_holidays: Vec<NagerHoliday> = serde_json::from_str(&body).map_err(|e| {
-        eprintln!("holidays: JSON parse failed: {e}");
+        record_request_failure(app, RequestFailure::new("INVALID_RESPONSE", e.to_string()));
         "Feiertage konnten nicht geladen werden".to_string()
     })?;
 
     Ok(filter_holidays(nager_holidays))
+}
+
+fn record_request_failure(app: Option<&tauri::AppHandle>, failure: RequestFailure) {
+    if let Some(app) = app {
+        record_failure(
+            app,
+            Operation::HolidayApiRequest,
+            Integration::Holidays,
+            &failure,
+        );
+    }
 }
 
 fn filter_holidays(nager_holidays: Vec<NagerHoliday>) -> Vec<Holiday> {

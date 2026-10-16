@@ -1,7 +1,7 @@
 ## Why
 
 The application currently reports failures only through `eprintln!` in the Rust backend and German error strings in the UI, so nobody outside the running machine ever learns that a Daylite refresh failed, a CalDAV write was rejected, or a week load took twelve seconds.
-Because this is a distributed desktop app, there is no server log to inspect after a user reports "es hängt" — the evidence is gone by the time the report arrives.
+Because this is a distributed desktop app, there is no server log to inspect after a user reports "es hängt", because the evidence is gone by the time the report arrives.
 Sending structured error and duration events to PostHog (free tier) makes recurring integration failures and slow operations visible per release without a support ticket.
 
 ## What Changes
@@ -10,16 +10,17 @@ Sending structured error and duration events to PostHog (free tier) makes recurr
 - Capture error events for failed Tauri commands and failed outbound integration calls (Daylite, ZEP/CalDAV, Nager holidays, local store, keychain), carrying the existing error `code`, the integration name, and the technical message.
 - Capture error events for uncaught frontend errors and unhandled promise rejections via a React error boundary and global handlers.
 - Capture performance events measuring the duration of Tauri commands, outbound HTTP calls to each integration, and app startup.
-- Attach anonymous context to every event: app version, OS and version, and a locally generated random install ID persisted in the local store.
+- Attach context to every event: app version, OS and version, and a locally generated random install ID persisted in the local store.
 - Add an opt-in telemetry consent flag, off by default, exposed as a new "Diagnose" section in the settings dialog; no event is buffered or sent while it is off.
-- Never include personal or business data in events: no project names, contact names, calendar URLs, tokens, or free-text search input — only enumerated codes, integration names, durations, and sanitized technical messages.
+- Remove credentials from every free-text event field and otherwise keep the full error detail, including URLs, file paths, and the messages of commands that fail with only a German user message, so a user's problem can be diagnosed remotely.
+- State in the German consent text that error reports contain technical details that can include project or employee names and the IP address, and that passwords, keys, and tokens are never transmitted.
 - Fail silently and never block the user: telemetry delivery errors are dropped, the buffer is bounded, and no UI depends on a capture result.
 
 ## Capabilities
 
 ### New Capabilities
 
-- `telemetry`: Opt-in collection and delivery of error and performance events to PostHog, covering the consent gate, event taxonomy and payload shape, anonymous install identity, batching and delivery behavior, data minimization rules, and failure isolation.
+- `telemetry`: Opt-in collection and delivery of error and performance events to PostHog, covering the consent gate, event taxonomy and payload shape, anonymous install identity, batching and delivery behavior, credential redaction, and failure isolation.
 
 ### Modified Capabilities
 
@@ -35,5 +36,5 @@ Sending structured error and duration events to PostHog (free tier) makes recurr
 - `src/app/`: new error boundary and global `error`/`unhandledrejection` handlers forwarding to the backend.
 - `src/generated/tauri.ts`: regenerated specta bindings for the new commands.
 - Build/CI: a `POSTHOG_API_KEY` build-time environment variable; when it is absent the telemetry client is inert, so local dev and tests send nothing.
-- Tests: Rust unit tests for consent gating, redaction, batching, and bounded buffering; cassette-based tests for the capture request; frontend tests for the consent panel and error boundary.
-- `docs/adr/0013-telemetry-and-posthog-integration.md`: new ADR recording the opt-in model, the backend-only client, and the data-minimization rules.
+- Tests: Rust unit tests for consent gating, redaction, batching, and bounded buffering; a live delivery test against PostHog that runs only when a project key is available; frontend tests for the consent panel and error boundary.
+- `docs/adr/0013-telemetry-and-posthog-integration.md`: new ADR recording the opt-in model, the backend-only client, and the credential redaction rules.
