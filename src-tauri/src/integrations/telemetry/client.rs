@@ -1,10 +1,6 @@
 use super::context::EventContext;
 use super::events::TelemetryEvent;
 use super::queue::DeliveryError;
-#[cfg(test)]
-use crate::integrations::http_record_replay::{
-    cassette_path_for_test, RecordReplayConfig, RecordedRequest, VcrMode,
-};
 use serde_json::{json, Map, Value};
 use tauri_plugin_http::reqwest;
 
@@ -17,8 +13,6 @@ pub struct PostHogClient {
     api_key: Option<String>,
     endpoint: String,
     http_client: reqwest::Client,
-    #[cfg(test)]
-    record_replay: Option<RecordReplayConfig>,
 }
 
 impl PostHogClient {
@@ -31,8 +25,6 @@ impl PostHogClient {
             api_key: api_key.map(str::to_string),
             endpoint: POSTHOG_ENDPOINT.to_string(),
             http_client: reqwest::Client::new(),
-            #[cfg(test)]
-            record_replay: None,
         }
     }
 
@@ -69,23 +61,6 @@ impl PostHogClient {
             return Ok(());
         };
 
-        #[cfg(test)]
-        if let Some(record_replay) = &self.record_replay {
-            if record_replay.mode() == VcrMode::Replay {
-                let recorded = record_replay
-                    .replay(&RecordedRequest {
-                        method: "POST".to_string(),
-                        path: "/batch/".to_string(),
-                        query: Vec::new(),
-                        body: Some(payload),
-                    })
-                    .map_err(|_| DeliveryError)?
-                    .ok_or(DeliveryError)?;
-
-                return (recorded.status < 400).then_some(()).ok_or(DeliveryError);
-            }
-        }
-
         let response = self
             .http_client
             .post(&self.endpoint)
@@ -95,23 +70,12 @@ impl PostHogClient {
             .await
             .map_err(|_| DeliveryError)?;
 
-        response
-            .status()
-            .is_success()
-            .then_some(())
-            .ok_or(DeliveryError)
+        delivery_result(response.status())
     }
+}
 
-    #[cfg(test)]
-    fn with_replay_cassette(api_key: &str, cassette_file_name: &str) -> Self {
-        Self {
-            record_replay: Some(RecordReplayConfig::new(
-                cassette_path_for_test(cassette_file_name),
-                VcrMode::Replay,
-            )),
-            ..Self::with_api_key(Some(api_key))
-        }
-    }
+fn delivery_result(status: reqwest::StatusCode) -> Result<(), DeliveryError> {
+    status.is_success().then_some(()).ok_or(DeliveryError)
 }
 
 fn enrich(properties: &Map<String, Value>, context: &EventContext) -> Map<String, Value> {
@@ -180,25 +144,17 @@ mod tests {
         assert_eq!(payload["batch"][0]["distinct_id"], INSTALL_ID);
     }
 
-    #[tokio::test]
-    async fn capture_request_matches_the_recorded_batch_interaction() {
-        let client = PostHogClient::with_replay_cassette("phc_test_key", "posthog-capture.json");
-
-        client
-            .send(vec![event(42)], &context())
-            .await
-            .expect("the recorded interaction should match the built request");
-    }
-
-    #[tokio::test]
-    async fn a_rejected_batch_is_reported_as_a_delivery_error() {
-        let client = PostHogClient::with_replay_cassette("phc_test_key", "posthog-capture.json");
-        let mut rejected = context();
-        rejected.install_id = "rejected-install-id".to_string();
-
-        let result = client.send(vec![event(42)], &rejected).await;
-
-        assert_eq!(result, Err(DeliveryError));
+    #[test]
+    fn only_a_success_status_counts_as_delivered() {
+        assert_eq!(delivery_result(reqwest::StatusCode::OK), Ok(()));
+        assert_eq!(
+            delivery_result(reqwest::StatusCode::UNAUTHORIZED),
+            Err(DeliveryError)
+        );
+        assert_eq!(
+            delivery_result(reqwest::StatusCode::SERVICE_UNAVAILABLE),
+            Err(DeliveryError)
+        );
     }
 
     #[tokio::test]

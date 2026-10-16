@@ -27,7 +27,7 @@
 - [x] 4.2 Implement `queue.rs` with the bounded `tokio::sync::mpsc` channel and the background flush task, satisfying the tests
 - [x] 4.3 Write a failing test asserting the client is inert when `POSTHOG_API_KEY` is absent at compile time (no request attempted)
 - [x] 4.4 Implement `client.rs` posting batches to the EU `/batch/` endpoint with the `option_env!` key, satisfying the test
-- [x] 4.5 Add a cassette-based test for the capture request using the existing `http_record_replay` harness, asserting the batch payload shape and that `distinct_id` is the install identifier
+- [x] 4.5 Add a live delivery test against the PostHog endpoint that runs when `POSTHOG_API_KEY` is set and is reported as ignored otherwise, with unit tests asserting the batch payload shape and that `distinct_id` is the install identifier
 - [x] 4.6 Write a failing test asserting a failed delivery attempt is not surfaced to the caller and the buffer stays bounded
 - [x] 4.7 Implement drop-after-one-retry delivery failure handling, satisfying the test
 

@@ -35,5 +35,5 @@ Sending structured error and duration events to PostHog (free tier) makes recurr
 - `src/app/`: new error boundary and global `error`/`unhandledrejection` handlers forwarding to the backend.
 - `src/generated/tauri.ts`: regenerated specta bindings for the new commands.
 - Build/CI: a `POSTHOG_API_KEY` build-time environment variable; when it is absent the telemetry client is inert, so local dev and tests send nothing.
-- Tests: Rust unit tests for consent gating, redaction, batching, and bounded buffering; cassette-based tests for the capture request; frontend tests for the consent panel and error boundary.
+- Tests: Rust unit tests for consent gating, redaction, batching, and bounded buffering; a live delivery test against PostHog that runs only when a project key is available; frontend tests for the consent panel and error boundary.
 - `docs/adr/0013-telemetry-and-posthog-integration.md`: new ADR recording the opt-in model, the backend-only client, and the data-minimization rules.
