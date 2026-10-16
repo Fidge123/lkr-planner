@@ -86,6 +86,6 @@
 - [x] 12.1 Run `cargo test` in `src-tauri` and confirm all tests pass
 - [x] 12.2 Run `bun test` and confirm all tests pass
 - [x] 12.3 Run `bun lint` and fix any issues
-- [ ] 12.4 Manually verify with telemetry disabled that no outbound request reaches the telemetry endpoint
-- [ ] 12.5 Manually verify with telemetry enabled against a scratch PostHog project that a forced Daylite failure and a week load appear as `error_occurred` and `operation_completed` events carrying no personal or business data
+- [x] 12.4 Manually verify with telemetry disabled that no outbound request reaches the telemetry endpoint
+- [x] 12.5 Manually verify with telemetry enabled against a scratch PostHog project that a forced Daylite failure and a week load appear as `error_occurred` and `operation_completed` events carrying no personal or business data
 - [x] 12.6 Run `bunx openspec validate telemetry-error-and-performance-posthog --strict`
