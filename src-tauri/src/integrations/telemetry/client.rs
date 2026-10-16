@@ -23,8 +23,12 @@ pub struct PostHogClient {
 
 impl PostHogClient {
     pub fn from_build_config() -> Self {
+        Self::with_api_key(BUILD_TIME_API_KEY)
+    }
+
+    pub(crate) fn with_api_key(api_key: Option<&str>) -> Self {
         Self {
-            api_key: BUILD_TIME_API_KEY.map(str::to_string),
+            api_key: api_key.map(str::to_string),
             endpoint: POSTHOG_ENDPOINT.to_string(),
             http_client: reqwest::Client::new(),
             #[cfg(test)]
@@ -99,23 +103,13 @@ impl PostHogClient {
     }
 
     #[cfg(test)]
-    pub(crate) fn with_key_for_test(api_key: &str) -> Self {
-        Self {
-            api_key: Some(api_key.to_string()),
-            endpoint: POSTHOG_ENDPOINT.to_string(),
-            http_client: reqwest::Client::new(),
-            record_replay: None,
-        }
-    }
-
-    #[cfg(test)]
     fn with_replay_cassette(api_key: &str, cassette_file_name: &str) -> Self {
         Self {
             record_replay: Some(RecordReplayConfig::new(
                 cassette_path_for_test(cassette_file_name),
                 VcrMode::Replay,
             )),
-            ..Self::with_key_for_test(api_key)
+            ..Self::with_api_key(Some(api_key))
         }
     }
 }
@@ -153,15 +147,15 @@ mod tests {
     }
 
     #[test]
-    fn client_is_inert_without_a_build_time_key() {
-        let client = PostHogClient::from_build_config();
+    fn client_is_inert_without_an_api_key() {
+        let client = PostHogClient::with_api_key(None);
 
         assert_eq!(client.batch_payload(vec![event(42)], &context()), None);
     }
 
     #[test]
     fn batch_payload_carries_the_api_key_and_one_entry_per_event() {
-        let client = PostHogClient::with_key_for_test("phc_test_key");
+        let client = PostHogClient::with_api_key(Some("phc_test_key"));
 
         let payload = client
             .batch_payload(vec![event(42), event(42)], &context())
@@ -177,7 +171,7 @@ mod tests {
 
     #[test]
     fn every_entry_is_identified_by_the_install_id() {
-        let client = PostHogClient::with_key_for_test("phc_test_key");
+        let client = PostHogClient::with_api_key(Some("phc_test_key"));
 
         let payload = client
             .batch_payload(vec![event(42)], &context())
@@ -205,6 +199,32 @@ mod tests {
         let result = client.send(vec![event(42)], &rejected).await;
 
         assert_eq!(result, Err(DeliveryError));
+    }
+
+    #[tokio::test]
+    async fn delivers_a_batch_to_the_live_posthog_api() {
+        const LIVE_TEST_INSTALL_ID: &str = "lkr-planner-integration-test";
+        let Some(api_key) = std::env::var("POSTHOG_API_KEY")
+            .ok()
+            .filter(|key| !key.is_empty())
+        else {
+            eprintln!("skipping delivers_a_batch_to_the_live_posthog_api: POSTHOG_API_KEY not set");
+            return;
+        };
+        let client = PostHogClient::with_api_key(Some(&api_key));
+
+        let result = client
+            .send(
+                vec![event(42)],
+                &EventContext::current(LIVE_TEST_INSTALL_ID.to_string()),
+            )
+            .await;
+
+        assert_eq!(
+            result,
+            Ok(()),
+            "PostHog was unreachable or rejected the batch"
+        );
     }
 
     #[test]
