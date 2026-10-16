@@ -88,9 +88,32 @@ pub fn run() {
 
     app.run(|app_handle, event| {
         if matches!(event, tauri::RunEvent::Exit) {
+            close_daylite_before_exit();
             flush_telemetry_before_exit(app_handle);
         }
     });
+}
+
+/// Covers the Daylite request timeout plus the keychain write.
+const DAYLITE_EXIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+
+fn close_daylite_before_exit() {
+    let closed = tauri::async_runtime::block_on(async {
+        tokio::time::timeout(
+            DAYLITE_EXIT_TIMEOUT,
+            integrations::daylite::shared::close_daylite_token_session(),
+        )
+        .await
+    });
+
+    match closed {
+        Ok(Ok(())) => {}
+        Ok(Err(error)) => eprintln!(
+            "Failed to persist Daylite tokens before exit: {}",
+            error.technical_message
+        ),
+        Err(_) => eprintln!("Timed out waiting for a Daylite token rotation before exit"),
+    }
 }
 
 const TELEMETRY_EXIT_FLUSH_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(2);

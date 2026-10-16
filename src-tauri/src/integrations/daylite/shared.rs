@@ -195,10 +195,7 @@ async fn rotate_tokens(
         ));
     }
 
-    let rotated = refresh_tokens(client, current.refresh_token).await?;
-    store_daylite_tokens(&rotated)?;
-
-    Ok(rotated)
+    refresh_tokens(client, current.refresh_token).await
 }
 
 /// Retries once on rejection: a token revoked server-side defeats expiry-driven rotation.
@@ -268,13 +265,12 @@ where
     F: FnOnce() -> Fut,
     Fut: std::future::Future<Output = Result<DayliteTokenState, DayliteApiError>>,
 {
-    token_session()
-        .adopt(|| async {
-            let minted = mint().await?;
-            store_daylite_tokens(&minted)?;
-            Ok(minted)
-        })
-        .await
+    token_session().adopt(mint).await
+}
+
+/// Must run before the process exits, including the restart that installs an update.
+pub async fn close_daylite_token_session() -> Result<(), DayliteApiError> {
+    token_session().close().await
 }
 
 pub(super) fn load_store_or_error(app: tauri::AppHandle) -> Result<LocalStore, DayliteApiError> {

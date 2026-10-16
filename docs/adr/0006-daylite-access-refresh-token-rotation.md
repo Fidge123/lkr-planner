@@ -3,6 +3,7 @@
 - Status: Accepted
 - Date: 2026-02-14
 - Amended: 2026-08-14 (token storage moved to the keychain, rotation narrowed to a session lock, `401` retry added)
+- Amended: 2026-10-16 (rotated tokens survive a refused keychain write, exit waits for an in-flight rotation)
 
 ## Context
 
@@ -44,6 +45,23 @@ That was wider than the invariant requires and made each call pay a keychain rea
   Expiry-driven refresh cannot anticipate a token revoked server-side, which is the case this covers.
   Track a generation on the token state so a burst of rejected requests costs one rotation rather than one per caller.
 - Do not retry an operation that has already mutated the local store. A rejected token surfaces there as an error the caller can retry deliberately.
+
+## Amendment 2026-10-16: no stranded refresh tokens
+
+Daylite retires the previous refresh token as soon as it issues a new one, so any rotation whose result does not reach the keychain leaves a dead refresh token behind and signs the user out on the next start.
+Two paths allowed that.
+
+- A refused keychain write discarded the rotated pair from memory as well, so even the running session went on rotating with the dead token.
+  The session now holds the rotated pair in memory before persisting it and marks it unpersisted until the write succeeds.
+  While it is unpersisted, a lease retries the write under the rotation lock and fails with the keychain error instead of handing out the token, so the keychain heals as soon as access is granted.
+- Exiting while a rotation was in flight, including the restart that installs an update, could drop the response after Daylite had already rotated.
+  On `RunEvent::Exit` the app now marks the session as closing, waits, bounded by a timeout, for the rotation lock, and persists any pending pair.
+  A closing session refuses to start a rotation or connect, including for callers that were already queued for the lock, so a failed in-flight rotation cannot hand the lock to a fresh one while the exit timeout runs out.
+
+Connecting saves the Daylite base URL after the refresh token is minted and before the session adopts the new pair.
+A pair kept in memory after a refused keychain write therefore always matches the stored base URL.
+
+A crash or power loss between Daylite's response and the keychain write still loses the new pair, because the server-side rotation cannot be made atomic with the local write.
 
 ## Consequences
 
