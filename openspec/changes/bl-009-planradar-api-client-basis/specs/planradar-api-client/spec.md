@@ -14,34 +14,47 @@ The system SHALL authenticate Planradar requests with a static, user-provided AP
 - **THEN** a normalized authentication error is returned
 - **AND** the user is prompted to provide a valid token
 
-### Requirement: Project search and list
-The system SHALL provide functionality to search and list Planradar projects.
+### Requirement: Project list
+The system SHALL provide functionality to list Planradar projects with pagination.
 
-#### Scenario: Search projects by query
-- **WHEN** user searches for projects with a query string
-- **THEN** the client returns projects matching the query
+The Planradar list endpoint (`GET .../projects`) supports `sort`, `page`, and `pagesize` query parameters but no full-text query, so listing is paginated rather than searched.
+
+#### Scenario: List a page of projects
+- **WHEN** user requests projects with optional sort, page, and pagesize parameters
+- **THEN** the client returns the requested page of accessible projects
 - **AND** results are typed as Project structs
 
-#### Scenario: List all accessible projects
-- **WHEN** user requests all projects
-- **THEN** the client returns a list of all accessible projects
-- **AND** pagination is handled automatically
+#### Scenario: Page through all projects
+- **WHEN** user needs all accessible projects
+- **THEN** the caller requests successive pages via the page and pagesize parameters
+- **AND** the client returns one page per call (pagination is caller-driven, not aggregated)
 
 ### Requirement: Project create
-The system SHALL provide functionality to create new Planradar projects, either blank or copied from a source project.
-
-Blank creation uses the create-project endpoint with project attributes (name, address, dates, description).
-Copying uses the dedicated copy-project endpoint with a new name and per-aspect toggles for details, groups, ticket types (forms), users, and components (layers).
+The system SHALL create a blank Planradar project synchronously from the provided project attributes.
 
 #### Scenario: Create a blank project
 - **WHEN** user creates a project without a source project
-- **THEN** a new project is created from the provided attributes
+- **THEN** a new project is created via the create-project endpoint from the provided attributes (name, address, dates, description)
 - **AND** the new project ID is returned
+
+### Requirement: Project copy
+The system SHALL copy a source Planradar project and return the copied project's ID once Planradar has finished the asynchronous copy.
 
 #### Scenario: Copy from a source project
 - **WHEN** user creates a project from a source project
-- **THEN** the source project is copied via the copy-project endpoint with the new name and selected aspect toggles
+- **THEN** the source project is copied via the copy-project endpoint with the new name and the selected aspect toggles for details, groups, ticket types (forms), users, and components (layers)
 - **AND** the new project ID is returned
+
+#### Scenario: Copy completes asynchronously
+- **GIVEN** the copy-project endpoint answered `202 Accepted` with a job handle
+- **AND** Planradar exposes no job-status endpoint
+- **WHEN** the client waits for the copy
+- **THEN** it polls the project list, where new projects appear last, until the copied project appears
+
+#### Scenario: Copy does not complete in time
+- **WHEN** the copied project has not appeared within the poll window
+- **THEN** a normalized timeout error is returned
+- **AND** the error carries the copy job ID so the copy can be traced in Planradar
 
 ### Requirement: Project status read
 The system SHALL provide functionality to read project status.
