@@ -9,9 +9,9 @@
 - [x] 2.1 Create `src-tauri/src/integrations/telemetry/mod.rs` and register it in `integrations/mod.rs`
 - [x] 2.2 Write failing tests for the `Operation` and `Integration` enums serializing to stable snake_case dimension values
 - [x] 2.3 Implement `events.rs` with the `Operation` and `Integration` enums and the `operation_completed` / `error_occurred` / `app_started` event structs, satisfying the tests
-- [x] 2.4 Write failing tests for the redaction sanitizer: a message containing a URL, an absolute file path, a bearer token, and an e-mail address comes out with each value redacted and the surrounding description retained
+- [x] 2.4 Write failing tests for the redaction sanitizer: URLs, absolute paths, and e-mail addresses are retained, while credentials in plain-text pairs, URL query strings, JSON, URL authorities, bearer values, and truncated bodies are redacted with the surrounding description retained
 - [x] 2.5 Implement `redact.rs` and make the event constructors the only way to build an event, running every free-text field through the sanitizer
-- [x] 2.6 Write a failing test asserting that an event built from a `ZepError` whose technical message embeds a calendar URL transmits no URL
+- [x] 2.6 Write a failing test asserting that an event built from a `ZepError` whose technical message embeds a calendar URL keeps the URL
 - [x] 2.7 Satisfy that test and confirm structured dimensions carry no free text
 
 ## 3. Consent gate and install identity
@@ -65,10 +65,12 @@
 - [x] 9.1 Implement the `telemetry::observe(Operation, future)` helper with tests covering success, failure, and that the measured duration is emitted in both cases
 - [x] 9.2 Wrap the calendar commands in `calendar/commands.rs` (`load_week_events`, `create_assignment`, `update_assignment`, `move_assignment`, `reorder_assignment`, `delete_assignment`)
 - [x] 9.3 Instrument the CalDAV request sites in `calendar/caldav/`, replacing the `eprintln!` failure logs in `write.rs` and `protection.rs` with telemetry events plus the existing log where it still aids local debugging
-- [x] 9.4 Instrument the Daylite request sites in `daylite/client.rs`, `projects.rs`, `categories.rs`, and `contacts/`, ensuring no search term or project name enters an event
-- [x] 9.5 Instrument the ZEP commands and credential loading in `zep/`, ensuring no calendar URL or password enters an event
+- [x] 9.4 Instrument the Daylite request sites in `daylite/client.rs`, `projects.rs`, `categories.rs`, and `contacts/`, ensuring no Daylite token enters an event
+- [x] 9.5 Instrument the ZEP commands and credential loading in `zep/`, ensuring no password enters an event
 - [x] 9.6 Instrument the holiday API request in `holidays.rs`, replacing its four `eprintln!` failure paths
 - [x] 9.7 Instrument local store read and write failures with the existing `StoreErrorCode` as the error dimension
+- [x] 9.8 Transmit the message of commands that fail with only a user-facing `String` message
+- [x] 9.9 Name the resource URL, the target calendar URL, and the project reference at the CalDAV and project lookup failure sites
 
 ## 10. Build configuration
 
@@ -77,7 +79,7 @@
 
 ## 11. Documentation
 
-- [x] 11.1 Write `docs/adr/0013-telemetry-and-posthog-integration.md` recording the opt-in default, the backend-only client, the EU region choice, and the data minimization rules
+- [x] 11.1 Write `docs/adr/0013-telemetry-and-posthog-integration.md` recording the opt-in default, the backend-only client, the EU region choice, and the credential redaction rules
 - [x] 11.2 Add telemetry to the README implemented-features list
 - [x] 11.3 Run `bun run test:docs`
 
@@ -87,5 +89,5 @@
 - [x] 12.2 Run `bun test` and confirm all tests pass
 - [x] 12.3 Run `bun lint` and fix any issues
 - [x] 12.4 Manually verify with telemetry disabled that no outbound request reaches the telemetry endpoint
-- [x] 12.5 Manually verify with telemetry enabled against a scratch PostHog project that a forced Daylite failure and a week load appear as `error_occurred` and `operation_completed` events carrying no personal or business data
+- [x] 12.5 Manually verify with telemetry enabled against a scratch PostHog project that a forced Daylite failure and a week load appear as `error_occurred` and `operation_completed` events carrying no credentials
 - [x] 12.6 Run `bunx openspec validate telemetry-error-and-performance-posthog --strict`

@@ -1,6 +1,6 @@
 ## Purpose
 
-Make failures and slow operations in a distributed desktop app observable to the maintainer by sending anonymous, opt-in error and performance events to PostHog, without ever transmitting personal or business data.
+Make failures and slow operations in a distributed desktop app observable to the maintainer by sending opt-in error and performance events to PostHog with enough detail to diagnose them remotely, without ever transmitting credentials.
 
 ## ADDED Requirements
 
@@ -104,26 +104,40 @@ The system SHALL attach the application version, the operating system name and v
 - **WHEN** the events are inspected
 - **THEN** each event's application version identifies the release it came from
 
-### Requirement: Data minimization
-The system SHALL restrict event payloads to enumerated identifiers, numeric measurements, and sanitized technical messages, and SHALL NOT transmit personal or business data.
+### Requirement: Secret removal
+The system SHALL remove credentials from every transmitted free-text field and SHALL transmit all other error details unchanged.
 
-#### Scenario: Business data excluded
-- **WHEN** an event is built for any operation
-- **THEN** it contains no project name, contact name, employee name, appointment title, or note text
-
-#### Scenario: Credentials and endpoints excluded
-- **WHEN** an event is built for a failed request
-- **THEN** it contains no token, password, authorization header, calendar URL, or query string
-
-#### Scenario: Free-text input excluded
-- **WHEN** a project search fails or is measured
-- **THEN** the event contains no search term entered by the user
-
-#### Scenario: Technical message sanitized
-- **GIVEN** a technical error message that embeds a URL, a file path, or a token
+#### Scenario: Error details retained
+- **GIVEN** a technical error message that names a URL, a file path, or an e-mail address
 - **WHEN** the error event is built
-- **THEN** the embedded value is redacted from the transmitted message
-- **AND** the surrounding error description is retained
+- **THEN** the URL, the file path, and the e-mail address are transmitted unchanged
+
+#### Scenario: Credential key-value pairs removed
+- **GIVEN** a technical error message containing a token, password, secret, or key as a key-value pair in plain text, in a URL query string, or in JSON
+- **WHEN** the error event is built
+- **THEN** the value is redacted
+- **AND** the key and the surrounding message are retained
+
+#### Scenario: Authorization values removed
+- **GIVEN** a technical error message containing a bearer or basic authorization value
+- **WHEN** the error event is built
+- **THEN** the value is redacted
+
+#### Scenario: URL credentials removed
+- **GIVEN** a technical error message containing a URL with a user name and password
+- **WHEN** the error event is built
+- **THEN** the user name and the password are redacted
+- **AND** the rest of the URL is retained
+
+#### Scenario: Truncated credential removed
+- **GIVEN** a technical error message that ends inside a credential value
+- **WHEN** the error event is built
+- **THEN** the message is redacted from the start of that value to its end
+
+#### Scenario: Command message transmitted
+- **GIVEN** a backend command fails with only a user-facing message
+- **WHEN** the error event is built
+- **THEN** the user-facing message is transmitted with credentials removed
 
 ### Requirement: Batched delivery
 The system SHALL buffer recorded events and transmit them in batches to the telemetry endpoint, in the background, without blocking the operation that produced them.
@@ -175,8 +189,10 @@ The system SHALL expose the telemetry preference in the settings dialog with a G
 
 #### Scenario: Collection described in German
 - **WHEN** the diagnostics section is shown
-- **THEN** it states in German that anonymous error and performance data is transmitted
-- **AND** it states that no project, contact, or login data is transmitted
+- **THEN** it states in German that error and performance data is transmitted
+- **AND** it states that error reports contain technical details and can contain project or employee names
+- **AND** it states that the IP address is transmitted
+- **AND** it states that passwords, keys, and tokens are never transmitted
 
 #### Scenario: Current state reflected
 - **GIVEN** telemetry is enabled
