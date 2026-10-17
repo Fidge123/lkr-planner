@@ -23,6 +23,8 @@ Writes re-slot the affected days on the server, so the times of the edited card 
 ## Decision
 
 - A drop moves the card into its target cell before the write starts, renumbers that cell, and clears the card's times until the backend has re-slotted the day.
+- A fixed appointment dropped on another day is not moved, since the backend always refuses that drop.
+  In the macOS app, showing it in the target cell and removing it again left a copy behind on screen.
 - A delete removes the card once the backend confirms it.
 - After any write, successful or not, `load_week_events` is called with the `refresh` purpose for the affected employees of the edited week, and their rows are replaced without the loading spinner.
 - A refresh result is discarded if another optimistic edit happened after the refresh was requested, so an older refresh cannot undo a newer edit; the newer edit's own refresh applies.
@@ -33,5 +35,5 @@ Writes re-slot the affected days on the server, so the times of the edited card 
 ## Consequences
 
 - Drops and deletes are reflected immediately, and the follow-up refresh replaces only the touched rows.
-- A rejected write shows its card in the target cell until the refresh puts it back, alongside the German error message.
+- Any other rejected write shows its card in the target cell until the refresh puts it back, alongside the German error message.
 - A moved card shows no times for the short time between the drop and the refresh.

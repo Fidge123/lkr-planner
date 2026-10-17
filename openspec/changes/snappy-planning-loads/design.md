@@ -49,6 +49,7 @@ After the contact sync it reads the store again and reloads the week only if an 
 
 ### Optimistic edits with targeted refresh
 A drop moves the card into its target cell before the write starts, clearing its times until the backend has re-slotted the day.
+A fixed appointment dropped on another day stays in its cell, because the backend always refuses that move and showing it in the target cell first left a copy behind on screen in the macOS app.
 A delete removes the card once the backend confirms it.
 After any write, `load_week_events` is called for the affected employees only, without the loading spinner, and their rows are replaced.
 A refresh result is dropped if another optimistic edit happened after it was requested, so an older refresh cannot undo a newer edit.

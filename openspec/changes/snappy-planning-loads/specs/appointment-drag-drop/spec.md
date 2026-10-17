@@ -27,7 +27,7 @@ The card SHALL be shown in its target cell as soon as it is dropped, and only th
 - **WHEN** a dragged assignment whose linked Daylite project has category `"Termin FIX geplant"` is dropped on a cell of a different date
 - **THEN** the move is rejected before any CalDAV write
 - **AND** the German error message returned by the backend is shown
-- **AND** the refreshed row shows the assignment in its original place
+- **AND** the card stays in its original cell throughout, without being shown in the target cell
 
 #### Scenario: Drop lands on the day cell without within-cell positioning
 - **WHEN** a dragged assignment is dropped onto a cell that already contains other cards

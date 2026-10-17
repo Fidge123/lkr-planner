@@ -32,6 +32,7 @@
 - [x] 5.2 Write failing tests for merging refreshed employee rows and discarding a refresh that an optimistic edit superseded
 - [x] 5.3 Relocate a dropped card before the write and refresh the source and target rows afterwards
 - [x] 5.4 Remove a deleted card and refresh only the edited employee's row after modal and quick-add writes
+- [x] 5.5 Write a failing `bun test` and keep a fixed appointment dropped on another day in its cell instead of relocating it
 
 ## 6. Telemetry
 

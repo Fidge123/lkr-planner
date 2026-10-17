@@ -4,6 +4,7 @@ import type {
   ResolvedProject,
 } from "../generated/tauri";
 import { sortCellEvents } from "./cell-order";
+import { isProtectedAssignment } from "./components/assignment-modal-logic";
 
 export interface WeekData {
   eventsByEmployee: Record<string, CalendarCellEvent[]>;
@@ -128,12 +129,19 @@ export function removeEvent(week: WeekData, uid: string): WeekData {
  * Places the event where a drop put it, before the backend has written it. Its times are
  * cleared because the backend re-slots the day, and the target cell is renumbered so the
  * cards keep the dropped order until the refreshed row replaces them.
+ * A fixed appointment dropped on another day stays put, since the backend refuses that move.
  */
 export function relocateEvent(
   week: WeekData,
   event: CalendarCellEvent,
   target: CellTarget,
 ): WeekData {
+  if (
+    isProtectedAssignment(event.projectCategory) &&
+    event.date !== target.date
+  ) {
+    return week;
+  }
   const without = removeEvent(week, event.uid);
   const targetEvents = without.eventsByEmployee[target.employeeRef] ?? [];
   const isTargetAssignment = (candidate: CalendarCellEvent) =>

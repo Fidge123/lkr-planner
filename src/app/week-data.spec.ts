@@ -314,6 +314,41 @@ describe("relocateEvent", () => {
     expect(next.eventsByEmployee["emp-1"]).toContainEqual(absence);
   });
 
+  it("leaves a fixed appointment in place when the drop changes its day", () => {
+    const fixed = event({
+      uid: "fixed",
+      date: monday,
+      projectCategory: "Termin FIX geplant",
+    });
+    const data = week({ "emp-1": [fixed], "emp-2": [] });
+
+    const next = relocateEvent(data, fixed, {
+      employeeRef: "emp-2",
+      date: tuesday,
+      orderIndex: 0,
+    });
+
+    expect(next).toBe(data);
+  });
+
+  it("moves a fixed appointment to another employee on its own day", () => {
+    const fixed = event({
+      uid: "fixed",
+      date: monday,
+      projectCategory: "Termin FIX geplant",
+    });
+    const data = week({ "emp-1": [fixed], "emp-2": [] });
+
+    const next = relocateEvent(data, fixed, {
+      employeeRef: "emp-2",
+      date: monday,
+      orderIndex: 0,
+    });
+
+    expect(uidsOf(next.eventsByEmployee["emp-1"])).toEqual([]);
+    expect(uidsOf(next.eventsByEmployee["emp-2"])).toEqual(["fixed"]);
+  });
+
   it("inserts an event that came from another week", () => {
     const fromOtherWeek = event({ uid: "moved", date: "2026-08-03" });
     const data = week({ "emp-1": [] });
