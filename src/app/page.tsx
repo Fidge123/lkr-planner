@@ -93,6 +93,7 @@ export function PlanningGrid({
   categoryColors = {},
   onOpenIcalDialog = () => {},
   onNavigateWeek,
+  onJumpToWeek,
 }: Props) {
   const weekDays = getWeekDays(weekOffset, showWeekend);
   const weekStart = toLocalISODate(weekDays[0]);
@@ -111,6 +112,7 @@ export function PlanningGrid({
       categoryColors={categoryColors}
       onOpenIcalDialog={onOpenIcalDialog}
       onNavigateWeek={onNavigateWeek}
+      onJumpToWeek={onJumpToWeek}
     />
   );
 }
@@ -125,6 +127,7 @@ export function PlanningGridTable({
   categoryColors,
   onOpenIcalDialog,
   onNavigateWeek,
+  onJumpToWeek,
 }: PlanningGridTableProps) {
   const {
     employees,
@@ -269,6 +272,7 @@ export function PlanningGridTable({
             onReloadAssignments={reloadAssignments}
             onAssignmentWritten={handleAssignmentWritten}
             onToggleHighlight={toggleHighlight}
+            onJumpToWeek={onJumpToWeek}
           />
           {/* The document guard is not about Tauri: bun tests render this grid
               through react-dom/server, where portals and `document` do not exist. */}
@@ -379,6 +383,7 @@ interface Props {
   categoryColors?: ProjectCategoryColors;
   onOpenIcalDialog?: (employee: PlanningContactRecord) => void;
   onNavigateWeek?: (direction: -1 | 1) => void;
+  onJumpToWeek?: (day: Date) => void;
 }
 
 export interface PlanningGridTableProps {
@@ -391,6 +396,7 @@ export interface PlanningGridTableProps {
   categoryColors: ProjectCategoryColors;
   onOpenIcalDialog: (employee: PlanningContactRecord) => void;
   onNavigateWeek?: (direction: -1 | 1) => void;
+  onJumpToWeek?: (day: Date) => void;
 }
 
 export interface PlanningGridEmployeesState {

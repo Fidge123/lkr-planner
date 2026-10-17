@@ -63,11 +63,12 @@ The popover id is derived with `useId` to stay unique regardless.
 
 Every day and every week number is a `<button>`, with an `aria-label` carrying the full German date or "KW n", so the static markup tests can assert on labels and the picker is reachable by tab.
 Days of neighbouring months stay clickable and only get `text-base-content/40`, since jumping to them is the same action.
-The displayed week's row uses `bg-primary/10`, and today gets an outlined primary emphasis consistent with the header's "Heute" button.
+The displayed week's row uses `bg-primary/10`, and today gets a filled primary emphasis matching the grid's today column, which is also how DaisyUI renders a button carrying `aria-current`.
 
 ## Risks / Trade-offs
 
 - [The popover cannot be exercised by `renderToStaticMarkup`] → The date logic is covered by unit tests in `util.spec.ts`, the rendered grid by static markup tests on `WeekPicker` with a fixed month, and the click flow is verified manually in the app until the DOM harness exists.
 - [A fixed position does not follow the trigger when a grid wider than the window scrolls horizontally under the open picker] → The picker hides itself on a scroll of the grid's scroll container, which counts as closing without a jump.
+- [Wheel events over the picker bubble to the grid's swipe listener, because the popover stays in the grid's DOM while it renders in the top layer] → The picker stops their propagation while it is open.
 - [Jumping during an appointment drag] → Not possible, because the table is `pointer-events-none` while a drag runs.
 - [`weekOffsetFor` disagrees with `getWeekDays` on weekends] → Unit tests pin Saturday and Sunday system times with the weekend both hidden and shown.

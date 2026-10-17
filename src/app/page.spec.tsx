@@ -228,6 +228,13 @@ describe("planning grid assignment states", () => {
     expect(html).not.toContain("bg-secondary");
   });
 
+  it("offers the week picker on the calendar week cell when a jump is passed", () => {
+    expect(renderGrid({ onJumpToWeek: () => {} })).toContain(
+      "KW 5, Woche auswählen",
+    );
+    expect(renderGrid()).not.toContain("Woche auswählen");
+  });
+
   it("renders dates from the next week when weekOffset is 1", () => {
     expect(renderGrid({ weekOffset: 1 })).toContain("02.02");
   });

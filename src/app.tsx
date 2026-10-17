@@ -12,7 +12,7 @@ import { useRerenderOnDayChange } from "./app/hooks/use-rerender-on-day-change";
 import { useZepCalendars } from "./app/hooks/use-zep-calendars";
 import { PlanningGrid } from "./app/page";
 import { runStartupSync } from "./app/startup-sync";
-import { getWeekStart } from "./app/util";
+import { getWeekStart, weekOffsetFor } from "./app/util";
 import type { EmployeeSetting, PlanningContactRecord } from "./generated/tauri";
 import { commands } from "./generated/tauri";
 import { resetProjectCategoryColors } from "./services/daylite-categories";
@@ -95,6 +95,11 @@ function App() {
   const handleNavigateWeek = useCallback((direction: -1 | 1) => {
     setWeekOffset((prev) => prev + direction);
   }, []);
+
+  const handleJumpToWeek = useCallback(
+    (day: Date) => setWeekOffset(weekOffsetFor(day, showWeekend)),
+    [showWeekend],
+  );
 
   const reloadData = useCallback(() => {
     resetProjectCategoryColors();
@@ -180,6 +185,7 @@ function App() {
           hideNonPlannableEmployees={hideNonPlannableEmployees}
           onOpenIcalDialog={handleOpenIcalDialog}
           onNavigateWeek={handleNavigateWeek}
+          onJumpToWeek={handleJumpToWeek}
         />
       </main>
 
