@@ -156,12 +156,13 @@ The system SHALL find, update and remove only appointments carrying the `lkr-pla
 - **THEN** that appointment is neither updated nor removed
 
 ### Requirement: Synchronization failures do not fail the assignment write
-The system SHALL treat Daylite synchronization as a follow-up to the calendar write: a synchronization failure SHALL NOT fail, roll back or retry the assignment write, and SHALL be recorded in telemetry.
+The system SHALL treat Daylite synchronization as a follow-up to the calendar write: a synchronization failure SHALL NOT fail, roll back or automatically retry the assignment write, SHALL be recorded in telemetry, and SHALL be reported to the user.
 
 #### Scenario: Daylite unreachable after a create
 - **WHEN** an assignment is created in CalDAV and the Daylite appointment request then fails
 - **THEN** the create command still reports success
 - **AND** the failure is recorded as a telemetry error
+- **AND** the user is shown the synchronization error
 
 #### Scenario: Later write converges
 - **GIVEN** a project day whose appointment could not be synchronized earlier
@@ -172,3 +173,50 @@ The system SHALL treat Daylite synchronization as a follow-up to the calendar wr
 - **WHEN** a worker's primary calendar cannot be read while a project day is being synchronized
 - **THEN** no appointment for that day is created, updated or removed
 - **AND** the failure is recorded as a telemetry error
+- **AND** the day counts as failed
+
+### Requirement: Synchronization failures are shown to the user
+The system SHALL show one German error alert above the planning grid while at least one day's synchronization has failed and has not succeeded since, naming every such day and offering an `Erneut versuchen` button.
+
+#### Scenario: Failure shows the alert
+- **WHEN** the synchronization of 2026-11-02 fails
+- **THEN** an error alert reading `Daylite-Termine für folgende Tage konnten nicht aktualisiert werden: 02.11.2026` is shown
+- **AND** it carries an `Erneut versuchen` button
+
+#### Scenario: Several failed days share one alert
+- **WHEN** the synchronizations of 2026-11-03 and 2026-11-02 fail
+- **THEN** one alert lists `02.11.2026, 03.11.2026` in ascending order
+
+#### Scenario: A later successful synchronization clears the day
+- **GIVEN** the synchronization of 2026-11-02 failed
+- **WHEN** a later assignment write synchronizes 2026-11-02 successfully
+- **THEN** 2026-11-02 is no longer listed
+- **AND** the alert is hidden once no failed day remains
+
+#### Scenario: Failed days are not remembered across restarts
+- **GIVEN** failed days are listed in the alert
+- **WHEN** the app is restarted
+- **THEN** no synchronization alert is shown
+
+### Requirement: Retry failed synchronization
+The system SHALL let the user retry from the alert, re-running the whole-day synchronization for every listed day against the calendar state at the time of the retry.
+
+#### Scenario: Retry succeeds
+- **GIVEN** the alert lists 2026-11-02 and 2026-11-03
+- **WHEN** the user clicks `Erneut versuchen` and both days synchronize successfully
+- **THEN** the alert disappears
+
+#### Scenario: Retry partially fails
+- **GIVEN** the alert lists 2026-11-02 and 2026-11-03
+- **WHEN** the retry succeeds for 2026-11-02 and fails for 2026-11-03
+- **THEN** the alert lists only `03.11.2026`
+
+#### Scenario: Retry in progress
+- **WHEN** a retry is running
+- **THEN** the button is disabled and reads `Wird wiederholt...`
+- **AND** further clicks do not start a second retry
+
+#### Scenario: Retry reflects the current calendar
+- **GIVEN** the synchronization of 2026-11-02 failed after an assignment for "Projekt Nord" was created
+- **WHEN** that assignment is deleted in the calendar before the user retries
+- **THEN** the retry leaves no appointment for "Projekt Nord" on 2026-11-02

@@ -24,14 +24,24 @@
 
 - [ ] 4.1 Write failing tests that `update_assignment_core`, `move_assignment_core` and `delete_assignment_core` report the date the event had before the write, then extend their results and verify the existing `caldav::write` tests still pass
 - [ ] 4.2 Schedule the background reconciliation in `create_assignment_inner`, `update_assignment_inner`, `move_assignment_inner`, `reorder_assignment_inner` and `delete_assignment_inner` for every touched date after a successful write only, and verify with tests that a failed CalDAV write schedules nothing and that the command results are unchanged
-- [ ] 4.3 Start a debug build with `bun tauri dev` so the specta bindings are exported, and verify `src/generated/tauri.ts` has no diff, confirming the command contracts are unchanged
 
-## 5. Documentation and verification
+## 5. Failure registry and retry command
 
-- [ ] 5.1 Write `docs/adr/0015-daylite-appointments-mirror-assignments.md` recording the whole-day desired-state reconciliation, the `lkr-planner` keyword marker, floating times and the empty invitee list, including the evaluated options with pros and cons, and verify `bun run test:docs` passes
-- [ ] 5.2 Record a Daylite cassette under `tests/cassettes/` for create, search, patch and delete of an app-managed appointment against a test project, and verify the replay test passes without network access
-- [ ] 5.3 Run `cargo test` and `cargo clippy` in `src-tauri`, plus `bun test` and `bun run lint`, and verify all pass
-- [ ] 5.4 Manually verify in the running app: assign two workers to one project on a day, check the Daylite appointment's title, times, attributes and empty invitee list, delete one assignment and then the other, and confirm the title shrinks and the appointment is removed
+- [ ] 5.1 Write failing tests for the failed-date registry: a failed reconciliation adds its date, a successful one removes it, a day whose worker calendar could not be read counts as failed, and every change emits `daylite-appointment-sync-failures` with the sorted ISO dates; implement it in `appointment_sync.rs` and verify the tests pass
+- [ ] 5.2 Write failing tests for `retry_daylite_appointment_sync`: it reconciles every failed date, keeps only the dates that fail again, resolves after all dates finished, and waits for the per-date lock of a date a write is reconciling; implement the command, register it in `src-tauri/src/lib.rs`, and verify the tests pass
+- [ ] 5.3 Start a debug build with `bun tauri dev` so the specta bindings are exported, and verify the only diff in `src/generated/tauri.ts` is the new `retryDayliteAppointmentSync` command
+
+## 6. Failure alert
+
+- [ ] 6.1 Write failing tests in `src/app/hooks/use-appointment-sync-failures.spec.ts`: the hook subscribes to `daylite-appointment-sync-failures`, unsubscribes through the pending promise on unmount, replaces its dates with each event payload, sets `isRetrying` while the retry command runs and ignores a second retry meanwhile; implement the hook and verify `bun test` passes
+- [ ] 6.2 Write failing render tests for the alert: hidden without failed days, the German message with dates formatted `dd.MM.yyyy` in ascending order, the `Erneut versuchen` button, and the disabled `Wird wiederholt...` state while retrying; render it in `src/app/page.tsx` above the planning grid and verify `bun test` passes
+
+## 7. Documentation and verification
+
+- [ ] 7.1 Write `docs/adr/0015-daylite-appointments-mirror-assignments.md` recording the whole-day desired-state reconciliation, the `lkr-planner` keyword marker, floating times, the empty invitee list, and the failure registry with its event and retry command, including the evaluated options with pros and cons, and verify `bun run test:docs` passes
+- [ ] 7.2 Record a Daylite cassette under `tests/cassettes/` for create, search, patch and delete of an app-managed appointment against a test project, and verify the replay test passes without network access
+- [ ] 7.3 Run `cargo test` and `cargo clippy` in `src-tauri`, plus `bun test` and `bun run lint`, and verify all pass
+- [ ] 7.4 Manually verify in the running app: assign two workers to one project on a day, check the Daylite appointment's title, times, attributes and empty invitee list, delete one assignment and then the other, and confirm the title shrinks and the appointment is removed; then block Daylite access, create an assignment, confirm the alert names the day, restore access, click `Erneut versuchen`, and confirm the alert disappears and the appointment exists
 
 ## Workflow follow-up
 
