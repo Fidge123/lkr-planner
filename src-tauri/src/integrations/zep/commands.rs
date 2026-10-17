@@ -83,7 +83,7 @@ pub async fn zep_save_and_test_calendar(
 }
 
 use super::caldav::{parse_propfind_calendars, probe_calendar, propfind};
-use super::credentials::{load_zep_credentials_from_keychain, save_zep_credentials_to_keychain};
+use super::credentials::{load_zep_credentials, save_zep_credentials_to_keychain};
 use super::settings::{current_timestamp, find_or_default_setting, update_setting};
 use super::types::{
     IcalSource, ZepCalendar, ZepCalendarTestResult, ZepCredentialTestResult, ZepCredentialsInfo,
@@ -128,7 +128,7 @@ fn zep_load_credentials_inner(
         return Ok(None);
     }
 
-    match load_zep_credentials_from_keychain() {
+    match load_zep_credentials() {
         Ok(creds) => Ok(Some(ZepCredentialsInfo {
             root_url,
             username: creds.username,
@@ -172,7 +172,7 @@ async fn zep_discover_calendars_inner(app: tauri::AppHandle) -> Result<Vec<ZepCa
         ));
     }
 
-    let creds = load_zep_credentials_from_keychain()?;
+    let creds = load_zep_credentials()?;
     let body = propfind(&root_url, &creds.username, &creds.password).await?;
     let calendars = parse_propfind_calendars(&body, &root_url);
 
@@ -294,7 +294,7 @@ fn store_calendar_url(
 }
 
 async fn run_calendar_test(calendar_url: &str) -> Result<ZepCalendarTestResult, ZepError> {
-    let creds = load_zep_credentials_from_keychain()?;
+    let creds = load_zep_credentials()?;
     let timestamp = current_timestamp();
     let (success, error_message) =
         match probe_calendar(calendar_url, &creds.username, &creds.password).await {

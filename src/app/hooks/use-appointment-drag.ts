@@ -311,12 +311,16 @@ interface UseAppointmentDragArgs {
   onNavigateWeek: (direction: -1 | 1) => void;
   reloadAssignments: () => void;
   invalidateWeeksContaining: (uid: string) => void;
+  moveEvent: (uid: string, target: DropCellTarget) => string | null;
+  refreshEmployees: (weekStart: string, employeeRefs: string[]) => void;
 }
 
 export function useAppointmentDrag({
   onNavigateWeek,
   reloadAssignments,
   invalidateWeeksContaining,
+  moveEvent,
+  refreshEmployees,
 }: UseAppointmentDragArgs): AppointmentDragState {
   const [activePayload, setActivePayload] =
     useState<AppointmentDragPayload | null>(null);
@@ -344,6 +348,10 @@ export function useAppointmentDrag({
   reloadAssignmentsRef.current = reloadAssignments;
   const invalidateWeeksContainingRef = useRef(invalidateWeeksContaining);
   invalidateWeeksContainingRef.current = invalidateWeeksContaining;
+  const moveEventRef = useRef(moveEvent);
+  moveEventRef.current = moveEvent;
+  const refreshEmployeesRef = useRef(refreshEmployees);
+  refreshEmployeesRef.current = refreshEmployees;
 
   // Held for the reconciliation path, which reloads only once the user resolves the dialog, long after the drop cleared activePayloadRef.
   const droppedUidRef = useRef<string | null>(null);
@@ -421,31 +429,37 @@ export function useAppointmentDrag({
       const target = targetOf(event);
       activePayloadRef.current = null;
       if (!source || !target) return;
+      if (decideDropAction(source, target) === "none") return;
+
+      // A rejected write is undone by the same refresh that confirms a successful one.
+      const editedWeek = moveEventRef.current(source.uid, target);
+      const refreshAffectedRows = () => {
+        if (editedWeek === null) return;
+        refreshEmployeesRef.current(editedWeek, [
+          ...new Set([source.employeeRef, target.employeeRef]),
+        ]);
+      };
 
       void performDrop(source, target, commandDropDeps())
         .then((outcome) => {
-          if (outcome.kind === "done") {
-            invalidateWeeksContainingRef.current(source.uid);
-            reloadAssignmentsRef.current();
-            return;
-          }
           if (outcome.kind === "partialMove") {
             droppedUidRef.current = source.uid;
             setReconciliation({
               newHref: outcome.newHref,
               sourceHref: outcome.sourceHref,
             });
-            return;
           }
           if (outcome.kind === "error") {
             setErrorMessage(outcome.message);
           }
+          refreshAffectedRows();
         })
         // The generated bindings re-throw Error-typed rejections (IPC failures)
         // instead of returning a status object; without this the drop fails silently.
-        .catch(() =>
-          setErrorMessage("Der Einsatz konnte nicht verschoben werden."),
-        );
+        .catch(() => {
+          setErrorMessage("Der Einsatz konnte nicht verschoben werden.");
+          refreshAffectedRows();
+        });
     },
     [targetOf],
   );

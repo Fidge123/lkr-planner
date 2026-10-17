@@ -11,21 +11,32 @@ const PROPFIND_BODY: &str = r#"<?xml version="1.0" encoding="utf-8"?>
   </d:prop>
 </d:propfind>"#;
 
+/// Cloning a reqwest client shares its connection pool rather than copying it.
+pub(crate) fn shared_caldav_client() -> Result<reqwest::Client, String> {
+    static CLIENT: std::sync::OnceLock<Result<reqwest::Client, String>> =
+        std::sync::OnceLock::new();
+    CLIENT
+        .get_or_init(|| {
+            reqwest::Client::builder()
+                .timeout(Duration::from_secs(30))
+                .build()
+                .map_err(|e| format!("HTTP-Client konnte nicht erstellt werden: {e}"))
+        })
+        .clone()
+}
+
 pub(super) async fn propfind(
     url: &str,
     username: &str,
     password: &str,
 ) -> Result<String, ZepError> {
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(30))
-        .build()
-        .map_err(|e| {
-            ZepError::new(
-                ZepErrorCode::NetworkError,
-                "HTTP-Client konnte nicht initialisiert werden.",
-                format!("Client::build fehlgeschlagen: {e}"),
-            )
-        })?;
+    let client = shared_caldav_client().map_err(|e| {
+        ZepError::new(
+            ZepErrorCode::NetworkError,
+            "HTTP-Client konnte nicht initialisiert werden.",
+            e,
+        )
+    })?;
     let response = client
         .request(
             Method::from_bytes(b"PROPFIND").expect("PROPFIND is a valid HTTP method"),
@@ -85,16 +96,13 @@ pub(super) async fn probe_calendar(
     username: &str,
     password: &str,
 ) -> Result<(), ZepError> {
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(30))
-        .build()
-        .map_err(|e| {
-            ZepError::new(
-                ZepErrorCode::NetworkError,
-                "HTTP-Client konnte nicht initialisiert werden.",
-                format!("Client::build fehlgeschlagen: {e}"),
-            )
-        })?;
+    let client = shared_caldav_client().map_err(|e| {
+        ZepError::new(
+            ZepErrorCode::NetworkError,
+            "HTTP-Client konnte nicht initialisiert werden.",
+            e,
+        )
+    })?;
     let response = client
         .request(
             Method::from_bytes(b"PROPFIND").expect("PROPFIND is a valid HTTP method"),
@@ -191,6 +199,21 @@ fn extract_origin(url: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn consecutive_probes_reuse_one_connection() {
+        let (base_url, connections) =
+            crate::integrations::test_http::spawn_keep_alive_server().await;
+        let calendar_url = format!("{base_url}/caldav/emp-1/");
+
+        for _ in 0..2 {
+            probe_calendar(&calendar_url, "user", "pass")
+                .await
+                .expect("probe should succeed");
+        }
+
+        assert_eq!(connections.load(std::sync::atomic::Ordering::SeqCst), 1);
+    }
 
     #[test]
     fn extract_origin_parses_https_url_with_path() {

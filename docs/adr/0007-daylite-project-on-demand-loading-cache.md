@@ -1,6 +1,6 @@
 # ADR 0007: Daylite Project On-Demand Loading with 30s In-Memory Cache
 
-- Status: Accepted
+- Status: Superseded by ADR 0015
 - Date: 2026-02-15
 
 ## Context

@@ -31,6 +31,7 @@ function event(
     endTime: null,
     href: null,
     orderIndex: null,
+    projectPending: false,
   };
 }
 

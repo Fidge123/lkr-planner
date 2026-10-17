@@ -19,6 +19,7 @@ function assignment(
     projectStatus: "in_progress",
     categoryColor: null,
     orderIndex,
+    projectPending: false,
   };
 }
 
@@ -35,6 +36,7 @@ function absence(uid: string): CellEvent {
     projectStatus: null,
     categoryColor: null,
     orderIndex: null,
+    projectPending: false,
   };
 }
 

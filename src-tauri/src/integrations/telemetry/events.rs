@@ -8,6 +8,9 @@ pub enum Operation {
     LoadLocalStore,
     SaveLocalStore,
     LoadWeekEvents,
+    PrefetchWeekEvents,
+    RefreshWeekEvents,
+    ResolveWeekProjects,
     CreateAssignment,
     UpdateAssignment,
     MoveAssignment,
@@ -181,6 +184,22 @@ mod tests {
             "daylite_search_projects"
         );
         assert_eq!(dimension(&Operation::CaldavWrite), "caldav_write");
+    }
+
+    #[test]
+    fn background_work_has_its_own_operations() {
+        assert_eq!(
+            dimension(&Operation::PrefetchWeekEvents),
+            "prefetch_week_events"
+        );
+        assert_eq!(
+            dimension(&Operation::RefreshWeekEvents),
+            "refresh_week_events"
+        );
+        assert_eq!(
+            dimension(&Operation::ResolveWeekProjects),
+            "resolve_week_projects"
+        );
     }
 
     #[test]

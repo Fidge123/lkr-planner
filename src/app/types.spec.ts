@@ -6,6 +6,7 @@ import {
   hasAbsenceConflict,
   highlightKey,
   isHighlighted,
+  isUnresolvedAssignment,
   nextHighlight,
   toCellEvent,
 } from "./types";
@@ -27,6 +28,7 @@ function calendarEvent(
     href: null,
     projectRef: null,
     orderIndex: null,
+    projectPending: false,
     ...overrides,
   };
 }
@@ -44,9 +46,48 @@ function cellEvent(overrides: Partial<CellEvent> = {}): CellEvent {
     categoryColor: null,
     projectStatus: null,
     orderIndex: null,
+    projectPending: false,
     ...overrides,
   };
 }
+
+describe("isUnresolvedAssignment", () => {
+  it("flags an assignment whose project could not be resolved", () => {
+    const event = cellEvent({ projectRef: "/v1/projects/42" });
+
+    expect(isUnresolvedAssignment(event)).toBe(true);
+  });
+
+  it("does not flag an assignment whose project is still being resolved", () => {
+    const event = cellEvent({
+      projectRef: "/v1/projects/42",
+      projectPending: true,
+    });
+
+    expect(isUnresolvedAssignment(event)).toBe(false);
+  });
+
+  it("does not flag a resolved assignment", () => {
+    const event = cellEvent({
+      projectRef: "/v1/projects/42",
+      projectStatus: "in_progress",
+    });
+
+    expect(isUnresolvedAssignment(event)).toBe(false);
+  });
+});
+
+describe("toCellEvent", () => {
+  it("carries whether the project is still being resolved", () => {
+    const pending = calendarEvent({
+      kind: "assignment",
+      projectRef: "/v1/projects/42",
+      projectPending: true,
+    });
+
+    expect(toCellEvent(pending, categoryColors).projectPending).toBe(true);
+  });
+});
 
 describe("hasAbsenceConflict", () => {
   it("flags an absence together with an assignment", () => {

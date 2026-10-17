@@ -18,6 +18,7 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         integrations::daylite::auth::daylite_connect_refresh_token,
         integrations::daylite::projects::daylite_search_projects,
         integrations::daylite::projects::daylite_query_overdue_projects,
+        integrations::daylite::projects::resolve_week_projects,
         integrations::daylite::categories::daylite_project_category_colors,
         integrations::daylite::deep_link::daylite_open_project,
         integrations::daylite::contacts::commands::daylite_list_contacts,
@@ -62,6 +63,7 @@ pub fn run() {
             }
 
             start_telemetry(app.handle(), started_at);
+            integrations::daylite::restore_project_cache(app.handle());
             install_reload_data_menu(app.handle())?;
 
             let handle = app.handle().clone();

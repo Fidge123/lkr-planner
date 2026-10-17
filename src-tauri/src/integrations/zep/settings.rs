@@ -1,5 +1,5 @@
 use super::caldav::probe_calendar;
-use super::credentials::load_zep_credentials_from_keychain;
+use super::credentials::load_zep_credentials;
 use crate::integrations::local_store::EmployeeSetting;
 use chrono::{SecondsFormat, Utc};
 
@@ -32,7 +32,7 @@ pub(crate) async fn test_untested_calendar_urls(settings: &mut [EmployeeSetting]
         return;
     }
 
-    let creds = match load_zep_credentials_from_keychain() {
+    let creds = match load_zep_credentials() {
         Ok(c) => c,
         Err(_) => return,
     };

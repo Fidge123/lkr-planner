@@ -30,6 +30,8 @@ pub struct CalendarCellEvent {
     pub project_ref: Option<String>,
     // None for events that carry no order property yet; those sort after the indexed ones.
     pub order_index: Option<u32>,
+    // The project was not cached when the week loaded; `resolve_week_projects` settles it.
+    pub project_pending: bool,
 }
 
 /// CalDAV has no atomic cross-collection move, so the target copy is created first and the source deleted afterwards, which can leave a partial move.
