@@ -21,6 +21,7 @@ function renderTable(
       isEmployeeLoading={false}
       onOpenIcalDialog={() => {}}
       onReloadAssignments={() => {}}
+      onAssignmentWritten={() => {}}
       {...overrides}
     />,
   );
@@ -67,6 +68,7 @@ function calendarEvent(
     href: "/calendars/user/uid-1.ics",
     projectRef: nord,
     orderIndex: 0,
+    projectPending: false,
     ...overrides,
   };
 }

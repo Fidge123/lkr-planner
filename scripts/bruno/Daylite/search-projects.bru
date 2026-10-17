@@ -1,0 +1,33 @@
+meta {
+  name: Search projects
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/projects/_search?limit=20&full-records=true
+  body: json
+  auth: bearer
+}
+
+params:query {
+  limit: 20
+  full-records: true
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+body:json {
+  [
+    { "name": { "contains": "" }, "status": { "equal": "new_status" } },
+    { "name": { "contains": "" }, "status": { "equal": "in_progress" } }
+  ]
+}
+
+docs {
+  A top-level array of clauses is matched with OR semantics.
+  Send a single object such as `{ "name": { "contains": "Nord" } }` to search without a status filter.
+  Add `start` as query parameter to continue from the `next` link of a previous page.
+}

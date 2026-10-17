@@ -1,0 +1,16 @@
+meta {
+  name: Delete event
+  type: http
+  seq: 7
+}
+
+delete {
+  url: {{zepCalendarUrl}}{{eventUid}}.ics
+  body: none
+  auth: basic
+}
+
+auth:basic {
+  username: {{username}}
+  password: {{password}}
+}

@@ -187,6 +187,28 @@ pub(super) struct DayliteHttpResponse {
     pub body: String,
 }
 
+/// Cloning a reqwest client shares its connection pool rather than copying it.
+fn shared_http_client() -> Result<reqwest::Client, DayliteApiError> {
+    static CLIENT: std::sync::OnceLock<Result<reqwest::Client, String>> =
+        std::sync::OnceLock::new();
+    CLIENT
+        .get_or_init(|| {
+            reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(5))
+                .build()
+                .map_err(|error| format!("HTTP-Client konnte nicht erstellt werden: {error}"))
+        })
+        .clone()
+        .map_err(|technical_message| {
+            DayliteApiError::new(
+                DayliteApiErrorCode::RequestFailed,
+                None,
+                "Die Verbindung zu Daylite konnte nicht aufgebaut werden.",
+                technical_message,
+            )
+        })
+}
+
 #[derive(Debug, Clone)]
 struct ReqwestTransport {
     base_url: String,
@@ -197,22 +219,9 @@ struct ReqwestTransport {
 
 impl ReqwestTransport {
     fn new(base_url: &str) -> Result<Self, DayliteApiError> {
-        let normalized_base_url = normalize_base_url(base_url)?;
-        let http_client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(5))
-            .build()
-            .map_err(|error| {
-                DayliteApiError::new(
-                    DayliteApiErrorCode::RequestFailed,
-                    None,
-                    "Die Verbindung zu Daylite konnte nicht aufgebaut werden.",
-                    format!("HTTP-Client konnte nicht erstellt werden: {error}"),
-                )
-            })?;
-
         Ok(Self {
-            base_url: normalized_base_url,
-            http_client,
+            base_url: normalize_base_url(base_url)?,
+            http_client: shared_http_client()?,
             #[cfg(test)]
             record_replay: None,
         })
@@ -576,6 +585,23 @@ mod tests {
         assert_eq!(events[0].name(), "operation_completed");
         assert_eq!(events[0].properties()["success"], true);
         assert!(!events[0].properties().contains_key("http_status"));
+    }
+
+    #[tokio::test]
+    async fn separate_clients_reuse_one_connection() {
+        let (base_url, connections) =
+            crate::integrations::test_http::spawn_keep_alive_server().await;
+
+        for _ in 0..2 {
+            let client = DayliteApiClient::new(&base_url).expect("client should be created");
+            let response = client
+                .send_request(DayliteHttpRequest::new(DayliteHttpMethod::Get, "/projects"))
+                .await
+                .expect("request should succeed");
+            assert_eq!(response.status, 200);
+        }
+
+        assert_eq!(connections.load(std::sync::atomic::Ordering::SeqCst), 1);
     }
 
     struct FixedResponseTransport(DayliteHttpResponse);

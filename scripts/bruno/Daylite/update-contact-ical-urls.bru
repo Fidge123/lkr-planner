@@ -1,0 +1,33 @@
+meta {
+  name: Update contact iCal URLs
+  type: http
+  seq: 8
+}
+
+patch {
+  url: {{baseUrl}}/contacts/{{contactId}}
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+vars:pre-request {
+  contactId: 100
+}
+
+body:json {
+  {
+    "urls": [
+      { "label": "Einsatz iCal", "url": "https://app.zep.de/caldav/admin/emp-1-einsatz/" },
+      { "label": "Abwesenheit iCal", "url": "https://app.zep.de/caldav/admin/emp-1-abwesenheit/" }
+    ]
+  }
+}
+
+docs {
+  `urls` replaces every URL of the contact.
+  Copy the unmanaged entries from "Get contact" into the body first, the app keeps them as well.
+}

@@ -11,6 +11,7 @@ describe("SettingsDialog", () => {
     expect(html).toContain("Daylite");
     expect(html).toContain("ZEP");
     expect(html).toContain("Anzeige");
+    expect(html).toContain("Darstellung");
     expect(html).toContain("Diagnose");
   });
 

@@ -12,3 +12,5 @@ pub mod shared;
 #[cfg(test)]
 mod test_support;
 mod token_session;
+
+pub(crate) use project_cache::restore_project_cache;

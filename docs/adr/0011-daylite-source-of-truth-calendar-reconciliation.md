@@ -1,6 +1,6 @@
 # ADR 0011: Daylite as Source of Truth for Employee Calendar Configuration
 
-- Status: Accepted
+- Status: Accepted, startup sequence amended by ADR 0015
 - Date: 2026-05-29
 
 ## Context

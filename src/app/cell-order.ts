@@ -1,11 +1,16 @@
 import type { CellEvent } from "./types";
 
+type OrderedEvent = Pick<
+  CellEvent,
+  "uid" | "kind" | "orderIndex" | "startTime" | "endTime"
+>;
+
 /**
  * Orders a cell's assignment cards the way the backend's `ordering_key` orders the day, so
  * the visual order and the allocated time slots agree. Absences and bare events keep the
  * positions the backend gave them.
  */
-export function sortCellEvents(events: CellEvent[]): CellEvent[] {
+export function sortCellEvents<T extends OrderedEvent>(events: T[]): T[] {
   const assignments = events
     .filter((event) => event.kind === "assignment")
     .sort(byCellOrder);
@@ -32,7 +37,7 @@ export function assignmentPositions(events: CellEvent[]): Map<string, number> {
  * reads the cell: the earlier start comes first, a longer assignment wins an identical
  * start, and the UID keeps the ordering total. Unindexed and untimed assignments sort last.
  */
-function byCellOrder(a: CellEvent, b: CellEvent): number {
+function byCellOrder(a: OrderedEvent, b: OrderedEvent): number {
   return (
     orderIndexOf(a) - orderIndexOf(b) ||
     startMinutesOf(a) - startMinutesOf(b) ||
@@ -42,15 +47,15 @@ function byCellOrder(a: CellEvent, b: CellEvent): number {
   );
 }
 
-function orderIndexOf(event: CellEvent): number {
+function orderIndexOf(event: OrderedEvent): number {
   return event.orderIndex ?? Number.MAX_SAFE_INTEGER;
 }
 
-function startMinutesOf(event: CellEvent): number {
+function startMinutesOf(event: OrderedEvent): number {
   return minutesOfDay(event.startTime) ?? Number.MAX_SAFE_INTEGER;
 }
 
-function durationMinutesOf(event: CellEvent): number {
+function durationMinutesOf(event: OrderedEvent): number {
   const start = minutesOfDay(event.startTime);
   const end = minutesOfDay(event.endTime);
   if (start === null || end === null) return 0;

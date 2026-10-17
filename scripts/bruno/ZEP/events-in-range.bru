@@ -1,0 +1,56 @@
+meta {
+  name: Events in range
+  type: http
+  seq: 3
+}
+
+http {
+  method: REPORT
+  url: {{zepCalendarUrl}}
+  body: xml
+  auth: basic
+}
+
+headers {
+  Depth: 1
+  Content-Type: application/xml; charset=utf-8
+}
+
+auth:basic {
+  username: {{username}}
+  password: {{password}}
+}
+
+script:pre-request {
+  const monday = new Date();
+  monday.setHours(0, 0, 0, 0);
+  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+  const nextMonday = new Date(monday);
+  nextMonday.setDate(monday.getDate() + 7);
+  const caldavTimestamp = (date) => `${date.toISOString().replace(/[-:]/g, "").slice(0, 15)}Z`;
+  
+  bru.setVar("rangeStart", caldavTimestamp(monday));
+  bru.setVar("rangeEnd", caldavTimestamp(nextMonday));
+}
+
+body:xml {
+  <?xml version="1.0" encoding="utf-8"?>
+  <c:calendar-query xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
+    <d:prop>
+      <d:getetag/>
+      <c:calendar-data/>
+    </d:prop>
+    <c:filter>
+      <c:comp-filter name="VCALENDAR">
+        <c:comp-filter name="VEVENT">
+          <c:time-range start="{{rangeStart}}" end="{{rangeEnd}}"/>
+        </c:comp-filter>
+      </c:comp-filter>
+    </c:filter>
+  </c:calendar-query>
+}
+
+docs {
+  The range covers the current week from Monday 00:00 local time.
+  `zepCalendarUrl` must point at a calendar collection, the home-set root answers REPORT with HTTP 405.
+}

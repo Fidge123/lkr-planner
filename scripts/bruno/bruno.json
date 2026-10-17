@@ -1,0 +1,12 @@
+{
+  "version": "1",
+  "name": "LKR Planner",
+  "type": "collection",
+  "ignore": ["node_modules", ".git"],
+  "scripts": {
+    "moduleWhitelist": ["child_process", "crypto", "fs", "os", "path"],
+    "filesystemAccess": {
+      "allow": true
+    }
+  }
+}

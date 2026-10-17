@@ -1,0 +1,26 @@
+meta {
+  name: Overdue projects
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/projects/_search?limit=50
+  body: json
+  auth: bearer
+}
+
+params:query {
+  limit: 50
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+body:json {
+  [
+    { "category": { "equal": "Überfällig" }, "status": { "equal": "new_status" } },
+    { "category": { "equal": "Überfällig" }, "status": { "equal": "in_progress" } }
+  ]
+}

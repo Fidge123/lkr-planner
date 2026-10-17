@@ -36,10 +36,11 @@ use super::auth_flow::send_authenticated_json;
 use super::client::DayliteApiClient;
 use super::client::DayliteHttpMethod;
 use super::client::DayliteHttpRequest;
-use super::project_cache::{cache_now_ms, project_cache};
+use super::project_cache::{cache_now_ms, persist_project_cache, project_cache};
 use super::shared::{
-    build_limit_query, run_daylite_command, trimmed, trimmed_or_none, with_daylite_tokens,
-    DayliteApiError, DayliteSearchInput, DayliteSearchResult, DayliteSearchSort, DayliteTokenState,
+    build_limit_query, load_store_or_error, run_daylite_command, trimmed, trimmed_or_none,
+    with_daylite_tokens, DayliteApiError, DayliteSearchInput, DayliteSearchResult,
+    DayliteSearchSort, DayliteTokenState,
 };
 use chrono::{DateTime, NaiveDate, SecondsFormat, Utc};
 use futures::StreamExt;
@@ -293,32 +294,79 @@ fn map_project_status(status: Option<String>) -> &'static str {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct ResolvedProject {
-    pub(crate) name: String,
-    pub(crate) status: String,
-    pub(crate) category: Option<String>,
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ResolvedProject {
+    pub name: String,
+    pub status: String,
+    pub category: Option<String>,
 }
 
 // An unbounded burst is what a rate limit answers with 429.
 const PROJECT_RESOLUTION_CONCURRENCY: usize = 6;
 
-pub(crate) async fn resolve_projects_by_reference(
-    daylite_base_url: &str,
-    references: HashSet<String>,
-) -> HashMap<String, Option<ResolvedProject>> {
-    let Ok(client) = DayliteApiClient::new(daylite_base_url) else {
-        return references
-            .into_iter()
-            .map(|reference| (reference, None))
-            .collect();
-    };
-
-    resolve_all(references, PROJECT_RESOLUTION_CONCURRENCY, |reference| {
-        let client = &client;
-        async move { resolve_project_cached(client, &reference).await }
-    })
+/// A reference that neither Daylite nor the cache could resolve maps to no project.
+#[tauri::command]
+#[specta::specta]
+pub async fn resolve_week_projects(
+    app: tauri::AppHandle,
+    project_refs: Vec<String>,
+    force_refresh: bool,
+) -> Result<HashMap<String, Option<ResolvedProject>>, DayliteApiError> {
+    let handle = app.clone();
+    observe(
+        &handle,
+        Operation::ResolveWeekProjects,
+        Integration::Daylite,
+        resolve_week_projects_inner(app, project_refs, force_refresh),
+    )
     .await
+}
+
+async fn resolve_week_projects_inner(
+    app: tauri::AppHandle,
+    project_refs: Vec<String>,
+    force_refresh: bool,
+) -> Result<HashMap<String, Option<ResolvedProject>>, DayliteApiError> {
+    let references: HashSet<String> = project_refs.into_iter().collect();
+    let cache = project_cache();
+    let now_ms = cache_now_ms();
+    if !force_refresh && references.iter().all(|r| cache.is_fresh(r, now_ms)) {
+        return Ok(references
+            .into_iter()
+            .map(|reference| {
+                let project = cache.peek(&reference);
+                (reference, project)
+            })
+            .collect());
+    }
+
+    let store = load_store_or_error(app.clone())?;
+    let client = DayliteApiClient::new(&store.api_endpoints.daylite_base_url)?.with_telemetry(&app);
+    let resolved = resolve_all(references, PROJECT_RESOLUTION_CONCURRENCY, |reference| {
+        let client = &client;
+        async move {
+            let load = || fetch_project(client, &reference);
+            if force_refresh {
+                cache.reload(&reference, now_ms, load).await
+            } else {
+                cache.get_or_load(&reference, now_ms, load).await
+            }
+        }
+    })
+    .await;
+    persist_project_cache(&app);
+
+    Ok(resolved)
+}
+
+/// Never calls Daylite, so a week can be shown before its projects are refreshed.
+pub(crate) fn cached_projects(references: &HashSet<String>) -> HashMap<String, ResolvedProject> {
+    let cache = project_cache();
+    references
+        .iter()
+        .filter_map(|reference| Some((reference.clone(), cache.peek(reference)?)))
+        .collect()
 }
 
 async fn resolve_all<F, Fut>(
@@ -340,17 +388,6 @@ where
         })
         .buffer_unordered(concurrency)
         .collect()
-        .await
-}
-
-async fn resolve_project_cached(
-    client: &DayliteApiClient,
-    project_ref: &str,
-) -> Option<ResolvedProject> {
-    project_cache()
-        .get_or_load(project_ref, cache_now_ms(), || {
-            fetch_project(client, project_ref)
-        })
         .await
 }
 

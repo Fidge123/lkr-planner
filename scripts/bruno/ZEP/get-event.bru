@@ -1,0 +1,20 @@
+meta {
+  name: Get event
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{zepCalendarUrl}}{{eventUid}}.ics
+  body: none
+  auth: basic
+}
+
+auth:basic {
+  username: {{username}}
+  password: {{password}}
+}
+
+docs {
+  `eventUid` is set by "Create event", set it as runtime variable to read another event.
+}

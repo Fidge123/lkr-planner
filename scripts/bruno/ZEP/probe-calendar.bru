@@ -1,0 +1,32 @@
+meta {
+  name: Probe calendar
+  type: http
+  seq: 2
+}
+
+http {
+  method: PROPFIND
+  url: {{zepCalendarUrl}}
+  body: xml
+  auth: basic
+}
+
+headers {
+  Depth: 0
+  Content-Type: application/xml; charset=utf-8
+}
+
+auth:basic {
+  username: {{username}}
+  password: {{password}}
+}
+
+body:xml {
+  <?xml version="1.0" encoding="utf-8"?>
+  <d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
+    <d:prop>
+      <d:displayname/>
+      <d:resourcetype/>
+    </d:prop>
+  </d:propfind>
+}

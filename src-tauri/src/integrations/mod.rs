@@ -5,4 +5,6 @@ pub mod holidays;
 pub(crate) mod http_record_replay;
 pub mod local_store;
 pub mod telemetry;
+#[cfg(test)]
+pub(crate) mod test_http;
 pub mod zep;

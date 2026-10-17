@@ -11,6 +11,7 @@ import { useReloadDataMenu } from "./app/hooks/use-reload-data-menu";
 import { useRerenderOnDayChange } from "./app/hooks/use-rerender-on-day-change";
 import { useZepCalendars } from "./app/hooks/use-zep-calendars";
 import { PlanningGrid } from "./app/page";
+import { runStartupSync } from "./app/startup-sync";
 import { getWeekStart } from "./app/util";
 import type { EmployeeSetting, PlanningContactRecord } from "./generated/tauri";
 import { commands } from "./generated/tauri";
@@ -20,9 +21,13 @@ import { loadDayliteContacts } from "./services/daylite-contacts";
 function App() {
   const [weekOffset, setWeekOffset] = useState(0);
   const [showWeekend, setShowWeekend] = useState(false);
+  // The weekend setting decides which week is shown on a weekend, so no week loads before it is read.
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
   useRerenderOnDayChange();
   const weekStart = getWeekStart(weekOffset, showWeekend);
-  const planningAssignmentsState = usePlanningAssignments(weekStart);
+  const planningAssignmentsState = usePlanningAssignments(
+    settingsLoaded ? weekStart : null,
+  );
   const planningEmployeesState = usePlanningEmployees();
   const categoryColors = useProjectCategoryColors();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -41,6 +46,7 @@ function App() {
 
   const loadEmployeeSettings = useCallback(async () => {
     const result = await commands.loadLocalStore();
+    setSettingsLoaded(true);
     if (result.status === "ok") {
       setEmployeeSettings(result.data.employeeSettings);
       setHideNonPlannableEmployees(
@@ -48,9 +54,10 @@ function App() {
       );
       setShowWeekend(result.data.displaySettings?.showWeekend ?? false);
       setEmployeeSettingsError(null);
-    } else {
-      setEmployeeSettingsError(result.error.userMessage);
+      return result.data.employeeSettings;
     }
+    setEmployeeSettingsError(result.error.userMessage);
+    return null;
   }, []);
 
   const reloadAssignmentsRef = useRef(
@@ -60,15 +67,14 @@ function App() {
 
   useEffect(() => {
     let cancelled = false;
-    void (async () => {
-      try {
+    void runStartupSync({
+      readSettings: loadEmployeeSettings,
+      syncContacts: async () => {
         await loadDayliteContacts();
-      } catch {}
-      if (cancelled) return;
-      await loadEmployeeSettings();
-      if (cancelled) return;
-      reloadAssignmentsRef.current();
-    })();
+      },
+      reloadWeek: () => reloadAssignmentsRef.current(),
+      isCancelled: () => cancelled,
+    });
     return () => {
       cancelled = true;
     };

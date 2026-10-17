@@ -30,6 +30,7 @@ mod tests {
             end_time: None,
             href: None,
             order_index: None,
+            project_pending: false,
         }
     }
 

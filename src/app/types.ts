@@ -16,12 +16,14 @@ export interface CellEvent {
   href: string | null;
   /** Daylite project reference (e.g. "/v1/projects/42"). Null for non-assignment events. */
   projectRef: string | null;
-  /** Daylite project status. Null for non-assignment events and for assignments whose project could not be resolved. */
+  /** Daylite project status. Null for non-assignment events and for assignments whose project is pending or could not be resolved. */
   projectStatus: string | null;
   /** Color of the resolved project's Daylite category, shown as a strip on the card. Null when the project has no category color. */
   categoryColor: string | null;
   /** Position among the day's assignments. Null for events that carry no order index yet. */
   orderIndex: number | null;
+  /** The project was not cached when the week loaded and is still being resolved. */
+  projectPending: boolean;
 }
 
 const absenceCodeColors: Record<string, string> = {
@@ -42,9 +44,11 @@ function absenceCategoryColor(title: string): string {
   return absenceCodeColors[code] ?? defaultAbsenceColor;
 }
 
-/** The backend leaves the status unset exactly when it could not read the project. */
+/** An assignment carries no status while its project is pending and after it could not be read. */
 export function isUnresolvedAssignment(event: CellEvent): boolean {
-  return event.projectRef !== null && !event.projectStatus;
+  return (
+    event.projectRef !== null && !event.projectStatus && !event.projectPending
+  );
 }
 
 /** What a card is highlighted by. Null for bare events and absences, which are not highlightable. */
@@ -120,5 +124,6 @@ export function toCellEvent(
     projectRef: event.projectRef,
     projectStatus: event.projectStatus,
     orderIndex: event.orderIndex,
+    projectPending: event.projectPending,
   };
 }

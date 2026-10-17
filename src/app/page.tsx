@@ -132,7 +132,13 @@ export function PlanningGridTable({
     errorMessage: employeeErrorMessage,
     reloadEmployees,
   } = employeeState;
-  const { reloadAssignments, invalidateWeeksContaining } = assignmentState;
+  const {
+    reloadAssignments,
+    invalidateWeeksContaining,
+    moveEvent,
+    refreshEmployees,
+    removeEvent,
+  } = assignmentState;
   const {
     holidays,
     errorMessage: holidayErrorMessage,
@@ -152,9 +158,18 @@ export function PlanningGridTable({
     onNavigateWeek: onNavigateWeek ?? (() => {}),
     reloadAssignments,
     invalidateWeeksContaining,
+    moveEvent,
+    refreshEmployees,
   });
   const isDragActive = drag.activePayload !== null;
   const weekStart = toLocalISODate(weekDays[0]);
+  const handleAssignmentWritten = (
+    employeeRef: string,
+    removedUid: string | null,
+  ) => {
+    if (removedUid !== null) removeEvent(removedUid);
+    refreshEmployees(weekStart, [employeeRef]);
+  };
 
   const [highlight, setHighlight] = useState<ActiveHighlight | null>(null);
   const activeHighlight = activeHighlightForWeek(highlight, weekStart);
@@ -252,6 +267,7 @@ export function PlanningGridTable({
             activeHighlight={activeHighlight}
             onOpenIcalDialog={onOpenIcalDialog}
             onReloadAssignments={reloadAssignments}
+            onAssignmentWritten={handleAssignmentWritten}
             onToggleHighlight={toggleHighlight}
           />
           {/* The document guard is not about Tauri: bun tests render this grid
@@ -295,6 +311,7 @@ export function PlanningGridTable({
               isEmployeeLoading={isEmployeeLoading}
               onOpenIcalDialog={onOpenIcalDialog}
               onReloadAssignments={reloadAssignments}
+              onAssignmentWritten={handleAssignmentWritten}
             />
           </DndContext>
         </aside>

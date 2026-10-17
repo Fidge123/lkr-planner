@@ -27,6 +27,7 @@ export function WeekTable({
   activeHighlight = null,
   onOpenIcalDialog,
   onReloadAssignments,
+  onAssignmentWritten,
   onToggleHighlight,
 }: WeekTableProps) {
   const holidayByDate = new Map(holidays.map((h) => [h.date, h.name]));
@@ -89,6 +90,7 @@ export function WeekTable({
             activeHighlight={activeHighlight}
             onOpenIcalDialog={onOpenIcalDialog}
             onReloadAssignments={onReloadAssignments}
+            onAssignmentWritten={onAssignmentWritten}
             onToggleHighlight={onToggleHighlight}
           />
         ))}
@@ -121,5 +123,6 @@ export interface WeekTableProps {
   activeHighlight?: string | null;
   onOpenIcalDialog: (employee: PlanningContactRecord) => void;
   onReloadAssignments: () => void;
+  onAssignmentWritten: (employeeRef: string, removedUid: string | null) => void;
   onToggleHighlight?: (event: CellEvent) => void;
 }
