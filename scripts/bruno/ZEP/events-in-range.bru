@@ -1,0 +1,48 @@
+meta {
+  name: Events in range
+  type: http
+  seq: 3
+}
+
+http {
+  method: REPORT
+  url: {{zepCalendarUrl}}
+  body: xml
+  auth: basic
+}
+
+headers {
+  Depth: 1
+  Content-Type: application/xml; charset=utf-8
+}
+
+auth:basic {
+  username: {{username}}
+  password: {{password}}
+}
+
+vars:pre-request {
+  rangeStart: 20260504T000000Z
+  rangeEnd: 20260511T000000Z
+}
+
+body:xml {
+  <?xml version="1.0" encoding="utf-8"?>
+  <c:calendar-query xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
+    <d:prop>
+      <d:getetag/>
+      <c:calendar-data/>
+    </d:prop>
+    <c:filter>
+      <c:comp-filter name="VCALENDAR">
+        <c:comp-filter name="VEVENT">
+          <c:time-range start="{{rangeStart}}" end="{{rangeEnd}}"/>
+        </c:comp-filter>
+      </c:comp-filter>
+    </c:filter>
+  </c:calendar-query>
+}
+
+docs {
+  `zepCalendarUrl` must point at a calendar collection, the home-set root answers REPORT with HTTP 405.
+}

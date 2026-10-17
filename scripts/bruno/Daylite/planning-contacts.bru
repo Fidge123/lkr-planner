@@ -1,0 +1,26 @@
+meta {
+  name: Planning contacts
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{dayliteBaseUrl}}/contacts/_search?full-records=true
+  body: json
+  auth: bearer
+}
+
+params:query {
+  full-records: true
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+body:json {
+  [
+    { "category": { "equal": "Monteur" } },
+    { "category": { "equal": "Test" } }
+  ]
+}

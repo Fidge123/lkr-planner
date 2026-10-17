@@ -1,0 +1,19 @@
+meta {
+  name: Project categories
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{dayliteBaseUrl}}/categories?entity=project
+  body: none
+  auth: bearer
+}
+
+params:query {
+  entity: project
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}

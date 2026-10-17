@@ -1,0 +1,19 @@
+meta {
+  name: Get contact
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{dayliteBaseUrl}}/contacts/{{contactId}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+vars:pre-request {
+  contactId: 100
+}

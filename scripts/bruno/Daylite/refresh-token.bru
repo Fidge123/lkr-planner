@@ -1,0 +1,37 @@
+meta {
+  name: Refresh token
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{dayliteBaseUrl}}/personal_token/refresh_token?refresh_token={{dayliteRefreshToken}}
+  body: none
+  auth: none
+}
+
+params:query {
+  refresh_token: {{dayliteRefreshToken}}
+}
+
+script:pre-request {
+  const { usesKeychain } = require("./lib/keychain.js");
+  
+  if (usesKeychain(bru)) {
+    throw new Error("Refreshing would retire the refresh token LKR Planner holds in the keychain. Let the app rotate it instead.");
+  }
+}
+
+script:post-response {
+  if (res.getStatus() === 200) {
+    const { access_token, refresh_token } = res.getBody();
+    bru.setEnvVar("dayliteAccessToken", access_token, { persist: true });
+    bru.setEnvVar("dayliteRefreshToken", refresh_token, { persist: true });
+  }
+}
+
+docs {
+  Daylite refresh tokens are single use.
+  A successful call stores the new access and refresh token in the Manual environment.
+  If storing fails, copy `refresh_token` from the response, otherwise the token pair is lost.
+}

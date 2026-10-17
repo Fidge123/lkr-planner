@@ -1,0 +1,17 @@
+meta {
+  name: Daylite
+}
+
+script:pre-request {
+  const { readKeychainJson, usesKeychain } = require("./lib/keychain.js");
+  
+  if (usesKeychain(bru)) {
+    const tokens = readKeychainJson("lkr-planner-daylite", "LKR Planner Daylite Token");
+    if (!tokens.accessTokenExpiresAtMs || tokens.accessTokenExpiresAtMs <= Date.now()) {
+      throw new Error("The Daylite access token in the keychain has expired. Trigger a Daylite request in LKR Planner to rotate it, then retry.");
+    }
+    bru.setVar("accessToken", tokens.accessToken);
+  } else {
+    bru.setVar("accessToken", bru.getEnvVar("dayliteAccessToken"));
+  }
+}
