@@ -1,0 +1,49 @@
+meta {
+  name: Create event
+  type: http
+  seq: 5
+}
+
+put {
+  url: {{zepCalendarUrl}}{{eventUid}}.ics
+  body: text
+  auth: basic
+}
+
+headers {
+  Content-Type: text/calendar; charset=utf-8
+}
+
+auth:basic {
+  username: {{username}}
+  password: {{password}}
+}
+
+body:text {
+  BEGIN:VCALENDAR
+  VERSION:2.0
+  PRODID:-//lkr-planner//EN
+  BEGIN:VEVENT
+  UID:{{eventUid}}
+  DTSTAMP:20260501T120000Z
+  DTSTART:20260506T080000
+  DTEND:20260506T160000
+  SUMMARY:Projekt Nord
+  DESCRIPTION:daylite:/v1/projects/3001
+  X-LKR-ORDER:0
+  END:VEVENT
+  END:VCALENDAR
+}
+
+script:pre-request {
+  const { randomUUID } = require("crypto");
+  
+  bru.setVar("eventUid", randomUUID());
+  req.setBody(req.getBody().replace(/\r?\n/g, "\r\n"));
+}
+
+docs {
+  Creates an event under a fresh UID and keeps it in `eventUid`, so "Get event", "Update event" and "Delete event" target it next.
+  Times are floating local time without `Z`, like the app writes them.
+  `zepCalendarUrl` needs a trailing slash.
+}
