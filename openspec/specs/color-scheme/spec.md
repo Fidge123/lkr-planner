@@ -19,10 +19,10 @@ The setting SHALL default to system and SHALL be stored in the browser local sto
 - **THEN** the dark theme is applied before the planning view renders
 
 ### Requirement: Color scheme selection in settings dialog
-The system SHALL expose the color scheme setting in the settings dialog under the "Erscheinungsbild" section with the options "Hell", "Dunkel" and "System".
+The system SHALL expose the color scheme setting in the settings dialog under the "Darstellung" section with the options "Hell", "Dunkel" and "System".
 
 #### Scenario: Selecting a color scheme
-- **GIVEN** the settings dialog is open on the "Erscheinungsbild" section
+- **GIVEN** the settings dialog is open on the "Darstellung" section
 - **WHEN** the user selects "Dunkel"
 - **THEN** the dark theme is applied immediately
 - **AND** the selection is saved to local storage

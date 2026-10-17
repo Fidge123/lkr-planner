@@ -8,7 +8,7 @@ describe("AppearanceSettingsPanel", () => {
       <AppearanceSettingsPanel onClose={() => {}} />,
     );
 
-    expect(html).toContain("Erscheinungsbild");
+    expect(html).toContain("Darstellung");
     expect(html).toContain("Hell");
     expect(html).toContain("Dunkel");
     expect(html).toContain("System");

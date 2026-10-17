@@ -31,7 +31,7 @@ export function AppearanceSettingsPanel({ onClose }: Props) {
 
   return (
     <>
-      <h3 className="text-lg font-semibold">Erscheinungsbild</h3>
+      <h3 className="text-lg font-semibold">Darstellung</h3>
 
       <StatusAlert
         status={

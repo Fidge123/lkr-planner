@@ -9,7 +9,7 @@ const sections = [
   { id: "daylite", label: "Daylite" },
   { id: "zep", label: "ZEP" },
   { id: "display", label: "Anzeige" },
-  { id: "appearance", label: "Erscheinungsbild" },
+  { id: "appearance", label: "Darstellung" },
   { id: "telemetry", label: "Diagnose" },
 ] as const;
 
