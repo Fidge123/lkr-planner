@@ -150,6 +150,7 @@ Optional environment variables:
 - `DAYLITE_VCR_CONTACT_REFERENCE`
 - `DAYLITE_VCR_PRIMARY_ICAL_URL`
 - `DAYLITE_VCR_ABSENCE_ICAL_URL`
+- `DAYLITE_VCR_APPOINTMENT_PROJECT_REFERENCE`
 
 `DAYLITE_VCR_SCOPE` defaults to `readonly`.
 That records only the read-only cassettes:
@@ -159,8 +160,9 @@ That records only the read-only cassettes:
 - `daylite-search-projects.json`
 - `daylite-list-contacts.json`
 
-Use `DAYLITE_VCR_SCOPE=all` only when you intentionally want to refresh the mutating cassette `daylite-update-contact-ical-urls.json`.
-For that mode you must also provide `DAYLITE_VCR_CONTACT_REFERENCE`, `DAYLITE_VCR_PRIMARY_ICAL_URL`, and `DAYLITE_VCR_ABSENCE_ICAL_URL`.
+Use `DAYLITE_VCR_SCOPE=all` only when you intentionally want to refresh the mutating cassettes `daylite-update-contact-ical-urls.json` and `daylite-appointments.json`.
+For that mode you must also provide `DAYLITE_VCR_CONTACT_REFERENCE`, `DAYLITE_VCR_PRIMARY_ICAL_URL`, `DAYLITE_VCR_ABSENCE_ICAL_URL`, and `DAYLITE_VCR_APPOINTMENT_PROJECT_REFERENCE`.
+The appointment recording creates, searches, edits and deletes an app-managed appointment on 2030-01-07 linked to that test project, which leaves it in the Daylite trash.
 
 Read-only recording example:
 
@@ -175,7 +177,7 @@ cargo test --manifest-path src-tauri/Cargo.toml \
   record_daylite_cassettes_from_live_api -- --ignored --nocapture
 ```
 
-Record all cassettes, including the live contact PATCH cassette:
+Record all cassettes, including the live contact PATCH and appointment cassettes:
 
 ```bash
 VCR_MODE=record \
@@ -187,6 +189,7 @@ DAYLITE_VCR_PROJECT_NO_MATCH_SEARCH_TERM="XXXXX" \
 DAYLITE_VCR_CONTACT_REFERENCE="/v1/contacts/500" \
 DAYLITE_VCR_PRIMARY_ICAL_URL="https://example.com/primary.ics" \
 DAYLITE_VCR_ABSENCE_ICAL_URL="https://example.com/absence.ics" \
+DAYLITE_VCR_APPOINTMENT_PROJECT_REFERENCE="/v1/projects/900" \
 cargo test --manifest-path src-tauri/Cargo.toml \
   record_daylite_cassettes_from_live_api -- --ignored --nocapture
 ```

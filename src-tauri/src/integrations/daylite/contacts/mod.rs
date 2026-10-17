@@ -5,6 +5,7 @@ mod mapping;
 pub mod types;
 
 pub use api::sync_contact_ical_urls;
+pub(crate) use mapping::cached_contact_display_name;
 pub use types::DayliteUpdateContactIcalUrlsInput;
 
 #[cfg(test)]

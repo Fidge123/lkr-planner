@@ -1,3 +1,4 @@
+use super::appointments::record_appointment_lifecycle;
 use super::auth_flow::refresh_tokens;
 use super::client::DayliteApiClient;
 use super::contacts::{
@@ -18,6 +19,8 @@ const DAYLITE_VCR_PROJECT_NO_MATCH_SEARCH_TERM_ENV: &str =
 const DAYLITE_VCR_CONTACT_REFERENCE_ENV: &str = "DAYLITE_VCR_CONTACT_REFERENCE";
 const DAYLITE_VCR_PRIMARY_ICAL_URL_ENV: &str = "DAYLITE_VCR_PRIMARY_ICAL_URL";
 const DAYLITE_VCR_ABSENCE_ICAL_URL_ENV: &str = "DAYLITE_VCR_ABSENCE_ICAL_URL";
+const DAYLITE_VCR_APPOINTMENT_PROJECT_REFERENCE_ENV: &str =
+    "DAYLITE_VCR_APPOINTMENT_PROJECT_REFERENCE";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum DayliteVcrScope {
@@ -49,6 +52,7 @@ struct DayliteVcrConfig {
     project_search_term: String,
     project_no_match_search_term: String,
     update_contact_input: Option<DayliteUpdateContactIcalUrlsInput>,
+    appointment_project_reference: Option<String>,
 }
 
 impl DayliteVcrConfig {
@@ -58,13 +62,16 @@ impl DayliteVcrConfig {
         }
 
         let scope = DayliteVcrScope::from_env()?;
-        let update_contact_input = match scope {
-            DayliteVcrScope::ReadOnly => None,
-            DayliteVcrScope::All => Some(DayliteUpdateContactIcalUrlsInput {
-                contact_reference: required_env(DAYLITE_VCR_CONTACT_REFERENCE_ENV)?,
-                primary_ical_url: required_env(DAYLITE_VCR_PRIMARY_ICAL_URL_ENV)?,
-                absence_ical_url: required_env(DAYLITE_VCR_ABSENCE_ICAL_URL_ENV)?,
-            }),
+        let (update_contact_input, appointment_project_reference) = match scope {
+            DayliteVcrScope::ReadOnly => (None, None),
+            DayliteVcrScope::All => (
+                Some(DayliteUpdateContactIcalUrlsInput {
+                    contact_reference: required_env(DAYLITE_VCR_CONTACT_REFERENCE_ENV)?,
+                    primary_ical_url: required_env(DAYLITE_VCR_PRIMARY_ICAL_URL_ENV)?,
+                    absence_ical_url: required_env(DAYLITE_VCR_ABSENCE_ICAL_URL_ENV)?,
+                }),
+                Some(required_env(DAYLITE_VCR_APPOINTMENT_PROJECT_REFERENCE_ENV)?),
+            ),
         };
 
         Ok(Self {
@@ -76,6 +83,7 @@ impl DayliteVcrConfig {
                 DAYLITE_VCR_PROJECT_NO_MATCH_SEARCH_TERM_ENV,
             )?,
             update_contact_input,
+            appointment_project_reference,
         })
     }
 }
@@ -173,12 +181,23 @@ async fn record_daylite_cassettes_from_live_api() {
                 "daylite-update-contact-ical-urls.json",
             )
             .expect("contact update cassette client should be created"),
-            stable_token_state,
+            stable_token_state.clone(),
             &mut LocalStore::default(),
             update_contact_input,
         )
         .await
         .expect("contact update cassette should be recorded");
+    }
+
+    if let Some(project_reference) = &config.appointment_project_reference {
+        record_appointment_lifecycle(
+            &DayliteApiClient::with_env_cassette(&config.base_url, "daylite-appointments.json")
+                .expect("appointment cassette client should be created"),
+            stable_token_state,
+            project_reference,
+        )
+        .await
+        .expect("appointment cassette should be recorded");
     }
 }
 
@@ -240,6 +259,26 @@ mod tests {
     }
 
     #[test]
+    fn config_requires_an_appointment_project_for_all_scope() {
+        let _guard = env_lock().lock().expect("env lock should not be poisoned");
+        clear_env();
+        unsafe {
+            std::env::set_var("VCR_MODE", "record");
+            std::env::set_var(DAYLITE_BASE_URL_ENV, "https://daylite.example");
+            std::env::set_var(DAYLITE_REFRESH_TOKEN_ENV, "refresh-token");
+            std::env::set_var(DAYLITE_VCR_SCOPE_ENV, "all");
+            std::env::set_var(DAYLITE_VCR_PROJECT_SEARCH_TERM_ENV, "Nord");
+            std::env::set_var(DAYLITE_VCR_CONTACT_REFERENCE_ENV, "/v1/contacts/1");
+            std::env::set_var(DAYLITE_VCR_PRIMARY_ICAL_URL_ENV, "https://zep/primary");
+            std::env::set_var(DAYLITE_VCR_ABSENCE_ICAL_URL_ENV, "https://zep/absence");
+        }
+
+        let error = DayliteVcrConfig::from_env()
+            .expect_err("all scope should require the appointment project");
+        assert!(error.contains(DAYLITE_VCR_APPOINTMENT_PROJECT_REFERENCE_ENV));
+    }
+
+    #[test]
     fn config_allows_read_only_without_patch_inputs() {
         let _guard = env_lock().lock().expect("env lock should not be poisoned");
         clear_env();
@@ -256,6 +295,7 @@ mod tests {
 
         assert_eq!(config.scope, DayliteVcrScope::ReadOnly);
         assert_eq!(config.update_contact_input, None);
+        assert_eq!(config.appointment_project_reference, None);
     }
 
     #[test]
@@ -288,6 +328,7 @@ mod tests {
             DAYLITE_VCR_CONTACT_REFERENCE_ENV,
             DAYLITE_VCR_PRIMARY_ICAL_URL_ENV,
             DAYLITE_VCR_ABSENCE_ICAL_URL_ENV,
+            DAYLITE_VCR_APPOINTMENT_PROJECT_REFERENCE_ENV,
         ] {
             unsafe {
                 std::env::remove_var(key);

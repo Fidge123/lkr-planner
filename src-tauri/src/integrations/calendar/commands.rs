@@ -2,8 +2,9 @@ use chrono::NaiveDate;
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use specta::Type;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 
+use super::appointment_sync::{retry_failed_in_app, schedule_appointment_sync};
 use super::caldav::{
     create_assignment_core, delete_assignment_core, fetch_calendar_events, move_assignment_core,
     reorder_assignment_core, update_assignment_core, AssignmentWrite, CaldavSession,
@@ -154,6 +155,13 @@ pub async fn delete_assignment(
     .await
 }
 
+/// Resolves once every listed day was reconciled; the failures event reports the days still failing.
+#[tauri::command]
+#[specta::specta]
+pub async fn retry_daylite_appointment_sync(app: tauri::AppHandle) {
+    retry_failed_in_app(&app).await;
+}
+
 async fn load_week_events_inner(
     app: tauri::AppHandle,
     week_start: String,
@@ -189,7 +197,7 @@ async fn load_week_events_inner(
 }
 
 // One unit is two requests, primary and absence, so the roster fans out to twice this.
-const EMPLOYEE_FETCH_CONCURRENCY: usize = 4;
+pub(super) const EMPLOYEE_FETCH_CONCURRENCY: usize = 4;
 
 struct EmployeeFetch {
     employee_reference: String,
@@ -197,7 +205,7 @@ struct EmployeeFetch {
     absences: Vec<CalendarCellEvent>,
 }
 
-fn employees_to_load<'a>(
+pub(super) fn employees_to_load<'a>(
     store: &'a LocalStore,
     only: Option<&'a [String]>,
 ) -> impl Iterator<Item = &'a EmployeeSetting> {
@@ -368,17 +376,36 @@ async fn create_assignment_inner(
 
     let session = load_caldav_session(&app, &store)?;
 
-    create_assignment_core(
-        &session,
-        &calendar_url,
-        &AssignmentWrite {
-            date: input.date,
-            project_ref: input.project_ref,
-            project_name: input.project_name,
-            order_index: None,
-        },
+    let write = AssignmentWrite {
+        date: input.date,
+        project_ref: input.project_ref,
+        project_name: input.project_name,
+        order_index: None,
+    };
+    let result = create_assignment_core(&session, &calendar_url, &write).await;
+    schedule_on_success(
+        result.map(|href| (href, touched_dates([Some(write.date.as_str())]))),
+        |dates| schedule_appointment_sync(&app, dates),
     )
-    .await
+}
+
+fn schedule_on_success<T>(
+    result: Result<(T, Vec<NaiveDate>), String>,
+    schedule: impl FnOnce(Vec<NaiveDate>),
+) -> Result<T, String> {
+    let (value, touched) = result?;
+    schedule(touched);
+    Ok(value)
+}
+
+fn touched_dates<'a>(dates: impl IntoIterator<Item = Option<&'a str>>) -> Vec<NaiveDate> {
+    dates
+        .into_iter()
+        .flatten()
+        .filter_map(|date| NaiveDate::parse_from_str(date, "%Y-%m-%d").ok())
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect()
 }
 
 fn resolve_employee_calendar_url(
@@ -395,7 +422,7 @@ fn resolve_employee_calendar_url(
         .ok_or_else(|| "Kein Kalender für diesen Mitarbeiter konfiguriert.".to_string())
 }
 
-fn load_caldav_session(
+pub(super) fn load_caldav_session(
     app: &tauri::AppHandle,
     store: &crate::integrations::local_store::LocalStore,
 ) -> Result<CaldavSession, String> {
@@ -434,29 +461,36 @@ async fn update_assignment_inner(
         .map_err(|e| e.user_message)?;
     let session = load_caldav_session(&app, &store)?;
 
+    let lookup_app = app.clone();
     refuse_protected_event(
         &session,
         &input.href,
         input.override_protection,
         |reference: String| async move {
-            crate::integrations::daylite::projects::fetch_project_by_reference(app, &reference)
-                .await
+            crate::integrations::daylite::projects::fetch_project_by_reference(
+                lookup_app, &reference,
+            )
+            .await
         },
     )
     .await?;
 
-    update_assignment_core(
-        &session,
-        &input.href,
-        &input.uid,
-        &AssignmentWrite {
-            date: input.date,
-            project_ref: input.project_ref,
-            project_name: input.project_name,
-            order_index: input.order_index,
-        },
+    let write = AssignmentWrite {
+        date: input.date,
+        project_ref: input.project_ref,
+        project_name: input.project_name,
+        order_index: input.order_index,
+    };
+    let result = update_assignment_core(&session, &input.href, &input.uid, &write).await;
+    schedule_on_success(
+        result.map(|previous_date| {
+            (
+                (),
+                touched_dates([Some(write.date.as_str()), previous_date.as_deref()]),
+            )
+        }),
+        |dates| schedule_appointment_sync(&app, dates),
     )
-    .await
 }
 
 async fn move_assignment_inner(
@@ -475,23 +509,29 @@ async fn move_assignment_inner(
 
     let session = load_caldav_session(&app, &store)?;
 
+    let lookup_app = app.clone();
     refuse_protected_day_change(&session, &href, &date, |reference: String| async move {
-        crate::integrations::daylite::projects::fetch_project_by_reference(app, &reference).await
+        crate::integrations::daylite::projects::fetch_project_by_reference(lookup_app, &reference)
+            .await
     })
     .await?;
 
-    move_assignment_core(
-        &session,
-        &href,
-        &target_calendar_url,
-        &AssignmentWrite {
-            date,
-            project_ref,
-            project_name,
-            order_index,
-        },
+    let write = AssignmentWrite {
+        date,
+        project_ref,
+        project_name,
+        order_index,
+    };
+    let result = move_assignment_core(&session, &href, &target_calendar_url, &write).await;
+    schedule_on_success(
+        result.map(|(moved, source_date)| {
+            (
+                moved,
+                touched_dates([Some(write.date.as_str()), source_date.as_deref()]),
+            )
+        }),
+        |dates| schedule_appointment_sync(&app, dates),
     )
-    .await
 }
 
 async fn reorder_assignment_inner(
@@ -505,7 +545,11 @@ async fn reorder_assignment_inner(
         .map_err(|e| e.user_message)?;
     let session = load_caldav_session(&app, &store)?;
 
-    reorder_assignment_core(&session, &href, &uid, &date, order_index).await
+    let result = reorder_assignment_core(&session, &href, &uid, &date, order_index).await;
+    schedule_on_success(
+        result.map(|()| ((), touched_dates([Some(date.as_str())]))),
+        |dates| schedule_appointment_sync(&app, dates),
+    )
 }
 
 async fn delete_assignment_inner(
@@ -517,18 +561,25 @@ async fn delete_assignment_inner(
         .map_err(|e| e.user_message)?;
     let session = load_caldav_session(&app, &store)?;
 
+    let lookup_app = app.clone();
     refuse_protected_event(
         &session,
         &href,
         override_protection,
         |reference: String| async move {
-            crate::integrations::daylite::projects::fetch_project_by_reference(app, &reference)
-                .await
+            crate::integrations::daylite::projects::fetch_project_by_reference(
+                lookup_app, &reference,
+            )
+            .await
         },
     )
     .await?;
 
-    delete_assignment_core(&session, &href).await
+    let result = delete_assignment_core(&session, &href).await;
+    schedule_on_success(
+        result.map(|previous_date| ((), touched_dates([previous_date.as_deref()]))),
+        |dates| schedule_appointment_sync(&app, dates),
+    )
 }
 
 #[cfg(test)]
@@ -598,6 +649,60 @@ mod tests {
             WeekLoadPurpose::Refresh.operation(),
             Operation::RefreshWeekEvents
         );
+    }
+
+    fn date(value: &str) -> NaiveDate {
+        NaiveDate::parse_from_str(value, "%Y-%m-%d").unwrap()
+    }
+
+    #[test]
+    fn a_failed_write_schedules_no_appointment_sync() {
+        let mut scheduled = Vec::new();
+
+        let result: Result<String, String> = schedule_on_success(
+            Err("Kalenderserver antwortete mit HTTP 500".to_string()),
+            |dates| scheduled.push(dates),
+        );
+
+        assert_eq!(
+            result,
+            Err("Kalenderserver antwortete mit HTTP 500".to_string())
+        );
+        assert!(scheduled.is_empty());
+    }
+
+    #[test]
+    fn a_successful_write_schedules_its_dates_and_keeps_its_result() {
+        let mut scheduled = Vec::new();
+
+        let result = schedule_on_success(
+            Ok(("/cal/uid-1.ics".to_string(), vec![date("2026-11-02")])),
+            |dates| scheduled.push(dates),
+        );
+
+        assert_eq!(result, Ok("/cal/uid-1.ics".to_string()));
+        assert_eq!(scheduled, [vec![date("2026-11-02")]]);
+    }
+
+    #[test]
+    fn a_write_touches_the_day_it_left_and_the_day_it_entered() {
+        assert_eq!(
+            touched_dates([Some("2026-11-03"), Some("2026-11-02")]),
+            [date("2026-11-02"), date("2026-11-03")]
+        );
+    }
+
+    #[test]
+    fn a_write_within_one_day_touches_it_once() {
+        assert_eq!(
+            touched_dates([Some("2026-11-02"), Some("2026-11-02")]),
+            [date("2026-11-02")]
+        );
+    }
+
+    #[test]
+    fn an_unknown_or_unreadable_date_is_not_touched() {
+        assert_eq!(touched_dates([None, Some("kein-datum")]), []);
     }
 
     #[test]

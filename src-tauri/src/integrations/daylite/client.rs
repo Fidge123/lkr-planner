@@ -158,6 +158,7 @@ pub(super) enum DayliteHttpMethod {
     Get,
     Post,
     Patch,
+    Delete,
 }
 
 #[derive(Debug, Clone)]
@@ -310,6 +311,7 @@ impl DayliteHttpTransport for ReqwestTransport {
                 DayliteHttpMethod::Get => self.http_client.get(url),
                 DayliteHttpMethod::Post => self.http_client.post(url),
                 DayliteHttpMethod::Patch => self.http_client.patch(url),
+                DayliteHttpMethod::Delete => self.http_client.delete(url),
             };
 
             if let Some(access_token) = request.access_token {
@@ -389,6 +391,7 @@ impl DayliteHttpMethod {
             Self::Get => "GET",
             Self::Post => "POST",
             Self::Patch => "PATCH",
+            Self::Delete => "DELETE",
         }
     }
 }

@@ -35,4 +35,4 @@ The existing `ical-assignment-sync` and `assignment-persistence` requirements ke
 - A new Tauri command `retry_daylite_appointment_sync` and a new event `daylite-appointment-sync-failures`; existing command signatures stay unchanged and `src/generated/tauri.ts` gains only the new command.
 - `src/app/hooks/use-appointment-sync-failures.ts` and `src/app/page.tsx`: the failure alert with its retry button.
 - Daylite: appointments carrying the `lkr-planner` keyword appear on linked projects; the keyword is created in Daylite on first use.
-- `docs/adr/0015-daylite-appointments-mirror-assignments.md`: new ADR recording the desired-state reconciliation, the keyword marker, and the failure reporting with retry.
+- `docs/adr/0017-daylite-appointments-mirror-assignments.md`: new ADR recording the desired-state reconciliation, the keyword marker, and the failure reporting with retry.

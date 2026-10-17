@@ -24,6 +24,7 @@ pub enum Operation {
     DayliteOpenProject,
     DayliteListContacts,
     DayliteListCachedContacts,
+    DayliteAppointmentSync,
     ZepSaveCredentials,
     ZepLoadCredentials,
     ZepTestCredentials,
@@ -199,6 +200,14 @@ mod tests {
         assert_eq!(
             dimension(&Operation::ResolveWeekProjects),
             "resolve_week_projects"
+        );
+    }
+
+    #[test]
+    fn appointment_sync_has_its_own_operation() {
+        assert_eq!(
+            dimension(&Operation::DayliteAppointmentSync),
+            "daylite_appointment_sync"
         );
     }
 

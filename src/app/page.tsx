@@ -16,6 +16,7 @@ import type {
   PlanningContactRecord,
 } from "../generated/tauri";
 import type { ProjectCategoryColors } from "../services/daylite-categories";
+import { AppointmentSyncAlert } from "./components/appointment-sync-alert";
 import { MoveReconciliationDialog } from "./components/move-reconciliation-dialog";
 import {
   AssignmentCardBody,
@@ -27,6 +28,10 @@ import { WeekTable } from "./components/week-table";
 import { filterVisibleEmployees } from "./employee-visibility";
 import type { AppointmentDragPayload } from "./hooks/use-appointment-drag";
 import { useAppointmentDrag } from "./hooks/use-appointment-drag";
+import {
+  type AppointmentSyncFailuresState,
+  useAppointmentSyncFailures,
+} from "./hooks/use-appointment-sync-failures";
 import { type HolidaysState, useHolidays } from "./hooks/use-holidays";
 import type { PlanningAssignmentsState } from "./hooks/use-planning-assignments";
 import { usePlanningEmployees } from "./hooks/use-planning-employees";
@@ -90,6 +95,7 @@ export function PlanningGrid({
   employeeSettings = [],
   hideNonPlannableEmployees = true,
   holidaysState,
+  appointmentSyncState,
   categoryColors = {},
   onOpenIcalDialog = () => {},
   onNavigateWeek,
@@ -99,6 +105,7 @@ export function PlanningGrid({
 
   const fallbackEmployeesState = usePlanningEmployees();
   const fallbackHolidaysState = useHolidays(weekStart);
+  const fallbackAppointmentSyncState = useAppointmentSyncFailures();
 
   return (
     <PlanningGridTable
@@ -108,6 +115,9 @@ export function PlanningGrid({
       employeeSettings={employeeSettings}
       hideNonPlannableEmployees={hideNonPlannableEmployees}
       holidaysState={holidaysState ?? fallbackHolidaysState}
+      appointmentSyncState={
+        appointmentSyncState ?? fallbackAppointmentSyncState
+      }
       categoryColors={categoryColors}
       onOpenIcalDialog={onOpenIcalDialog}
       onNavigateWeek={onNavigateWeek}
@@ -122,6 +132,7 @@ export function PlanningGridTable({
   employeeSettings,
   hideNonPlannableEmployees,
   holidaysState,
+  appointmentSyncState,
   categoryColors,
   onOpenIcalDialog,
   onNavigateWeek,
@@ -229,6 +240,11 @@ export function PlanningGridTable({
           message={holidayErrorMessage}
           onReload={reloadHolidays}
           variant="warning"
+        />
+        <AppointmentSyncAlert
+          failedDates={appointmentSyncState.failedDates}
+          isRetrying={appointmentSyncState.isRetrying}
+          onRetry={() => void appointmentSyncState.retry()}
         />
         {drag.errorMessage ? (
           <section className="toast toast-top toast-center z-50">
@@ -376,6 +392,7 @@ interface Props {
   employeeSettings?: EmployeeSetting[];
   hideNonPlannableEmployees?: boolean;
   holidaysState?: HolidaysState;
+  appointmentSyncState?: AppointmentSyncFailuresState;
   categoryColors?: ProjectCategoryColors;
   onOpenIcalDialog?: (employee: PlanningContactRecord) => void;
   onNavigateWeek?: (direction: -1 | 1) => void;
@@ -388,6 +405,7 @@ export interface PlanningGridTableProps {
   employeeSettings: EmployeeSetting[];
   hideNonPlannableEmployees: boolean;
   holidaysState: HolidaysState;
+  appointmentSyncState: AppointmentSyncFailuresState;
   categoryColors: ProjectCategoryColors;
   onOpenIcalDialog: (employee: PlanningContactRecord) => void;
   onNavigateWeek?: (direction: -1 | 1) => void;

@@ -28,6 +28,7 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         integrations::calendar::commands::move_assignment,
         integrations::calendar::commands::reorder_assignment,
         integrations::calendar::commands::delete_assignment,
+        integrations::calendar::commands::retry_daylite_appointment_sync,
         integrations::zep::commands::zep_save_credentials,
         integrations::zep::commands::zep_load_credentials,
         integrations::zep::commands::zep_test_credentials,

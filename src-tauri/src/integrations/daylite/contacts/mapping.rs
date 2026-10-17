@@ -66,6 +66,11 @@ pub(super) fn sort_contacts(
     contacts
 }
 
+/// The planning grid's row label, so the name reads the same wherever a worker is shown.
+pub(crate) fn cached_contact_display_name(contact: Option<&DayliteContactCacheEntry>) -> String {
+    contact_display_name(&contact.cloned().map(map_cached_contact).unwrap_or_default())
+}
+
 pub(super) fn contact_display_name(contact: &PlanningContactRecord) -> String {
     if let Some(nickname) = trimmed_or_none(contact.nickname.clone()) {
         return nickname;
