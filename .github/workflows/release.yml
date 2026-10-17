@@ -9,6 +9,7 @@ on:
       - "!**.md"
       - "!docs/**"
       - "!openspec/**"
+      - "!scripts/bruno/**"
       - "!.github/**"
       - ".github/workflows/release.yml"
 
