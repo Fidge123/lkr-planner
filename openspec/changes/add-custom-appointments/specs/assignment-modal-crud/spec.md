@@ -9,13 +9,13 @@ The system SHALL allow assigning a project or a custom appointment to an employe
 - **WHEN** user selects a project and clicks save
 - **THEN** assignment is persisted
 - **AND** modal closes
-- **AND** weekly grid shows new assignment immediately
+- **AND** the employee's row is refreshed without the loading spinner and shows the new assignment
 
 #### Scenario: Save new custom appointment
 - **WHEN** user selects "Eigener Termin", enters a title and clicks save
 - **THEN** a custom appointment is persisted
 - **AND** modal closes
-- **AND** weekly grid shows the new custom appointment immediately
+- **AND** the employee's row is refreshed without the loading spinner and shows the new custom appointment
 
 ### Requirement: Project picker
 The system SHALL provide a project picker in the modal for selecting a project while the appointment type is "Projekt".

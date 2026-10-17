@@ -2,13 +2,13 @@
 
 ## 1. Architecture record
 
-- [ ] 1.1 Write ADR 0015 in `docs/adr` recording the `lkr-planner:custom` DESCRIPTION marker, the classification order and the rejected alternatives, and verify it follows the format of the existing ADRs
+- [ ] 1.1 Write ADR 0017 in `docs/adr` recording the `lkr-planner:custom` DESCRIPTION marker, the classification order and the rejected alternatives, and verify it follows the format of the existing ADRs
 
 ## 2. Backend classification
 
 - [ ] 2.1 Write failing `cargo test`s in `events/classify.rs`: a first line of `lkr-planner:custom` classifies as custom, also with surrounding whitespace, BOM or zero-width space and with further lines after it; the marker on a later line, a prefix like `lkr-planner:customer` and any other first line stay bare; a `daylite:` reference stays a project assignment
 - [ ] 2.2 Replace `PendingEvent.project_ref` with an `EventLink` enum (`Project`, `Custom`, `Bare`), add `CalendarEventKind::Custom`, map custom events in `resolve_event` with no project status, category or reference, and verify the tests from 2.1 and the existing `events` tests pass
-- [ ] 2.3 Write a failing test that `project_references` skips custom events so no Daylite lookup is made for them, then satisfy it
+- [ ] 2.3 Write failing tests that `project_references` skips custom events and that `resolve_event` maps them with `project_pending: false`, so neither the cache lookup nor `resolve_week_projects` touches them, then satisfy them
 
 ## 3. Backend writes
 
@@ -28,7 +28,7 @@
 
 - [ ] 5.1 Write failing `bun test`s: `toCellEvent` maps `custom` with null project fields and the muted strip, `highlightKey` returns null for custom, and `cell-order.ts` orders custom and assignment cards together by order index
 - [ ] 5.2 Add `"custom"` to `CellEvent.kind`, add an `isPlannerManaged` helper and use it in `cell-order.ts` and `withDropPreview`, satisfying the tests from 5.1
-- [ ] 5.3 Write failing `timetable-cell.spec.tsx` tests: a custom card shows its title and times, is clickable and draggable, and shows no project status, warning icon, Daylite link or highlight toggle; then render custom events through the draggable card in `timetable-cell.tsx` so they pass
+- [ ] 5.3 Write failing `timetable-cell.spec.tsx` tests: a custom card shows its title and times, is clickable and draggable, and shows no project status, pending state, warning icon, Daylite link or highlight toggle; then render custom events through the draggable card in `timetable-cell.tsx` so they pass
 
 ## 6. Modal
 
@@ -45,7 +45,7 @@
 ## 8. Integration checks
 
 - [ ] 8.1 Run `cargo test --manifest-path src-tauri/Cargo.toml`, `bun test`, `bun lint`, `bun format:check` and `bunx tsc --noEmit` and verify all pass
-- [ ] 8.2 In the running app, create a custom appointment next to a project assignment, verify both share the day's slots, chain it to the next days via the ghost, rename it, drag it to another day and another employee, reorder it and delete it; verify in ZEP that its DESCRIPTION reads `lkr-planner:custom`
+- [ ] 8.2 In the running app, create a custom appointment next to a project assignment, verify only that employee's row refreshes without the loading spinner and both share the day's slots, chain it to the next days via the ghost, rename it, drag it to another day and another employee and verify the card moves immediately, reorder it, delete it and verify the card disappears immediately; verify in ZEP that its DESCRIPTION reads `lkr-planner:custom`
 - [ ] 8.3 Update the "Implemented" list in `README.md` with custom appointments and verify the line reads correctly
 
 ## Workflow follow-up

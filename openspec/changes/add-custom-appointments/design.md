@@ -47,11 +47,12 @@ Alternatives considered:
 Since only the first line is read, ZEP or employees can add notes on later lines without breaking the marker.
 If a client rewrites the first line, the event degrades to bare, which is read-only and protected, so the failure is safe.
 
-Record this as ADR 0015 in `docs/adr`.
+Record this as ADR 0017 in `docs/adr`.
 
 ### Replace `project_ref: Option<String>` with an explicit link enum in the backend
 `PendingEvent` gets `link: EventLink` with variants `Project(String)`, `Custom` and `Bare`, derived once in `classify_event` from the DESCRIPTION.
 `resolve_event`, `plan_slot_updates`, `project_references` and the protection guard match on it, and `CalendarEventKind` gains `Custom`.
+`resolve_event` maps a custom event with `project_pending: false` and no project fields, so neither the cached-project lookup in `load_week_events` nor the background `resolve_week_projects` ever sees it.
 The guard parses the same DESCRIPTION it already fetches via `fetch_event_by_href`, so it needs no extra request.
 
 Alternative considered: keep `project_ref` and add a separate `is_custom` flag.
@@ -68,7 +69,7 @@ Rejected: parallel commands duplicate the slot, protection, absence-calendar and
 
 ### Frontend: a new `custom` kind next to `assignment`
 `CellEvent.kind` gains `"custom"`, with `projectRef`, `projectStatus` and `categoryColor` always null.
-`timetable-cell.tsx` renders custom appointments through the same draggable card as assignments, so dragging, reordering and drop previews need no new code; the card hides the project-only affordances when the kind is `custom`.
+`timetable-cell.tsx` renders custom appointments through the same draggable card as assignments, so dragging, reordering, drop previews and the optimistic relocation and removal from ADR 0016 need no new code; the card hides the project-only affordances when the kind is `custom`.
 Every place that counts or orders "planner cards" (`withDropPreview`, `cell-order.ts`, the drag payload) switches from `kind === "assignment"` to a shared `isPlannerManaged(event)` helper, so the two kinds cannot drift apart.
 `highlightKey` stays keyed on `kind === "assignment"`, so custom cards are never highlightable.
 

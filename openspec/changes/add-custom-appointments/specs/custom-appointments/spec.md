@@ -78,7 +78,7 @@ The system SHALL let the user create a custom appointment from the assignment mo
 - **WHEN** the user enters a title and clicks save
 - **THEN** a custom appointment is persisted for the preselected employee and day with the trimmed title
 - **AND** the modal closes
-- **AND** the grid reloads and shows the new card
+- **AND** the employee's row is refreshed without the loading spinner and shows the new card
 
 #### Scenario: Entered title counts as unsaved change
 - **WHEN** the user has entered a title and tries to close the modal without saving
@@ -101,7 +101,7 @@ The appointment type of an existing entry SHALL NOT be changeable.
 - **WHEN** the user changes the title and saves
 - **THEN** the existing VEVENT is updated with the new title under the same UID
 - **AND** it keeps `lkr-planner:custom` as its DESCRIPTION
-- **AND** the grid reflects the change
+- **AND** the employee's row is refreshed without the loading spinner and shows the new title
 
 #### Scenario: Blank title cannot be saved in edit mode
 - **WHEN** the user clears the title of an existing custom appointment
@@ -110,7 +110,8 @@ The appointment type of an existing entry SHALL NOT be changeable.
 #### Scenario: Delete a custom appointment
 - **WHEN** the user deletes a custom appointment and confirms
 - **THEN** the VEVENT is removed from CalDAV
-- **AND** the grid shows the cell without it
+- **AND** its card is removed from the grid immediately
+- **AND** the employee's row is refreshed without the loading spinner
 
 ### Requirement: Custom appointments are never protected
 The system SHALL treat a custom appointment as not protected, so updating, deleting, moving to another day and reordering it proceed without a protection check failing.
@@ -136,6 +137,7 @@ The system SHALL render a custom appointment as an editable, draggable card show
 #### Scenario: No project affordances
 - **WHEN** a custom appointment card is rendered
 - **THEN** it shows no project status, no unresolved-project warning and no Daylite deep link
+- **AND** it is never marked as pending and triggers no background project resolution
 - **AND** it offers no highlight toggle
 
 #### Scenario: Never highlighted
@@ -152,7 +154,8 @@ The system SHALL let custom appointments take part in drag-and-drop, intra-day r
 
 #### Scenario: Move to another employee keeps the title
 - **WHEN** a custom appointment is dragged to another employee's cell
-- **THEN** the new VEVENT on the target calendar carries the same title and `lkr-planner:custom` as its DESCRIPTION
+- **THEN** the card is shown under the target employee immediately
+- **AND** the new VEVENT on the target calendar carries the same title and `lkr-planner:custom` as its DESCRIPTION
 - **AND** the source VEVENT is deleted
 
 #### Scenario: Reorder within a cell
