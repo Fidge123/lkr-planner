@@ -3,8 +3,6 @@ use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use std::collections::{HashMap, HashSet};
-use std::time::Duration;
-use tauri_plugin_http::reqwest;
 
 use super::caldav::{
     create_assignment_core, delete_assignment_core, fetch_calendar_events, move_assignment_core,
@@ -16,23 +14,45 @@ use super::events::{
 use super::protection::{refuse_protected_day_change, refuse_protected_event};
 use super::types::{CalendarCellEvent, EmployeeWeekEvents, MoveAssignmentResult, PendingEvent};
 use crate::integrations::daylite::projects::ResolvedProject;
-use crate::integrations::local_store::LocalStore;
+use crate::integrations::local_store::{EmployeeSetting, LocalStore};
 use crate::integrations::telemetry::events::{Integration, Operation};
 use crate::integrations::telemetry::observe::{observe, record_failure};
 use tauri::Manager;
 
+/// Background loads are recorded apart so they do not count as time a user waited.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Type, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum WeekLoadPurpose {
+    Display,
+    Prefetch,
+    Refresh,
+}
+
+impl WeekLoadPurpose {
+    fn operation(self) -> Operation {
+        match self {
+            Self::Display => Operation::LoadWeekEvents,
+            Self::Prefetch => Operation::PrefetchWeekEvents,
+            Self::Refresh => Operation::RefreshWeekEvents,
+        }
+    }
+}
+
+/// Without employee references, every employee with a calendar is loaded.
 #[tauri::command]
 #[specta::specta]
 pub async fn load_week_events(
     app: tauri::AppHandle,
     week_start: String,
+    employee_references: Option<Vec<String>>,
+    purpose: WeekLoadPurpose,
 ) -> Result<Vec<EmployeeWeekEvents>, String> {
     let handle = app.clone();
     observe(
         &handle,
-        Operation::LoadWeekEvents,
+        purpose.operation(),
         Integration::Zep,
-        load_week_events_inner(app, week_start),
+        load_week_events_inner(app, week_start, employee_references),
     )
     .await
 }
@@ -137,35 +157,34 @@ pub async fn delete_assignment(
 async fn load_week_events_inner(
     app: tauri::AppHandle,
     week_start: String,
+    employee_references: Option<Vec<String>>,
 ) -> Result<Vec<EmployeeWeekEvents>, String> {
     let store = crate::integrations::local_store::load_local_store(app.clone())
         .map_err(|e| e.user_message)?;
+    let only = employee_references.as_deref();
 
     let week_start_date = NaiveDate::parse_from_str(&week_start, "%Y-%m-%d")
         .map_err(|_| format!("Ungültiges Wochenstartdatum: {week_start}"))?;
 
-    let credentials = match crate::integrations::zep::load_zep_credentials_from_keychain() {
+    let credentials = match crate::integrations::zep::load_zep_credentials() {
         Ok(c) => c,
         Err(e) => {
             record_failure(&app, Operation::KeychainRead, Integration::Keychain, &e);
-            return Ok(employees_with_error(&store, &e.user_message));
+            return Ok(employees_with_error(&store, only, &e.user_message));
         }
     };
 
     let session = build_caldav_session(&app, &store, credentials)?;
 
     let (fetches, error_results) =
-        fetch_week_for_employees(&store, &session, week_start_date).await;
+        fetch_week_for_employees(&store, only, &session, week_start_date).await;
 
-    let resolved_projects = crate::integrations::daylite::projects::resolve_projects_by_reference(
-        &store.api_endpoints.daylite_base_url,
-        project_references(&fetches),
-    )
-    .await;
+    let cached_projects =
+        crate::integrations::daylite::projects::cached_projects(&project_references(&fetches));
     Ok(assemble_week_events(
         fetches,
         error_results,
-        &resolved_projects,
+        &cached_projects,
     ))
 }
 
@@ -178,16 +197,24 @@ struct EmployeeFetch {
     absences: Vec<CalendarCellEvent>,
 }
 
-fn employees_with_error(store: &LocalStore, message: &str) -> Vec<EmployeeWeekEvents> {
-    store
-        .employee_settings
-        .iter()
-        .filter(|s| {
-            s.zep_primary_calendar
-                .as_deref()
-                .map(|u| !u.is_empty())
-                .unwrap_or(false)
-        })
+fn employees_to_load<'a>(
+    store: &'a LocalStore,
+    only: Option<&'a [String]>,
+) -> impl Iterator<Item = &'a EmployeeSetting> {
+    store.employee_settings.iter().filter(move |s| {
+        s.zep_primary_calendar
+            .as_deref()
+            .is_some_and(|u| !u.is_empty())
+            && only.is_none_or(|refs| refs.contains(&s.daylite_contact_reference))
+    })
+}
+
+fn employees_with_error(
+    store: &LocalStore,
+    only: Option<&[String]>,
+    message: &str,
+) -> Vec<EmployeeWeekEvents> {
+    employees_to_load(store, only)
         .map(|s| EmployeeWeekEvents {
             employee_reference: s.daylite_contact_reference.clone(),
             events: vec![],
@@ -198,12 +225,11 @@ fn employees_with_error(store: &LocalStore, message: &str) -> Vec<EmployeeWeekEv
 
 async fn fetch_week_for_employees(
     store: &LocalStore,
+    only: Option<&[String]>,
     session: &CaldavSession,
     week_start: NaiveDate,
 ) -> (Vec<EmployeeFetch>, Vec<EmployeeWeekEvents>) {
-    let employee_futures: Vec<_> = store
-        .employee_settings
-        .iter()
+    let employee_futures: Vec<_> = employees_to_load(store, only)
         .filter_map(|setting| {
             let calendar_url = setting
                 .zep_primary_calendar
@@ -284,14 +310,14 @@ fn project_references(fetches: &[EmployeeFetch]) -> HashSet<String> {
 fn assemble_week_events(
     fetches: Vec<EmployeeFetch>,
     error_results: Vec<EmployeeWeekEvents>,
-    resolved_projects: &HashMap<String, Option<ResolvedProject>>,
+    cached_projects: &HashMap<String, ResolvedProject>,
 ) -> Vec<EmployeeWeekEvents> {
     let mut results = error_results;
     for fetch in fetches {
         let mut events: Vec<CalendarCellEvent> = fetch
             .pending
             .into_iter()
-            .map(|p| resolve_event(p, resolved_projects))
+            .map(|p| resolve_event(p, cached_projects))
             .collect();
         events.extend(fetch.absences);
         // Deduplicate by UID to guard against CalDAV servers redelivering the same event.
@@ -373,23 +399,9 @@ fn load_caldav_session(
     app: &tauri::AppHandle,
     store: &crate::integrations::local_store::LocalStore,
 ) -> Result<CaldavSession, String> {
-    let credentials = crate::integrations::zep::load_zep_credentials_from_keychain()
-        .map_err(|e| e.user_message)?;
+    let credentials =
+        crate::integrations::zep::load_zep_credentials().map_err(|e| e.user_message)?;
     build_caldav_session(app, store, credentials)
-}
-
-/// Cloning a reqwest client shares its connection pool rather than copying it.
-fn caldav_client() -> Result<reqwest::Client, String> {
-    static CLIENT: std::sync::OnceLock<Result<reqwest::Client, String>> =
-        std::sync::OnceLock::new();
-    CLIENT
-        .get_or_init(|| {
-            reqwest::Client::builder()
-                .timeout(Duration::from_secs(30))
-                .build()
-                .map_err(|e| format!("HTTP-Client konnte nicht erstellt werden: {e}"))
-        })
-        .clone()
 }
 
 fn build_caldav_session(
@@ -398,7 +410,7 @@ fn build_caldav_session(
     credentials: crate::integrations::zep::ZepStoredCredentials,
 ) -> Result<CaldavSession, String> {
     Ok(CaldavSession {
-        client: caldav_client()?,
+        client: crate::integrations::zep::shared_caldav_client()?,
         username: credentials.username,
         password: credentials.password,
         base_url: store.api_endpoints.zep_caldav_root_url.clone(),
@@ -522,6 +534,71 @@ async fn delete_assignment_inner(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn store_with(employees: &[(&str, Option<&str>)]) -> LocalStore {
+        LocalStore {
+            employee_settings: employees
+                .iter()
+                .map(|(reference, calendar)| EmployeeSetting {
+                    daylite_contact_reference: reference.to_string(),
+                    zep_primary_calendar: calendar.map(str::to_string),
+                    ..Default::default()
+                })
+                .collect(),
+            ..Default::default()
+        }
+    }
+
+    fn references(selected: Vec<&EmployeeSetting>) -> Vec<&str> {
+        selected
+            .iter()
+            .map(|s| s.daylite_contact_reference.as_str())
+            .collect()
+    }
+
+    #[test]
+    fn without_a_filter_every_employee_with_a_primary_calendar_is_loaded() {
+        let store = store_with(&[
+            ("/v1/contacts/1", Some("https://zep/cal-1")),
+            ("/v1/contacts/2", None),
+            ("/v1/contacts/3", Some("")),
+            ("/v1/contacts/4", Some("https://zep/cal-4")),
+        ]);
+
+        let selected = employees_to_load(&store, None).collect();
+
+        assert_eq!(references(selected), ["/v1/contacts/1", "/v1/contacts/4"]);
+    }
+
+    #[test]
+    fn a_filter_limits_the_load_to_the_listed_employees() {
+        let store = store_with(&[
+            ("/v1/contacts/1", Some("https://zep/cal-1")),
+            ("/v1/contacts/2", Some("https://zep/cal-2")),
+            ("/v1/contacts/3", None),
+        ]);
+        let only = ["/v1/contacts/2".to_string(), "/v1/contacts/3".to_string()];
+
+        let selected = employees_to_load(&store, Some(&only)).collect();
+
+        assert_eq!(references(selected), ["/v1/contacts/2"]);
+    }
+
+    #[test]
+    fn each_load_purpose_records_its_own_operation() {
+        assert_eq!(
+            WeekLoadPurpose::Display.operation(),
+            Operation::LoadWeekEvents
+        );
+        assert_eq!(
+            WeekLoadPurpose::Prefetch.operation(),
+            Operation::PrefetchWeekEvents
+        );
+        assert_eq!(
+            WeekLoadPurpose::Refresh.operation(),
+            Operation::RefreshWeekEvents
+        );
+    }
 
     #[test]
     fn update_input_carries_the_override_the_frontend_sends() {

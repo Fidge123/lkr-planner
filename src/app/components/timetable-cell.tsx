@@ -306,7 +306,7 @@ function DraggableAssignmentCard({
     position,
   };
   const unresolved = isUnresolvedAssignment(event);
-  const canDrag = Boolean(event.href) && !unresolved;
+  const canDrag = Boolean(event.href) && !unresolved && !event.projectPending;
   const { listeners, setActivatorNodeRef, setNodeRef } = useDraggable({
     id: `assignment-${employeeRef}-${event.uid}`,
     data: payload,

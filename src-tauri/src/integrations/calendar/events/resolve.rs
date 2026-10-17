@@ -5,7 +5,7 @@ use crate::integrations::daylite::projects::ResolvedProject;
 
 pub(crate) fn resolve_event(
     pending: PendingEvent,
-    resolved_projects: &HashMap<String, Option<ResolvedProject>>,
+    cached_projects: &HashMap<String, ResolvedProject>,
 ) -> CalendarCellEvent {
     let PendingEvent {
         uid,
@@ -33,10 +33,11 @@ pub(crate) fn resolve_event(
             end_time,
             href,
             order_index,
+            project_pending: false,
         };
     };
 
-    if let Some(Some(resolved)) = resolved_projects.get(&project_ref) {
+    if let Some(resolved) = cached_projects.get(&project_ref) {
         return CalendarCellEvent {
             uid,
             kind: CalendarEventKind::Assignment,
@@ -49,11 +50,10 @@ pub(crate) fn resolve_event(
             end_time,
             href,
             order_index,
+            project_pending: false,
         };
     }
 
-    // An assignment without a project status is how the frontend detects a
-    // reference it must not treat as a project name.
     CalendarCellEvent {
         uid,
         kind: CalendarEventKind::Assignment,
@@ -66,6 +66,7 @@ pub(crate) fn resolve_event(
         end_time,
         href,
         order_index,
+        project_pending: true,
     }
 }
 
@@ -82,14 +83,14 @@ mod tests {
         name: &str,
         status: &str,
         category: Option<&str>,
-    ) -> HashMap<String, Option<ResolvedProject>> {
+    ) -> HashMap<String, ResolvedProject> {
         HashMap::from([(
             project_ref.to_string(),
-            Some(ResolvedProject {
+            ResolvedProject {
                 name: name.to_string(),
                 status: status.to_string(),
                 category: category.map(str::to_string),
-            }),
+            },
         )])
     }
 
@@ -120,6 +121,7 @@ mod tests {
         assert_eq!(event.project_status, Some("deferred".to_string()));
         assert_eq!(event.project_category, None);
         assert_eq!(event.date, "2026-01-26");
+        assert!(!event.project_pending);
     }
 
     #[test]
@@ -143,16 +145,16 @@ mod tests {
     }
 
     #[test]
-    fn shows_placeholder_when_project_not_resolvable() {
-        let pending = pending("Unbekanntes Projekt", Some("/v1/projects/9999"));
-        let resolved_projects = HashMap::from([("/v1/projects/9999".to_string(), None)]);
+    fn an_uncached_project_keeps_the_summary_and_is_pending() {
+        let pending = pending("Projekt Ohne Cache", Some("/v1/projects/9999"));
 
-        let event = resolve_event(pending, &resolved_projects);
+        let event = resolve_event(pending, &HashMap::new());
 
         assert_eq!(event.kind, CalendarEventKind::Assignment);
-        assert_eq!(event.title, "Unbekanntes Projekt");
+        assert_eq!(event.title, "Projekt Ohne Cache");
         assert_eq!(event.project_status, None);
         assert_eq!(event.project_category, None);
+        assert!(event.project_pending);
     }
 
     #[test]
@@ -165,6 +167,7 @@ mod tests {
         assert_eq!(event.title, "Auto Werkstatt");
         assert_eq!(event.project_status, None);
         assert_eq!(event.project_category, None);
+        assert!(!event.project_pending);
     }
 
     #[test]
@@ -180,6 +183,7 @@ mod tests {
         let events = map_absence_raw_events_for_week(vec![raw], week_start);
 
         assert_eq!(events[0].project_category, None);
+        assert!(!events[0].project_pending);
     }
 
     #[test]

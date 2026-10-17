@@ -16,6 +16,7 @@ function assignment(overrides: Partial<CellEvent> = {}): CellEvent {
     projectStatus: "in_progress",
     categoryColor: null,
     orderIndex: 0,
+    projectPending: false,
     ...overrides,
   };
 }
@@ -164,6 +165,29 @@ describe("TimetableCell", () => {
     expect(html).toContain("@max-[10rem]:col-start-1");
     expect(html).toContain("@max-[10rem]:row-start-2");
     expect(html).toContain("@max-[10rem]:row-span-2");
+  });
+
+  it("shows no unresolved note on an assignment whose project is still being resolved", () => {
+    const html = renderCell({
+      events: [
+        assignment({
+          title: "Projekt Süd",
+          projectStatus: null,
+          projectPending: true,
+        }),
+      ],
+    });
+
+    expect(html).toContain("Projekt Süd");
+    expect(html).not.toContain("konnte nicht abgerufen werden");
+  });
+
+  it("keeps an assignment whose project is still being resolved from being dragged", () => {
+    const html = renderCell({
+      events: [assignment({ projectStatus: null, projectPending: true })],
+    });
+
+    expect(html).not.toContain('aria-roledescription="draggable"');
   });
 
   it("renders no Daylite action on an assignment with an unresolved project", () => {

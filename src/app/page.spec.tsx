@@ -27,6 +27,9 @@ const defaultAssignmentState: PlanningGridAssignmentState = {
   errorMessage: null,
   loadedWeekStart: null,
   reloadAssignments: () => {},
+  refreshEmployees: () => {},
+  removeEvent: () => {},
+  moveEvent: () => null,
   invalidateWeeksContaining: () => {},
   getCachedWeek: () => null,
 };
@@ -76,6 +79,7 @@ function cellEvent(overrides: Partial<CalendarCellEvent>): CalendarCellEvent {
     endTime: null,
     href: null,
     orderIndex: null,
+    projectPending: false,
     ...overrides,
   };
 }

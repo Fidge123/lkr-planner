@@ -82,7 +82,7 @@ pub enum IcalSource {
     Absence,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub(crate) struct ZepStoredCredentials {
     pub(crate) username: String,
     pub(crate) password: String,

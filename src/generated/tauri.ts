@@ -7,11 +7,14 @@ import { invoke as __TAURI_INVOKE } from "@tauri-apps/api/core";
 export const commands = {
 	loadLocalStore: () => typedError<LocalStore, StoreError>(__TAURI_INVOKE("load_local_store")),
 	saveLocalStore: (store: LocalStore) => typedError<null, StoreError>(__TAURI_INVOKE("save_local_store", { store })),
-	loadWeekEvents: (weekStart: string) => typedError<EmployeeWeekEvents[], string>(__TAURI_INVOKE("load_week_events", { weekStart })),
+	/**  Without employee references, every employee with a calendar is loaded. */
+	loadWeekEvents: (weekStart: string, employeeReferences: string[] | null, purpose: WeekLoadPurpose) => typedError<EmployeeWeekEvents[], string>(__TAURI_INVOKE("load_week_events", { weekStart, employeeReferences, purpose })),
 	getHolidaysForWeek: (weekStart: string) => typedError<Holiday[], string>(__TAURI_INVOKE("get_holidays_for_week", { weekStart })),
 	dayliteConnectRefreshToken: (request: DayliteRefreshTokenRequest) => typedError<DayliteTokenSyncStatus, DayliteApiError>(__TAURI_INVOKE("daylite_connect_refresh_token", { request })),
 	dayliteSearchProjects: (input: DayliteSearchInput) => typedError<DayliteSearchResult<DayliteProjectSummary>, DayliteApiError>(__TAURI_INVOKE("daylite_search_projects", { input })),
 	dayliteQueryOverdueProjects: () => typedError<DayliteProjectSummary[], DayliteApiError>(__TAURI_INVOKE("daylite_query_overdue_projects")),
+	/**  A reference that neither Daylite nor the cache could resolve maps to no project. */
+	resolveWeekProjects: (projectRefs: string[], forceRefresh: boolean) => typedError<{ [key in string]: ResolvedProject | null }, DayliteApiError>(__TAURI_INVOKE("resolve_week_projects", { projectRefs, forceRefresh })),
 	dayliteProjectCategoryColors: () => typedError<{ [key in string]: string }, DayliteApiError>(__TAURI_INVOKE("daylite_project_category_colors")),
 	dayliteOpenProject: (projectRef: string) => typedError<null, string>(__TAURI_INVOKE("daylite_open_project", { projectRef })),
 	dayliteListContacts: () => typedError<PlanningContactRecord[], DayliteApiError>(__TAURI_INVOKE("daylite_list_contacts")),
@@ -58,6 +61,7 @@ export type CalendarCellEvent = {
 	href: string | null,
 	projectRef: string | null,
 	orderIndex: number | null,
+	projectPending: boolean,
 };
 
 export type CalendarEventKind = "assignment" | "bare" | "absence";
@@ -202,6 +206,12 @@ export type PlanningContactRecord = {
 	urls?: DayliteContactUrl[],
 };
 
+export type ResolvedProject = {
+	name: string,
+	status: string,
+	category: string | null,
+};
+
 export type StoreError = {
 	code: StoreErrorCode,
 	userMessage: string,
@@ -226,6 +236,9 @@ export type UpdateAssignmentInput = {
 	/**  The user deliberately unlocked a fixed appointment for this one write. */
 	overrideProtection: boolean,
 };
+
+/**  Background loads are recorded apart so they do not count as time a user waited. */
+export type WeekLoadPurpose = "display" | "prefetch" | "refresh";
 
 export type ZepCalendar = {
 	displayName: string,

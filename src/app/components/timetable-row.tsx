@@ -30,6 +30,7 @@ export function TimetableRow({
   activeHighlight = null,
   onOpenIcalDialog,
   onReloadAssignments,
+  onAssignmentWritten,
   onToggleHighlight,
 }: Props) {
   const showWarning = needsAttention(employeeSetting);
@@ -53,9 +54,11 @@ export function TimetableRow({
   };
 
   const handleSave = (action: ModalSaveAction) => {
+    const removedUid =
+      action.kind === "delete" ? (modalState?.assignment?.uid ?? null) : null;
     setModalState(null);
     setGhost((current) => nextGhostState(current, action, isoWeekDays));
-    onReloadAssignments();
+    onAssignmentWritten(employee.self, removedUid);
   };
 
   const handleSuggestionClick = async (suggestion: GhostSuggestion) => {
@@ -82,7 +85,7 @@ export function TimetableRow({
         isoWeekDays,
       ),
     );
-    onReloadAssignments();
+    onAssignmentWritten(employee.self, null);
   };
 
   return (
@@ -210,5 +213,7 @@ interface Props {
   activeHighlight?: string | null;
   onOpenIcalDialog: (employee: PlanningContactRecord) => void;
   onReloadAssignments: () => void;
+  /** A deleted assignment's UID lets the card disappear before the row is refreshed. */
+  onAssignmentWritten: (employeeRef: string, removedUid: string | null) => void;
   onToggleHighlight?: (event: CellEvent) => void;
 }

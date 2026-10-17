@@ -47,6 +47,7 @@ const fixedAssignment: CalendarCellEvent = {
   endTime: "16:00",
   href: "/calendars/user/cal/uid-9.ics",
   orderIndex: null,
+  projectPending: false,
 };
 
 function project(name: string, ref: string): DayliteProjectSummary {
@@ -97,6 +98,7 @@ describe("AssignmentModal", () => {
       endTime: "16:00",
       href: "/calendars/user/cal/uid-1.ics",
       orderIndex: null,
+      projectPending: false,
     };
 
     const html = renderToStaticMarkup(
@@ -140,6 +142,7 @@ describe("AssignmentModal", () => {
       endTime: "16:00",
       href: "/calendars/user/cal/uid-1.ics",
       orderIndex: null,
+      projectPending: false,
     };
 
     const html = renderToStaticMarkup(
@@ -175,6 +178,7 @@ describe("AssignmentModal", () => {
       endTime: null,
       href: "/calendars/user/cal/uid-2.ics",
       orderIndex: null,
+      projectPending: false,
     };
 
     const html = renderToStaticMarkup(
