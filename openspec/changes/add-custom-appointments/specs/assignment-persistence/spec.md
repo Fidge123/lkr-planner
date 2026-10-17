@@ -30,13 +30,13 @@ The system SHALL distinguish lkr-planner assignments and custom appointments fro
 - **AND** it shares the same surface color as an assignment, so the strip alone marks an event as an assignment or a custom appointment
 
 #### Scenario: Display custom appointment
-- **WHEN** a VEVENT carries the custom appointment marker and no Daylite project reference
+- **WHEN** a VEVENT has a DESCRIPTION first line of exactly `lkr-planner:custom`
 - **THEN** it is shown on a neutral card carrying a strip in the default muted color
 - **AND** an edit affordance is shown
 
 #### Scenario: Display bare event
 - **WHEN** a VEVENT has no structured Daylite project reference
-- **AND** it carries no custom appointment marker
+- **AND** its DESCRIPTION first line is not `lkr-planner:custom`
 - **THEN** it is shown with neutral/grey styling
 - **AND** no edit affordance is shown (read-only)
 - **AND** covers legacy manually-created events and employee blockers
@@ -61,7 +61,7 @@ The system SHALL move an assignment or a custom appointment from one employee's 
 
 #### Scenario: Move to another employee's calendar
 - **WHEN** a move is requested with the source assignment href and a target employee reference and date
-- **THEN** a new VEVENT carrying the same project reference and project name, or the same custom title and custom appointment marker, is created on the target employee's primary calendar at the target date with the standard assignment time window
+- **THEN** a new VEVENT carrying the same project reference and project name, or the same title and the `lkr-planner:custom` DESCRIPTION, is created on the target employee's primary calendar at the target date with the standard assignment time window
 - **AND** the original VEVENT is deleted from the source calendar
 - **AND** a result indicating a full move with the new CalDAV href is returned
 

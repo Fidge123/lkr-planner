@@ -7,34 +7,42 @@ Let planners plan work that has no Daylite project, such as workshop days, train
 ## ADDED Requirements
 
 ### Requirement: Identify custom appointments
-The system SHALL identify a CalDAV event as a custom appointment when it carries the planner's custom appointment marker and no Daylite project reference.
+The system SHALL identify a CalDAV event as a custom appointment when the first line of its DESCRIPTION is exactly `lkr-planner:custom`.
+The first line is read with the same tolerance for leading and trailing whitespace, BOM and zero-width space as the `daylite:` reference.
 
 #### Scenario: Event with the custom marker
-- **WHEN** an event in an employee's primary calendar carries the custom appointment marker
-- **AND** its DESCRIPTION contains no `daylite:/<path>` reference
+- **WHEN** the first DESCRIPTION line of an event in an employee's primary calendar is `lkr-planner:custom`
 - **THEN** the event is treated as a custom appointment
 
-#### Scenario: Daylite reference wins over the custom marker
-- **WHEN** an event carries both the custom appointment marker and a `daylite:/<path>` reference
-- **THEN** the event is treated as a project assignment
+#### Scenario: Further description lines are ignored
+- **WHEN** the first DESCRIPTION line is `lkr-planner:custom`
+- **AND** further lines follow it
+- **THEN** the event is still treated as a custom appointment
 
-#### Scenario: Event without the marker stays bare
-- **WHEN** an event carries neither the custom appointment marker nor a `daylite:/<path>` reference
+#### Scenario: Marker with surrounding whitespace or BOM
+- **WHEN** the first DESCRIPTION line is `lkr-planner:custom` preceded or followed by whitespace, a BOM or a zero-width space
+- **THEN** the event is treated as a custom appointment
+
+#### Scenario: Marker not on the first line
+- **WHEN** `lkr-planner:custom` appears in the DESCRIPTION but not as its first line
 - **THEN** the event is treated as a bare event
 
-#### Scenario: Marker lost in another calendar client
-- **WHEN** another calendar client rewrites a custom appointment and drops the custom appointment marker
+#### Scenario: Other first line stays bare
+- **WHEN** the first DESCRIPTION line is neither `lkr-planner:custom` nor a `daylite:/<path>` reference
+- **THEN** the event is treated as a bare event
+
+#### Scenario: Marker removed in another calendar client
+- **WHEN** another calendar client changes the first DESCRIPTION line of a custom appointment
 - **THEN** the event is treated as a bare event from then on
 
 ### Requirement: Write custom appointments to CalDAV
-The system SHALL write a custom appointment as a VEVENT in the employee's primary CalDAV calendar whose SUMMARY is the title and which carries the custom appointment marker instead of a Daylite reference.
+The system SHALL write a custom appointment as a VEVENT in the employee's primary CalDAV calendar whose SUMMARY is the title and whose DESCRIPTION is `lkr-planner:custom`.
 
 #### Scenario: Create a custom appointment
 - **WHEN** a custom appointment is created
 - **THEN** a VEVENT with a stable UUID as its UID is written to the employee's primary calendar
 - **AND** its SUMMARY is the entered title
-- **AND** it carries the custom appointment marker
-- **AND** its DESCRIPTION carries no `daylite:` reference
+- **AND** its DESCRIPTION is `lkr-planner:custom`
 
 #### Scenario: Title is written verbatim
 - **WHEN** the entered title contains commas, semicolons, backslashes or umlauts
@@ -76,36 +84,28 @@ The system SHALL let the user create a custom appointment from the assignment mo
 - **WHEN** the user has entered a title and tries to close the modal without saving
 - **THEN** the unsaved-changes confirmation appears
 
-#### Scenario: No next-day ghost after creating a custom appointment
-- **WHEN** a custom appointment is created
-- **THEN** no next-day quick-add ghost is shown
-
 ### Requirement: Edit and delete a custom appointment from the modal
-The system SHALL open the assignment modal in edit mode when the user clicks a custom appointment card and SHALL let the user change its title, convert it to a project assignment or delete it.
+The system SHALL open the assignment modal in edit mode when the user clicks a custom appointment card and SHALL let the user change its title or delete it.
+The appointment type of an existing entry SHALL NOT be changeable.
 
 #### Scenario: Edit mode is prefilled
 - **WHEN** the user clicks a custom appointment card
-- **THEN** the modal opens in edit mode with "Eigener Termin" selected
-- **AND** the title field holds the appointment's current title
+- **THEN** the modal opens in edit mode with the title field holding the appointment's current title
+- **AND** no project picker is shown
+
+#### Scenario: No type switch in edit mode
+- **WHEN** the modal opens in edit mode for a custom appointment or a project assignment
+- **THEN** no appointment type switch is shown
 
 #### Scenario: Change the title
 - **WHEN** the user changes the title and saves
 - **THEN** the existing VEVENT is updated with the new title under the same UID
+- **AND** it keeps `lkr-planner:custom` as its DESCRIPTION
 - **AND** the grid reflects the change
 
-#### Scenario: Convert a custom appointment to a project assignment
-- **WHEN** the user switches an existing custom appointment to "Projekt", selects a project and saves
-- **THEN** the event is rewritten as a project assignment under the same UID
-- **AND** it no longer carries the custom appointment marker
-
-#### Scenario: Convert a project assignment to a custom appointment
-- **WHEN** the user switches a non-protected project assignment to "Eigener Termin", enters a title and saves
-- **THEN** the event is rewritten as a custom appointment under the same UID
-- **AND** it no longer carries the Daylite reference
-
-#### Scenario: Locked protected assignment cannot be converted
-- **WHEN** the modal is open for a protected project assignment that the user has not unlocked
-- **THEN** the appointment type switch is disabled
+#### Scenario: Blank title cannot be saved in edit mode
+- **WHEN** the user clears the title of an existing custom appointment
+- **THEN** the save control is disabled
 
 #### Scenario: Delete a custom appointment
 - **WHEN** the user deletes a custom appointment and confirms
@@ -152,7 +152,7 @@ The system SHALL let custom appointments take part in drag-and-drop, intra-day r
 
 #### Scenario: Move to another employee keeps the title
 - **WHEN** a custom appointment is dragged to another employee's cell
-- **THEN** the new VEVENT on the target calendar carries the same title and the custom appointment marker
+- **THEN** the new VEVENT on the target calendar carries the same title and `lkr-planner:custom` as its DESCRIPTION
 - **AND** the source VEVENT is deleted
 
 #### Scenario: Reorder within a cell

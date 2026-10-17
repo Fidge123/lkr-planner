@@ -32,4 +32,4 @@ The system SHALL re-allocate same-day slots whenever an assignment or a custom a
 - **GIVEN** a day contains lkr-planner assignments and custom appointments
 - **WHEN** slots are re-allocated
 - **THEN** the window is split across the assignments and custom appointments together in order-index order
-- **AND** each custom appointment keeps its title and its custom appointment marker
+- **AND** each custom appointment keeps its title and its `lkr-planner:custom` DESCRIPTION

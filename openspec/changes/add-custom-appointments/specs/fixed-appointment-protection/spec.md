@@ -17,11 +17,11 @@ The system SHALL identify a CalDAV event as protected when the Daylite project i
 
 #### Scenario: Event has no Daylite project reference
 - **WHEN** an event's DESCRIPTION contains no `daylite:/<path>` reference
-- **AND** the event carries no custom appointment marker (bare event)
+- **AND** its first DESCRIPTION line is not `lkr-planner:custom` (bare event)
 - **THEN** the event is protected
 
 #### Scenario: Custom appointment
-- **WHEN** an event carries the custom appointment marker and no `daylite:/<path>` reference
+- **WHEN** an event's first DESCRIPTION line is `lkr-planner:custom`
 - **THEN** the event is not treated as protected
 - **AND** no Daylite lookup is performed for it
 
