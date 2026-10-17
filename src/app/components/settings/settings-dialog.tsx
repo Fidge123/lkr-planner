@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { AppearanceSettingsPanel } from "./appearance-panel";
 import { DayliteSettingsPanel } from "./daylite-panel";
 import { DisplaySettingsPanel } from "./display-panel";
 import { TelemetrySettingsPanel } from "./telemetry-panel";
@@ -8,6 +9,7 @@ const sections = [
   { id: "daylite", label: "Daylite" },
   { id: "zep", label: "ZEP" },
   { id: "display", label: "Anzeige" },
+  { id: "appearance", label: "Erscheinungsbild" },
   { id: "telemetry", label: "Diagnose" },
 ] as const;
 
@@ -59,6 +61,8 @@ export function SettingsDialog({
             <DayliteSettingsPanel onClose={onClose} />
           ) : activeSection === "zep" ? (
             <ZepSettingsPanel onClose={onClose} />
+          ) : activeSection === "appearance" ? (
+            <AppearanceSettingsPanel onClose={onClose} />
           ) : activeSection === "telemetry" ? (
             <TelemetrySettingsPanel onClose={onClose} />
           ) : (
