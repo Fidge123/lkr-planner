@@ -2,9 +2,21 @@
 
 ## Purpose
 
-Mirror every project day planned in the workers' assignment calendars as one Daylite appointment linked to the project, so the schedule is visible in Daylite without inviting anyone.
+Record in each project's Daylite timeline, next to its notes and emails, when the team works on the project, by mirroring every project day planned in lkr-planner as one Daylite appointment linked to the project without inviting anyone.
 
 ## ADDED Requirements
+
+### Requirement: Planned work appears in the project timeline
+The system SHALL link every appointment it creates to the assignment's Daylite project, so the appointment appears in that project's timeline, and SHALL NOT link it to the assigned workers or invite anyone, so it appears in nobody's calendar or invitations.
+
+#### Scenario: Appointment shows in the project timeline
+- **WHEN** "Max Müller" is assigned to "Projekt Nord" on 2026-11-02 through lkr-planner
+- **THEN** the timeline of "Projekt Nord" in Daylite shows an appointment on 2026-11-02 naming "Max Müller"
+
+#### Scenario: Appointment does not reach the workers
+- **WHEN** an appointment is created for a project day with worker "Max Müller"
+- **THEN** "Max Müller" receives no invitation
+- **AND** the appointment is not linked to the contact of "Max Müller"
 
 ### Requirement: One appointment per planned project day
 The system SHALL keep exactly one app-managed Daylite appointment for each project and day on which at least one worker's primary calendar holds an lkr-planner assignment for that project, and none for project days without such an assignment.
@@ -128,16 +140,22 @@ The system SHALL update the appointment when a worker's last assignment for a pr
 - **THEN** the worker is removed from the "Projekt Nord" appointment for that day
 - **AND** the worker is listed on the "Projekt Süd" appointment for that day
 
-### Requirement: Synchronization after every assignment write
-The system SHALL synchronize every day an assignment write touched, the day it left and the day it entered, after every successful assignment create, update, move, reorder and delete, covering all projects planned on that day.
+### Requirement: Synchronization after assignment writes through the app
+The system SHALL synchronize the appointments after every successful assignment create, update, move, reorder and delete made through lkr-planner, for the day the write left and the day it entered, covering all projects planned on those days; calendar entries the app does not write SHALL NOT trigger synchronization.
 
 #### Scenario: Update moves an assignment to another day
 - **WHEN** an assignment is updated from 2026-11-02 to 2026-11-03
-- **THEN** the appointments of both days are synchronized
+- **THEN** the appointments of both days reflect the calendar after the update
 
-#### Scenario: Unchanged appointments are not rewritten
-- **WHEN** a day is synchronized and an app-managed appointment already matches its desired title, times and attributes
-- **THEN** no update request is sent for that appointment
+#### Scenario: Entry the app did not write
+- **GIVEN** a calendar entry linked to "Projekt Nord" on 2026-11-02 that was created outside lkr-planner or before this feature existed
+- **WHEN** the week containing 2026-11-02 is loaded
+- **THEN** no Daylite appointment is created or changed
+
+#### Scenario: Entry the app did not write is covered once its day is written
+- **GIVEN** a calendar entry linked to "Projekt Nord" on 2026-11-02 that has no Daylite appointment
+- **WHEN** any assignment on 2026-11-02 is created, updated, moved, reordered or deleted through lkr-planner
+- **THEN** "Projekt Nord" has an appointment for 2026-11-02 reflecting all its assignments of that day
 
 #### Scenario: Reorder triggers synchronization
 - **WHEN** an assignment is reordered and the day's slots are re-allocated
@@ -148,7 +166,7 @@ The system SHALL synchronize every day an assignment write touched, the day it l
 - **THEN** no Daylite appointment is created, updated or removed
 
 ### Requirement: Only app-managed appointments are touched
-The system SHALL find, update and remove only appointments carrying the `lkr-planner` keyword, and SHALL leave every other Daylite appointment untouched, even when it is linked to the same project on the same day.
+The system SHALL treat an appointment as app-managed only when it carries the `lkr-planner` keyword, and SHALL find, update and remove only such appointments, and SHALL leave every other Daylite appointment untouched, even when it is linked to the same project on the same day.
 
 #### Scenario: Manual appointment on the same project day
 - **GIVEN** a Daylite appointment without the `lkr-planner` keyword is linked to "Projekt Nord" on a day

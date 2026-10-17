@@ -1,7 +1,7 @@
 ## Why
 
-Assignments planned in lkr-planner live only in the workers' CalDAV calendars, so anyone looking at a project in Daylite cannot see when and by whom it is being worked on.
-Mirroring each planned project day as a Daylite appointment linked to the project makes the schedule visible where the office already manages projects, without inviting the workers to anything.
+Assignments planned in lkr-planner live only in the workers' CalDAV calendars, so a project's Daylite timeline of notes, appointments and emails does not show when and by whom the project was worked on.
+Mirroring each planned project day as a Daylite appointment linked to the project puts that work into the project timeline, without inviting the workers or anyone else.
 
 ## What Changes
 
