@@ -21,9 +21,16 @@ auth:basic {
   password: {{password}}
 }
 
-vars:pre-request {
-  rangeStart: 20260504T000000Z
-  rangeEnd: 20260511T000000Z
+script:pre-request {
+  const monday = new Date();
+  monday.setHours(0, 0, 0, 0);
+  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+  const nextMonday = new Date(monday);
+  nextMonday.setDate(monday.getDate() + 7);
+  const caldavTimestamp = (date) => `${date.toISOString().replace(/[-:]/g, "").slice(0, 15)}Z`;
+  
+  bru.setVar("rangeStart", caldavTimestamp(monday));
+  bru.setVar("rangeEnd", caldavTimestamp(nextMonday));
 }
 
 body:xml {
@@ -44,5 +51,6 @@ body:xml {
 }
 
 docs {
+  The range covers the current week from Monday 00:00 local time.
   `zepCalendarUrl` must point at a calendar collection, the home-set root answers REPORT with HTTP 405.
 }

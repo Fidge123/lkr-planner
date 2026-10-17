@@ -3,11 +3,16 @@ meta {
 }
 
 script:pre-request {
-  const { readKeychainJson, usesKeychain } = require("./lib/keychain.js");
+  const { readApiEndpoints, readKeychainJson, usesKeychain } = require("./lib/keychain.js");
   
-  const credentials = usesKeychain(bru)
-    ? readKeychainJson("lkr-planner-zep", "LKR Planner ZEP Admin")
-    : { username: bru.getEnvVar("zepUsername"), password: bru.getEnvVar("zepPassword") };
-  bru.setVar("username", credentials.username);
-  bru.setVar("password", credentials.password);
+  if (usesKeychain(bru)) {
+    const credentials = readKeychainJson("lkr-planner-zep", "LKR Planner ZEP Admin");
+    bru.setVar("username", credentials.username);
+    bru.setVar("password", credentials.password);
+    bru.setVar("rootUrl", readApiEndpoints().zepCaldavRootUrl);
+  } else {
+    bru.setVar("username", bru.getEnvVar("zepUsername"));
+    bru.setVar("password", bru.getEnvVar("zepPassword"));
+    bru.setVar("rootUrl", bru.getEnvVar("zepCaldavRootUrl"));
+  }
 }
