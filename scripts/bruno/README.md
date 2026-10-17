@@ -10,7 +10,7 @@ CalDAV requests use the custom methods `PROPFIND` and `REPORT`, which need a Bru
 
 ## Environments
 
-Both environments share the same requests and differ only in where credentials come from.
+Both environments share the same requests and differ only in where credentials and API endpoints come from.
 Set `zepCalendarUrl` to a calendar collection with a trailing slash, for example one returned by "List calendars".
 
 ### Manual
