@@ -46,8 +46,8 @@ Contact links identify each worker by reference, so adding and removing one work
 
 Create touches the created assignment's worker and date.
 Update, move and delete also touch the date the event had before the write, which `update_assignment_core`, `move_assignment_core` and `delete_assignment_core` return alongside their current result.
-The worker of an updated, moved or deleted event is the employee whose configured primary calendar holds the event's href; an event in no configured calendar is recorded in telemetry and not synchronized.
-A move touches the target worker on the target date and the source worker on the source date.
+The worker of an updated, moved or deleted event is the employee whose configured primary calendar holds the event's href, comparing parsed URLs because hand-typed calendar URLs can differ from the server's hrefs in host case, default ports and path encoding; an event in no configured calendar is recorded in telemetry and not synchronized.
+A move touches the target worker on the target date and the source worker on the source date, in that order, so the source's unlink cannot delete an appointment the target is joining.
 Reordering changes nothing an appointment holds, so it touches nothing.
 A failed CalDAV write returns before synchronization is scheduled.
 
@@ -79,7 +79,8 @@ An update is sent only when a link is missing or one of the fixed fields differs
 
 ### Run in the background, serialized per day
 
-The command spawns the synchronization with `tauri::async_runtime::spawn` after the CalDAV write returns, so the command result and latency do not change.
+The command spawns one task per write with `tauri::async_runtime::spawn` after the CalDAV write returns, so the command result and latency do not change.
+The task synchronizes the write's worker days one after the other in the order the write lists them.
 A process-wide map of per-date `tokio::sync::Mutex` guards serializes synchronizations of the same day, so two quick writes cannot both observe "no appointment" and create duplicates.
 Cross-device races remain possible and are healed by the duplicate rule.
 
@@ -118,7 +119,7 @@ Alternatives considered:
 - [Other workers' links are never re-checked] → A link left stale by a failed synchronization or an edit outside the app stays until that worker's day is edited again.
 - [An appointment is deleted when its last linked planning contact leaves] → If another worker's link was missed earlier, that worker's next edit of the day creates the appointment again.
 - [Existing assignments gain links one worker at a time] → An appointment can link only some of the project day's workers until each of them is edited.
-- [Manual edits to an app-managed appointment's subject, times, status or invitees are overwritten] → Intended; other fields such as notes, details, extra keywords and extra contacts are left untouched.
+- [Manual edits to an app-managed appointment's subject, times, status, invitees or linked projects are overwritten] → Intended; other fields such as notes, details, extra keywords and extra contacts are left untouched.
 - [Daylite `DELETE` only moves the appointment to the trash] → Trashed appointments are excluded from search by default, so a re-added assignment creates a fresh appointment instead of restoring the trashed one.
 - [Background work outlives a quickly closed app] → An unfinished synchronization converges on the next write to that worker's day.
 - [The failed worker days are lost when the app restarts] → They converge on the next write that touches them; telemetry still holds the failure.

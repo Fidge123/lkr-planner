@@ -273,6 +273,23 @@ impl AppointmentSync {
         }
     }
 
+    /// One after the other, because a move's target must be linked before its source is unlinked.
+    pub(super) async fn run_in_order<Fut, N>(
+        &self,
+        worker_days: Vec<WorkerDay>,
+        reconcile: impl Fn(WorkerDay) -> Fut,
+        notify: &N,
+    ) where
+        Fut: Future<Output = bool>,
+        N: Fn(Vec<String>),
+    {
+        for worker_day in worker_days {
+            let synchronized = worker_day.clone();
+            self.run(worker_day, || reconcile(synchronized), notify)
+                .await;
+        }
+    }
+
     /// Synchronizes every worker day failing when called, each under its date's lock.
     pub(super) async fn retry_failed<Fut, N>(
         &self,
@@ -314,19 +331,16 @@ pub(super) fn appointment_sync() -> &'static AppointmentSync {
 
 /// Runs after the command returned, so Daylite never adds latency to a planner action.
 pub(super) fn schedule_appointment_sync(app: &tauri::AppHandle, worker_days: Vec<WorkerDay>) {
-    for worker_day in worker_days {
-        let app = app.clone();
-        tauri::async_runtime::spawn(async move {
-            let synchronized = worker_day.clone();
-            appointment_sync()
-                .run(
-                    worker_day,
-                    || reconcile_in_app(&app, synchronized),
-                    &failure_notifier(&app),
-                )
-                .await;
-        });
-    }
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        appointment_sync()
+            .run_in_order(
+                worker_days,
+                |worker_day| reconcile_in_app(&app, worker_day),
+                &failure_notifier(&app),
+            )
+            .await;
+    });
 }
 
 pub(super) async fn retry_failed_in_app(app: &tauri::AppHandle) {
@@ -1046,6 +1060,37 @@ mod tests {
                 "other day started",
                 "first finished",
                 "second started"
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn the_worker_days_of_one_write_run_one_after_the_other_in_order() {
+        let sync = AppointmentSync::default();
+        let log = Mutex::new(Vec::new());
+
+        sync.run_in_order(
+            vec![on(ANNA, next_day()), on(MAX, day())],
+            |worker_day| {
+                let log = &log;
+                async move {
+                    log.lock().unwrap().push(("started", worker_day.clone()));
+                    tokio::task::yield_now().await;
+                    log.lock().unwrap().push(("finished", worker_day));
+                    true
+                }
+            },
+            &ignore,
+        )
+        .await;
+
+        assert_eq!(
+            *log.lock().unwrap(),
+            [
+                ("started", on(ANNA, next_day())),
+                ("finished", on(ANNA, next_day())),
+                ("started", on(MAX, day())),
+                ("finished", on(MAX, day())),
             ]
         );
     }

@@ -23,8 +23,8 @@
 ## 4. Trigger from assignment writes
 
 - [x] 4.1 Write failing tests that `update_assignment_core`, `move_assignment_core` and `delete_assignment_core` report the date the event had before the write, then extend their results and verify the existing `caldav::write` tests still pass
-- [x] 4.2 Write a failing test that an event's href maps to the employee whose configured primary calendar holds it, then implement the mapping on the shared `lies_in_calendar` helper that the absence guard also uses
-- [x] 4.3 Schedule the background synchronization in `create_assignment_inner`, `update_assignment_inner`, `move_assignment_inner` and `delete_assignment_inner` for every touched worker day after a successful write only, and verify with tests that a failed CalDAV write schedules nothing, that the command results are unchanged, and that a reorder schedules nothing
+- [x] 4.2 Write a failing test that an event's href maps to the employee whose configured primary calendar holds it, also when the configured URL differs in host case, default port or path encoding, then implement the mapping on the shared `lies_in_calendar` helper that the absence guard also uses
+- [x] 4.3 Schedule the background synchronization in `create_assignment_inner`, `update_assignment_inner`, `move_assignment_inner` and `delete_assignment_inner` for every touched worker day after a successful write only, and verify with tests that a failed CalDAV write schedules nothing, that the command results are unchanged, that a reorder schedules nothing, and that a write's worker days run one after the other with a move's target worker before its source worker
 
 ## 5. Failure registry and retry command
 

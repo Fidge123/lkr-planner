@@ -39,8 +39,8 @@ On a Daylite update, a list sent as an array replaces the whole list, while `{"a
 
 ## Decision
 
-- After every successful create, update, move and delete, the backend synchronizes each touched worker day in a background task: the edited worker on the day the write left and the day it entered, and for a move both the source and the target worker.
-- The worker of an updated, moved or deleted event is the employee whose configured primary calendar holds the event; an event in no configured calendar is recorded in telemetry and not synchronized.
+- After every successful create, update, move and delete, one background task synchronizes the write's touched worker days one after the other: the edited worker on the day the write left and the day it entered, and for a move the target worker first, so the source worker's unlink cannot delete an appointment the target is joining.
+- The worker of an updated, moved or deleted event is the employee whose configured primary calendar holds the event, comparing parsed URLs so host case, default ports and path encoding do not matter; an event in no configured calendar is recorded in telemetry and not synchronized.
 - A failed CalDAV write and a reorder schedule no synchronization.
 - A synchronization reads the day from the worker's primary calendar only, links the worker's contact to the appointment of each project the worker holds, creating it when missing, and unlinks the contact from appointments of projects the worker no longer holds.
 - An appointment whose last linked planning contact is the worker is deleted instead of unlinked; of several appointments for one project the lowest Daylite ID takes over the others' contacts and the others are deleted once that update succeeded.
@@ -57,7 +57,7 @@ On a Daylite update, a list sent as an array replaces the whole list, while `{"a
 - Each project day's appointment appears in the project's timeline and with the contact of every worker edited onto it, and nobody is invited.
 - Links of workers who are not edited stay as they were, including links left stale by a failed synchronization or a calendar edit outside the app.
 - Calendar entries the app did not write gain a link the first time a write touches their worker's day; worker days no write touches are never backfilled.
-- Manual edits to an app-managed appointment's title, times, status, type or invitees are overwritten on the next synchronization of a worker on it; notes, details, extra keywords and extra contacts are kept.
+- Manual edits to an app-managed appointment's title, times, status, type, invitees or linked projects are overwritten on the next synchronization of a worker on it; notes, details, extra keywords and extra contacts are kept.
 - Deleted appointments go to the Daylite trash, which search excludes, so a re-added assignment creates a fresh appointment.
 - Failed worker days are lost on restart and heal on the next write that touches them; telemetry still holds the failure.
 - Concurrent writes from two devices can still create duplicates, which the next synchronization of a worker on that project day merges.

@@ -424,6 +424,18 @@ fn worker_days<'a>(
         .collect()
 }
 
+/// Target first, so the source's unlink cannot delete the appointment the target is joining.
+fn move_worker_days(
+    target: &str,
+    target_date: &str,
+    source: Option<&str>,
+    source_date: Option<&str>,
+) -> Vec<WorkerDay> {
+    let mut touched = worker_days(Some(target), [Some(target_date)]);
+    touched.extend(worker_days(source, [source_date]));
+    touched
+}
+
 pub(super) fn resolve_employee_calendar_url(
     store: &crate::integrations::local_store::LocalStore,
     employee_reference: &str,
@@ -538,9 +550,12 @@ async fn move_assignment_inner(
     schedule_on_success(
         result.map(|(moved, source_date)| {
             let source = event_worker(&handle, &store, &session, &href);
-            let target = Some(target_employee_reference.as_str());
-            let mut touched = worker_days(target, [Some(write.date.as_str())]);
-            touched.extend(worker_days(source.as_deref(), [source_date.as_deref()]));
+            let touched = move_worker_days(
+                &target_employee_reference,
+                &write.date,
+                source.as_deref(),
+                source_date.as_deref(),
+            );
             (moved, touched)
         }),
         |worker_days| schedule_appointment_sync(&handle, worker_days),
@@ -740,6 +755,22 @@ mod tests {
         for (label, touched, expected) in cases {
             assert_eq!(touched, expected, "case: {label}");
         }
+    }
+
+    #[test]
+    fn a_move_synchronizes_the_target_worker_before_the_source_worker() {
+        assert_eq!(
+            move_worker_days(
+                "/v1/contacts/2",
+                "2026-11-02",
+                Some("/v1/contacts/1"),
+                Some("2026-11-02"),
+            ),
+            [
+                on("/v1/contacts/2", "2026-11-02"),
+                on("/v1/contacts/1", "2026-11-02"),
+            ]
+        );
     }
 
     #[test]

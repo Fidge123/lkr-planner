@@ -135,6 +135,7 @@ The system SHALL unlink an edited worker's contact when the worker's last assign
 - **WHEN** the assignment of "Max Müller" for "Projekt Nord" on a day is moved to "Anna Schmidt" on the same day
 - **THEN** the appointment is linked to the contact of "Anna Schmidt"
 - **AND** it is no longer linked to the contact of "Max Müller"
+- **AND** it is the same appointment, not removed and created again
 
 #### Scenario: Assignment changed to another project
 - **WHEN** an assignment of "Max Müller" on a day is changed from "Projekt Nord" to "Projekt Süd"
@@ -175,6 +176,11 @@ Reordering an assignment within its day and calendar entries the app does not wr
 #### Scenario: Failed calendar write
 - **WHEN** an assignment write to CalDAV fails
 - **THEN** no Daylite appointment is created, updated or removed
+
+#### Scenario: Calendar URL written differently from the server's hrefs
+- **GIVEN** the primary calendar of "Max Müller" is configured as `https://App.zep.de:443/caldav/admin/max-einsatz`
+- **WHEN** an assignment the server lists under `/caldav/admin/max-einsatz/` is deleted
+- **THEN** the day of "Max Müller" is synchronized
 
 #### Scenario: Event outside every configured calendar
 - **WHEN** an updated, moved or deleted event lies in no configured primary calendar

@@ -541,9 +541,13 @@ fn targets_absence_calendar(target_url: &str, absence_urls: &[String]) -> bool {
 }
 
 /// True for the calendar collection itself and every resource beneath it, ignoring trailing slashes.
+/// Both sides are parsed, because hand-typed calendar URLs differ from server hrefs in host case, default ports and path encoding.
 pub(crate) fn lies_in_calendar(target_url: &str, calendar_url: &str) -> bool {
-    let target = target_url.trim_end_matches('/');
-    let calendar = calendar_url.trim_end_matches('/');
+    let normalized = |url: &str| {
+        reqwest::Url::parse(url).map_or_else(|_| url.to_string(), |parsed| parsed.to_string())
+    };
+    let (target, calendar) = (normalized(target_url), normalized(calendar_url));
+    let (target, calendar) = (target.trim_end_matches('/'), calendar.trim_end_matches('/'));
     !calendar.is_empty() && (target == calendar || target.starts_with(&format!("{calendar}/")))
 }
 
@@ -1171,5 +1175,51 @@ mod tests {
             "https://app.zep.de/caldav/admin/emp/primary",
             &[],
         ));
+    }
+
+    #[test]
+    fn a_calendar_holds_its_resources_however_its_url_is_written() {
+        let resource = "https://app.zep.de/caldav/admin/emp1/uid-1.ics";
+        let cases = [
+            (
+                "same spelling",
+                "https://app.zep.de/caldav/admin/emp1/",
+                resource,
+                true,
+            ),
+            (
+                "upper-case host",
+                "https://App.zep.de/caldav/admin/emp1/",
+                resource,
+                true,
+            ),
+            (
+                "explicit default port",
+                "https://app.zep.de:443/caldav/admin/emp1",
+                resource,
+                true,
+            ),
+            (
+                "non-ASCII path",
+                "https://app.zep.de/caldav/admin/jürgen-einsatz/",
+                "https://app.zep.de/caldav/admin/j%C3%BCrgen-einsatz/uid-1.ics",
+                true,
+            ),
+            (
+                "sibling with a longer name",
+                "https://app.zep.de/caldav/admin/emp1/",
+                "https://app.zep.de/caldav/admin/emp10/uid-1.ics",
+                false,
+            ),
+            ("no calendar", "", resource, false),
+        ];
+
+        for (label, calendar, target, expected) in cases {
+            assert_eq!(
+                lies_in_calendar(target, calendar),
+                expected,
+                "case: {label}"
+            );
+        }
     }
 }
