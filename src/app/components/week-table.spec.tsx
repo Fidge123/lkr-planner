@@ -42,6 +42,25 @@ describe("WeekTable", () => {
     }
   });
 
+  it("opens the week picker from the calendar week cell when a jump is offered", () => {
+    const html = renderTable({ onJumpToWeek: () => {} });
+
+    const trigger =
+      html.match(/<button[^>]*aria-label="[^"]*Woche auswählen"[^>]*>/)?.[0] ??
+      "";
+    expect(trigger).toMatch(/popovertarget="[^"]+"/i);
+    expect(html).toContain('popover="auto"');
+    expect(html).toContain("KW 34");
+  });
+
+  it("shows the calendar week without the picker, as the week sliding in during a swipe does", () => {
+    const html = renderTable();
+
+    expect(html).toContain("KW 34");
+    expect(html).not.toContain("Woche auswählen");
+    expect(html).not.toContain("popover");
+  });
+
   it("follows the displayed week across the year boundary", () => {
     const html = renderTable({
       weekDays: [29, 30, 31].map((day) => new Date(2025, 11, day)),

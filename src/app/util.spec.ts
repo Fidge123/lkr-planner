@@ -12,8 +12,12 @@ import {
   getWeekStart,
   isToday,
   millisecondsUntilNextLocalMidnight,
+  monthWeeks,
+  pickerAnchorMonth,
+  shiftMonth,
   shiftWeekDays,
   toLocalISODate,
+  weekOffsetFor,
 } from "./util";
 
 describe("util", () => {
@@ -192,6 +196,160 @@ describe("util", () => {
     it("stays stable across a DST switch", () => {
       expect(getIsoWeek(new Date(2026, 2, 30))).toBe(14);
       expect(getIsoWeek(new Date(2026, 9, 26))).toBe(44);
+    });
+  });
+
+  describe("monthWeeks", () => {
+    const mondays = (year: number, month: number) =>
+      monthWeeks(year, month).map((week) => toLocalISODate(week.days[0]));
+
+    it("starts on the Monday on or before the 1st and ends on the Sunday on or after the last day", () => {
+      const weeks = monthWeeks(2026, 9);
+
+      expect(mondays(2026, 9)).toEqual([
+        "2026-09-28",
+        "2026-10-05",
+        "2026-10-12",
+        "2026-10-19",
+        "2026-10-26",
+      ]);
+      expect(toLocalISODate(weeks[4].days[6])).toBe("2026-11-01");
+      expect(weeks.map((week) => week.weekNumber)).toEqual([
+        40, 41, 42, 43, 44,
+      ]);
+    });
+
+    it("lays every row out from Monday to Sunday at local midnight", () => {
+      for (const week of monthWeeks(2026, 9)) {
+        expect(week.days.map((day) => day.getDay())).toEqual([
+          1, 2, 3, 4, 5, 6, 0,
+        ]);
+        expect(week.days.every((day) => day.getHours() === 0)).toBe(true);
+      }
+    });
+
+    it("adds no leading row for a month starting on a Monday", () => {
+      expect(mondays(2027, 1)).toEqual([
+        "2027-02-01",
+        "2027-02-08",
+        "2027-02-15",
+        "2027-02-22",
+      ]);
+    });
+
+    it("numbers December's last row by the year that owns its Thursday", () => {
+      const lastWeekNumber = (year: number) =>
+        monthWeeks(year, 11)
+          .map((week) => week.weekNumber)
+          .pop();
+
+      expect(lastWeekNumber(2026)).toBe(53);
+      expect(lastWeekNumber(2025)).toBe(1);
+    });
+  });
+
+  describe("pickerAnchorMonth", () => {
+    const week = (year: number, month: number, monday: number) =>
+      [0, 1, 2, 3, 4].map((i) => new Date(year, month, monday + i));
+
+    it("returns the month of a week lying inside one month", () => {
+      expect(pickerAnchorMonth(week(2026, 9, 12))).toEqual({
+        year: 2026,
+        month: 9,
+      });
+    });
+
+    it("returns the month of the Thursday for a week starting in the month before", () => {
+      expect(pickerAnchorMonth(week(2026, 8, 28))).toEqual({
+        year: 2026,
+        month: 9,
+      });
+    });
+
+    it("returns the year of the Thursday for a week spanning the year boundary", () => {
+      expect(pickerAnchorMonth(week(2025, 11, 29))).toEqual({
+        year: 2026,
+        month: 0,
+      });
+    });
+  });
+
+  describe("shiftMonth", () => {
+    it("moves a month within the year", () => {
+      expect(shiftMonth({ year: 2026, month: 9 }, 1)).toEqual({
+        year: 2026,
+        month: 10,
+      });
+      expect(shiftMonth({ year: 2026, month: 9 }, -1)).toEqual({
+        year: 2026,
+        month: 8,
+      });
+    });
+
+    it("crosses the year boundary in both directions", () => {
+      expect(shiftMonth({ year: 2026, month: 11 }, 1)).toEqual({
+        year: 2027,
+        month: 0,
+      });
+      expect(shiftMonth({ year: 2027, month: 0 }, -1)).toEqual({
+        year: 2026,
+        month: 11,
+      });
+    });
+  });
+
+  describe("weekOffsetFor", () => {
+    afterAll(() => {
+      setSystemTime(new Date(2026, 0, 1, 12, 34, 56));
+    });
+
+    const firstShownDay = (day: Date, showWeekend: boolean) =>
+      toLocalISODate(
+        getWeekDays(weekOffsetFor(day, showWeekend), showWeekend)[0],
+      );
+
+    it("counts whole weeks from the current week on a weekday", () => {
+      setSystemTime(new Date(2026, 9, 14, 12));
+
+      expect(weekOffsetFor(new Date(2026, 9, 16), false)).toBe(0);
+      expect(weekOffsetFor(new Date(2026, 8, 9), false)).toBe(-5);
+      expect(weekOffsetFor(new Date(2026, 9, 18), true)).toBe(0);
+      expect(firstShownDay(new Date(2026, 8, 9), false)).toBe("2026-09-07");
+    });
+
+    it("shows the chosen week on a Saturday whether the weekend is hidden or shown", () => {
+      setSystemTime(new Date(2026, 9, 17, 12));
+
+      expect(weekOffsetFor(new Date(2026, 9, 17), false)).toBe(-1);
+      expect(weekOffsetFor(new Date(2026, 9, 17), true)).toBe(0);
+      expect(firstShownDay(new Date(2026, 9, 17), false)).toBe("2026-10-12");
+      expect(firstShownDay(new Date(2026, 9, 21), false)).toBe("2026-10-19");
+    });
+
+    it("shows the chosen week on a Sunday whether the weekend is hidden or shown", () => {
+      setSystemTime(new Date(2026, 9, 18, 12));
+
+      expect(weekOffsetFor(new Date(2026, 8, 13), false)).toBe(-6);
+      expect(weekOffsetFor(new Date(2026, 8, 13), true)).toBe(-5);
+      expect(firstShownDay(new Date(2026, 8, 13), false)).toBe("2026-09-07");
+      expect(firstShownDay(new Date(2026, 8, 13), true)).toBe("2026-09-07");
+    });
+
+    it("counts whole weeks across a DST switch", () => {
+      setSystemTime(new Date(2026, 9, 14, 12));
+
+      expect(weekOffsetFor(new Date(2026, 10, 4), false)).toBe(3);
+      expect(weekOffsetFor(new Date(2026, 2, 25), false)).toBe(-29);
+      expect(firstShownDay(new Date(2026, 2, 25), false)).toBe("2026-03-23");
+    });
+
+    it("counts whole weeks across the year boundary", () => {
+      setSystemTime(new Date(2026, 11, 30, 12));
+
+      expect(weekOffsetFor(new Date(2027, 0, 6), false)).toBe(1);
+      expect(weekOffsetFor(new Date(2027, 0, 1), true)).toBe(0);
+      expect(weekOffsetFor(new Date(2026, 11, 20), false)).toBe(-2);
+      expect(firstShownDay(new Date(2027, 0, 6), false)).toBe("2027-01-04");
     });
   });
 

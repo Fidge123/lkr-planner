@@ -1,3 +1,5 @@
+const millisecondsPerWeek = 7 * 24 * 60 * 60 * 1000;
+
 export function getWeekDays(weekOffset: number, showWeekend = false) {
   const today = new Date();
   const currentDay = today.getDay();
@@ -14,6 +16,19 @@ export function getWeekDays(weekOffset: number, showWeekend = false) {
   return Array.from(
     { length: showWeekend ? 7 : 5 },
     (_, i) => new Date(today.getFullYear(), today.getMonth(), mondayDate + i),
+  );
+}
+
+export function weekOffsetFor(day: Date, showWeekend = false): number {
+  const daysSinceMonday = (day.getDay() + 6) % 7;
+  const monday = new Date(
+    day.getFullYear(),
+    day.getMonth(),
+    day.getDate() - daysSinceMonday,
+  );
+  const currentMonday = getWeekDays(0, showWeekend)[0];
+  return Math.round(
+    (monday.getTime() - currentMonday.getTime()) / millisecondsPerWeek,
   );
 }
 
@@ -59,13 +74,48 @@ export function toLocalISODate(date: Date): string {
 export function getIsoWeek(date: Date): number {
   const thursday = thursdayOfWeek(date);
   const firstThursday = thursdayOfWeek(new Date(thursday.getFullYear(), 0, 4));
-  const millisecondsPerWeek = 7 * 24 * 60 * 60 * 1000;
   return (
     1 +
     Math.round(
       (thursday.getTime() - firstThursday.getTime()) / millisecondsPerWeek,
     )
   );
+}
+
+export function monthWeeks(year: number, month: number): MonthWeek[] {
+  const daysBeforeFirst = (new Date(year, month, 1).getDay() + 6) % 7;
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  return Array.from(
+    { length: Math.ceil((daysBeforeFirst + daysInMonth) / 7) },
+    (_, row) => {
+      const days = Array.from(
+        { length: 7 },
+        (_, i) => new Date(year, month, 1 - daysBeforeFirst + row * 7 + i),
+      );
+      return { weekNumber: getIsoWeek(days[0]), days };
+    },
+  );
+}
+
+export interface MonthWeek {
+  weekNumber: number;
+  days: Date[];
+}
+
+// The Thursday's month always holds the whole displayed week together with the month before it.
+export function pickerAnchorMonth(weekDays: Date[]): YearMonth {
+  const thursday = thursdayOfWeek(weekDays[0]);
+  return { year: thursday.getFullYear(), month: thursday.getMonth() };
+}
+
+export interface YearMonth {
+  year: number;
+  month: number;
+}
+
+export function shiftMonth({ year, month }: YearMonth, by: number): YearMonth {
+  const shifted = new Date(year, month + by, 1);
+  return { year: shifted.getFullYear(), month: shifted.getMonth() };
 }
 
 function thursdayOfWeek(date: Date): Date {

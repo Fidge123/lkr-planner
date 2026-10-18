@@ -12,6 +12,7 @@ import type { CellEvent } from "../types";
 import { getIsoWeek, toLocalISODate } from "../util";
 import { stickyHeaderClass, TimetableHeader } from "./timetable-header";
 import { TimetableRow } from "./timetable-row";
+import { WeekPicker } from "./week-picker";
 
 export function WeekTable({
   weekDays,
@@ -29,6 +30,7 @@ export function WeekTable({
   onReloadAssignments,
   onAssignmentWritten,
   onToggleHighlight,
+  onJumpToWeek,
 }: WeekTableProps) {
   const holidayByDate = new Map(holidays.map((h) => [h.date, h.name]));
   const holidayDates = new Set(holidays.map((h) => h.date));
@@ -47,6 +49,13 @@ export function WeekTable({
     return () => cancelAnimationFrame(frame);
   }, [eventsByEmployee]);
 
+  const calendarWeek = (
+    <>
+      <CalendarDays className="size-4" aria-hidden="true" />
+      KW {getIsoWeek(weekDays[0])}
+    </>
+  );
+
   return (
     // A card the pointer crosses mid-drag, or that an autoscroll slides under it, otherwise keeps its hover for good.
     // dnd-kit measures rects rather than hit-testing, so it loses nothing by this.
@@ -57,10 +66,15 @@ export function WeekTable({
       <thead className="text-base-content">
         <tr>
           <th className={`w-40 p-4 font-bold bg-base-100 ${stickyHeaderClass}`}>
-            <span className="flex items-center gap-1.5 text-primary">
-              <CalendarDays className="size-4" aria-hidden="true" />
-              KW {getIsoWeek(weekDays[0])}
-            </span>
+            {onJumpToWeek ? (
+              <WeekPicker weekDays={weekDays} onJumpToWeek={onJumpToWeek}>
+                {calendarWeek}
+              </WeekPicker>
+            ) : (
+              <span className="flex items-center gap-1.5 text-primary">
+                {calendarWeek}
+              </span>
+            )}
           </th>
           {weekDays.map((day) => (
             <TimetableHeader
@@ -125,4 +139,5 @@ export interface WeekTableProps {
   onReloadAssignments: () => void;
   onAssignmentWritten: (employeeRef: string, removedUid: string | null) => void;
   onToggleHighlight?: (event: CellEvent) => void;
+  onJumpToWeek?: (day: Date) => void;
 }
