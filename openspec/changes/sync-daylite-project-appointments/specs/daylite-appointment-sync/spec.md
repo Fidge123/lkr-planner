@@ -2,21 +2,17 @@
 
 ## Purpose
 
-Record in each project's Daylite timeline, next to its notes and emails, when the team works on the project, by mirroring every project day planned in lkr-planner as one Daylite appointment linked to the project without inviting anyone.
+Record in each project's Daylite timeline, next to its notes and emails, when the team works on the project, by mirroring every project day planned in lkr-planner as one Daylite appointment linked to the project and its workers without inviting anyone.
 
 ## ADDED Requirements
 
-### Requirement: Planned work appears in the project timeline
-The system SHALL link every appointment it creates to the assignment's Daylite project, so the appointment appears in that project's timeline, and SHALL NOT link it to the assigned workers or invite anyone, so it appears in nobody's calendar or invitations.
+### Requirement: Planned work appears with the project and its workers
+The system SHALL link every appointment it creates to the assignment's Daylite project and to the Daylite contact of every worker assigned to that project on that day, so the appointment appears in the project's timeline and with each worker's contact.
 
 #### Scenario: Appointment shows in the project timeline
 - **WHEN** "Max Müller" is assigned to "Projekt Nord" on 2026-11-02 through lkr-planner
-- **THEN** the timeline of "Projekt Nord" in Daylite shows an appointment on 2026-11-02 naming "Max Müller"
-
-#### Scenario: Appointment does not reach the workers
-- **WHEN** an appointment is created for a project day with worker "Max Müller"
-- **THEN** "Max Müller" receives no invitation
-- **AND** the appointment is not linked to the contact of "Max Müller"
+- **THEN** the timeline of "Projekt Nord" in Daylite shows the appointment `Einsatz 02.11.2026`
+- **AND** that appointment is linked to the contact of "Max Müller"
 
 ### Requirement: One appointment per planned project day
 The system SHALL keep exactly one app-managed Daylite appointment for each project and day on which at least one planning contact's primary calendar holds an lkr-planner assignment for that project, and none for project days without such an assignment.
@@ -24,7 +20,7 @@ Planning contacts are the Daylite contacts the planning grid lists, Monteur and 
 
 #### Scenario: Test contacts count like Monteur contacts
 - **WHEN** a Test contact is assigned to "Projekt Nord" on 2026-11-02
-- **THEN** the appointment for "Projekt Nord" on 2026-11-02 lists that contact
+- **THEN** the appointment for "Projekt Nord" on 2026-11-02 is linked to that contact
 
 #### Scenario: Calendar of a former planning contact
 - **GIVEN** a primary calendar is still configured for a contact that is no longer a Monteur or Test contact
@@ -53,87 +49,76 @@ Planning contacts are the Daylite contacts the planning grid lists, Monteur and 
 - **AND** the other is removed
 
 ### Requirement: Fixed appointment attributes
-The system SHALL create and update every app-managed appointment with type `appointment`, status `confirmed`, show-as `free`, the assignment's project as the only linked project, and the app-managed marker keyword.
+The system SHALL create and update every app-managed appointment with the title `Einsatz <date>`, its day formatted `dd.MM.yyyy`, the floating times 08:00 to 16:00 on that day, type `appointment`, status `confirmed`, show-as `free`, the assignment's project as the only linked project, and the app-managed marker keyword.
 
 #### Scenario: Attributes of a created appointment
-- **WHEN** an appointment is created for project `/v1/projects/42`
-- **THEN** its type is `appointment`
+- **WHEN** an appointment is created for project `/v1/projects/42` on 2026-11-02
+- **THEN** its title is `Einsatz 02.11.2026`
+- **AND** it starts at 2026-11-02 08:00 and ends at 2026-11-02 16:00
+- **AND** its time zone is `floating`, so it shows 08:00 to 16:00 regardless of the viewer's time zone or daylight saving time
+- **AND** its type is `appointment`
 - **AND** its status is `confirmed`
 - **AND** its show-as is `free`
 - **AND** it is linked to project `/v1/projects/42`
 - **AND** it carries the keyword `lkr-planner`
 
+#### Scenario: Times do not follow the assignment events
+- **WHEN** "Max Müller" is assigned to "Projekt Nord" from 12:00 to 16:00 on 2026-11-02
+- **THEN** the appointment for "Projekt Nord" on 2026-11-02 runs from 08:00 to 16:00
+
+#### Scenario: Slot re-allocation leaves the appointment unchanged
+- **GIVEN** "Max Müller" is assigned to "Projekt Nord" on 2026-11-02 and its appointment exists
+- **WHEN** a second assignment for "Projekt Süd" is created for "Max Müller" on that day and "Projekt Nord" is re-allocated to 08:00 to 12:00
+- **THEN** the "Projekt Nord" appointment is not updated
+- **AND** an appointment for "Projekt Süd" is created from 08:00 to 16:00
+
 #### Scenario: Attributes are restored on update
-- **GIVEN** an app-managed appointment whose status was changed to `tentative` in Daylite
+- **GIVEN** an app-managed appointment whose status was changed to `tentative` and whose title was changed in Daylite
 - **WHEN** its project day is synchronized
 - **THEN** its status is `confirmed` again
+- **AND** its title is `Einsatz <date>` again
 
 ### Requirement: Empty invitee list
 The system SHALL send an empty invitee list on every create and update of an app-managed appointment, so nobody, including the assigned workers and the requesting Daylite user, is invited.
 
-#### Scenario: Workers are not invited
+#### Scenario: Workers are linked but not invited
 - **WHEN** an appointment is created for a project day with workers "Max Müller" and "Anna Schmidt"
 - **THEN** the appointment has no invitations
-- **AND** neither worker is linked to it as a contact
+- **AND** neither worker receives an invitation
+- **AND** both workers are linked to it as contacts
 
 #### Scenario: Invitees added in Daylite are cleared
 - **GIVEN** an app-managed appointment to which an invitee was added in Daylite
 - **WHEN** its project day is synchronized
 - **THEN** the appointment has no invitations
 
-### Requirement: Title lists the assigned workers
-The system SHALL title an app-managed appointment `<project name> (<worker names>)`, listing each worker assigned to the project on that day once, alphabetically and separated by `, `.
+### Requirement: Linked contacts are the assigned workers
+The system SHALL link an app-managed appointment to exactly the Daylite contacts of the workers assigned to its project on its day, each contact once, and to no other contact.
 
-#### Scenario: Title for one worker
+#### Scenario: Contacts for one worker
 - **WHEN** only "Max Müller" is assigned to "Projekt Nord" on a day
-- **THEN** the appointment title is `Projekt Nord (Max Müller)`
+- **THEN** the appointment is linked to the contact of "Max Müller" only
 
-#### Scenario: Title for two workers
+#### Scenario: Contacts for two workers
 - **WHEN** "Max Müller" and "Anna Schmidt" are assigned to "Projekt Nord" on a day
-- **THEN** the appointment title is `Projekt Nord (Anna Schmidt, Max Müller)`
-
-#### Scenario: Worker display name
-- **WHEN** a worker's name is put into the title
-- **THEN** the name shown for that worker in the planning grid is used, which is the nickname when set and the full name otherwise
-
-#### Scenario: Worker without a known name
-- **WHEN** an assigned worker has neither a nickname nor a full name
-- **THEN** the title lists that worker as `Unbenannter Kontakt`
+- **THEN** the appointment is linked to the contacts of "Max Müller" and "Anna Schmidt"
 
 #### Scenario: Worker with two assignments for the same project day
 - **WHEN** a worker holds two assignments for "Projekt Nord" on the same day
-- **THEN** the worker's name appears once in the title
+- **THEN** the worker's contact is linked once
 
-### Requirement: Times follow the calendar events
-The system SHALL set an app-managed appointment's start to the earliest start and its end to the latest end of the project's assignment events on that day across all workers' primary calendars, as floating times matching the calendar's wall-clock times.
-
-#### Scenario: Times for one worker
-- **WHEN** "Max Müller" is assigned to "Projekt Nord" from 08:00 to 12:00 on 2026-11-02
-- **THEN** the appointment starts at 2026-11-02 08:00 and ends at 2026-11-02 12:00
-- **AND** its time zone is `floating`, so it shows 08:00 to 12:00 regardless of the viewer's time zone or daylight saving time
-
-#### Scenario: Times for workers with different slots
-- **WHEN** "Max Müller" is assigned to "Projekt Nord" from 08:00 to 12:00 and "Anna Schmidt" from 12:00 to 16:00 on the same day
-- **THEN** the appointment starts at 08:00 and ends at 16:00
-
-#### Scenario: Event that does not end after it starts
-- **WHEN** "Max Müller" is assigned to "Projekt Nord" from 17:00 without an end time on 2026-11-02
-- **THEN** the appointment starts at 2026-11-02 17:00 and ends at 2026-11-03 00:00
-
-#### Scenario: Slot re-allocation shifts the times
-- **GIVEN** "Max Müller" is assigned to "Projekt Nord" from 08:00 to 16:00 on a day and the appointment covers 08:00 to 16:00
-- **WHEN** a second assignment for another project is created for "Max Müller" on that day and "Projekt Nord" is re-allocated to 08:00 to 12:00
-- **THEN** the "Projekt Nord" appointment is updated to 08:00 to 12:00
-- **AND** an appointment for the other project is created with its re-allocated times
+#### Scenario: Contacts added in Daylite are removed
+- **GIVEN** a contact other than the assigned workers was linked to an app-managed appointment in Daylite
+- **WHEN** its project day is synchronized
+- **THEN** only the contacts of the assigned workers remain linked
 
 ### Requirement: Removing a worker from a project day
-The system SHALL update the appointment when a worker's last assignment for a project day is deleted or moved away, removing the worker's name from the title, and SHALL remove the appointment once no worker is assigned to that project day.
+The system SHALL update the appointment when a worker's last assignment for a project day is deleted or moved away, unlinking the worker's contact, and SHALL remove the appointment once no worker is assigned to that project day.
 
 #### Scenario: One of two workers removed
 - **GIVEN** "Max Müller" and "Anna Schmidt" are assigned to "Projekt Nord" on a day
 - **WHEN** the assignment of "Anna Schmidt" is deleted
-- **THEN** the appointment title becomes `Projekt Nord (Max Müller)`
-- **AND** the times are recomputed from the remaining assignment
+- **THEN** the appointment is linked to the contact of "Max Müller" only
 
 #### Scenario: Last worker removed
 - **GIVEN** only "Max Müller" is assigned to "Projekt Nord" on a day
@@ -147,15 +132,17 @@ The system SHALL update the appointment when a worker's last assignment for a pr
 
 #### Scenario: Assignment moved to another worker
 - **WHEN** the assignment of "Max Müller" for "Projekt Nord" on a day is moved to "Anna Schmidt" on the same day
-- **THEN** the appointment title becomes `Projekt Nord (Anna Schmidt)`
+- **THEN** the appointment is linked to the contact of "Anna Schmidt"
+- **AND** it is no longer linked to the contact of "Max Müller"
 
 #### Scenario: Assignment changed to another project
-- **WHEN** an assignment on a day is changed from "Projekt Nord" to "Projekt Süd"
-- **THEN** the worker is removed from the "Projekt Nord" appointment for that day
-- **AND** the worker is listed on the "Projekt Süd" appointment for that day
+- **WHEN** an assignment of "Max Müller" on a day is changed from "Projekt Nord" to "Projekt Süd"
+- **THEN** the contact of "Max Müller" is unlinked from the "Projekt Nord" appointment for that day
+- **AND** it is linked to the "Projekt Süd" appointment for that day
 
 ### Requirement: Synchronization after assignment writes through the app
-The system SHALL synchronize the appointments after every successful assignment create, update, move, reorder and delete made through lkr-planner, for the day the write left and the day it entered, covering all projects planned on those days; calendar entries the app does not write SHALL NOT trigger synchronization.
+The system SHALL synchronize the appointments after every successful assignment create, update, move and delete made through lkr-planner, for the day the write left and the day it entered, covering all projects planned on those days.
+Reordering an assignment within its day changes nothing an appointment holds and SHALL NOT trigger synchronization, and neither SHALL calendar entries the app does not write.
 
 #### Scenario: Update moves an assignment to another day
 - **WHEN** an assignment is updated from 2026-11-02 to 2026-11-03
@@ -168,12 +155,12 @@ The system SHALL synchronize the appointments after every successful assignment 
 
 #### Scenario: Entry the app did not write is covered once its day is written
 - **GIVEN** a calendar entry linked to "Projekt Nord" on 2026-11-02 that has no Daylite appointment
-- **WHEN** any assignment on 2026-11-02 is created, updated, moved, reordered or deleted through lkr-planner
+- **WHEN** any assignment on 2026-11-02 is created, updated, moved or deleted through lkr-planner
 - **THEN** "Projekt Nord" has an appointment for 2026-11-02 reflecting all its assignments of that day
 
-#### Scenario: Reorder triggers synchronization
-- **WHEN** an assignment is reordered and the day's slots are re-allocated
-- **THEN** the appointments of every project on that worker's day reflect the new times
+#### Scenario: Reorder leaves Daylite unchanged
+- **WHEN** an assignment is reordered within its day and the day's slots are re-allocated
+- **THEN** no Daylite appointment is created, updated or removed
 
 #### Scenario: Failed calendar write
 - **WHEN** an assignment write to CalDAV fails
