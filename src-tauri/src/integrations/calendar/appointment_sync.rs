@@ -1,4 +1,4 @@
-use chrono::{NaiveDate, NaiveTime};
+use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 use futures::StreamExt;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::future::Future;
@@ -42,8 +42,8 @@ pub(super) enum AppointmentAction {
 struct ProjectDay {
     summary: String,
     worker_names: BTreeMap<String, String>,
-    start: NaiveTime,
-    end: NaiveTime,
+    start: NaiveDateTime,
+    end: NaiveDateTime,
 }
 
 /// A project missing from `project_names` is named after the summary of its first event.
@@ -66,7 +66,7 @@ pub(super) fn desired_appointments(
                 continue;
             }
 
-            let (start, end) = event_window(&pending);
+            let (start, end) = event_window(date, &pending);
             let project = projects.entry(project_ref).or_insert_with(|| ProjectDay {
                 summary: pending.summary.clone(),
                 worker_names: BTreeMap::new(),
@@ -101,8 +101,8 @@ pub(super) fn desired_appointments(
 
             AppointmentFields {
                 subject: format!("{project_name} ({})", worker_names.join(", ")),
-                local_start: date.and_time(project.start),
-                local_end: date.and_time(project.end),
+                local_start: project.start,
+                local_end: project.end,
                 project_ref,
             }
         })
@@ -110,13 +110,14 @@ pub(super) fn desired_appointments(
 }
 
 /// A missing or unreadable time falls back to the edge of the full assignment window.
-fn event_window(event: &PendingEvent) -> (NaiveTime, NaiveTime) {
+/// An event that does not end after it starts runs until midnight, because Daylite rejects such an appointment.
+fn event_window(date: NaiveDate, event: &PendingEvent) -> (NaiveDateTime, NaiveDateTime) {
     let (window_start, window_end) = full_window();
     let parse = |time: Option<&str>| NaiveTime::parse_from_str(time?, "%H:%M").ok();
-    (
-        parse(event.start_time.as_deref()).unwrap_or(window_start),
-        parse(event.end_time.as_deref()).unwrap_or(window_end),
-    )
+    let start = date.and_time(parse(event.start_time.as_deref()).unwrap_or(window_start));
+    let end = date.and_time(parse(event.end_time.as_deref()).unwrap_or(window_end));
+    let midnight = (date + chrono::Duration::days(1)).and_time(NaiveTime::MIN);
+    (start, if end > start { end } else { midnight })
 }
 
 /// Appointments are matched by their first linked project; of several for one project the lowest ID is kept.
@@ -271,6 +272,9 @@ fn record_failure(
     );
 }
 
+/// Daylite answers a burst of requests with 429, so a retry after an outage goes a few days at a time.
+const RETRY_CONCURRENCY: usize = 2;
+
 /// Matched by the frontend listener in `use-appointment-sync-failures.ts`.
 const APPOINTMENT_SYNC_FAILURES_EVENT: &str = "daylite-appointment-sync-failures";
 
@@ -300,24 +304,20 @@ impl AppointmentSync {
         synced
     }
 
+    /// Announces under the lock, so two outcomes finishing together cannot reach the frontend out of order.
     fn record_outcome(&self, date: NaiveDate, synced: bool, notify: &impl Fn(Vec<String>)) {
-        let still_failing: Vec<String> = {
-            let mut failed = self
-                .failed_dates
-                .lock()
-                .expect("appointment sync failures poisoned");
-            let changed = if synced {
-                failed.remove(&date)
-            } else {
-                failed.insert(date)
-            };
-            if !changed {
-                return;
-            }
-            failed.iter().map(NaiveDate::to_string).collect()
+        let mut failed = self
+            .failed_dates
+            .lock()
+            .expect("appointment sync failures poisoned");
+        let changed = if synced {
+            failed.remove(&date)
+        } else {
+            failed.insert(date)
         };
-
-        notify(still_failing);
+        if changed {
+            notify(failed.iter().map(NaiveDate::to_string).collect());
+        }
     }
 
     /// Reconciles every date failing when called, each under its date's lock.
@@ -338,12 +338,11 @@ impl AppointmentSync {
             .collect();
 
         let reconcile = &reconcile;
-        futures::future::join_all(
-            dates
-                .into_iter()
-                .map(|date| self.run(date, move || reconcile(date), notify)),
-        )
-        .await;
+        futures::stream::iter(dates)
+            .map(|date| self.run(date, move || reconcile(date), notify))
+            .buffer_unordered(RETRY_CONCURRENCY)
+            .collect::<Vec<_>>()
+            .await;
     }
 
     fn lock_for(&self, date: NaiveDate) -> Arc<tokio::sync::Mutex<()>> {
@@ -1593,5 +1592,64 @@ END:VCALENDAR
             error,
             "/v1/contacts/3: CalDAV-Server antwortete mit HTTP 503"
         );
+    }
+
+    #[test]
+    fn an_event_that_does_not_end_after_it_starts_runs_until_midnight() {
+        let workers = [worker(
+            MAX,
+            vec![RawVEvent {
+                end_time: None,
+                ..assignment(NORD, "Projekt Nord", "17:00", "")
+            }],
+        )];
+
+        let appointment = &desired(&workers)[0];
+
+        assert_eq!(appointment.local_start, at("17:00"));
+        assert_eq!(
+            appointment.local_end,
+            (day() + chrono::Duration::days(1)).and_time(chrono::NaiveTime::MIN)
+        );
+    }
+
+    #[tokio::test]
+    async fn a_change_is_announced_before_another_outcome_can_be_recorded() {
+        let sync = AppointmentSync::default();
+        let registry_held = std::sync::atomic::AtomicBool::new(false);
+
+        settle(&sync, day(), false, &|_| {
+            registry_held.store(
+                sync.failed_dates.try_lock().is_err(),
+                std::sync::atomic::Ordering::SeqCst,
+            )
+        })
+        .await;
+
+        assert!(registry_held.load(std::sync::atomic::Ordering::SeqCst));
+    }
+
+    #[tokio::test]
+    async fn a_retry_reconciles_at_most_two_dates_at_once() {
+        let dates: Vec<NaiveDate> = (0..5)
+            .map(|offset| day() + chrono::Duration::days(offset))
+            .collect();
+        let sync = failing(&dates).await;
+        let in_flight = std::sync::atomic::AtomicUsize::new(0);
+        let peak = std::sync::atomic::AtomicUsize::new(0);
+
+        sync.retry_failed(
+            |_| async {
+                let running = in_flight.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
+                peak.fetch_max(running, std::sync::atomic::Ordering::SeqCst);
+                tokio::task::yield_now().await;
+                in_flight.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+                true
+            },
+            &ignore,
+        )
+        .await;
+
+        assert_eq!(peak.load(std::sync::atomic::Ordering::SeqCst), 2);
     }
 }
