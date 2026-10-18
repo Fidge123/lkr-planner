@@ -162,7 +162,7 @@ That records only the read-only cassettes:
 
 Use `DAYLITE_VCR_SCOPE=all` only when you intentionally want to refresh the mutating cassettes `daylite-update-contact-ical-urls.json` and `daylite-appointments.json`.
 For that mode you must also provide `DAYLITE_VCR_CONTACT_REFERENCE`, `DAYLITE_VCR_PRIMARY_ICAL_URL`, `DAYLITE_VCR_ABSENCE_ICAL_URL`, and `DAYLITE_VCR_APPOINTMENT_PROJECT_REFERENCE`.
-The appointment recording creates, searches, edits and deletes an app-managed appointment on 2030-01-07 linked to that test project, which leaves it in the Daylite trash.
+The appointment recording creates an app-managed appointment on 2030-01-07 linked to that test project and the test contact, searches and edits it, unlinks the contact and deletes it, which leaves it in the Daylite trash.
 
 Read-only recording example:
 
