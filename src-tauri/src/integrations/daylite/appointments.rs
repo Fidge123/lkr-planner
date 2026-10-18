@@ -1,12 +1,13 @@
 use chrono::{NaiveDate, NaiveDateTime};
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 use serde_json::{json, Map, Value};
+use std::future::Future;
 
 use super::auth_flow::{send_authenticated_json, send_authenticated_request};
 use super::client::{DayliteApiClient, DayliteHttpMethod, DayliteHttpRequest};
 use super::shared::{
-    normalize_http_error, trimmed, trimmed_or_none, with_daylite_tokens, DayliteApiError,
-    DayliteSearchResult, DayliteTokenState,
+    normalize_http_error, trimmed, with_daylite_tokens, DayliteApiError, DayliteSearchResult,
+    DayliteTokenState,
 };
 
 /// Marks the appointments this app maintains; appointments without it are never touched.
@@ -28,18 +29,34 @@ pub(crate) struct AppointmentFields {
     pub(crate) local_end: NaiveDateTime,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 pub(crate) struct DayliteAppointment {
+    #[serde(rename = "self", deserialize_with = "trimmed_string")]
     pub(crate) reference: String,
+    #[serde(default, deserialize_with = "trimmed_string")]
     pub(crate) subject: String,
+    #[serde(default)]
     pub(crate) timezone: Option<String>,
-    pub(crate) local_start: Option<NaiveDateTime>,
-    pub(crate) local_end: Option<NaiveDateTime>,
+    #[serde(default)]
+    pub(crate) local_start: Option<String>,
+    #[serde(default)]
+    pub(crate) local_end: Option<String>,
+    #[serde(default, rename = "type")]
     pub(crate) appointment_type: Option<String>,
+    #[serde(default)]
     pub(crate) status: Option<String>,
+    #[serde(default)]
     pub(crate) show_as: Option<String>,
-    pub(crate) invitees: Vec<String>,
-    pub(crate) project_refs: Vec<String>,
+    #[serde(default)]
+    pub(crate) invitations: Option<Vec<Value>>,
+    #[serde(default)]
+    pub(crate) projects: Option<Vec<DayliteProjectLink>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub(crate) struct DayliteProjectLink {
+    #[serde(default, deserialize_with = "trimmed_string")]
+    pub(crate) project: String,
 }
 
 impl DayliteAppointment {
@@ -52,18 +69,49 @@ impl DayliteAppointment {
             .unwrap_or(u64::MAX)
     }
 
+    pub(crate) fn project_refs(&self) -> impl Iterator<Item = &str> {
+        self.projects
+            .iter()
+            .flatten()
+            .map(|link| link.project.as_str())
+            .filter(|reference| !reference.is_empty())
+    }
+
     /// True when patching these fields would change nothing the app owns.
     pub(crate) fn matches(&self, fields: &AppointmentFields) -> bool {
+        let is = |value: &Option<String>, expected: &str| {
+            value.as_deref().map(str::trim) == Some(expected)
+        };
         self.subject == fields.subject
-            && self.timezone.as_deref() == Some(FLOATING_TIMEZONE)
-            && self.local_start == Some(fields.local_start)
-            && self.local_end == Some(fields.local_end)
-            && self.appointment_type.as_deref() == Some(APPOINTMENT_TYPE)
-            && self.status.as_deref() == Some(APPOINTMENT_STATUS)
-            && self.show_as.as_deref() == Some(APPOINTMENT_SHOW_AS)
-            && self.invitees.is_empty()
-            && self.project_refs == [fields.project_ref.as_str()]
+            && is(&self.timezone, FLOATING_TIMEZONE)
+            && parse_local_time(self.local_start.as_deref()) == Some(fields.local_start)
+            && parse_local_time(self.local_end.as_deref()) == Some(fields.local_end)
+            && is(&self.appointment_type, APPOINTMENT_TYPE)
+            && is(&self.status, APPOINTMENT_STATUS)
+            && is(&self.show_as, APPOINTMENT_SHOW_AS)
+            && self.invitations.as_ref().is_none_or(Vec::is_empty)
+            && self.project_refs().eq([fields.project_ref.as_str()])
     }
+}
+
+pub(crate) trait AppointmentStore {
+    fn search_day(
+        &self,
+        date: NaiveDate,
+    ) -> impl Future<Output = Result<Vec<DayliteAppointment>, DayliteApiError>> + Send;
+
+    fn create(
+        &self,
+        fields: &AppointmentFields,
+    ) -> impl Future<Output = Result<String, DayliteApiError>> + Send;
+
+    fn patch(
+        &self,
+        reference: &str,
+        fields: &AppointmentFields,
+    ) -> impl Future<Output = Result<(), DayliteApiError>> + Send;
+
+    fn delete(&self, reference: &str) -> impl Future<Output = Result<(), DayliteApiError>> + Send;
 }
 
 pub(crate) struct DayliteAppointments {
@@ -76,8 +124,10 @@ impl DayliteAppointments {
             client: DayliteApiClient::new(base_url)?.with_telemetry(app),
         })
     }
+}
 
-    pub(crate) async fn search_day(
+impl AppointmentStore for DayliteAppointments {
+    async fn search_day(
         &self,
         date: NaiveDate,
     ) -> Result<Vec<DayliteAppointment>, DayliteApiError> {
@@ -87,17 +137,14 @@ impl DayliteAppointments {
         .await
     }
 
-    pub(crate) async fn create(
-        &self,
-        fields: &AppointmentFields,
-    ) -> Result<String, DayliteApiError> {
+    async fn create(&self, fields: &AppointmentFields) -> Result<String, DayliteApiError> {
         with_daylite_tokens(&self.client, |tokens| {
             create_appointment_core(&self.client, tokens, fields)
         })
         .await
     }
 
-    pub(crate) async fn patch(
+    async fn patch(
         &self,
         reference: &str,
         fields: &AppointmentFields,
@@ -108,48 +155,12 @@ impl DayliteAppointments {
         .await
     }
 
-    pub(crate) async fn delete(&self, reference: &str) -> Result<(), DayliteApiError> {
+    async fn delete(&self, reference: &str) -> Result<(), DayliteApiError> {
         with_daylite_tokens(&self.client, |tokens| {
             delete_appointment_core(&self.client, tokens, reference)
         })
         .await
     }
-}
-
-#[derive(Debug, Deserialize)]
-struct DayliteAppointmentDto {
-    #[serde(rename = "self")]
-    reference: String,
-    #[serde(default)]
-    subject: String,
-    #[serde(default)]
-    timezone: Option<String>,
-    #[serde(default)]
-    local_start: Option<String>,
-    #[serde(default)]
-    local_end: Option<String>,
-    #[serde(default, rename = "type")]
-    appointment_type: Option<String>,
-    #[serde(default)]
-    status: Option<String>,
-    #[serde(default)]
-    show_as: Option<String>,
-    #[serde(default)]
-    invitations: Option<Vec<DayliteInvitationDto>>,
-    #[serde(default)]
-    projects: Option<Vec<DayliteProjectLinkDto>>,
-}
-
-#[derive(Debug, Deserialize)]
-struct DayliteInvitationDto {
-    #[serde(default)]
-    invitee: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct DayliteProjectLinkDto {
-    #[serde(default)]
-    project: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -162,7 +173,7 @@ pub(super) async fn search_app_managed_appointments_core(
     token_state: DayliteTokenState,
     date: NaiveDate,
 ) -> Result<Vec<DayliteAppointment>, DayliteApiError> {
-    let search_result = send_authenticated_json::<DayliteSearchResult<DayliteAppointmentDto>>(
+    let search_result = send_authenticated_json::<DayliteSearchResult<DayliteAppointment>>(
         client,
         &token_state.access_token,
         DayliteHttpRequest {
@@ -180,11 +191,7 @@ pub(super) async fn search_app_managed_appointments_core(
     )
     .await?;
 
-    Ok(search_result
-        .results
-        .into_iter()
-        .map(normalize_appointment)
-        .collect())
+    Ok(search_result.results)
 }
 
 pub(super) async fn create_appointment_core(
@@ -270,35 +277,12 @@ fn api_path(reference: &str) -> &str {
     reference.strip_prefix("/v1").unwrap_or(reference)
 }
 
-fn normalize_appointment(appointment: DayliteAppointmentDto) -> DayliteAppointment {
-    DayliteAppointment {
-        reference: trimmed(appointment.reference),
-        subject: trimmed(appointment.subject),
-        timezone: trimmed_or_none(appointment.timezone),
-        local_start: parse_local_time(appointment.local_start),
-        local_end: parse_local_time(appointment.local_end),
-        appointment_type: trimmed_or_none(appointment.appointment_type),
-        status: trimmed_or_none(appointment.status),
-        show_as: trimmed_or_none(appointment.show_as),
-        invitees: appointment
-            .invitations
-            .unwrap_or_default()
-            .into_iter()
-            .map(|invitation| trimmed(invitation.invitee))
-            .collect(),
-        project_refs: appointment
-            .projects
-            .unwrap_or_default()
-            .into_iter()
-            .map(|link| trimmed(link.project))
-            .filter(|reference| !reference.is_empty())
-            .collect(),
-    }
+fn parse_local_time(value: Option<&str>) -> Option<NaiveDateTime> {
+    NaiveDateTime::parse_from_str(value?.trim().trim_end_matches('Z'), "%Y-%m-%dT%H:%M:%S%.f").ok()
 }
 
-fn parse_local_time(value: Option<String>) -> Option<NaiveDateTime> {
-    let value = trimmed_or_none(value)?;
-    NaiveDateTime::parse_from_str(value.trim_end_matches('Z'), "%Y-%m-%dT%H:%M:%S%.f").ok()
+fn trimmed_string<'de, D: Deserializer<'de>>(deserializer: D) -> Result<String, D::Error> {
+    String::deserialize(deserializer).map(trimmed)
 }
 
 /// A day far from planned work, so recording finds no other app-managed appointment on it.
@@ -472,21 +456,20 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn search_parses_the_attributes_the_app_owns() {
+    async fn search_recognizes_padded_owned_fields() {
         let (client, _) = mock_client(vec![Ok(mock_response(
             200,
             r#"{"results":[{
                 "self":" /v1/appointments/5000 ",
-                "subject":" Projekt Nord (Max Müller) ",
-                "timezone":"floating",
-                "local_start":"2026-11-02T08:00:00",
-                "local_end":"2026-11-02T12:00:00",
-                "utc_start":"2026-11-02T08:00:00Z",
+                "subject":" Projekt Nord (Anna Schmidt, Max Müller) ",
+                "timezone":" floating ",
+                "local_start":"2026-11-02T08:00:00.000",
+                "local_end":"2026-11-02T16:00:00Z",
                 "type":"appointment",
-                "status":"tentative",
-                "show_as":"busy",
-                "invitations":[{"invitee":"/v1/users/1000","status":"pending","type":"internal"}],
-                "projects":[{"project":"/v1/projects/42"}],
+                "status":"confirmed",
+                "show_as":"free",
+                "invitations":[],
+                "projects":[{"project":" /v1/projects/42 "}],
                 "keywords":["lkr-planner"]
             }]}"#,
         ))]);
@@ -496,31 +479,17 @@ mod tests {
                 .await
                 .expect("search should succeed");
 
-        assert_eq!(
-            appointments,
-            vec![DayliteAppointment {
-                reference: "/v1/appointments/5000".to_string(),
-                subject: "Projekt Nord (Max Müller)".to_string(),
-                timezone: Some("floating".to_string()),
-                local_start: Some(at("2026-11-02", "08:00")),
-                local_end: Some(at("2026-11-02", "12:00")),
-                appointment_type: Some("appointment".to_string()),
-                status: Some("tentative".to_string()),
-                show_as: Some("busy".to_string()),
-                invitees: vec!["/v1/users/1000".to_string()],
-                project_refs: vec!["/v1/projects/42".to_string()],
-            }]
-        );
+        assert_eq!(appointments[0].reference, "/v1/appointments/5000");
+        assert!(appointments[0].matches(&fields()));
     }
 
     #[tokio::test]
-    async fn search_reads_null_lists_as_empty() {
+    async fn search_reads_null_lists_as_absent() {
         let (client, _) = mock_client(vec![Ok(mock_response(
             200,
             r#"{"results":[{
                 "self":"/v1/appointments/5000",
                 "subject":"Projekt Nord (Max Müller)",
-                "local_start":"2026-11-02T08:00:00.000",
                 "invitations":null,
                 "projects":null
             }]}"#,
@@ -531,9 +500,8 @@ mod tests {
                 .await
                 .expect("search should succeed");
 
-        assert!(appointments[0].invitees.is_empty());
-        assert!(appointments[0].project_refs.is_empty());
-        assert_eq!(appointments[0].local_start, Some(at("2026-11-02", "08:00")));
+        assert_eq!(appointments[0].invitations, None);
+        assert_eq!(appointments[0].project_refs().next(), None);
     }
 
     #[tokio::test]
@@ -640,7 +608,7 @@ mod tests {
         let [appointment] = found.as_slice() else {
             panic!("the recorded day should hold exactly the created appointment: {found:?}");
         };
-        let project_ref = appointment.project_refs[0].clone();
+        let project_ref = appointment.project_refs().next().unwrap().to_string();
         let created = cassette_fields(&project_ref, "Testprojekt (Max Müller)", "16:00");
         assert!(
             appointment.matches(&created),

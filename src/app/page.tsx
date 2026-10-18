@@ -28,10 +28,7 @@ import { WeekTable } from "./components/week-table";
 import { filterVisibleEmployees } from "./employee-visibility";
 import type { AppointmentDragPayload } from "./hooks/use-appointment-drag";
 import { useAppointmentDrag } from "./hooks/use-appointment-drag";
-import {
-  type AppointmentSyncFailuresState,
-  useAppointmentSyncFailures,
-} from "./hooks/use-appointment-sync-failures";
+import { useAppointmentSyncFailures } from "./hooks/use-appointment-sync-failures";
 import { type HolidaysState, useHolidays } from "./hooks/use-holidays";
 import type { PlanningAssignmentsState } from "./hooks/use-planning-assignments";
 import { usePlanningEmployees } from "./hooks/use-planning-employees";
@@ -95,7 +92,6 @@ export function PlanningGrid({
   employeeSettings = [],
   hideNonPlannableEmployees = true,
   holidaysState,
-  appointmentSyncState,
   categoryColors = {},
   onOpenIcalDialog = () => {},
   onNavigateWeek,
@@ -105,7 +101,6 @@ export function PlanningGrid({
 
   const fallbackEmployeesState = usePlanningEmployees();
   const fallbackHolidaysState = useHolidays(weekStart);
-  const fallbackAppointmentSyncState = useAppointmentSyncFailures();
 
   return (
     <PlanningGridTable
@@ -115,9 +110,6 @@ export function PlanningGrid({
       employeeSettings={employeeSettings}
       hideNonPlannableEmployees={hideNonPlannableEmployees}
       holidaysState={holidaysState ?? fallbackHolidaysState}
-      appointmentSyncState={
-        appointmentSyncState ?? fallbackAppointmentSyncState
-      }
       categoryColors={categoryColors}
       onOpenIcalDialog={onOpenIcalDialog}
       onNavigateWeek={onNavigateWeek}
@@ -132,7 +124,6 @@ export function PlanningGridTable({
   employeeSettings,
   hideNonPlannableEmployees,
   holidaysState,
-  appointmentSyncState,
   categoryColors,
   onOpenIcalDialog,
   onNavigateWeek,
@@ -155,6 +146,7 @@ export function PlanningGridTable({
     errorMessage: holidayErrorMessage,
     reloadHolidays,
   } = holidaysState;
+  const appointmentSync = useAppointmentSyncFailures();
   const visibleEmployees = filterVisibleEmployees(
     employees,
     employeeSettings,
@@ -242,9 +234,9 @@ export function PlanningGridTable({
           variant="warning"
         />
         <AppointmentSyncAlert
-          failedDates={appointmentSyncState.failedDates}
-          isRetrying={appointmentSyncState.isRetrying}
-          onRetry={() => void appointmentSyncState.retry()}
+          failedDates={appointmentSync.failedDates}
+          isRetrying={appointmentSync.isRetrying}
+          onRetry={() => void appointmentSync.retry()}
         />
         {drag.errorMessage ? (
           <section className="toast toast-top toast-center z-50">
@@ -392,7 +384,6 @@ interface Props {
   employeeSettings?: EmployeeSetting[];
   hideNonPlannableEmployees?: boolean;
   holidaysState?: HolidaysState;
-  appointmentSyncState?: AppointmentSyncFailuresState;
   categoryColors?: ProjectCategoryColors;
   onOpenIcalDialog?: (employee: PlanningContactRecord) => void;
   onNavigateWeek?: (direction: -1 | 1) => void;
@@ -405,7 +396,6 @@ export interface PlanningGridTableProps {
   employeeSettings: EmployeeSetting[];
   hideNonPlannableEmployees: boolean;
   holidaysState: HolidaysState;
-  appointmentSyncState: AppointmentSyncFailuresState;
   categoryColors: ProjectCategoryColors;
   onOpenIcalDialog: (employee: PlanningContactRecord) => void;
   onNavigateWeek?: (direction: -1 | 1) => void;

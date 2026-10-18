@@ -4,7 +4,6 @@ import type {
   CalendarCellEvent,
   PlanningContactRecord,
 } from "../generated/tauri";
-import type { AppointmentSyncFailuresState } from "./hooks/use-appointment-sync-failures";
 import type { HolidaysState } from "./hooks/use-holidays";
 import {
   PlanningGrid,
@@ -40,12 +39,6 @@ const defaultHolidaysState: HolidaysState = {
   isLoading: false,
   errorMessage: null,
   reloadHolidays: () => {},
-};
-
-const defaultAppointmentSyncState: AppointmentSyncFailuresState = {
-  failedDates: [],
-  isRetrying: false,
-  retry: async () => {},
 };
 
 function renderGrid(
@@ -267,7 +260,6 @@ describe("planning grid drag-and-drop wiring", () => {
         employeeSettings={[]}
         hideNonPlannableEmployees={false}
         holidaysState={defaultHolidaysState}
-        appointmentSyncState={defaultAppointmentSyncState}
         categoryColors={{}}
         onOpenIcalDialog={() => {}}
         onNavigateWeek={() => {}}
@@ -329,26 +321,5 @@ describe("planning grid weekend visibility", () => {
     });
 
     expect(html).toContain("Test-Samstagsfeiertag");
-  });
-});
-
-describe("planning grid appointment sync failures", () => {
-  it("shows the failed days above the grid", () => {
-    const html = renderGrid({
-      appointmentSyncState: {
-        ...defaultAppointmentSyncState,
-        failedDates: ["2026-11-02"],
-      },
-    });
-
-    const alertAt = html.indexOf(
-      "Daylite-Termine für folgende Tage konnten nicht aktualisiert werden: 02.11.2026",
-    );
-    expect(alertAt).toBeGreaterThan(-1);
-    expect(alertAt).toBeLessThan(html.indexOf("<table"));
-  });
-
-  it("shows no sync alert while every day is synchronized", () => {
-    expect(renderGrid()).not.toContain("Daylite-Termine");
   });
 });

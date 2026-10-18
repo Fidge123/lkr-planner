@@ -461,16 +461,14 @@ async fn update_assignment_inner(
         .map_err(|e| e.user_message)?;
     let session = load_caldav_session(&app, &store)?;
 
-    let lookup_app = app.clone();
+    let handle = app.clone();
     refuse_protected_event(
         &session,
         &input.href,
         input.override_protection,
         |reference: String| async move {
-            crate::integrations::daylite::projects::fetch_project_by_reference(
-                lookup_app, &reference,
-            )
-            .await
+            crate::integrations::daylite::projects::fetch_project_by_reference(app, &reference)
+                .await
         },
     )
     .await?;
@@ -489,7 +487,7 @@ async fn update_assignment_inner(
                 touched_dates([Some(write.date.as_str()), previous_date.as_deref()]),
             )
         }),
-        |dates| schedule_appointment_sync(&app, dates),
+        |dates| schedule_appointment_sync(&handle, dates),
     )
 }
 
@@ -509,10 +507,9 @@ async fn move_assignment_inner(
 
     let session = load_caldav_session(&app, &store)?;
 
-    let lookup_app = app.clone();
+    let handle = app.clone();
     refuse_protected_day_change(&session, &href, &date, |reference: String| async move {
-        crate::integrations::daylite::projects::fetch_project_by_reference(lookup_app, &reference)
-            .await
+        crate::integrations::daylite::projects::fetch_project_by_reference(app, &reference).await
     })
     .await?;
 
@@ -530,7 +527,7 @@ async fn move_assignment_inner(
                 touched_dates([Some(write.date.as_str()), source_date.as_deref()]),
             )
         }),
-        |dates| schedule_appointment_sync(&app, dates),
+        |dates| schedule_appointment_sync(&handle, dates),
     )
 }
 
@@ -561,16 +558,14 @@ async fn delete_assignment_inner(
         .map_err(|e| e.user_message)?;
     let session = load_caldav_session(&app, &store)?;
 
-    let lookup_app = app.clone();
+    let handle = app.clone();
     refuse_protected_event(
         &session,
         &href,
         override_protection,
         |reference: String| async move {
-            crate::integrations::daylite::projects::fetch_project_by_reference(
-                lookup_app, &reference,
-            )
-            .await
+            crate::integrations::daylite::projects::fetch_project_by_reference(app, &reference)
+                .await
         },
     )
     .await?;
@@ -578,7 +573,7 @@ async fn delete_assignment_inner(
     let result = delete_assignment_core(&session, &href).await;
     schedule_on_success(
         result.map(|previous_date| ((), touched_dates([previous_date.as_deref()]))),
-        |dates| schedule_appointment_sync(&app, dates),
+        |dates| schedule_appointment_sync(&handle, dates),
     )
 }
 

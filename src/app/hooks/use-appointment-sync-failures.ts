@@ -1,66 +1,32 @@
 import { listen } from "@tauri-apps/api/event";
 import { useEffect, useState } from "react";
 import { commands } from "../../generated/tauri";
+import { subscribeToTauriEvent } from "../tauri-event";
 
-export const appointmentSyncFailuresEvent = "daylite-appointment-sync-failures";
+const appointmentSyncFailuresEvent = "daylite-appointment-sync-failures";
 
-export interface AppointmentSyncFailuresState {
-  /** ISO dates whose Daylite appointments could not be synchronized. */
-  failedDates: string[];
-  isRetrying: boolean;
-  retry: () => Promise<void>;
-}
+export function useAppointmentSyncFailures() {
+  const [failedDates, setFailedDates] = useState<string[]>([]);
+  const [isRetrying, setIsRetrying] = useState(false);
 
-export type AppointmentSyncFailuresListen = (
-  event: string,
-  handler: (event: { payload: string[] }) => void,
-) => Promise<() => void>;
-
-/**
- * The subscription only exists once `listen` resolves, so an unmount that races the
- * setup has to unlisten through the promise instead of a captured value.
- */
-export function subscribeToAppointmentSyncFailures(
-  listenFn: AppointmentSyncFailuresListen,
-  onFailedDates: (dates: string[]) => void,
-): () => void {
-  const subscription = listenFn(appointmentSyncFailuresEvent, (event) =>
-    onFailedDates(event.payload),
+  useEffect(
+    () =>
+      subscribeToTauriEvent<string[]>(
+        listen,
+        appointmentSyncFailuresEvent,
+        setFailedDates,
+      ),
+    [],
   );
-  return () => {
-    void subscription.then((unlisten) => unlisten()).catch(() => {});
-  };
-}
 
-export function createRetryRunner(
-  retryCommand: () => Promise<unknown>,
-  setIsRetrying: (isRetrying: boolean) => void,
-): () => Promise<void> {
-  let isRunning = false;
-  return async () => {
-    if (isRunning) return;
-    isRunning = true;
+  const retry = async () => {
     setIsRetrying(true);
     try {
-      await retryCommand();
+      await commands.retryDayliteAppointmentSync();
     } finally {
-      isRunning = false;
       setIsRetrying(false);
     }
   };
-}
-
-export function useAppointmentSyncFailures(): AppointmentSyncFailuresState {
-  const [failedDates, setFailedDates] = useState<string[]>([]);
-  const [isRetrying, setIsRetrying] = useState(false);
-  const [retry] = useState(() =>
-    createRetryRunner(commands.retryDayliteAppointmentSync, setIsRetrying),
-  );
-
-  useEffect(
-    () => subscribeToAppointmentSyncFailures(listen, setFailedDates),
-    [],
-  );
 
   return { failedDates, isRetrying, retry };
 }
