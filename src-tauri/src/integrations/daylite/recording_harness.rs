@@ -189,12 +189,16 @@ async fn record_daylite_cassettes_from_live_api() {
         .expect("contact update cassette should be recorded");
     }
 
-    if let Some(project_reference) = &config.appointment_project_reference {
+    if let (Some(project_reference), Some(update_contact_input)) = (
+        &config.appointment_project_reference,
+        &config.update_contact_input,
+    ) {
         record_appointment_lifecycle(
             &DayliteApiClient::with_env_cassette(&config.base_url, "daylite-appointments.json")
                 .expect("appointment cassette client should be created"),
             stable_token_state,
             project_reference,
+            &update_contact_input.contact_reference,
         )
         .await
         .expect("appointment cassette should be recorded");

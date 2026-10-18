@@ -4,7 +4,9 @@ use serde::{Deserialize, Serialize};
 use specta::Type;
 use std::collections::{BTreeSet, HashMap, HashSet};
 
-use super::appointment_sync::{retry_failed_in_app, schedule_appointment_sync};
+use super::appointment_sync::{
+    event_worker, retry_failed_in_app, schedule_appointment_sync, WorkerDay,
+};
 use super::caldav::{
     create_assignment_core, delete_assignment_core, fetch_calendar_events, move_assignment_core,
     reorder_assignment_core, update_assignment_core, AssignmentWrite, CaldavSession,
@@ -197,7 +199,7 @@ async fn load_week_events_inner(
 }
 
 // One unit is two requests, primary and absence, so the roster fans out to twice this.
-pub(super) const EMPLOYEE_FETCH_CONCURRENCY: usize = 4;
+const EMPLOYEE_FETCH_CONCURRENCY: usize = 4;
 
 struct EmployeeFetch {
     employee_reference: String,
@@ -205,7 +207,7 @@ struct EmployeeFetch {
     absences: Vec<CalendarCellEvent>,
 }
 
-pub(super) fn employees_to_load<'a>(
+fn employees_to_load<'a>(
     store: &'a LocalStore,
     only: Option<&'a [String]>,
 ) -> impl Iterator<Item = &'a EmployeeSetting> {
@@ -384,31 +386,45 @@ async fn create_assignment_inner(
     };
     let result = create_assignment_core(&session, &calendar_url, &write).await;
     schedule_on_success(
-        result.map(|href| (href, touched_dates([Some(write.date.as_str())]))),
-        |dates| schedule_appointment_sync(&app, dates),
+        result.map(|href| {
+            let worker = Some(input.employee_reference.as_str());
+            (href, worker_days(worker, [Some(write.date.as_str())]))
+        }),
+        |worker_days| schedule_appointment_sync(&app, worker_days),
     )
 }
 
 fn schedule_on_success<T>(
-    result: Result<(T, Vec<NaiveDate>), String>,
-    schedule: impl FnOnce(Vec<NaiveDate>),
+    result: Result<(T, Vec<WorkerDay>), String>,
+    schedule: impl FnOnce(Vec<WorkerDay>),
 ) -> Result<T, String> {
     let (value, touched) = result?;
     schedule(touched);
     Ok(value)
 }
 
-fn touched_dates<'a>(dates: impl IntoIterator<Item = Option<&'a str>>) -> Vec<NaiveDate> {
+/// Nothing is touched for a worker or date that could not be determined.
+fn worker_days<'a>(
+    worker: Option<&str>,
+    dates: impl IntoIterator<Item = Option<&'a str>>,
+) -> Vec<WorkerDay> {
+    let Some(worker) = worker else {
+        return Vec::new();
+    };
     dates
         .into_iter()
         .flatten()
         .filter_map(|date| NaiveDate::parse_from_str(date, "%Y-%m-%d").ok())
         .collect::<BTreeSet<_>>()
         .into_iter()
+        .map(|date| WorkerDay {
+            worker: worker.to_string(),
+            date,
+        })
         .collect()
 }
 
-fn resolve_employee_calendar_url(
+pub(super) fn resolve_employee_calendar_url(
     store: &crate::integrations::local_store::LocalStore,
     employee_reference: &str,
 ) -> Result<String, String> {
@@ -482,12 +498,11 @@ async fn update_assignment_inner(
     let result = update_assignment_core(&session, &input.href, &input.uid, &write).await;
     schedule_on_success(
         result.map(|previous_date| {
-            (
-                (),
-                touched_dates([Some(write.date.as_str()), previous_date.as_deref()]),
-            )
+            let worker = event_worker(&handle, &store, &session, &input.href);
+            let dates = [Some(write.date.as_str()), previous_date.as_deref()];
+            ((), worker_days(worker.as_deref(), dates))
         }),
-        |dates| schedule_appointment_sync(&handle, dates),
+        |worker_days| schedule_appointment_sync(&handle, worker_days),
     )
 }
 
@@ -522,12 +537,13 @@ async fn move_assignment_inner(
     let result = move_assignment_core(&session, &href, &target_calendar_url, &write).await;
     schedule_on_success(
         result.map(|(moved, source_date)| {
-            (
-                moved,
-                touched_dates([Some(write.date.as_str()), source_date.as_deref()]),
-            )
+            let source = event_worker(&handle, &store, &session, &href);
+            let target = Some(target_employee_reference.as_str());
+            let mut touched = worker_days(target, [Some(write.date.as_str())]);
+            touched.extend(worker_days(source.as_deref(), [source_date.as_deref()]));
+            (moved, touched)
         }),
-        |dates| schedule_appointment_sync(&handle, dates),
+        |worker_days| schedule_appointment_sync(&handle, worker_days),
     )
 }
 
@@ -542,11 +558,7 @@ async fn reorder_assignment_inner(
         .map_err(|e| e.user_message)?;
     let session = load_caldav_session(&app, &store)?;
 
-    let result = reorder_assignment_core(&session, &href, &uid, &date, order_index).await;
-    schedule_on_success(
-        result.map(|()| ((), touched_dates([Some(date.as_str())]))),
-        |dates| schedule_appointment_sync(&app, dates),
-    )
+    reorder_assignment_core(&session, &href, &uid, &date, order_index).await
 }
 
 async fn delete_assignment_inner(
@@ -572,8 +584,14 @@ async fn delete_assignment_inner(
 
     let result = delete_assignment_core(&session, &href).await;
     schedule_on_success(
-        result.map(|previous_date| ((), touched_dates([previous_date.as_deref()]))),
-        |dates| schedule_appointment_sync(&handle, dates),
+        result.map(|previous_date| {
+            let worker = event_worker(&handle, &store, &session, &href);
+            (
+                (),
+                worker_days(worker.as_deref(), [previous_date.as_deref()]),
+            )
+        }),
+        |worker_days| schedule_appointment_sync(&handle, worker_days),
     )
 }
 
@@ -646,8 +664,11 @@ mod tests {
         );
     }
 
-    fn date(value: &str) -> NaiveDate {
-        NaiveDate::parse_from_str(value, "%Y-%m-%d").unwrap()
+    fn on(worker: &str, date: &str) -> WorkerDay {
+        WorkerDay {
+            worker: worker.to_string(),
+            date: NaiveDate::parse_from_str(date, "%Y-%m-%d").unwrap(),
+        }
     }
 
     #[test]
@@ -656,7 +677,7 @@ mod tests {
 
         let result: Result<String, String> = schedule_on_success(
             Err("Kalenderserver antwortete mit HTTP 500".to_string()),
-            |dates| scheduled.push(dates),
+            |worker_days| scheduled.push(worker_days),
         );
 
         assert_eq!(
@@ -667,37 +688,58 @@ mod tests {
     }
 
     #[test]
-    fn a_successful_write_schedules_its_dates_and_keeps_its_result() {
+    fn a_successful_write_schedules_its_worker_days_and_keeps_its_result() {
         let mut scheduled = Vec::new();
 
         let result = schedule_on_success(
-            Ok(("/cal/uid-1.ics".to_string(), vec![date("2026-11-02")])),
-            |dates| scheduled.push(dates),
+            Ok((
+                "/cal/uid-1.ics".to_string(),
+                vec![on("/v1/contacts/1", "2026-11-02")],
+            )),
+            |worker_days| scheduled.push(worker_days),
         );
 
         assert_eq!(result, Ok("/cal/uid-1.ics".to_string()));
-        assert_eq!(scheduled, [vec![date("2026-11-02")]]);
+        assert_eq!(scheduled, [vec![on("/v1/contacts/1", "2026-11-02")]]);
     }
 
     #[test]
-    fn a_write_touches_the_day_it_left_and_the_day_it_entered() {
-        assert_eq!(
-            touched_dates([Some("2026-11-03"), Some("2026-11-02")]),
-            [date("2026-11-02"), date("2026-11-03")]
-        );
-    }
+    fn a_write_touches_the_workers_day_it_left_and_the_day_it_entered() {
+        let cases = [
+            (
+                "two days",
+                worker_days(
+                    Some("/v1/contacts/1"),
+                    [Some("2026-11-03"), Some("2026-11-02")],
+                ),
+                vec![
+                    on("/v1/contacts/1", "2026-11-02"),
+                    on("/v1/contacts/1", "2026-11-03"),
+                ],
+            ),
+            (
+                "one day once",
+                worker_days(
+                    Some("/v1/contacts/1"),
+                    [Some("2026-11-02"), Some("2026-11-02")],
+                ),
+                vec![on("/v1/contacts/1", "2026-11-02")],
+            ),
+            (
+                "an unknown or unreadable date",
+                worker_days(Some("/v1/contacts/1"), [None, Some("kein-datum")]),
+                vec![],
+            ),
+            (
+                "an unknown worker",
+                worker_days(None, [Some("2026-11-02")]),
+                vec![],
+            ),
+        ];
 
-    #[test]
-    fn a_write_within_one_day_touches_it_once() {
-        assert_eq!(
-            touched_dates([Some("2026-11-02"), Some("2026-11-02")]),
-            [date("2026-11-02")]
-        );
-    }
-
-    #[test]
-    fn an_unknown_or_unreadable_date_is_not_touched() {
-        assert_eq!(touched_dates([None, Some("kein-datum")]), []);
+        for (label, touched, expected) in cases {
+            assert_eq!(touched, expected, "case: {label}");
+        }
     }
 
     #[test]

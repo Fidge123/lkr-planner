@@ -476,7 +476,7 @@ pub(crate) async fn move_assignment_core(
 /// CalDAV servers return root-absolute hrefs; joining one onto a `base_url` that
 /// already contains a path would duplicate the path segment and produce a 404,
 /// so the href is resolved against the scheme+host origin only.
-pub(super) fn resolve_href(href: &str, base_url: &str) -> Result<String, String> {
+pub(crate) fn resolve_href(href: &str, base_url: &str) -> Result<String, String> {
     if href.starts_with("http://") || href.starts_with("https://") {
         return Ok(href.to_string());
     }
@@ -535,19 +535,134 @@ async fn put_ical(
 }
 
 fn targets_absence_calendar(target_url: &str, absence_urls: &[String]) -> bool {
+    absence_urls
+        .iter()
+        .any(|absence| lies_in_calendar(target_url, absence))
+}
+
+/// True for the calendar collection itself and every resource beneath it, ignoring trailing slashes.
+pub(crate) fn lies_in_calendar(target_url: &str, calendar_url: &str) -> bool {
     let target = target_url.trim_end_matches('/');
-    absence_urls.iter().any(|raw| {
-        let absence = raw.trim_end_matches('/');
-        !absence.is_empty() && (target == absence || target.starts_with(&format!("{absence}/")))
-    })
+    let calendar = calendar_url.trim_end_matches('/');
+    !calendar.is_empty() && (target == calendar || target.starts_with(&format!("{calendar}/")))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::integrations::telemetry::test_support::{enabled_recorder, recorded};
-    use crate::integrations::test_http::TestServer;
+    use std::sync::{Arc, Mutex};
     use std::time::Duration;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    /// Routes are matched by method + path prefix, and every request is recorded
+    /// in arrival order.
+    struct TestServer {
+        base_url: String,
+        received: Arc<Mutex<Vec<(String, String)>>>,
+    }
+
+    impl TestServer {
+        async fn spawn(routes: Vec<(&'static str, &'static str, u16)>) -> Self {
+            Self::spawn_with_bodies(
+                routes
+                    .into_iter()
+                    .map(|(method, prefix, status)| (method, prefix, status, ""))
+                    .collect(),
+            )
+            .await
+        }
+
+        async fn spawn_with_bodies(
+            routes: Vec<(&'static str, &'static str, u16, &'static str)>,
+        ) -> Self {
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+                .await
+                .expect("bind test server");
+            let addr = listener.local_addr().expect("test server addr");
+            let received: Arc<Mutex<Vec<(String, String)>>> = Arc::new(Mutex::new(Vec::new()));
+            let recorded = received.clone();
+
+            tokio::spawn(async move {
+                loop {
+                    let Ok((mut stream, _)) = listener.accept().await else {
+                        break;
+                    };
+                    let routes = routes.clone();
+                    let recorded = recorded.clone();
+                    tokio::spawn(async move {
+                        let Some((method, path)) = read_request(&mut stream).await else {
+                            return;
+                        };
+                        recorded
+                            .lock()
+                            .unwrap()
+                            .push((method.clone(), path.clone()));
+                        let (status, body) = routes
+                            .iter()
+                            .find(|(m, prefix, _, _)| *m == method && path.starts_with(prefix))
+                            .map(|(_, _, status, body)| (*status, *body))
+                            .unwrap_or((404, ""));
+                        let response = format!(
+                            "HTTP/1.1 {status} Test\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                            body.len()
+                        );
+                        let _ = stream.write_all(response.as_bytes()).await;
+                        let _ = stream.shutdown().await;
+                    });
+                }
+            });
+
+            Self {
+                base_url: format!("http://{addr}"),
+                received,
+            }
+        }
+
+        fn requests(&self) -> Vec<(String, String)> {
+            self.received.lock().unwrap().clone()
+        }
+    }
+
+    async fn read_request(stream: &mut tokio::net::TcpStream) -> Option<(String, String)> {
+        let mut buffer = Vec::new();
+        let mut chunk = [0u8; 1024];
+        let head_end = loop {
+            let read = stream.read(&mut chunk).await.ok()?;
+            if read == 0 {
+                return None;
+            }
+            buffer.extend_from_slice(&chunk[..read]);
+            if let Some(pos) = buffer.windows(4).position(|w| w == b"\r\n\r\n") {
+                break pos + 4;
+            }
+        };
+
+        let head = String::from_utf8_lossy(&buffer[..head_end]).to_string();
+        let content_length: usize = head
+            .lines()
+            .find_map(|line| {
+                let (name, value) = line.split_once(':')?;
+                name.eq_ignore_ascii_case("content-length")
+                    .then(|| value.trim().parse().ok())?
+            })
+            .unwrap_or(0);
+
+        // Drain the body so the client can finish writing before we respond.
+        let mut body_read = buffer.len() - head_end;
+        while body_read < content_length {
+            let read = stream.read(&mut chunk).await.ok()?;
+            if read == 0 {
+                break;
+            }
+            body_read += read;
+        }
+
+        let mut request_line = head.lines().next()?.split_whitespace();
+        let method = request_line.next()?.to_string();
+        let path = request_line.next()?.to_string();
+        Some((method, path))
+    }
 
     fn test_client() -> reqwest::Client {
         reqwest::Client::builder()

@@ -360,19 +360,6 @@ async fn resolve_week_projects_inner(
     Ok(resolved)
 }
 
-/// Leaves out a reference that neither Daylite nor the cache resolves.
-pub(crate) async fn resolve_project_names(
-    app: tauri::AppHandle,
-    references: HashSet<String>,
-) -> HashMap<String, String> {
-    resolve_week_projects_inner(app, references.into_iter().collect(), false)
-        .await
-        .unwrap_or_default()
-        .into_iter()
-        .filter_map(|(reference, project)| Some((reference, project?.name)))
-        .collect()
-}
-
 /// Never calls Daylite, so a week can be shown before its projects are refreshed.
 pub(crate) fn cached_projects(references: &HashSet<String>) -> HashMap<String, ResolvedProject> {
     let cache = project_cache();
