@@ -193,6 +193,11 @@ The system SHALL treat Daylite synchronization as a follow-up to the calendar wr
 - **AND** the failure is recorded as a telemetry error
 - **AND** the day counts as failed
 
+#### Scenario: Worker calendar that does not exist
+- **WHEN** the calendar server reports a worker's configured primary calendar as not found while a project day is being synchronized
+- **THEN** that worker counts as having no assignments on that day
+- **AND** the day is synchronized from the other workers' calendars
+
 ### Requirement: Synchronization failures are shown to the user
 The system SHALL show one German error alert above the planning grid while at least one day's synchronization has failed and has not succeeded since, naming every such day and offering an `Erneut versuchen` button.
 

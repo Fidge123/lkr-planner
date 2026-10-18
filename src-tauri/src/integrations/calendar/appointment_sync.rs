@@ -5,7 +5,7 @@ use std::future::Future;
 use std::sync::{Arc, Mutex, OnceLock};
 use tauri::{Emitter, Manager};
 
-use super::caldav::{fetch_events_in_range, CaldavSession};
+use super::caldav::{fetch_existing_events_in_range, CaldavSession};
 use super::commands::{employees_to_load, load_caldav_session, EMPLOYEE_FETCH_CONCURRENCY};
 use super::events::{classify_event, parse_daylite_reference};
 use super::slots::full_window;
@@ -435,30 +435,7 @@ struct AppSources {
 
 impl DaySources for AppSources {
     async fn worker_events(&self, date: NaiveDate) -> Result<Vec<WorkerEvents>, String> {
-        let next_day = date + chrono::Duration::days(1);
-        let fetches: Vec<_> = employees_to_load(&self.store, None)
-            .map(|setting| {
-                let employee_reference = setting.daylite_contact_reference.clone();
-                let calendar_url = setting.zep_primary_calendar.clone().unwrap_or_default();
-                async move {
-                    let events =
-                        fetch_events_in_range(&self.session, &calendar_url, date, next_day)
-                            .await
-                            .map_err(|error| format!("{employee_reference}: {error}"))?;
-                    Ok(WorkerEvents {
-                        employee_reference,
-                        events,
-                    })
-                }
-            })
-            .collect();
-
-        futures::stream::iter(fetches)
-            .buffered(EMPLOYEE_FETCH_CONCURRENCY)
-            .collect::<Vec<_>>()
-            .await
-            .into_iter()
-            .collect()
+        fetch_worker_events(&self.store, &self.session, date).await
     }
 
     fn contacts(&self) -> &[DayliteContactCacheEntry] {
@@ -468,6 +445,39 @@ impl DaySources for AppSources {
     async fn project_names(&self, references: HashSet<String>) -> HashMap<String, String> {
         resolve_project_names(self.app.clone(), references).await
     }
+}
+
+/// A calendar that does not exist cannot hold assignments, so it counts as empty instead of failing the day.
+async fn fetch_worker_events(
+    store: &LocalStore,
+    session: &CaldavSession,
+    date: NaiveDate,
+) -> Result<Vec<WorkerEvents>, String> {
+    let next_day = date + chrono::Duration::days(1);
+    let fetches: Vec<_> = employees_to_load(store, None)
+        .map(|setting| {
+            let employee_reference = setting.daylite_contact_reference.clone();
+            let calendar_url = setting.zep_primary_calendar.clone().unwrap_or_default();
+            async move {
+                let events = fetch_existing_events_in_range(session, &calendar_url, date, next_day)
+                    .await
+                    .map_err(|error| format!("{employee_reference}: {error}"))?;
+                Ok(events.map(|events| WorkerEvents {
+                    employee_reference,
+                    events,
+                }))
+            }
+        })
+        .collect();
+
+    let fetched: Vec<Option<WorkerEvents>> = futures::stream::iter(fetches)
+        .buffered(EMPLOYEE_FETCH_CONCURRENCY)
+        .collect::<Vec<_>>()
+        .await
+        .into_iter()
+        .collect::<Result<_, String>>()?;
+
+    Ok(fetched.into_iter().flatten().collect())
 }
 
 impl AppointmentStore for DayliteAppointments {
@@ -1485,6 +1495,103 @@ mod tests {
                 "retry started",
                 "retry resolved"
             ]
+        );
+    }
+
+    const ONE_ASSIGNMENT_REPORT: &str = r#"<?xml version="1.0" encoding="utf-8"?>
+<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
+  <d:response>
+    <d:href>/cal-max/uid-1.ics</d:href>
+    <d:propstat>
+      <d:prop>
+        <c:calendar-data>BEGIN:VCALENDAR
+BEGIN:VEVENT
+UID:uid-1
+SUMMARY:Projekt Nord
+DESCRIPTION:daylite:/v1/projects/42
+DTSTART:20261102T080000
+DTEND:20261102T160000
+END:VEVENT
+END:VCALENDAR
+</c:calendar-data>
+      </d:prop>
+    </d:propstat>
+  </d:response>
+</d:multistatus>"#;
+
+    const PLACEHOLDER: &str = "/v1/contacts/3";
+
+    fn calendar_store(base_url: &str) -> LocalStore {
+        LocalStore {
+            employee_settings: [(MAX, "cal-max"), (PLACEHOLDER, "cal-missing")]
+                .into_iter()
+                .map(
+                    |(reference, calendar)| crate::integrations::local_store::EmployeeSetting {
+                        daylite_contact_reference: reference.to_string(),
+                        zep_primary_calendar: Some(format!("{base_url}/{calendar}/")),
+                        ..Default::default()
+                    },
+                )
+                .collect(),
+            ..Default::default()
+        }
+    }
+
+    fn calendar_session(base_url: &str) -> CaldavSession {
+        CaldavSession {
+            client: tauri_plugin_http::reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(5))
+                .build()
+                .unwrap(),
+            username: "user".to_string(),
+            password: "pass".to_string(),
+            base_url: base_url.to_string(),
+            absence_urls: vec![],
+            telemetry: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn a_calendar_that_does_not_exist_holds_no_assignments() {
+        let server = crate::integrations::test_http::TestServer::spawn_with_bodies(vec![
+            ("REPORT", "/cal-max/", 207, ONE_ASSIGNMENT_REPORT),
+            ("REPORT", "/cal-missing/", 404, ""),
+        ])
+        .await;
+
+        let workers = fetch_worker_events(
+            &calendar_store(&server.base_url),
+            &calendar_session(&server.base_url),
+            day(),
+        )
+        .await
+        .expect("a missing calendar should not fail the day");
+
+        assert_eq!(workers.len(), 1);
+        assert_eq!(workers[0].employee_reference, MAX);
+        assert_eq!(workers[0].events.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn an_unreadable_calendar_still_fails_the_day() {
+        let server = crate::integrations::test_http::TestServer::spawn_with_bodies(vec![
+            ("REPORT", "/cal-max/", 207, ONE_ASSIGNMENT_REPORT),
+            ("REPORT", "/cal-missing/", 503, ""),
+        ])
+        .await;
+
+        let error = fetch_worker_events(
+            &calendar_store(&server.base_url),
+            &calendar_session(&server.base_url),
+            day(),
+        )
+        .await
+        .err()
+        .expect("a calendar that answers with a server error should fail the day");
+
+        assert_eq!(
+            error,
+            "/v1/contacts/3: CalDAV-Server antwortete mit HTTP 503"
         );
     }
 }

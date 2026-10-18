@@ -85,6 +85,7 @@ Cross-device races remain possible and are healed by the duplicate rule.
 ### Failure handling
 
 A failure reading any worker's calendar for the day aborts that day's reconciliation before any Daylite write, because removing a name based on a partial view would be wrong.
+A calendar the server reports as not found (`404`) cannot hold assignments, so it counts as empty instead; otherwise a placeholder or stale calendar URL on a contact the planning grid hides would fail every day.
 Daylite request failures are recorded under a new telemetry operation `DayliteAppointmentSync` and do not affect the command result.
 A failure for one project does not stop the remaining projects of the day, but marks the whole day as failed.
 

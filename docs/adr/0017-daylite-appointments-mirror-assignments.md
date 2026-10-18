@@ -57,6 +57,7 @@ The Daylite search API filters on `keywords`, linked `projects` and `utc_start`,
 - A patch is only sent when one of these attributes differs from the searched appointment; among several appointments for one project the lowest Daylite ID is kept and the others are deleted.
 - A process-wide lock per date serializes reconciliations of the same day, so two quick writes cannot both create an appointment.
 - A day whose calendars cannot all be read is not written to Daylite, because removing a name based on a partial view would be wrong.
+- A calendar the server reports as not found counts as empty, so a placeholder or stale calendar URL on a contact the planning grid hides cannot block every day.
 - A failure for one project does not stop the others but fails the day; every failure is recorded under the telemetry operation `daylite_appointment_sync`.
 - The backend keeps the set of failed days in memory and emits `daylite-appointment-sync-failures` with the sorted ISO dates whenever the set changes.
 - The planning grid shows one German error alert naming the failed days and an `Erneut versuchen` button that calls `retry_daylite_appointment_sync`, which reconciles every failed day through the same per-date locks.

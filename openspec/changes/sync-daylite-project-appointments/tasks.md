@@ -19,6 +19,7 @@
 - [x] 3.1 Write failing tests for the orchestrator with stubbed calendar and Daylite access: a day whose worker calendar fails to load sends no Daylite request and records a telemetry error, a failed create for one project still applies the other projects' actions, and every Daylite failure is recorded under `DayliteAppointmentSync`
 - [x] 3.2 Implement the orchestrator: read the day from every configured primary calendar at the existing concurrency limit, resolve project names through the cached project resolution with the SUMMARY fallback, read worker names from the contact cache, search, plan and apply; verify the tests from 3.1 pass
 - [x] 3.3 Write a failing test that two reconciliations of the same date run one after the other while different dates run concurrently, then implement the per-date lock and verify the test passes
+- [x] 3.4 Write a failing test that a worker calendar answering `404` counts as holding no assignments while a server error still fails the day, then implement it and verify the test passes
 
 ## 4. Trigger from assignment writes
 

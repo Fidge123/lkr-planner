@@ -16,12 +16,24 @@ pub(crate) async fn fetch_calendar_events(
     fetch_events_in_range(session, calendar_url, week_start, week_end).await
 }
 
-pub(crate) async fn fetch_events_in_range(
+pub(super) async fn fetch_events_in_range(
     session: &CaldavSession,
     calendar_url: &str,
     range_start: NaiveDate,
     range_end: NaiveDate,
 ) -> Result<Vec<RawVEvent>, String> {
+    fetch_existing_events_in_range(session, calendar_url, range_start, range_end)
+        .await?
+        .ok_or_else(|| "CalDAV-Server antwortete mit HTTP 404".to_string())
+}
+
+/// `None` when the calendar does not exist.
+pub(crate) async fn fetch_existing_events_in_range(
+    session: &CaldavSession,
+    calendar_url: &str,
+    range_start: NaiveDate,
+    range_end: NaiveDate,
+) -> Result<Option<Vec<RawVEvent>>, String> {
     let start_str = range_start.format("%Y%m%dT000000Z").to_string();
     let end_str = range_end.format("%Y%m%dT000000Z").to_string();
 
@@ -45,6 +57,9 @@ pub(crate) async fn fetch_events_in_range(
     if status == 401 {
         return Err("Authentifizierung fehlgeschlagen. ZEP-Zugangsdaten prüfen.".to_string());
     }
+    if status == 404 {
+        return Ok(None);
+    }
     if !(200..300).contains(&status) {
         return Err(format!("CalDAV-Server antwortete mit HTTP {status}"));
     }
@@ -55,6 +70,7 @@ pub(crate) async fn fetch_events_in_range(
         .map_err(|e| format!("Kalenderantwort konnte nicht gelesen werden: {e}"))?;
 
     parse_caldav_report(session, &xml_text)
+        .map(Some)
         .map_err(|e| format!("Kalenderantwort konnte nicht verarbeitet werden: {e}"))
 }
 
