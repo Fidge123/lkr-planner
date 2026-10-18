@@ -446,14 +446,21 @@ impl DaySources for AppSources {
     }
 }
 
-/// A calendar that does not exist cannot hold assignments, so it counts as empty instead of failing the day.
+/// Reads the planning contacts the grid lists, Monteur and Test alike, so a former contact's leftover calendar cannot fail the day.
+/// A calendar that does not exist cannot hold assignments, so it counts as empty.
 async fn fetch_worker_events(
     store: &LocalStore,
     session: &CaldavSession,
     date: NaiveDate,
 ) -> Result<Vec<WorkerEvents>, String> {
     let next_day = date + chrono::Duration::days(1);
-    let fetches: Vec<_> = employees_to_load(store, None)
+    let planning_contacts: Vec<String> = store
+        .daylite_cache
+        .contacts
+        .iter()
+        .map(|contact| contact.reference.clone())
+        .collect();
+    let fetches: Vec<_> = employees_to_load(store, Some(&planning_contacts))
         .map(|setting| {
             let employee_reference = setting.daylite_contact_reference.clone();
             let calendar_url = setting.zep_primary_calendar.clone().unwrap_or_default();
@@ -1519,11 +1526,17 @@ END:VCALENDAR
 </d:multistatus>"#;
 
     const PLACEHOLDER: &str = "/v1/contacts/3";
+    const FORMER: &str = "/v1/contacts/4";
 
-    fn calendar_store(base_url: &str) -> LocalStore {
+    /// Every listed calendar is configured, but only the planning contacts are in the contact cache.
+    fn calendar_store(
+        base_url: &str,
+        calendars: &[(&str, &str)],
+        planning_contacts: &[&str],
+    ) -> LocalStore {
         LocalStore {
-            employee_settings: [(MAX, "cal-max"), (PLACEHOLDER, "cal-missing")]
-                .into_iter()
+            employee_settings: calendars
+                .iter()
                 .map(
                     |(reference, calendar)| crate::integrations::local_store::EmployeeSetting {
                         daylite_contact_reference: reference.to_string(),
@@ -1532,8 +1545,71 @@ END:VCALENDAR
                     },
                 )
                 .collect(),
+            daylite_cache: crate::integrations::local_store::DayliteCache {
+                last_synced_at: None,
+                contacts: planning_contacts
+                    .iter()
+                    .map(|reference| contact(reference, None, None))
+                    .collect(),
+            },
             ..Default::default()
         }
+    }
+
+    fn max_and_placeholder(base_url: &str) -> LocalStore {
+        calendar_store(
+            base_url,
+            &[(MAX, "cal-max"), (PLACEHOLDER, "cal-missing")],
+            &[MAX, PLACEHOLDER],
+        )
+    }
+
+    #[tokio::test]
+    async fn only_the_planning_contacts_calendars_are_read() {
+        let server = crate::integrations::test_http::TestServer::spawn_with_bodies(vec![
+            ("REPORT", "/cal-max/", 207, ONE_ASSIGNMENT_REPORT),
+            ("REPORT", "/cal-tester/", 207, ONE_ASSIGNMENT_REPORT),
+            ("REPORT", "/cal-former/", 503, ""),
+        ])
+        .await;
+        let store = LocalStore {
+            daylite_cache: crate::integrations::local_store::DayliteCache {
+                last_synced_at: None,
+                contacts: vec![
+                    DayliteContactCacheEntry {
+                        category: Some("Monteur".to_string()),
+                        ..contact(MAX, Some("Max Müller"), None)
+                    },
+                    DayliteContactCacheEntry {
+                        category: Some("Test".to_string()),
+                        ..contact(ANNA, Some("Anna Schmidt"), None)
+                    },
+                ],
+            },
+            ..calendar_store(
+                &server.base_url,
+                &[
+                    (MAX, "cal-max"),
+                    (ANNA, "cal-tester"),
+                    (FORMER, "cal-former"),
+                ],
+                &[],
+            )
+        };
+
+        let workers = fetch_worker_events(&store, &calendar_session(&server.base_url), day())
+            .await
+            .expect("a former contact's calendar should not be read");
+
+        let read: Vec<&str> = workers
+            .iter()
+            .map(|worker| worker.employee_reference.as_str())
+            .collect();
+        assert_eq!(read, [MAX, ANNA]);
+        assert!(server
+            .requests()
+            .iter()
+            .all(|(_, path)| !path.starts_with("/cal-former/")));
     }
 
     fn calendar_session(base_url: &str) -> CaldavSession {
@@ -1559,7 +1635,7 @@ END:VCALENDAR
         .await;
 
         let workers = fetch_worker_events(
-            &calendar_store(&server.base_url),
+            &max_and_placeholder(&server.base_url),
             &calendar_session(&server.base_url),
             day(),
         )
@@ -1580,7 +1656,7 @@ END:VCALENDAR
         .await;
 
         let error = fetch_worker_events(
-            &calendar_store(&server.base_url),
+            &max_and_placeholder(&server.base_url),
             &calendar_session(&server.base_url),
             day(),
         )
