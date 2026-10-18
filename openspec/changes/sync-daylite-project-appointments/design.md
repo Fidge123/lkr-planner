@@ -29,7 +29,7 @@ See proposal.md for the motivation and `specs/daylite-appointment-sync/spec.md` 
 
 ### Reconcile whole days from desired state
 
-After a write, the backend reconciles each touched day: it reads that day from every configured primary calendar, builds the desired appointment per project, searches Daylite for the app-managed appointments on that day, and applies the difference.
+After a write, the backend reconciles each touched day: it reads that day from the primary calendar of every planning contact the grid lists, Monteur and Test alike, builds the desired appointment per project, searches Daylite for the app-managed appointments on that day, and applies the difference.
 Matching is by linked project reference; a desired project without an appointment is created, an appointment without a desired project is deleted, and a pair that differs is patched.
 Among several appointments for one project, the lowest Daylite ID is kept and the rest are deleted.
 
@@ -70,7 +70,7 @@ Alternative considered: `Europe/Berlin` with UTC conversion, which needs a time 
 - `subject`: `<project name> (<names>)`, names deduplicated per worker and sorted alphabetically, ignoring case.
 - Project name: the Daylite project name from the cached project resolution, falling back to the SUMMARY of the first assignment event when resolution fails.
 - Worker name: the contact cache's nickname, then full name, then `Unbenannter Kontakt`, matching the planning grid row label.
-- Times: minimum start and maximum end over the project's assignment events of that day; an assignment event without times counts as the fixed 08:00 to 16:00 window.
+- Times: minimum start and maximum end over the project's assignment events of that day; an assignment event without times counts as the fixed 08:00 to 16:00 window, and one that does not end after it starts runs until midnight, because Daylite rejects an appointment that ends before it starts.
 - Fixed fields on every create and patch: `type: "appointment"`, `status: "confirmed"`, `show_as: "free"`, `invitations: []`, `projects: [{"project": <ref>}]`.
 - `invitations` is always sent as an empty array, because Daylite may otherwise default the requesting user or keep invitees added later.
 
@@ -85,7 +85,8 @@ Cross-device races remain possible and are healed by the duplicate rule.
 ### Failure handling
 
 A failure reading any worker's calendar for the day aborts that day's reconciliation before any Daylite write, because removing a name based on a partial view would be wrong.
-A calendar the server reports as not found (`404`) cannot hold assignments, so it counts as empty instead; otherwise a placeholder or stale calendar URL on a contact the planning grid hides would fail every day.
+A calendar the server reports as not found (`404`) cannot hold assignments, so it counts as empty instead; otherwise a placeholder calendar URL on a Test contact would fail every day.
+A calendar still configured for a contact that is no longer a planning contact is not read at all.
 Daylite request failures are recorded under a new telemetry operation `DayliteAppointmentSync` and do not affect the command result.
 A failure for one project does not stop the remaining projects of the day, but marks the whole day as failed.
 
@@ -96,7 +97,10 @@ A reconciliation that fails adds its date and one that succeeds removes it, so a
 Every change to the set emits the Tauri event `daylite-appointment-sync-failures` carrying the sorted ISO dates.
 The new command `retry_daylite_appointment_sync` reconciles every date in the set through the same per-date locks and resolves once all of them have finished; the event reports what is still failing.
 
-In the frontend, `src/app/hooks/use-appointment-sync-failures.ts` subscribes to the event the same way `use-reload-data-menu.ts` subscribes to the reload event, and exposes the failed dates, a `retry` function and an `isRetrying` flag.
+The registry announces a change while it still holds its lock, so two outcomes finishing together reach the frontend in order.
+A retry reconciles at most two days at once, because Daylite answers a burst of requests with `429`.
+
+In the frontend, `src/app/hooks/use-appointment-sync-failures.ts` subscribes to the event through the Tauri event helper it shares with `use-reload-data-menu.ts`, and exposes the failed dates, a `retry` function and an `isRetrying` flag.
 `src/app/page.tsx` renders a DaisyUI `alert alert-error` above the planning grid with the German message and an `Erneut versuchen` button that is disabled and reads `Wird wiederholt...` while `isRetrying` is set.
 The planning grid subscribes on mount, before any write can run, so no failure event can be missed and no initial query command is needed.
 

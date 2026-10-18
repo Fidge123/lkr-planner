@@ -50,17 +50,17 @@ The Daylite search API filters on `keywords`, linked `projects` and `utc_start`,
 
 - After every successful create, update, move, reorder and delete, the backend reconciles the day the write left and the day it entered in a background task, so the command's result and latency do not change.
 - A failed CalDAV write schedules no reconciliation.
-- A reconciliation reads the day from every configured primary calendar, resolves project names through the cached project resolution with the event summary as fallback, and takes worker names from the contact cache the way the planning grid labels its rows.
-- Each project of the day gets one appointment titled `<project> (<names>)`, with names listed once per worker and sorted ignoring case, from the earliest start to the latest end of the project's assignments; an assignment without times counts as 08:00 to 16:00.
+- A reconciliation reads the day from the primary calendar of every planning contact the grid lists, Monteur and Test alike, resolves project names through the cached project resolution with the event summary as fallback, and takes worker names from the contact cache the way the planning grid labels its rows.
+- Each project of the day gets one appointment titled `<project> (<names>)`, with names listed once per worker and sorted ignoring case, from the earliest start to the latest end of the project's assignments; an assignment without times counts as 08:00 to 16:00, and one that does not end after it starts runs until midnight.
 - App-managed appointments carry the keyword `lkr-planner`; only appointments with that keyword are searched, updated or removed, and updates never send `keywords`, so keywords added in Daylite survive.
 - Every create and patch sends `timezone: "floating"`, local times, `type: "appointment"`, `status: "confirmed"`, `show_as: "free"`, the project as the only linked project, and an empty `invitations` list, because Daylite may otherwise invite the requesting user or keep invitees added later.
 - A patch is only sent when one of these attributes differs from the searched appointment; among several appointments for one project the lowest Daylite ID is kept and the others are deleted.
 - A process-wide lock per date serializes reconciliations of the same day, so two quick writes cannot both create an appointment.
 - A day whose calendars cannot all be read is not written to Daylite, because removing a name based on a partial view would be wrong.
-- A calendar the server reports as not found counts as empty, so a placeholder or stale calendar URL on a contact the planning grid hides cannot block every day.
+- A calendar the server reports as not found counts as empty, so a placeholder calendar URL on a Test contact cannot block every day; a calendar still configured for a former planning contact is not read.
 - A failure for one project does not stop the others but fails the day; every failure is recorded under the telemetry operation `daylite_appointment_sync`.
-- The backend keeps the set of failed days in memory and emits `daylite-appointment-sync-failures` with the sorted ISO dates whenever the set changes.
-- The planning grid shows one German error alert naming the failed days and an `Erneut versuchen` button that calls `retry_daylite_appointment_sync`, which reconciles every failed day through the same per-date locks.
+- The backend keeps the set of failed days in memory and emits `daylite-appointment-sync-failures` with the sorted ISO dates whenever the set changes, while still holding the set's lock so concurrent changes arrive in order.
+- The planning grid shows one German error alert naming the failed days and an `Erneut versuchen` button that calls `retry_daylite_appointment_sync`, which reconciles every failed day through the same per-date locks, at most two days at a time.
 
 ## Consequences
 

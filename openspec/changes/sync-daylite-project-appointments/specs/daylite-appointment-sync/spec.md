@@ -19,7 +19,17 @@ The system SHALL link every appointment it creates to the assignment's Daylite p
 - **AND** the appointment is not linked to the contact of "Max Müller"
 
 ### Requirement: One appointment per planned project day
-The system SHALL keep exactly one app-managed Daylite appointment for each project and day on which at least one worker's primary calendar holds an lkr-planner assignment for that project, and none for project days without such an assignment.
+The system SHALL keep exactly one app-managed Daylite appointment for each project and day on which at least one planning contact's primary calendar holds an lkr-planner assignment for that project, and none for project days without such an assignment.
+Planning contacts are the Daylite contacts the planning grid lists, Monteur and Test contacts alike.
+
+#### Scenario: Test contacts count like Monteur contacts
+- **WHEN** a Test contact is assigned to "Projekt Nord" on 2026-11-02
+- **THEN** the appointment for "Projekt Nord" on 2026-11-02 lists that contact
+
+#### Scenario: Calendar of a former planning contact
+- **GIVEN** a primary calendar is still configured for a contact that is no longer a Monteur or Test contact
+- **WHEN** a project day is synchronized
+- **THEN** that calendar is not read
 
 #### Scenario: First worker assigned to a project on a day
 - **GIVEN** no worker is assigned to project "Projekt Nord" on 2026-11-02
@@ -105,6 +115,10 @@ The system SHALL set an app-managed appointment's start to the earliest start an
 #### Scenario: Times for workers with different slots
 - **WHEN** "Max Müller" is assigned to "Projekt Nord" from 08:00 to 12:00 and "Anna Schmidt" from 12:00 to 16:00 on the same day
 - **THEN** the appointment starts at 08:00 and ends at 16:00
+
+#### Scenario: Event that does not end after it starts
+- **WHEN** "Max Müller" is assigned to "Projekt Nord" from 17:00 without an end time on 2026-11-02
+- **THEN** the appointment starts at 2026-11-02 17:00 and ends at 2026-11-03 00:00
 
 #### Scenario: Slot re-allocation shifts the times
 - **GIVEN** "Max Müller" is assigned to "Projekt Nord" from 08:00 to 16:00 on a day and the appointment covers 08:00 to 16:00
@@ -238,6 +252,11 @@ The system SHALL let the user retry from the alert, re-running the whole-day syn
 - **WHEN** a retry is running
 - **THEN** the button is disabled and reads `Wird wiederholt...`
 - **AND** further clicks do not start a second retry
+
+#### Scenario: Retry after a long outage
+- **GIVEN** the alert lists many days
+- **WHEN** the user clicks `Erneut versuchen`
+- **THEN** at most two days are synchronized at the same time
 
 #### Scenario: Retry reflects the current calendar
 - **GIVEN** the synchronization of 2026-11-02 failed after an assignment for "Projekt Nord" was created

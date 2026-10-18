@@ -20,6 +20,7 @@
 - [x] 3.2 Implement the orchestrator: read the day from every configured primary calendar at the existing concurrency limit, resolve project names through the cached project resolution with the SUMMARY fallback, read worker names from the contact cache, search, plan and apply; verify the tests from 3.1 pass
 - [x] 3.3 Write a failing test that two reconciliations of the same date run one after the other while different dates run concurrently, then implement the per-date lock and verify the test passes
 - [x] 3.4 Write a failing test that a worker calendar answering `404` counts as holding no assignments while a server error still fails the day, then implement it and verify the test passes
+- [x] 3.5 Write failing tests that only the planning contacts' calendars are read, Test contacts like Monteur contacts, and that an event which does not end after it starts runs until midnight; implement both and verify the tests pass
 
 ## 4. Trigger from assignment writes
 
@@ -31,10 +32,11 @@
 - [x] 5.1 Write failing tests for the failed-date registry: a failed reconciliation adds its date, a successful one removes it, a day whose worker calendar could not be read counts as failed, and every change emits `daylite-appointment-sync-failures` with the sorted ISO dates; implement it in `appointment_sync.rs` and verify the tests pass
 - [x] 5.2 Write failing tests for `retry_daylite_appointment_sync`: it reconciles every failed date, keeps only the dates that fail again, resolves after all dates finished, and waits for the per-date lock of a date a write is reconciling; implement the command, register it in `src-tauri/src/lib.rs`, and verify the tests pass
 - [x] 5.3 Start a debug build with `bun tauri dev` so the specta bindings are exported, and verify the only diff in `src/generated/tauri.ts` is the new `retryDayliteAppointmentSync` command
+- [x] 5.4 Write failing tests that a change to the failed days is announced while the registry lock is held and that a retry reconciles at most two days at once; implement both and verify the tests pass
 
 ## 6. Failure alert
 
-- [x] 6.1 Write failing tests in `src/app/hooks/use-appointment-sync-failures.spec.ts`: the hook subscribes to `daylite-appointment-sync-failures`, unsubscribes through the pending promise on unmount, replaces its dates with each event payload, sets `isRetrying` while the retry command runs and ignores a second retry meanwhile; implement the hook and verify `bun test` passes
+- [x] 6.1 Write failing tests for the shared Tauri event subscription in `src/app/tauri-event.spec.ts`: it listens to the named event, passes each payload on and unsubscribes through the pending promise on unmount; implement `use-appointment-sync-failures.ts` on top of it with an `isRetrying` flag that disables the button while the retry command runs, and verify `bun test` passes
 - [x] 6.2 Write failing render tests for the alert: hidden without failed days, the German message with dates formatted `dd.MM.yyyy` in ascending order, the `Erneut versuchen` button, and the disabled `Wird wiederholt...` state while retrying; render it in `src/app/page.tsx` above the planning grid and verify `bun test` passes
 
 ## 7. Documentation and verification
