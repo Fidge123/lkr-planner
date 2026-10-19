@@ -8,7 +8,26 @@ The system SHALL distinguish lkr-planner assignments and custom appointments fro
 #### Scenario: Display lkr-planner assignment
 - **WHEN** a VEVENT has a DESCRIPTION first line matching `daylite:/<path>`
 - **THEN** it is shown on a neutral card carrying a strip in its Daylite project's category color (`hex_colour`)
-- **AND** an edit affordance is shown
+- **AND** an edit affordance is shown in the card's action area
+
+#### Scenario: Assignment cards carry an action area
+- **WHEN** an assignment card is rendered
+- **THEN** its actions sit together in one area of the card as icon-only controls in a fixed order
+- **AND** the card itself is not a control: the only things on it that can be triggered are the actions in that area
+
+#### Scenario: Action area in a column wide enough for it
+- **WHEN** the card's column leaves the title useful room beside the actions
+- **THEN** the action area sits on the right edge of the card
+
+#### Scenario: Action area in a narrow column
+- **WHEN** the column is too narrow for that
+- **THEN** the action area moves under the card's times, on its left edge
+- **AND** the title keeps the full height of the card beside both
+
+#### Scenario: The edit affordance is always available on an assignment
+- **WHEN** an assignment card is rendered, including one whose Daylite project could not be resolved
+- **THEN** the edit action is shown
+- **AND** an assignment stays editable and deletable regardless of whether Daylite could be reached
 
 #### Scenario: Category color is applied verbatim
 - **WHEN** an assignment event is rendered with a category color
@@ -32,13 +51,13 @@ The system SHALL distinguish lkr-planner assignments and custom appointments fro
 #### Scenario: Display custom appointment
 - **WHEN** a VEVENT has a DESCRIPTION first line of exactly `lkr-planner:custom`
 - **THEN** it is shown on a neutral card carrying a strip in the default muted color
-- **AND** an edit affordance is shown
+- **AND** an edit affordance is shown in the card's action area
 
 #### Scenario: Display bare event
 - **WHEN** a VEVENT has no structured Daylite project reference
 - **AND** its DESCRIPTION first line is not `lkr-planner:custom`
 - **THEN** it is shown with neutral/grey styling
-- **AND** no edit affordance is shown (read-only)
+- **AND** no action area and no edit affordance are shown (read-only)
 - **AND** covers legacy manually-created events and employee blockers
 
 #### Scenario: Display event start and end time
@@ -50,6 +69,10 @@ The system SHALL distinguish lkr-planner assignments and custom appointments fro
 #### Scenario: Event card hover feedback
 - **WHEN** the user hovers over any event card
 - **THEN** a visual hover indicator is shown
+
+#### Scenario: Card action hover feedback
+- **WHEN** the user hovers over one of an assignment card's actions
+- **THEN** that action is marked as the thing under the pointer, distinctly from the card's own hover indicator
 
 #### Scenario: Long event titles
 - **WHEN** an event title exceeds the card width
