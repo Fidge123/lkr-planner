@@ -21,7 +21,6 @@ use crate::integrations::telemetry::observe::{
 use crate::integrations::telemetry::recorder::TelemetryRecorder;
 use crate::integrations::telemetry::state::TelemetryState;
 
-/// A worker whose day a write touched; a synchronization only changes this worker's links.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(super) struct WorkerDay {
     pub(super) worker: String,
@@ -48,11 +47,7 @@ fn worker_projects(date: NaiveDate, events: &[RawVEvent]) -> BTreeSet<String> {
         .collect()
 }
 
-/// Only the appointments of the worker's projects and the appointments linked to the worker are touched.
-/// Of several appointments for one project the worker keeps the lowest ID and leaves the others.
-/// An appointment whose only contact is the worker is deleted rather than unlinked.
-/// Nothing is written unless the worker's calendar was read, because a missing view would unlink the worker everywhere.
-/// One failed request does not stop the others, but fails the worker's day.
+/// An unread calendar must not count as empty, or the worker would be unlinked from every appointment.
 async fn reconcile_worker_day(
     worker_day: &WorkerDay,
     events: Result<Vec<RawVEvent>, String>,
@@ -132,18 +127,17 @@ fn sync_failed(
     false
 }
 
-/// Matched by the frontend listener in `use-appointment-sync-failures.ts`.
+/// Must match `appointmentSyncFailuresEvent` in `use-appointment-sync-failures.ts`.
 const APPOINTMENT_SYNC_FAILURES_EVENT: &str = "daylite-appointment-sync-failures";
 
-/// Serializes synchronizations per date, so two quick writes cannot both find no appointment and create one each.
 #[derive(Default)]
 pub(super) struct AppointmentSync {
+    /// Keeps two quick writes from both creating the day's appointment.
     locks: Mutex<HashMap<NaiveDate, Arc<tokio::sync::Mutex<()>>>>,
     failed: Mutex<BTreeSet<WorkerDay>>,
 }
 
 impl AppointmentSync {
-    /// `notify` receives the sorted ISO dates still failing whenever the failed worker days change.
     pub(super) async fn run<Fut, N>(
         &self,
         worker_day: WorkerDay,
@@ -161,7 +155,7 @@ impl AppointmentSync {
         synced
     }
 
-    /// Announces under the lock, so two outcomes finishing together cannot reach the frontend out of order.
+    /// Notifies under the lock, so outcomes finishing together reach the frontend in order.
     fn record_outcome(&self, worker_day: WorkerDay, synced: bool, notify: &impl Fn(Vec<String>)) {
         let mut failed = self
             .failed
@@ -195,7 +189,7 @@ impl AppointmentSync {
         }
     }
 
-    /// Synchronizes every worker day failing when called, one at a time, because Daylite answers a burst of requests with 429.
+    /// One at a time, because Daylite answers a burst of requests with 429.
     pub(super) async fn retry_failed<Fut, N>(
         &self,
         reconcile: impl Fn(WorkerDay) -> Fut,
@@ -225,7 +219,7 @@ pub(super) fn appointment_sync() -> &'static AppointmentSync {
     SYNC.get_or_init(AppointmentSync::default)
 }
 
-/// Runs after the command returned, so Daylite never adds latency to a planner action.
+/// Spawned, so Daylite never adds latency to a planner action.
 pub(super) fn schedule_appointment_sync(app: &tauri::AppHandle, worker_days: Vec<WorkerDay>) {
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
@@ -256,7 +250,6 @@ fn failure_notifier(app: &tauri::AppHandle) -> impl Fn(Vec<String>) + '_ {
     }
 }
 
-/// Reads the configuration afresh, so a settings change applies to the next synchronization.
 async fn reconcile_in_app(app: &tauri::AppHandle, worker_day: WorkerDay) -> bool {
     let recorder = app
         .try_state::<TelemetryState>()
@@ -285,7 +278,6 @@ async fn reconcile_in_app(app: &tauri::AppHandle, worker_day: WorkerDay) -> bool
     reconcile_worker_day(&worker_day, events, &appointments, telemetry).await
 }
 
-/// Records a failure when no configured primary calendar holds the event, since its worker's links then stay unsynchronized.
 pub(super) fn event_worker(
     app: &tauri::AppHandle,
     store: &LocalStore,
@@ -601,7 +593,6 @@ mod tests {
         }
     }
 
-    /// Each recorded error as `<operation> <integration>`.
     fn sync_errors(receiver: &mut tokio::sync::mpsc::Receiver<TelemetryCommand>) -> Vec<String> {
         recorded(receiver)
             .into_iter()

@@ -308,7 +308,7 @@ pub(crate) async fn create_assignment_core(
     Ok(resource_url)
 }
 
-/// Returns the date the event had before the write, `None` when it could not be read.
+/// Returns the event's date before the write, if it could be read.
 pub(crate) async fn update_assignment_core(
     session: &CaldavSession,
     href: &str,
@@ -396,7 +396,7 @@ pub(crate) async fn reorder_assignment_core(
     replan_day_until_settled(session, calendar_url, date, Some(placement)).await
 }
 
-/// Returns the date the event had before the delete, `None` when it could not be read.
+/// Returns the event's date before the delete, if it could be read.
 pub(crate) async fn delete_assignment_core(
     session: &CaldavSession,
     href: &str,
@@ -445,9 +445,8 @@ pub(crate) async fn delete_assignment_core(
     Ok(event_date)
 }
 
-/// A failed target create returns `Err` and leaves the source untouched; a failed
-/// source delete returns `SourceDeleteFailed` for the caller to reconcile.
-/// Alongside the result comes the date the source had, `None` when the source was not removed or its date could not be read.
+/// A failed target create returns `Err` and leaves the source untouched; a failed source delete returns `SourceDeleteFailed` for the caller to reconcile.
+/// Also returns the source's date, if the source was removed and its date could be read.
 pub(crate) async fn move_assignment_core(
     session: &CaldavSession,
     source_href: &str,
@@ -540,7 +539,6 @@ fn targets_absence_calendar(target_url: &str, absence_urls: &[String]) -> bool {
         .any(|absence| lies_in_calendar(target_url, absence))
 }
 
-/// True for the calendar collection itself and every resource beneath it, ignoring trailing slashes.
 /// Both sides are parsed, because hand-typed calendar URLs differ from server hrefs in host case, default ports and path encoding.
 pub(crate) fn lies_in_calendar(target_url: &str, calendar_url: &str) -> bool {
     let normalized = |url: &str| {

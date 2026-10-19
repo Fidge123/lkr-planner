@@ -10,7 +10,7 @@ use super::shared::{
     DayliteTokenState,
 };
 
-/// Marks the appointments this app maintains; appointments without it are never touched.
+/// Appointments without this keyword are never touched.
 pub(crate) const APP_MANAGED_KEYWORD: &str = "lkr-planner";
 const APPOINTMENT_TYPE: &str = "appointment";
 const APPOINTMENT_STATUS: &str = "confirmed";
@@ -20,7 +20,6 @@ const FLOATING_TIMEZONE: &str = "floating";
 const SEARCH_LIMIT: u16 = 250;
 const LOCAL_TIME_FORMAT: &str = "%Y-%m-%dT%H:%M:%S";
 
-/// The attributes the app owns on an appointment it maintains.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct AppointmentFields {
     pub(crate) project_ref: String,
@@ -218,7 +217,7 @@ pub(super) async fn create_appointment_core(
     .await
 }
 
-/// Keywords are left out and contacts are only added, so links made in Daylite or by another device survive.
+/// Arrays replace Daylite's whole list, so keywords are left out and contacts only added.
 pub(super) async fn update_appointment_core(
     client: &DayliteApiClient,
     token_state: DayliteTokenState,
@@ -334,7 +333,6 @@ pub(super) fn cassette_day() -> NaiveDate {
     NaiveDate::parse_from_str(CASSETTE_DAY, "%Y-%m-%d").expect("cassette day should parse")
 }
 
-/// Leaves Daylite as it found it, apart from the trashed appointment.
 #[cfg(test)]
 pub(super) async fn record_appointment_lifecycle(
     client: &DayliteApiClient,

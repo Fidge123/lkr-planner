@@ -157,7 +157,7 @@ pub async fn delete_assignment(
     .await
 }
 
-/// Resolves once every listed day was reconciled; the failures event reports the days still failing.
+/// Returns nothing; the failures event reports the worker days still failing.
 #[tauri::command]
 #[specta::specta]
 pub async fn retry_daylite_appointment_sync(app: tauri::AppHandle) {
@@ -390,7 +390,6 @@ async fn create_assignment_inner(
     Ok(href)
 }
 
-/// Nothing is touched for a worker or date that could not be determined.
 fn worker_days<'a>(
     worker: Option<&str>,
     dates: impl IntoIterator<Item = Option<&'a str>>,
