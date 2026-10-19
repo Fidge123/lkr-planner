@@ -5,7 +5,7 @@
 Assignments are VEVENTs in each worker's primary CalDAV calendar, written by the create, update, move, reorder and delete commands in `src-tauri/src/integrations/calendar/commands.rs`.
 Each VEVENT carries `daylite:<project ref>` in its DESCRIPTION.
 The CalDAV events use floating local times without a time zone.
-Daylite requests go through `DayliteApiClient` with `with_daylite_tokens`, which retries once after a `401`; the planning contacts are cached in the local store.
+Daylite requests go through `DayliteApiClient` with `with_daylite_tokens`, which retries once after a `401`.
 The Daylite API offers `POST /v1/appointments`, `PATCH /v1/appointments/{id}`, `DELETE /v1/appointments/{id}` (moves to trash) and `POST /v1/appointments/_search` with filters on `keywords`, `projects` and `utc_start`.
 On a patch, a list field sent as an array replaces the whole list, while `{"add": [...], "remove": [...]}` changes only the given entries.
 See proposal.md for the motivation and `specs/daylite-appointment-sync/spec.md` for the required behavior.
@@ -32,7 +32,7 @@ See proposal.md for the motivation and `specs/daylite-appointment-sync/spec.md` 
 
 After a write, the backend synchronizes each touched worker day: it reads that day from the edited worker's primary calendar, searches Daylite for the app-managed appointments on that day, and changes only that worker's links.
 The worker's contact is linked to the appointment of every project the worker holds that day, creating the appointment when the project has none, and unlinked from every appointment of a project the worker no longer holds.
-An appointment whose last planning contact is the worker is deleted instead of unlinked.
+An appointment whose only linked contact is the worker is deleted instead of unlinked, so an appointment to which a contact was linked in Daylite stays.
 Among several appointments for one project, the lowest Daylite ID is kept, takes over the other appointments' contacts, and the others are deleted once that update succeeded.
 
 Alternatives considered:
@@ -95,7 +95,7 @@ A failure for one appointment does not stop the worker's remaining appointments,
 The backend keeps a process-wide set of failed worker days next to the per-date locks.
 A synchronization that fails adds its worker day and one that succeeds removes it, so a later write that heals a worker day also clears it.
 Every change to the set emits the Tauri event `daylite-appointment-sync-failures` carrying the sorted ISO dates of the failed worker days, while the registry still holds its lock, so two outcomes finishing together reach the frontend in order.
-The command `retry_daylite_appointment_sync` synchronizes every failed worker day through the same per-date locks, at most two at once because Daylite answers a burst of requests with `429`, and resolves once all of them have finished; the event reports what is still failing.
+The command `retry_daylite_appointment_sync` synchronizes every failed worker day through the same per-date locks, one at a time because Daylite answers a burst of requests with `429`, and resolves once all of them have finished; the event reports what is still failing.
 
 In the frontend, `src/app/hooks/use-appointment-sync-failures.ts` subscribes to the event through the Tauri event helper it shares with `use-reload-data-menu.ts`, and exposes the failed dates, a `retry` function and an `isRetrying` flag.
 `src/app/page.tsx` renders a DaisyUI `alert alert-error` above the planning grid with the German message and an `Erneut versuchen` button that is disabled and reads `Wird wiederholt...` while `isRetrying` is set.
@@ -110,14 +110,15 @@ Alternatives considered:
 ### Module layout
 
 - `src-tauri/src/integrations/daylite/appointments.rs`: the appointment record, the `AppointmentStore` trait, and the search, create, update, unlink and delete requests.
-- `src-tauri/src/integrations/calendar/appointment_sync.rs`: the pure planner turning the worker's projects and the day's appointments into create, update, unlink and delete actions, the orchestrator that reads, plans and applies, the per-date locks and the failed worker day registry that emits the event.
+- `src-tauri/src/integrations/calendar/appointment_sync.rs`: the synchronization that reads the worker's calendar, searches the day's appointments and sends the creates, updates, unlinks and deletes, the per-date locks and the failed worker day registry that emits the event.
 - `src-tauri/src/integrations/calendar/commands.rs`: schedules the synchronization for the touched worker days after each successful write and hosts `retry_daylite_appointment_sync`.
 - `src/app/hooks/use-appointment-sync-failures.ts` and the alert in `src/app/page.tsx`.
 
 ## Risks / Trade-offs
 
 - [Other workers' links are never re-checked] → A link left stale by a failed synchronization or an edit outside the app stays until that worker's day is edited again.
-- [An appointment is deleted when its last linked planning contact leaves] → If another worker's link was missed earlier, that worker's next edit of the day creates the appointment again.
+- [An appointment is deleted when the worker is its only linked contact] → If another worker's link was missed earlier, that worker's next edit of the day creates the appointment again.
+- [Daylite might link the requesting user to every appointment] → No appointment would ever be deleted; the recorded cassette shows whether Daylite does this.
 - [Existing assignments gain links one worker at a time] → An appointment can link only some of the project day's workers until each of them is edited.
 - [Manual edits to an app-managed appointment's subject, times, status, invitees or linked projects are overwritten] → Intended; other fields such as notes, details, extra keywords and extra contacts are left untouched.
 - [Daylite `DELETE` only moves the appointment to the trash] → Trashed appointments are excluded from search by default, so a re-added assignment creates a fresh appointment instead of restoring the trashed one.

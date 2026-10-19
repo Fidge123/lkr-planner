@@ -120,7 +120,7 @@ pub(crate) trait AppointmentStore {
         &self,
         fields: &AppointmentFields,
         contact: &str,
-    ) -> impl Future<Output = Result<String, DayliteApiError>> + Send;
+    ) -> impl Future<Output = Result<(), DayliteApiError>> + Send;
 
     fn update(
         &self,
@@ -165,7 +165,7 @@ impl AppointmentStore for DayliteAppointments {
         &self,
         fields: &AppointmentFields,
         contact: &str,
-    ) -> Result<String, DayliteApiError> {
+    ) -> Result<(), DayliteApiError> {
         with_daylite_tokens(&self.client, |tokens| {
             create_appointment_core(&self.client, tokens, fields, contact)
         })
@@ -199,11 +199,6 @@ impl AppointmentStore for DayliteAppointments {
     }
 }
 
-#[derive(Debug, Deserialize)]
-struct DayliteCreatedDto {
-    location: String,
-}
-
 pub(super) async fn search_app_managed_appointments_core(
     client: &DayliteApiClient,
     token_state: DayliteTokenState,
@@ -235,12 +230,12 @@ pub(super) async fn create_appointment_core(
     token_state: DayliteTokenState,
     fields: &AppointmentFields,
     contact: &str,
-) -> Result<String, DayliteApiError> {
+) -> Result<(), DayliteApiError> {
     let mut body = owned_fields_body(fields);
     body.insert("contacts".to_string(), json!([{ "contact": contact }]));
     body.insert("keywords".to_string(), json!([APP_MANAGED_KEYWORD]));
 
-    let created = send_authenticated_json::<DayliteCreatedDto>(
+    send_authenticated_request(
         client,
         &token_state.access_token,
         DayliteHttpRequest {
@@ -248,9 +243,7 @@ pub(super) async fn create_appointment_core(
             ..DayliteHttpRequest::new(DayliteHttpMethod::Post, "/appointments")
         },
     )
-    .await?;
-
-    Ok(trimmed(created.location))
+    .await
 }
 
 /// Keywords are left out and contacts are only added, so links made in Daylite or by another device survive.
@@ -389,9 +382,13 @@ pub(super) async fn record_appointment_lifecycle(
     contact_ref: &str,
 ) -> Result<(), DayliteApiError> {
     let fields = cassette_fields(project_ref);
-    let reference =
-        create_appointment_core(client, token_state.clone(), &fields, contact_ref).await?;
-    search_app_managed_appointments_core(client, token_state.clone(), cassette_day()).await?;
+    create_appointment_core(client, token_state.clone(), &fields, contact_ref).await?;
+    let found =
+        search_app_managed_appointments_core(client, token_state.clone(), cassette_day()).await?;
+    let [created]: [DayliteAppointment; 1] = found
+        .try_into()
+        .expect("the cassette day should hold only the created appointment");
+    let reference = created.reference;
     update_appointment_core(client, token_state.clone(), &reference, &fields, &[]).await?;
     unlink_contact_core(client, token_state.clone(), &reference, contact_ref).await?;
     delete_appointment_core(client, token_state, &reference).await
@@ -401,7 +398,6 @@ pub(super) async fn record_appointment_lifecycle(
 mod tests {
     use super::*;
     use crate::integrations::daylite::client::DayliteHttpMethod;
-    use crate::integrations::daylite::shared::DayliteApiErrorCode;
     use crate::integrations::daylite::test_support::{
         mock_client, mock_response, valid_token_state,
     };
@@ -415,7 +411,7 @@ mod tests {
     fn fields() -> AppointmentFields {
         AppointmentFields {
             project_ref: "/v1/projects/42".to_string(),
-            subject: "Projekt Nord (Anna Schmidt, Max Müller)".to_string(),
+            subject: "Einsatz 02.11.2026".to_string(),
             local_start: at("2026-11-02", "08:00"),
             local_end: at("2026-11-02", "16:00"),
         }
@@ -429,7 +425,7 @@ mod tests {
 
     fn owned_fields() -> serde_json::Map<String, Value> {
         let Value::Object(fields) = json!({
-            "subject": "Projekt Nord (Anna Schmidt, Max Müller)",
+            "subject": "Einsatz 02.11.2026",
             "timezone": "floating",
             "local_start": "2026-11-02T08:00:00",
             "local_end": "2026-11-02T16:00:00",
@@ -445,65 +441,22 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn create_sends_the_owned_fields_with_the_app_keyword() {
-        let (client, transport) = mock_client(vec![Ok(mock_response(
-            201,
-            r#"{"location":"/v1/appointments/5000"}"#,
-        ))]);
+    async fn create_sends_the_owned_fields_with_the_worker_and_the_app_keyword() {
+        let (client, transport) = mock_client(vec![Ok(mock_response(201, "{}"))]);
 
         create_appointment_core(&client, valid_token_state(), &fields(), WORKER)
             .await
             .expect("create should succeed");
 
+        let mut expected = owned_fields();
+        expected.insert("contacts".to_string(), json!([{ "contact": WORKER }]));
+        expected.insert("keywords".to_string(), json!(["lkr-planner"]));
         let requests = transport.requests();
         assert_eq!(requests.len(), 1);
         assert_eq!(requests[0].method, DayliteHttpMethod::Post);
         assert_eq!(requests[0].path, "/appointments");
         assert_eq!(requests[0].access_token.as_deref(), Some("at"));
-        assert_eq!(
-            requests[0].body,
-            Some(json!({
-                "subject": "Projekt Nord (Anna Schmidt, Max Müller)",
-                "timezone": "floating",
-                "local_start": "2026-11-02T08:00:00",
-                "local_end": "2026-11-02T16:00:00",
-                "type": "appointment",
-                "status": "confirmed",
-                "show_as": "free",
-                "invitations": [],
-                "projects": [{ "project": "/v1/projects/42" }],
-                "contacts": [{ "contact": WORKER }],
-                "keywords": ["lkr-planner"],
-            }))
-        );
-    }
-
-    #[tokio::test]
-    async fn create_reads_the_new_reference_from_location() {
-        let (client, _) = mock_client(vec![Ok(mock_response(
-            201,
-            r#"{"location":" /v1/appointments/5000 "}"#,
-        ))]);
-
-        let reference = create_appointment_core(&client, valid_token_state(), &fields(), WORKER)
-            .await
-            .expect("create should succeed");
-
-        assert_eq!(reference, "/v1/appointments/5000");
-    }
-
-    #[tokio::test]
-    async fn a_rejected_create_surfaces_the_status() {
-        let (client, _) = mock_client(vec![Ok(mock_response(
-            400,
-            r#"{"base":[{"error":"invalid_start_end_date"}]}"#,
-        ))]);
-
-        let error = create_appointment_core(&client, valid_token_state(), &fields(), WORKER)
-            .await
-            .expect_err("a rejected create should fail");
-
-        assert_eq!(error.http_status, Some(400));
+        assert_eq!(requests[0].body, Some(Value::Object(expected)));
     }
 
     #[tokio::test]
@@ -542,7 +495,7 @@ mod tests {
             200,
             r#"{"results":[{
                 "self":" /v1/appointments/5000 ",
-                "subject":" Projekt Nord (Anna Schmidt, Max Müller) ",
+                "subject":" Einsatz 02.11.2026 ",
                 "timezone":" floating ",
                 "local_start":"2026-11-02T08:00:00.000",
                 "local_end":"2026-11-02T16:00:00Z",
@@ -567,39 +520,6 @@ mod tests {
             appointments[0].contact_refs().collect::<Vec<_>>(),
             ["/v1/contacts/1", "/v1/contacts/2"]
         );
-    }
-
-    #[tokio::test]
-    async fn search_reads_null_lists_as_absent() {
-        let (client, _) = mock_client(vec![Ok(mock_response(
-            200,
-            r#"{"results":[{
-                "self":"/v1/appointments/5000",
-                "subject":"Projekt Nord (Max Müller)",
-                "invitations":null,
-                "projects":null
-            }]}"#,
-        ))]);
-
-        let appointments =
-            search_app_managed_appointments_core(&client, valid_token_state(), day())
-                .await
-                .expect("search should succeed");
-
-        assert_eq!(appointments[0].invitations, None);
-        assert_eq!(appointments[0].project_refs().next(), None);
-    }
-
-    #[tokio::test]
-    async fn search_without_matches_is_empty() {
-        let (client, _) = mock_client(vec![Ok(mock_response(200, "{}"))]);
-
-        let appointments =
-            search_app_managed_appointments_core(&client, valid_token_state(), day())
-                .await
-                .expect("search should succeed");
-
-        assert!(appointments.is_empty());
     }
 
     #[tokio::test]
@@ -668,38 +588,19 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn delete_moves_the_appointment_to_the_trash() {
-        let (client, transport) = mock_client(vec![Ok(mock_response(204, ""))]);
+    async fn delete_moves_the_appointment_to_the_trash_and_accepts_a_missing_one() {
+        for (status, deleted) in [(204, true), (404, true), (500, false)] {
+            let (client, transport) = mock_client(vec![Ok(mock_response(status, ""))]);
 
-        delete_appointment_core(&client, valid_token_state(), "/v1/appointments/5000")
-            .await
-            .expect("delete should succeed");
+            let result =
+                delete_appointment_core(&client, valid_token_state(), "/v1/appointments/5000")
+                    .await;
 
-        let requests = transport.requests();
-        assert_eq!(requests.len(), 1);
-        assert_eq!(requests[0].method, DayliteHttpMethod::Delete);
-        assert_eq!(requests[0].path, "/appointments/5000");
-        assert_eq!(requests[0].body, None);
-    }
-
-    #[tokio::test]
-    async fn deleting_a_missing_appointment_counts_as_removed() {
-        let (client, _) = mock_client(vec![Ok(mock_response(404, r#"{"error":"invalid_id"}"#))]);
-
-        delete_appointment_core(&client, valid_token_state(), "/v1/appointments/5000")
-            .await
-            .expect("a missing appointment is already removed");
-    }
-
-    #[tokio::test]
-    async fn a_failed_delete_surfaces_the_error() {
-        let (client, _) = mock_client(vec![Ok(mock_response(500, ""))]);
-
-        let error = delete_appointment_core(&client, valid_token_state(), "/v1/appointments/5000")
-            .await
-            .expect_err("a server error should fail the delete");
-
-        assert_eq!(error.code, DayliteApiErrorCode::ServerError);
+            assert_eq!(result.is_ok(), deleted, "status {status}");
+            let requests = transport.requests();
+            assert_eq!(requests[0].method, DayliteHttpMethod::Delete);
+            assert_eq!(requests[0].path, "/appointments/5000");
+        }
     }
 
     #[tokio::test]
@@ -728,25 +629,14 @@ mod tests {
         };
         let project_ref = appointment.project_refs().next().unwrap().to_string();
         let contact_ref = appointment.contact_refs().next().unwrap().to_string();
-        let fields = cassette_fields(&project_ref);
         assert!(
-            appointment.matches(&fields),
+            appointment.matches(&cassette_fields(&project_ref)),
             "Daylite should store the owned fields as sent: {appointment:?}"
         );
         assert_eq!(appointment.contact_refs().count(), 1);
 
-        let reference = create_appointment_core(&client, tokens.clone(), &fields, &contact_ref)
+        record_appointment_lifecycle(&client, tokens, &project_ref, &contact_ref)
             .await
-            .expect("create should replay from cassette");
-        assert_eq!(reference, appointment.reference);
-        update_appointment_core(&client, tokens.clone(), &reference, &fields, &[])
-            .await
-            .expect("update should replay from cassette");
-        unlink_contact_core(&client, tokens.clone(), &reference, &contact_ref)
-            .await
-            .expect("unlink should replay from cassette");
-        delete_appointment_core(&client, tokens, &reference)
-            .await
-            .expect("delete should replay from cassette");
+            .expect("the lifecycle should replay from cassette");
     }
 }

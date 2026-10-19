@@ -384,23 +384,10 @@ async fn create_assignment_inner(
         project_name: input.project_name,
         order_index: None,
     };
-    let result = create_assignment_core(&session, &calendar_url, &write).await;
-    schedule_on_success(
-        result.map(|href| {
-            let worker = Some(input.employee_reference.as_str());
-            (href, worker_days(worker, [Some(write.date.as_str())]))
-        }),
-        |worker_days| schedule_appointment_sync(&app, worker_days),
-    )
-}
-
-fn schedule_on_success<T>(
-    result: Result<(T, Vec<WorkerDay>), String>,
-    schedule: impl FnOnce(Vec<WorkerDay>),
-) -> Result<T, String> {
-    let (value, touched) = result?;
-    schedule(touched);
-    Ok(value)
+    let href = create_assignment_core(&session, &calendar_url, &write).await?;
+    let worker = Some(input.employee_reference.as_str());
+    schedule_appointment_sync(&app, worker_days(worker, [Some(write.date.as_str())]));
+    Ok(href)
 }
 
 /// Nothing is touched for a worker or date that could not be determined.
@@ -507,15 +494,11 @@ async fn update_assignment_inner(
         project_name: input.project_name,
         order_index: input.order_index,
     };
-    let result = update_assignment_core(&session, &input.href, &input.uid, &write).await;
-    schedule_on_success(
-        result.map(|previous_date| {
-            let worker = event_worker(&handle, &store, &session, &input.href);
-            let dates = [Some(write.date.as_str()), previous_date.as_deref()];
-            ((), worker_days(worker.as_deref(), dates))
-        }),
-        |worker_days| schedule_appointment_sync(&handle, worker_days),
-    )
+    let previous_date = update_assignment_core(&session, &input.href, &input.uid, &write).await?;
+    let worker = event_worker(&handle, &store, &session, &input.href);
+    let dates = [Some(write.date.as_str()), previous_date.as_deref()];
+    schedule_appointment_sync(&handle, worker_days(worker.as_deref(), dates));
+    Ok(())
 }
 
 async fn move_assignment_inner(
@@ -546,20 +529,17 @@ async fn move_assignment_inner(
         project_name,
         order_index,
     };
-    let result = move_assignment_core(&session, &href, &target_calendar_url, &write).await;
-    schedule_on_success(
-        result.map(|(moved, source_date)| {
-            let source = event_worker(&handle, &store, &session, &href);
-            let touched = move_worker_days(
-                &target_employee_reference,
-                &write.date,
-                source.as_deref(),
-                source_date.as_deref(),
-            );
-            (moved, touched)
-        }),
-        |worker_days| schedule_appointment_sync(&handle, worker_days),
-    )
+    let (moved, source_date) =
+        move_assignment_core(&session, &href, &target_calendar_url, &write).await?;
+    let source = event_worker(&handle, &store, &session, &href);
+    let touched = move_worker_days(
+        &target_employee_reference,
+        &write.date,
+        source.as_deref(),
+        source_date.as_deref(),
+    );
+    schedule_appointment_sync(&handle, touched);
+    Ok(moved)
 }
 
 async fn reorder_assignment_inner(
@@ -597,17 +577,13 @@ async fn delete_assignment_inner(
     )
     .await?;
 
-    let result = delete_assignment_core(&session, &href).await;
-    schedule_on_success(
-        result.map(|previous_date| {
-            let worker = event_worker(&handle, &store, &session, &href);
-            (
-                (),
-                worker_days(worker.as_deref(), [previous_date.as_deref()]),
-            )
-        }),
-        |worker_days| schedule_appointment_sync(&handle, worker_days),
-    )
+    let previous_date = delete_assignment_core(&session, &href).await?;
+    let worker = event_worker(&handle, &store, &session, &href);
+    schedule_appointment_sync(
+        &handle,
+        worker_days(worker.as_deref(), [previous_date.as_deref()]),
+    );
+    Ok(())
 }
 
 #[cfg(test)]
@@ -684,38 +660,6 @@ mod tests {
             worker: worker.to_string(),
             date: NaiveDate::parse_from_str(date, "%Y-%m-%d").unwrap(),
         }
-    }
-
-    #[test]
-    fn a_failed_write_schedules_no_appointment_sync() {
-        let mut scheduled = Vec::new();
-
-        let result: Result<String, String> = schedule_on_success(
-            Err("Kalenderserver antwortete mit HTTP 500".to_string()),
-            |worker_days| scheduled.push(worker_days),
-        );
-
-        assert_eq!(
-            result,
-            Err("Kalenderserver antwortete mit HTTP 500".to_string())
-        );
-        assert!(scheduled.is_empty());
-    }
-
-    #[test]
-    fn a_successful_write_schedules_its_worker_days_and_keeps_its_result() {
-        let mut scheduled = Vec::new();
-
-        let result = schedule_on_success(
-            Ok((
-                "/cal/uid-1.ics".to_string(),
-                vec![on("/v1/contacts/1", "2026-11-02")],
-            )),
-            |worker_days| scheduled.push(worker_days),
-        );
-
-        assert_eq!(result, Ok("/cal/uid-1.ics".to_string()));
-        assert_eq!(scheduled, [vec![on("/v1/contacts/1", "2026-11-02")]]);
     }
 
     #[test]

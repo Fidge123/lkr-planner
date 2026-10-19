@@ -8,7 +8,7 @@ Mirroring each planned project day as a Daylite appointment linked to the projec
 - Keep one Daylite appointment per project and day on which an edited worker holds an lkr-planner assignment.
 - Create that appointment when the first worker is assigned to the project on that day, linked to the project and to the worker's contact, titled `Einsatz <dd.MM.yyyy>`, from 08:00 to 16:00, with type `appointment`, status `confirmed`, show-as `free` and an empty invitee list.
 - Link each further worker's contact when they are assigned, and unlink it when their last assignment for that project day is deleted, moved away or changed to another project; workers are never invited.
-- Trash the appointment once its last linked planning contact is unlinked.
+- Trash the appointment once its last linked contact is unlinked.
 - After every assignment create, update, move and delete, synchronize only the edited worker's day, as a best-effort follow-up that never fails or rolls back the calendar write.
 - Mark app-managed appointments with a Daylite keyword so the app never touches appointments people created by hand.
 - Show a German error alert above the planning grid naming the days whose synchronization failed, with an `Erneut versuchen` button that re-runs the synchronization for those days.

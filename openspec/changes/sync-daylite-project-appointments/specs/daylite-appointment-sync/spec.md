@@ -16,7 +16,6 @@ The system SHALL link every appointment it creates to the assignment's Daylite p
 
 ### Requirement: One appointment per planned project day
 The system SHALL keep exactly one app-managed Daylite appointment for each project and day on which an edited worker holds an lkr-planner assignment for that project, and SHALL NOT create a second one for a project and day that already has one.
-Planning contacts are the Daylite contacts the planning grid lists, Monteur and Test contacts alike.
 
 #### Scenario: Test contacts count like Monteur contacts
 - **WHEN** a Test contact is assigned to "Projekt Nord" on 2026-11-02
@@ -109,7 +108,7 @@ The system SHALL link the contact of an edited worker, once, to the appointment 
 - **THEN** that contact stays linked
 
 ### Requirement: Removing a worker from a project day
-The system SHALL unlink an edited worker's contact when the worker's last assignment for a project day is deleted, moved away or changed to another project, and SHALL remove the appointment instead when no other planning contact stays linked to it.
+The system SHALL unlink an edited worker's contact when the worker's last assignment for a project day is deleted, moved away or changed to another project, and SHALL remove the appointment instead when no other contact stays linked to it.
 
 #### Scenario: One of two workers removed
 - **GIVEN** "Max Müller" and "Anna Schmidt" are assigned to "Projekt Nord" on a day
@@ -121,10 +120,11 @@ The system SHALL unlink an edited worker's contact when the worker's last assign
 - **WHEN** that assignment is deleted
 - **THEN** the appointment is removed from Daylite
 
-#### Scenario: Only a contact outside the planning list stays
+#### Scenario: A contact linked in Daylite keeps the appointment
 - **GIVEN** the "Projekt Nord" appointment of a day is linked to "Max Müller" and to a contact outside the planning list
 - **WHEN** the assignment of "Max Müller" for that project day is deleted
-- **THEN** the appointment is removed from Daylite
+- **THEN** the contact of "Max Müller" is unlinked
+- **AND** the appointment stays linked to the other contact
 
 #### Scenario: Assignment moved to another day
 - **WHEN** the only assignment for "Projekt Nord" on 2026-11-02 is moved to 2026-11-03
@@ -259,7 +259,7 @@ The system SHALL let the user retry from the alert, re-running the synchronizati
 #### Scenario: Retry after a long outage
 - **GIVEN** the alert lists many days
 - **WHEN** the user clicks `Erneut versuchen`
-- **THEN** at most two worker days are synchronized at the same time
+- **THEN** the worker days are synchronized one at a time
 
 #### Scenario: Retry reflects the current calendar
 - **GIVEN** the synchronization of 2026-11-02 failed after an assignment for "Projekt Nord" was created

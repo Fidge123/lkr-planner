@@ -185,6 +185,10 @@ mod tests {
             "daylite_search_projects"
         );
         assert_eq!(dimension(&Operation::CaldavWrite), "caldav_write");
+        assert_eq!(
+            dimension(&Operation::DayliteAppointmentSync),
+            "daylite_appointment_sync"
+        );
     }
 
     #[test]
@@ -200,14 +204,6 @@ mod tests {
         assert_eq!(
             dimension(&Operation::ResolveWeekProjects),
             "resolve_week_projects"
-        );
-    }
-
-    #[test]
-    fn appointment_sync_has_its_own_operation() {
-        assert_eq!(
-            dimension(&Operation::DayliteAppointmentSync),
-            "daylite_appointment_sync"
         );
     }
 

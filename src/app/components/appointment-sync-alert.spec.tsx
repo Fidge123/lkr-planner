@@ -17,18 +17,12 @@ describe("AppointmentSyncAlert", () => {
     expect(renderAlert([])).toBe("");
   });
 
-  it("names the failed day in German date format", () => {
-    const html = renderAlert(["2026-11-02"]);
+  it("names the failed days in German date format", () => {
+    const html = renderAlert(["2026-11-02", "2026-11-03"]);
 
     expect(html).toContain("alert alert-error");
     expect(html).toContain(
-      "Daylite-Termine für folgende Tage konnten nicht aktualisiert werden: 02.11.2026",
-    );
-  });
-
-  it("lists several failed days in ascending order", () => {
-    expect(renderAlert(["2026-11-03", "2026-11-02"])).toContain(
-      "konnten nicht aktualisiert werden: 02.11.2026, 03.11.2026",
+      "Daylite-Termine für folgende Tage konnten nicht aktualisiert werden: 02.11.2026, 03.11.2026",
     );
   });
 

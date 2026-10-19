@@ -5,7 +5,7 @@ export function AppointmentSyncAlert({
 }: Props) {
   if (failedDates.length === 0) return null;
 
-  const days = [...failedDates].sort().map(formatGermanDate).join(", ");
+  const days = failedDates.map(formatGermanDate).join(", ");
   return (
     <section className="alert alert-error m-4">
       <span>

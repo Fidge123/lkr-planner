@@ -43,14 +43,14 @@ On a Daylite update, a list sent as an array replaces the whole list, while `{"a
 - The worker of an updated, moved or deleted event is the employee whose configured primary calendar holds the event, comparing parsed URLs so host case, default ports and path encoding do not matter; an event in no configured calendar is recorded in telemetry and not synchronized.
 - A failed CalDAV write and a reorder schedule no synchronization.
 - A synchronization reads the day from the worker's primary calendar only, links the worker's contact to the appointment of each project the worker holds, creating it when missing, and unlinks the contact from appointments of projects the worker no longer holds.
-- An appointment whose last linked planning contact is the worker is deleted instead of unlinked; of several appointments for one project the lowest Daylite ID takes over the others' contacts and the others are deleted once that update succeeded.
+- An appointment whose only linked contact is the worker is deleted instead of unlinked; of several appointments for one project the lowest Daylite ID takes over the others' contacts and the others are deleted once that update succeeded.
 - Every appointment is titled `Einsatz <dd.MM.yyyy>` and runs from 08:00 to 16:00 as floating times, with `type: "appointment"`, `status: "confirmed"`, `show_as: "free"`, the project as the only linked project and an empty `invitations` list, because Daylite may otherwise invite the requesting user or keep invitees added later.
 - App-managed appointments carry the keyword `lkr-planner`; only appointments with that keyword are searched, updated or removed, and updates never send `keywords`.
 - Contacts are only ever added or removed one worker at a time, so contacts linked in Daylite or by another device stay linked.
 - A process-wide lock per date serializes synchronizations of the same day, so two quick writes cannot both create an appointment.
 - A worker day whose calendar cannot be read is not written to Daylite; a failure for one appointment does not stop the others but fails the worker day; every failure is recorded under the telemetry operation `daylite_appointment_sync`.
 - The backend keeps the failed worker days in memory and, while holding the set's lock, emits `daylite-appointment-sync-failures` with their sorted ISO dates whenever the set changes.
-- The planning grid shows one German error alert naming the failed days and an `Erneut versuchen` button that calls `retry_daylite_appointment_sync`, which synchronizes every failed worker day through the same per-date locks, at most two at a time.
+- The planning grid shows one German error alert naming the failed days and an `Erneut versuchen` button that calls `retry_daylite_appointment_sync`, which synchronizes every failed worker day through the same per-date locks, one at a time.
 
 ## Consequences
 
@@ -58,6 +58,7 @@ On a Daylite update, a list sent as an array replaces the whole list, while `{"a
 - Links of workers who are not edited stay as they were, including links left stale by a failed synchronization or a calendar edit outside the app.
 - Calendar entries the app did not write gain a link the first time a write touches their worker's day; worker days no write touches are never backfilled.
 - Manual edits to an app-managed appointment's title, times, status, type, invitees or linked projects are overwritten on the next synchronization of a worker on it; notes, details, extra keywords and extra contacts are kept.
+- An appointment that still links a contact added in Daylite stays after its last worker is unlinked.
 - Deleted appointments go to the Daylite trash, which search excludes, so a re-added assignment creates a fresh appointment.
 - Failed worker days are lost on restart and heal on the next write that touches them; telemetry still holds the failure.
 - Concurrent writes from two devices can still create duplicates, which the next synchronization of a worker on that project day merges.

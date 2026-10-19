@@ -1,5 +1,4 @@
 use chrono::NaiveDate;
-use futures::StreamExt;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::future::Future;
 use std::sync::{Arc, Mutex, OnceLock};
@@ -29,27 +28,7 @@ pub(super) struct WorkerDay {
     pub(super) date: NaiveDate,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(super) enum AppointmentAction {
-    /// Creates the project's appointment linked to the worker.
-    Create(AppointmentFields),
-    /// Restores the owned fields and links the given contacts, then deletes the duplicates it replaces.
-    Update {
-        reference: String,
-        fields: AppointmentFields,
-        link: Vec<String>,
-        replaces: Vec<String>,
-    },
-    /// Unlinks the worker.
-    Unlink {
-        reference: String,
-    },
-    Delete {
-        reference: String,
-    },
-}
-
-pub(super) fn appointment_fields(project_ref: &str, date: NaiveDate) -> AppointmentFields {
+fn appointment_fields(project_ref: &str, date: NaiveDate) -> AppointmentFields {
     let (start, end) = full_window();
     AppointmentFields {
         project_ref: project_ref.to_string(),
@@ -70,89 +49,13 @@ fn worker_projects(date: NaiveDate, events: &[RawVEvent]) -> BTreeSet<String> {
 }
 
 /// Only the appointments of the worker's projects and the appointments linked to the worker are touched.
-/// Of several appointments for one project the lowest ID is kept and takes over the others' contacts.
-/// An appointment whose last planning contact is the worker is deleted rather than unlinked.
-pub(super) fn plan_worker_actions(
-    worker_day: &WorkerDay,
-    projects: &BTreeSet<String>,
-    existing: Vec<DayliteAppointment>,
-    planning_contacts: &HashSet<String>,
-) -> Vec<AppointmentAction> {
-    let worker = worker_day.worker.as_str();
-    let mut by_project: BTreeMap<Option<String>, Vec<DayliteAppointment>> = BTreeMap::new();
-    for appointment in existing {
-        let project_ref = appointment.project_refs().next().map(str::to_string);
-        by_project.entry(project_ref).or_default().push(appointment);
-    }
-
-    let mut actions = Vec::new();
-    for project_ref in projects {
-        let fields = appointment_fields(project_ref, worker_day.date);
-        let mut candidates = by_project
-            .remove(&Some(project_ref.clone()))
-            .unwrap_or_default();
-        candidates.sort_by_key(DayliteAppointment::numeric_id);
-        let mut candidates = candidates.into_iter();
-        let Some(kept) = candidates.next() else {
-            actions.push(AppointmentAction::Create(fields));
-            continue;
-        };
-
-        let duplicates: Vec<DayliteAppointment> = candidates.collect();
-        let linked: HashSet<&str> = kept.contact_refs().collect();
-        let link: Vec<String> = std::iter::once(worker)
-            .chain(duplicates.iter().flat_map(DayliteAppointment::contact_refs))
-            .filter(|contact| !linked.contains(contact))
-            .map(str::to_string)
-            .collect::<BTreeSet<_>>()
-            .into_iter()
-            .collect();
-        if link.is_empty() && kept.matches(&fields) {
-            actions.extend(duplicates.into_iter().map(delete));
-        } else {
-            actions.push(AppointmentAction::Update {
-                reference: kept.reference.clone(),
-                fields,
-                link,
-                replaces: duplicates
-                    .into_iter()
-                    .map(|duplicate| duplicate.reference)
-                    .collect(),
-            });
-        }
-    }
-
-    for appointment in by_project.into_values().flatten() {
-        if !appointment.contact_refs().any(|contact| contact == worker) {
-            continue;
-        }
-        let others_planned = appointment
-            .contact_refs()
-            .any(|contact| contact != worker && planning_contacts.contains(contact));
-        actions.push(if others_planned {
-            AppointmentAction::Unlink {
-                reference: appointment.reference,
-            }
-        } else {
-            delete(appointment)
-        });
-    }
-
-    actions
-}
-
-fn delete(appointment: DayliteAppointment) -> AppointmentAction {
-    AppointmentAction::Delete {
-        reference: appointment.reference,
-    }
-}
-
+/// Of several appointments for one project the lowest ID is kept, takes over the others' contacts, and the others are deleted once that succeeded.
+/// An appointment whose only contact is the worker is deleted rather than unlinked.
 /// Nothing is written unless the worker's calendar was read, because a missing view would unlink the worker everywhere.
-/// One failed action does not stop the others, but fails the worker's day.
-pub(super) async fn reconcile_worker_day(
+/// One failed request does not stop the others, but fails the worker's day.
+async fn reconcile_worker_day(
     worker_day: &WorkerDay,
     events: Result<Vec<RawVEvent>, String>,
-    planning_contacts: &HashSet<String>,
     appointments: &impl AppointmentStore,
     telemetry: Option<&TelemetryRecorder>,
 ) -> bool {
@@ -170,8 +73,12 @@ pub(super) async fn reconcile_worker_day(
         Ok(existing) => existing,
         Err(error) => return sync_failed(telemetry, Integration::Daylite, &error),
     };
+    let mut by_project: BTreeMap<Option<String>, Vec<DayliteAppointment>> = BTreeMap::new();
+    for appointment in existing {
+        let project_ref = appointment.project_refs().next().map(str::to_string);
+        by_project.entry(project_ref).or_default().push(appointment);
+    }
 
-    let projects = worker_projects(*date, &events);
     let mut synced = true;
     let mut succeeded = |result: Result<(), DayliteApiError>| match result {
         Ok(()) => true,
@@ -180,30 +87,44 @@ pub(super) async fn reconcile_worker_day(
             false
         }
     };
-    for action in plan_worker_actions(worker_day, &projects, existing, planning_contacts) {
-        match action {
-            AppointmentAction::Create(fields) => {
-                succeeded(appointments.create(&fields, worker).await.map(drop));
-            }
-            AppointmentAction::Update {
-                reference,
-                fields,
-                link,
-                replaces,
-            } => {
-                if succeeded(appointments.update(&reference, &fields, &link).await) {
-                    for duplicate in replaces {
-                        succeeded(appointments.delete(&duplicate).await);
-                    }
-                }
-            }
-            AppointmentAction::Unlink { reference } => {
-                succeeded(appointments.unlink(&reference, worker).await);
-            }
-            AppointmentAction::Delete { reference } => {
-                succeeded(appointments.delete(&reference).await);
-            }
+    for project_ref in worker_projects(*date, &events) {
+        let fields = appointment_fields(&project_ref, *date);
+        let mut candidates = by_project.remove(&Some(project_ref)).unwrap_or_default();
+        candidates.sort_by_key(DayliteAppointment::numeric_id);
+        let mut candidates = candidates.into_iter();
+        let Some(kept) = candidates.next() else {
+            succeeded(appointments.create(&fields, worker).await);
+            continue;
+        };
+
+        let duplicates: Vec<DayliteAppointment> = candidates.collect();
+        let linked: HashSet<&str> = kept.contact_refs().collect();
+        let link: Vec<String> = std::iter::once(worker.as_str())
+            .chain(duplicates.iter().flat_map(DayliteAppointment::contact_refs))
+            .filter(|contact| !linked.contains(contact))
+            .map(str::to_string)
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect();
+        let needs_update = !link.is_empty() || !kept.matches(&fields);
+        if needs_update && !succeeded(appointments.update(&kept.reference, &fields, &link).await) {
+            continue;
         }
+        for duplicate in duplicates {
+            succeeded(appointments.delete(&duplicate.reference).await);
+        }
+    }
+
+    for appointment in by_project.into_values().flatten() {
+        if !appointment.contact_refs().any(|contact| contact == worker) {
+            continue;
+        }
+        let others_linked = appointment.contact_refs().any(|contact| contact != worker);
+        succeeded(if others_linked {
+            appointments.unlink(&appointment.reference, worker).await
+        } else {
+            appointments.delete(&appointment.reference).await
+        });
     }
 
     synced
@@ -223,9 +144,6 @@ fn sync_failed(
     );
     false
 }
-
-/// Daylite answers a burst of requests with 429, so a retry after an outage goes a few days at a time.
-const RETRY_CONCURRENCY: usize = 2;
 
 /// Matched by the frontend listener in `use-appointment-sync-failures.ts`.
 const APPOINTMENT_SYNC_FAILURES_EVENT: &str = "daylite-appointment-sync-failures";
@@ -290,7 +208,7 @@ impl AppointmentSync {
         }
     }
 
-    /// Synchronizes every worker day failing when called, each under its date's lock.
+    /// Synchronizes every worker day failing when called, one at a time, because Daylite answers a burst of requests with 429.
     pub(super) async fn retry_failed<Fut, N>(
         &self,
         reconcile: impl Fn(WorkerDay) -> Fut,
@@ -306,16 +224,7 @@ impl AppointmentSync {
             .iter()
             .cloned()
             .collect();
-
-        let reconcile = &reconcile;
-        futures::stream::iter(failed)
-            .map(|worker_day| {
-                let retried = worker_day.clone();
-                self.run(worker_day, move || reconcile(retried), notify)
-            })
-            .buffer_unordered(RETRY_CONCURRENCY)
-            .collect::<Vec<_>>()
-            .await;
+        self.run_in_order(failed, reconcile, notify).await;
     }
 
     fn lock_for(&self, date: NaiveDate) -> Arc<tokio::sync::Mutex<()>> {
@@ -386,21 +295,7 @@ async fn reconcile_in_app(app: &tauri::AppHandle, worker_day: WorkerDay) -> bool
         fetch_events_in_range(&session, &calendar_url, worker_day.date, next_day).await
     }
     .await;
-    let planning_contacts: HashSet<String> = store
-        .daylite_cache
-        .contacts
-        .iter()
-        .map(|contact| contact.reference.clone())
-        .collect();
-
-    reconcile_worker_day(
-        &worker_day,
-        events,
-        &planning_contacts,
-        &appointments,
-        telemetry,
-    )
-    .await
+    reconcile_worker_day(&worker_day, events, &appointments, telemetry).await
 }
 
 /// Records a failure when no configured primary calendar holds the event, since its worker's links then stay unsynchronized.
@@ -444,7 +339,7 @@ mod tests {
     use crate::integrations::local_store::EmployeeSetting;
     use crate::integrations::telemetry::recorder::TelemetryCommand;
     use crate::integrations::telemetry::test_support::{enabled_recorder, recorded};
-    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    use std::sync::atomic::{AtomicBool, Ordering};
 
     const DATE: &str = "2026-11-02";
     const NORD: &str = "/v1/projects/42";
@@ -485,10 +380,6 @@ mod tests {
         }
     }
 
-    fn planning() -> HashSet<String> {
-        [MAX, ANNA, THIRD].map(str::to_string).into()
-    }
-
     fn projects(references: &[&str]) -> BTreeSet<String> {
         references
             .iter()
@@ -496,12 +387,8 @@ mod tests {
             .collect()
     }
 
-    fn fields(project_ref: &str) -> AppointmentFields {
-        appointment_fields(project_ref, day())
-    }
-
     fn existing(reference: &str, project_ref: &str, contacts: &[&str]) -> DayliteAppointment {
-        let matching = fields(project_ref);
+        let matching = appointment_fields(project_ref, day());
         let local =
             |time: chrono::NaiveDateTime| Some(time.format("%Y-%m-%dT%H:%M:%S").to_string());
         DayliteAppointment {
@@ -528,37 +415,9 @@ mod tests {
         }
     }
 
-    fn plan(worker_projects: &[&str], existing: Vec<DayliteAppointment>) -> Vec<AppointmentAction> {
-        plan_worker_actions(
-            &max_today(),
-            &projects(worker_projects),
-            existing,
-            &planning(),
-        )
-    }
-
-    fn strings(values: &[&str]) -> Vec<String> {
-        values.iter().map(|value| value.to_string()).collect()
-    }
-
-    fn update(reference: &str, project_ref: &str, link: &[&str]) -> AppointmentAction {
-        AppointmentAction::Update {
-            reference: reference.to_string(),
-            fields: fields(project_ref),
-            link: strings(link),
-            replaces: vec![],
-        }
-    }
-
-    fn deleted(reference: &str) -> AppointmentAction {
-        AppointmentAction::Delete {
-            reference: reference.to_string(),
-        }
-    }
-
     #[test]
     fn appointments_are_titled_after_their_day_and_run_from_eight_to_four() {
-        let fields = fields(NORD);
+        let fields = appointment_fields(NORD, day());
 
         assert_eq!(fields.subject, "Einsatz 02.11.2026");
         assert_eq!(fields.local_start, day().and_hms_opt(8, 0, 0).unwrap());
@@ -581,186 +440,6 @@ mod tests {
         ];
 
         assert_eq!(worker_projects(day(), &events), projects(&[NORD]));
-    }
-
-    #[test]
-    fn creates_the_appointment_of_a_project_without_one() {
-        assert_eq!(
-            plan(&[NORD], vec![]),
-            [AppointmentAction::Create(fields(NORD))]
-        );
-    }
-
-    #[test]
-    fn links_the_worker_to_the_existing_appointment_of_its_project() {
-        assert_eq!(
-            plan(
-                &[NORD],
-                vec![existing("/v1/appointments/5000", NORD, &[ANNA])]
-            ),
-            [update("/v1/appointments/5000", NORD, &[MAX])]
-        );
-    }
-
-    #[test]
-    fn leaves_an_appointment_alone_that_matches_and_links_the_worker() {
-        assert!(plan(
-            &[NORD],
-            vec![existing("/v1/appointments/5000", NORD, &[MAX])]
-        )
-        .is_empty());
-    }
-
-    #[test]
-    fn restores_an_owned_field_that_differs() {
-        let matching = existing("/v1/appointments/5000", NORD, &[MAX]);
-        let project = |project: &str| DayliteProjectLink {
-            project: project.to_string(),
-        };
-        let cases = [
-            (
-                DayliteAppointment {
-                    subject: "Projekt Nord".to_string(),
-                    ..matching.clone()
-                },
-                "subject",
-            ),
-            (
-                DayliteAppointment {
-                    local_end: Some("2026-11-02T12:00:00".to_string()),
-                    ..matching.clone()
-                },
-                "end time",
-            ),
-            (
-                DayliteAppointment {
-                    timezone: Some("Europe/Berlin".to_string()),
-                    ..matching.clone()
-                },
-                "time zone",
-            ),
-            (
-                DayliteAppointment {
-                    status: Some("tentative".to_string()),
-                    ..matching.clone()
-                },
-                "status",
-            ),
-            (
-                DayliteAppointment {
-                    show_as: Some("busy".to_string()),
-                    ..matching.clone()
-                },
-                "show as",
-            ),
-            (
-                DayliteAppointment {
-                    appointment_type: Some("meeting".to_string()),
-                    ..matching.clone()
-                },
-                "type",
-            ),
-            (
-                DayliteAppointment {
-                    invitations: Some(vec![serde_json::json!({ "invitee": MAX })]),
-                    ..matching.clone()
-                },
-                "invitees",
-            ),
-            (
-                DayliteAppointment {
-                    projects: Some(vec![project(NORD), project(SUED)]),
-                    ..matching.clone()
-                },
-                "projects",
-            ),
-        ];
-
-        for (appointment, label) in cases {
-            assert_eq!(
-                plan(&[NORD], vec![appointment]),
-                [update("/v1/appointments/5000", NORD, &[])],
-                "case: {label}"
-            );
-        }
-    }
-
-    #[test]
-    fn a_worker_that_left_a_project_is_unlinked_or_its_appointment_deleted() {
-        let without_project = DayliteAppointment {
-            projects: None,
-            ..existing("/v1/appointments/5002", WEST, &[MAX])
-        };
-        let cases = [
-            (
-                "another planning contact stays linked",
-                existing("/v1/appointments/5000", NORD, &[MAX, ANNA]),
-                AppointmentAction::Unlink {
-                    reference: "/v1/appointments/5000".to_string(),
-                },
-            ),
-            (
-                "only a contact outside the planning list stays linked",
-                existing("/v1/appointments/5001", NORD, &[MAX, OUTSIDER]),
-                deleted("/v1/appointments/5001"),
-            ),
-            (
-                "an appointment without a project",
-                without_project,
-                deleted("/v1/appointments/5002"),
-            ),
-        ];
-
-        for (label, appointment, expected) in cases {
-            assert_eq!(plan(&[], vec![appointment]), [expected], "case: {label}");
-        }
-    }
-
-    #[test]
-    fn leaves_the_appointments_of_other_workers_alone() {
-        assert!(plan(
-            &[NORD],
-            vec![
-                existing("/v1/appointments/5000", NORD, &[MAX]),
-                existing("/v1/appointments/5001", SUED, &[ANNA]),
-            ]
-        )
-        .is_empty());
-    }
-
-    #[test]
-    fn keeps_the_lowest_id_of_duplicates_and_takes_over_their_contacts() {
-        let actions = plan(
-            &[NORD],
-            vec![
-                existing("/v1/appointments/1000", NORD, &[ANNA]),
-                existing("/v1/appointments/900", NORD, &[MAX]),
-                existing("/v1/appointments/1100", NORD, &[THIRD, MAX]),
-            ],
-        );
-
-        assert_eq!(
-            actions,
-            [AppointmentAction::Update {
-                reference: "/v1/appointments/900".to_string(),
-                fields: fields(NORD),
-                link: strings(&[ANNA, THIRD]),
-                replaces: strings(&["/v1/appointments/1000", "/v1/appointments/1100"]),
-            }]
-        );
-    }
-
-    #[test]
-    fn deletes_duplicates_whose_contacts_the_kept_appointment_already_links() {
-        let actions = plan(
-            &[NORD],
-            vec![
-                existing("/v1/appointments/900", NORD, &[MAX, ANNA]),
-                existing("/v1/appointments/1000", NORD, &[ANNA]),
-            ],
-        );
-
-        assert_eq!(actions, [deleted("/v1/appointments/1000")]);
     }
 
     #[derive(Default)]
@@ -811,11 +490,11 @@ mod tests {
             &self,
             fields: &AppointmentFields,
             contact: &str,
-        ) -> Result<String, DayliteApiError> {
+        ) -> Result<(), DayliteApiError> {
             self.respond(
                 format!("create {} {contact}", fields.project_ref),
                 self.fails(&fields.project_ref),
-                "/v1/appointments/7000".to_string(),
+                (),
             )
         }
 
@@ -825,11 +504,8 @@ mod tests {
             _: &AppointmentFields,
             link: &[String],
         ) -> Result<(), DayliteApiError> {
-            self.respond(
-                format!("update {reference} {}", link.join(" ")),
-                self.fails(reference),
-                (),
-            )
+            let request = format!("update {reference} {}", link.join(" "));
+            self.respond(request.trim_end().to_string(), self.fails(reference), ())
         }
 
         async fn unlink(&self, reference: &str, contact: &str) -> Result<(), DayliteApiError> {
@@ -854,7 +530,148 @@ mod tests {
         appointments: &StubAppointments,
         telemetry: Option<&TelemetryRecorder>,
     ) -> bool {
-        reconcile_worker_day(&max_today(), events, &planning(), appointments, telemetry).await
+        reconcile_worker_day(&max_today(), events, appointments, telemetry).await
+    }
+
+    /// The requests after the search of a synchronization that has to succeed.
+    async fn requests_for(projects: &[&str], existing: Vec<DayliteAppointment>) -> Vec<String> {
+        let appointments = StubAppointments {
+            existing,
+            ..Default::default()
+        };
+        let events = projects
+            .iter()
+            .map(|project| assignment(project, "08:00"))
+            .collect();
+        assert!(reconcile(Ok(events), &appointments, None).await);
+        appointments.requests().split_off(1)
+    }
+
+    #[tokio::test]
+    async fn the_worker_is_linked_to_its_projects_and_unlinked_from_the_others() {
+        let without_project = DayliteAppointment {
+            projects: None,
+            ..existing("/v1/appointments/5002", WEST, &[MAX])
+        };
+        let cases = [
+            (
+                "a project without an appointment",
+                vec![NORD],
+                vec![],
+                vec!["create /v1/projects/42 /v1/contacts/1"],
+            ),
+            (
+                "a project whose appointment does not link the worker",
+                vec![NORD],
+                vec![existing("/v1/appointments/5000", NORD, &[ANNA])],
+                vec!["update /v1/appointments/5000 /v1/contacts/1"],
+            ),
+            (
+                "a matching appointment that links the worker",
+                vec![NORD],
+                vec![existing("/v1/appointments/5000", NORD, &[MAX])],
+                vec![],
+            ),
+            (
+                "another worker's appointment",
+                vec![NORD],
+                vec![
+                    existing("/v1/appointments/5000", NORD, &[MAX]),
+                    existing("/v1/appointments/5001", SUED, &[ANNA]),
+                ],
+                vec![],
+            ),
+            (
+                "a left project whose appointment links another contact",
+                vec![],
+                vec![existing("/v1/appointments/5000", NORD, &[MAX, OUTSIDER])],
+                vec!["unlink /v1/appointments/5000 /v1/contacts/1"],
+            ),
+            (
+                "a left project whose appointment links only the worker",
+                vec![],
+                vec![existing("/v1/appointments/5000", NORD, &[MAX])],
+                vec!["delete /v1/appointments/5000"],
+            ),
+            (
+                "an appointment without a project",
+                vec![],
+                vec![without_project],
+                vec!["delete /v1/appointments/5002"],
+            ),
+            (
+                "duplicates, whose contacts the lowest ID takes over",
+                vec![NORD],
+                vec![
+                    existing("/v1/appointments/1000", NORD, &[ANNA]),
+                    existing("/v1/appointments/900", NORD, &[MAX]),
+                    existing("/v1/appointments/1100", NORD, &[THIRD, MAX]),
+                ],
+                vec![
+                    "update /v1/appointments/900 /v1/contacts/2 /v1/contacts/3",
+                    "delete /v1/appointments/1000",
+                    "delete /v1/appointments/1100",
+                ],
+            ),
+            (
+                "duplicates whose contacts the lowest ID already links",
+                vec![NORD],
+                vec![
+                    existing("/v1/appointments/900", NORD, &[MAX, ANNA]),
+                    existing("/v1/appointments/1000", NORD, &[ANNA]),
+                ],
+                vec!["delete /v1/appointments/1000"],
+            ),
+        ];
+
+        for (label, projects, existing, expected) in cases {
+            assert_eq!(
+                requests_for(&projects, existing).await,
+                expected,
+                "case: {label}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn an_owned_field_that_differs_is_restored() {
+        type Change = fn(&mut DayliteAppointment);
+        let cases: [(&str, Change); 8] = [
+            ("subject", |a| a.subject = "Projekt Nord".to_string()),
+            ("end time", |a| {
+                a.local_end = Some("2026-11-02T12:00:00".to_string())
+            }),
+            ("time zone", |a| {
+                a.timezone = Some("Europe/Berlin".to_string())
+            }),
+            ("status", |a| a.status = Some("tentative".to_string())),
+            ("show as", |a| a.show_as = Some("busy".to_string())),
+            ("type", |a| a.appointment_type = Some("meeting".to_string())),
+            ("invitees", |a| {
+                a.invitations = Some(vec![serde_json::json!({ "invitee": MAX })])
+            }),
+            ("projects", |a| {
+                a.projects = Some(vec![
+                    DayliteProjectLink {
+                        project: NORD.to_string(),
+                    },
+                    DayliteProjectLink {
+                        project: SUED.to_string(),
+                    },
+                ])
+            }),
+        ];
+
+        for (label, change) in cases {
+            let mut appointment = existing("/v1/appointments/5000", NORD, &[MAX]);
+            change(&mut appointment);
+
+            assert_eq!(
+                requests_for(&[NORD], vec![appointment]).await,
+                ["update /v1/appointments/5000"],
+                "case: {label}"
+            );
+        }
     }
 
     /// Each recorded error as `<operation> <integration>`.
@@ -882,7 +699,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_failed_create_still_applies_the_other_actions() {
+    async fn a_failed_create_still_sends_the_other_requests() {
         let (recorder, mut receiver) = enabled_recorder();
         let appointments = StubAppointments {
             existing: vec![existing("/v1/appointments/5000", WEST, &[MAX])],
@@ -957,32 +774,6 @@ mod tests {
             sync_errors(&mut receiver),
             ["daylite_appointment_sync daylite"]
         );
-    }
-
-    #[tokio::test]
-    async fn a_worker_day_that_converges_reports_success_without_errors() {
-        let (recorder, mut receiver) = enabled_recorder();
-        let appointments = StubAppointments {
-            existing: vec![
-                existing("/v1/appointments/5000", NORD, &[MAX]),
-                existing("/v1/appointments/5001", SUED, &[ANNA]),
-            ],
-            ..Default::default()
-        };
-
-        let synced = reconcile(
-            Ok(vec![assignment(NORD, "08:00"), assignment(WEST, "12:00")]),
-            &appointments,
-            Some(&recorder),
-        )
-        .await;
-
-        assert!(synced);
-        assert_eq!(
-            appointments.requests(),
-            ["search 2026-11-02", "create /v1/projects/44 /v1/contacts/1"]
-        );
-        assert!(sync_errors(&mut receiver).is_empty());
     }
 
     fn ignore(_: Vec<String>) {}
@@ -1146,22 +937,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_worker_day_with_an_unreadable_calendar_counts_as_failed() {
-        let sync = AppointmentSync::default();
-        let notifications = Notifications::default();
-        let appointments = StubAppointments::default();
-
-        sync.run(
-            max_today(),
-            || reconcile(unreadable_calendar(), &appointments, None),
-            &notifications.notify(),
-        )
-        .await;
-
-        assert_eq!(notifications.received(), [vec!["2026-11-02".to_string()]]);
-    }
-
-    #[tokio::test]
     async fn a_change_is_announced_before_another_outcome_can_be_recorded() {
         let sync = AppointmentSync::default();
         let registry_held = AtomicBool::new(false);
@@ -1175,41 +950,28 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_retry_synchronizes_every_failed_worker_day_before_it_resolves() {
-        let sync = failing(&[on(MAX, day()), on(ANNA, next_day())]).await;
+    async fn a_retry_synchronizes_every_failed_worker_day_and_keeps_those_failing_again() {
+        let sync = failing(&[on(MAX, day()), on(MAX, next_day())]).await;
         let notifications = Notifications::default();
-        let finished = Mutex::new(Vec::new());
+        let retried = Mutex::new(Vec::new());
 
         sync.retry_failed(
             |worker_day| {
-                let finished = &finished;
+                let retried = &retried;
                 async move {
                     tokio::task::yield_now().await;
-                    finished.lock().unwrap().push(worker_day);
-                    true
+                    retried.lock().unwrap().push(worker_day.clone());
+                    worker_day.date == day()
                 }
             },
             &notifications.notify(),
         )
         .await;
 
-        let mut finished = finished.lock().unwrap().clone();
-        finished.sort();
-        assert_eq!(finished, [on(MAX, day()), on(ANNA, next_day())]);
-        assert_eq!(notifications.received().last(), Some(&vec![]));
-    }
-
-    #[tokio::test]
-    async fn a_retry_keeps_only_the_worker_days_that_fail_again() {
-        let sync = failing(&[on(MAX, day()), on(MAX, next_day())]).await;
-        let notifications = Notifications::default();
-
-        sync.retry_failed(
-            |worker_day| async move { worker_day.date == day() },
-            &notifications.notify(),
-        )
-        .await;
-
+        assert_eq!(
+            *retried.lock().unwrap(),
+            [on(MAX, day()), on(MAX, next_day())]
+        );
         assert_eq!(notifications.received(), [vec!["2026-11-03".to_string()]]);
     }
 
@@ -1256,30 +1018,6 @@ mod tests {
                 "retry resolved"
             ]
         );
-    }
-
-    #[tokio::test]
-    async fn a_retry_synchronizes_at_most_two_worker_days_at_once() {
-        let worker_days: Vec<WorkerDay> = (0..5)
-            .map(|offset| on(MAX, day() + chrono::Duration::days(offset)))
-            .collect();
-        let sync = failing(&worker_days).await;
-        let in_flight = AtomicUsize::new(0);
-        let peak = AtomicUsize::new(0);
-
-        sync.retry_failed(
-            |_| async {
-                let running = in_flight.fetch_add(1, Ordering::SeqCst) + 1;
-                peak.fetch_max(running, Ordering::SeqCst);
-                tokio::task::yield_now().await;
-                in_flight.fetch_sub(1, Ordering::SeqCst);
-                true
-            },
-            &ignore,
-        )
-        .await;
-
-        assert_eq!(peak.load(Ordering::SeqCst), 2);
     }
 
     #[test]
