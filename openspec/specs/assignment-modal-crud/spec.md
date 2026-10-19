@@ -76,17 +76,22 @@ The system SHALL handle unsaved changes properly.
 - **AND** user can save, discard, or cancel
 
 ### Requirement: Grid reload after save
-The system SHALL reload the weekly grid after a successful save or delete.
+The system SHALL refresh only the edited employee's row of the displayed week after a successful save or delete, without the loading spinner.
 
-#### Scenario: Grid reloads after save
+#### Scenario: Row refreshes after save
 - **WHEN** assignment is saved successfully
-- **THEN** weekly grid reloads from backend without full page reload
+- **THEN** the modal closes
+- **AND** the employee's calendar events of the displayed week are fetched again and replace that row without the loading spinner
 - **AND** the new or updated assignment is visible
 
-#### Scenario: Grid reloads after delete
+#### Scenario: Card is removed after delete
 - **WHEN** assignment is deleted successfully
-- **THEN** weekly grid reloads from backend without full page reload
-- **AND** the cell is shown as empty
+- **THEN** the modal closes and the card is removed from the grid immediately
+- **AND** the employee's row is then refreshed without the loading spinner
+
+#### Scenario: Failed row refresh
+- **WHEN** the refresh of the employee's row fails
+- **THEN** the whole displayed week is loaded again
 
 ### Requirement: Project picker
 The system SHALL provide a project picker in the modal for selecting a project.
