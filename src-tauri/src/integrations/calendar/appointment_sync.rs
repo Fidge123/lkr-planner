@@ -1,5 +1,5 @@
 use chrono::NaiveDate;
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::future::Future;
 use std::sync::{Arc, Mutex, OnceLock};
 use tauri::{Emitter, Manager};
@@ -49,7 +49,7 @@ fn worker_projects(date: NaiveDate, events: &[RawVEvent]) -> BTreeSet<String> {
 }
 
 /// Only the appointments of the worker's projects and the appointments linked to the worker are touched.
-/// Of several appointments for one project the lowest ID is kept, takes over the others' contacts, and the others are deleted once that succeeded.
+/// Of several appointments for one project the worker keeps the lowest ID and leaves the others.
 /// An appointment whose only contact is the worker is deleted rather than unlinked.
 /// Nothing is written unless the worker's calendar was read, because a missing view would unlink the worker everywhere.
 /// One failed request does not stop the others, but fails the worker's day.
@@ -87,6 +87,7 @@ async fn reconcile_worker_day(
             false
         }
     };
+    let mut duplicates = Vec::new();
     for project_ref in worker_projects(*date, &events) {
         let fields = appointment_fields(&project_ref, *date);
         let mut candidates = by_project.remove(&Some(project_ref)).unwrap_or_default();
@@ -96,27 +97,13 @@ async fn reconcile_worker_day(
             succeeded(appointments.create(&fields, worker).await);
             continue;
         };
-
-        let duplicates: Vec<DayliteAppointment> = candidates.collect();
-        let linked: HashSet<&str> = kept.contact_refs().collect();
-        let link: Vec<String> = std::iter::once(worker.as_str())
-            .chain(duplicates.iter().flat_map(DayliteAppointment::contact_refs))
-            .filter(|contact| !linked.contains(contact))
-            .map(str::to_string)
-            .collect::<BTreeSet<_>>()
-            .into_iter()
-            .collect();
-        let needs_update = !link.is_empty() || !kept.matches(&fields);
-        if needs_update && !succeeded(appointments.update(&kept.reference, &fields, &link).await) {
-            continue;
-        }
-        for duplicate in duplicates {
-            succeeded(appointments.delete(&duplicate.reference).await);
-        }
+        let link = (!kept.links(worker)).then_some(worker.as_str());
+        succeeded(appointments.update(&kept.reference, &fields, link).await);
+        duplicates.extend(candidates);
     }
 
-    for appointment in by_project.into_values().flatten() {
-        if !appointment.contact_refs().any(|contact| contact == worker) {
+    for appointment in by_project.into_values().flatten().chain(duplicates) {
+        if !appointment.links(worker) {
             continue;
         }
         let others_linked = appointment.contact_refs().any(|contact| contact != worker);
@@ -388,19 +375,8 @@ mod tests {
     }
 
     fn existing(reference: &str, project_ref: &str, contacts: &[&str]) -> DayliteAppointment {
-        let matching = appointment_fields(project_ref, day());
-        let local =
-            |time: chrono::NaiveDateTime| Some(time.format("%Y-%m-%dT%H:%M:%S").to_string());
         DayliteAppointment {
             reference: reference.to_string(),
-            subject: matching.subject,
-            timezone: Some("floating".to_string()),
-            local_start: local(matching.local_start),
-            local_end: local(matching.local_end),
-            appointment_type: Some("appointment".to_string()),
-            status: Some("confirmed".to_string()),
-            show_as: Some("free".to_string()),
-            invitations: Some(vec![]),
             projects: Some(vec![DayliteProjectLink {
                 project: project_ref.to_string(),
             }]),
@@ -502,9 +478,9 @@ mod tests {
             &self,
             reference: &str,
             _: &AppointmentFields,
-            link: &[String],
+            link: Option<&str>,
         ) -> Result<(), DayliteApiError> {
-            let request = format!("update {reference} {}", link.join(" "));
+            let request = format!("update {reference} {}", link.unwrap_or_default());
             self.respond(request.trim_end().to_string(), self.fails(reference), ())
         }
 
@@ -567,10 +543,10 @@ mod tests {
                 vec!["update /v1/appointments/5000 /v1/contacts/1"],
             ),
             (
-                "a matching appointment that links the worker",
+                "a project whose appointment links the worker",
                 vec![NORD],
                 vec![existing("/v1/appointments/5000", NORD, &[MAX])],
-                vec![],
+                vec!["update /v1/appointments/5000"],
             ),
             (
                 "another worker's appointment",
@@ -579,7 +555,7 @@ mod tests {
                     existing("/v1/appointments/5000", NORD, &[MAX]),
                     existing("/v1/appointments/5001", SUED, &[ANNA]),
                 ],
-                vec![],
+                vec!["update /v1/appointments/5000"],
             ),
             (
                 "a left project whose appointment links another contact",
@@ -600,27 +576,19 @@ mod tests {
                 vec!["delete /v1/appointments/5002"],
             ),
             (
-                "duplicates, whose contacts the lowest ID takes over",
+                "duplicates, of which the worker keeps only the lowest ID",
                 vec![NORD],
                 vec![
                     existing("/v1/appointments/1000", NORD, &[ANNA]),
-                    existing("/v1/appointments/900", NORD, &[MAX]),
-                    existing("/v1/appointments/1100", NORD, &[THIRD, MAX]),
+                    existing("/v1/appointments/900", NORD, &[THIRD]),
+                    existing("/v1/appointments/1100", NORD, &[OUTSIDER, MAX]),
+                    existing("/v1/appointments/1200", NORD, &[MAX]),
                 ],
                 vec![
-                    "update /v1/appointments/900 /v1/contacts/2 /v1/contacts/3",
-                    "delete /v1/appointments/1000",
-                    "delete /v1/appointments/1100",
+                    "update /v1/appointments/900 /v1/contacts/1",
+                    "unlink /v1/appointments/1100 /v1/contacts/1",
+                    "delete /v1/appointments/1200",
                 ],
-            ),
-            (
-                "duplicates whose contacts the lowest ID already links",
-                vec![NORD],
-                vec![
-                    existing("/v1/appointments/900", NORD, &[MAX, ANNA]),
-                    existing("/v1/appointments/1000", NORD, &[ANNA]),
-                ],
-                vec!["delete /v1/appointments/1000"],
             ),
         ];
 
@@ -628,47 +596,6 @@ mod tests {
             assert_eq!(
                 requests_for(&projects, existing).await,
                 expected,
-                "case: {label}"
-            );
-        }
-    }
-
-    #[tokio::test]
-    async fn an_owned_field_that_differs_is_restored() {
-        type Change = fn(&mut DayliteAppointment);
-        let cases: [(&str, Change); 8] = [
-            ("subject", |a| a.subject = "Projekt Nord".to_string()),
-            ("end time", |a| {
-                a.local_end = Some("2026-11-02T12:00:00".to_string())
-            }),
-            ("time zone", |a| {
-                a.timezone = Some("Europe/Berlin".to_string())
-            }),
-            ("status", |a| a.status = Some("tentative".to_string())),
-            ("show as", |a| a.show_as = Some("busy".to_string())),
-            ("type", |a| a.appointment_type = Some("meeting".to_string())),
-            ("invitees", |a| {
-                a.invitations = Some(vec![serde_json::json!({ "invitee": MAX })])
-            }),
-            ("projects", |a| {
-                a.projects = Some(vec![
-                    DayliteProjectLink {
-                        project: NORD.to_string(),
-                    },
-                    DayliteProjectLink {
-                        project: SUED.to_string(),
-                    },
-                ])
-            }),
-        ];
-
-        for (label, change) in cases {
-            let mut appointment = existing("/v1/appointments/5000", NORD, &[MAX]);
-            change(&mut appointment);
-
-            assert_eq!(
-                requests_for(&[NORD], vec![appointment]).await,
-                ["update /v1/appointments/5000"],
                 "case: {label}"
             );
         }
@@ -727,29 +654,6 @@ mod tests {
         assert_eq!(
             sync_errors(&mut receiver),
             ["daylite_appointment_sync daylite"]
-        );
-    }
-
-    #[tokio::test]
-    async fn duplicates_survive_a_failed_takeover_of_their_contacts() {
-        let appointments = StubAppointments {
-            existing: vec![
-                existing("/v1/appointments/900", NORD, &[MAX]),
-                existing("/v1/appointments/1000", NORD, &[ANNA]),
-            ],
-            failing: vec!["/v1/appointments/900".to_string()],
-            ..Default::default()
-        };
-
-        let synced = reconcile(Ok(vec![assignment(NORD, "08:00")]), &appointments, None).await;
-
-        assert!(!synced);
-        assert_eq!(
-            appointments.requests(),
-            [
-                "search 2026-11-02",
-                "update /v1/appointments/900 /v1/contacts/2"
-            ]
         );
     }
 

@@ -3,20 +3,20 @@
 ## 1. Daylite appointment API
 
 - [x] 1.1 Write failing tests in `src-tauri/src/integrations/daylite/appointments.rs` using a mock transport: the create body carries `subject`, `timezone: "floating"`, `local_start`, `local_end`, `type: "appointment"`, `status: "confirmed"`, `show_as: "free"`, `invitations: []`, `projects: [{"project": ...}]`, `contacts: [{"contact": <worker>}]` and `keywords: ["lkr-planner"]`
-- [x] 1.2 Write failing tests that the search posts to `/appointments/_search?full-records=true&limit=250` with the `lkr-planner` keyword and the day's `utc_start` range, and parses `self`, `subject`, local times, `type`, `status`, `show_as`, `invitations`, linked `projects` and linked `contacts`
-- [x] 1.3 Write failing tests that an update sends the fixed fields with `invitations: []`, no `keywords`, and new contacts only through `contacts.add`, that an unlink sends only `contacts.remove` with the worker, and that delete issues `DELETE /appointments/{id}` and treats `404` as already removed
+- [x] 1.2 Write failing tests that the search posts to `/appointments/_search?full-records=true&limit=250` with the `lkr-planner` keyword and the day's `utc_start` range, and parses `self`, linked `projects` and linked `contacts`
+- [x] 1.3 Write failing tests that an update sends the fixed fields with `invitations: []`, no `keywords`, and the worker only through `contacts.add`, that an unlink sends only `contacts.remove` with the worker, and that delete issues `DELETE /appointments/{id}` and treats `404` as already removed
 - [x] 1.4 Implement the appointment record, the `AppointmentStore` trait and the search, create, update, unlink and delete requests with `with_daylite_tokens`, register the module in `daylite/mod.rs`, and verify `cargo test daylite::appointments` passes
 - [x] 1.5 Add the `DayliteAppointmentSync` operation to `telemetry/events.rs` and verify its snake_case serialization test passes
 
 ## 2. Edited-worker requests
 
 - [x] 2.1 Write failing tests in `src-tauri/src/integrations/calendar/appointment_sync.rs` for the appointment fields: the title `Einsatz <dd.MM.yyyy>` and the times 08:00 to 16:00, and for the worker's projects of the day, ignoring bare events and other days
-- [x] 2.2 Write failing tests for the requests a worker day sends to a stubbed Daylite store: create for a project without an appointment, link the worker to an existing appointment, restore a differing fixed field, nothing for a matching linked appointment, unlink the worker from a project it left while another contact stays linked, delete an appointment whose only contact is the worker, leave other workers' appointments alone, and let the lowest-ID duplicate take over the others' contacts
+- [x] 2.2 Write failing tests for the requests a worker day sends to a stubbed Daylite store: create for a project without an appointment, link the worker to an existing appointment, update the fixed fields of every appointment of the worker's projects, unlink the worker from a project it left while another contact stays linked, delete an appointment whose only contact is the worker, leave other workers' appointments alone, and link the worker to the lowest-ID duplicate while unlinking it from the others
 - [x] 2.3 Implement the worker day synchronization satisfying the tests and verify `cargo test calendar::appointment_sync` passes
 
 ## 3. Worker day synchronization
 
-- [x] 3.1 Write failing tests for failures with a stubbed Daylite store: a worker whose calendar fails to load sends no Daylite request and records a telemetry error, a failed create still sends the worker's other requests, duplicates survive a failed takeover of their contacts, and every Daylite failure is recorded under `DayliteAppointmentSync`
+- [x] 3.1 Write failing tests for failures with a stubbed Daylite store: a worker whose calendar fails to load sends no Daylite request and records a telemetry error, a failed create still sends the worker's other requests, and every Daylite failure is recorded under `DayliteAppointmentSync`
 - [x] 3.2 Read the day from the edited worker's primary calendar before searching Daylite, and verify the tests from 3.1 pass
 - [x] 3.3 Write a failing test that two synchronizations of the same date run one after the other while different dates run concurrently, then implement the per-date lock and verify the test passes
 

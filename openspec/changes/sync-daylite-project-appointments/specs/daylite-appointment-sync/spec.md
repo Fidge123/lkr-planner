@@ -15,7 +15,7 @@ The system SHALL link every appointment it creates to the assignment's Daylite p
 - **AND** that appointment is linked to the contact of "Max Müller"
 
 ### Requirement: One appointment per planned project day
-The system SHALL keep exactly one app-managed Daylite appointment for each project and day on which an edited worker holds an lkr-planner assignment for that project, and SHALL NOT create a second one for a project and day that already has one.
+The system SHALL keep one app-managed Daylite appointment for each project and day on which an edited worker holds an lkr-planner assignment for that project, and SHALL NOT create a second one for a project and day that already has one.
 
 #### Scenario: Test contacts count like Monteur contacts
 - **WHEN** a Test contact is assigned to "Projekt Nord" on 2026-11-02
@@ -39,8 +39,8 @@ The system SHALL keep exactly one app-managed Daylite appointment for each proje
 #### Scenario: Duplicate app-managed appointments for one project day
 - **GIVEN** two app-managed Daylite appointments exist for the same project and day
 - **WHEN** a worker assigned to that project day is synchronized
-- **THEN** the appointment with the lowest Daylite ID is kept and linked to the contacts of both appointments
-- **AND** the other is removed once that link succeeded
+- **THEN** the worker is linked to the appointment with the lowest Daylite ID
+- **AND** the worker is unlinked from the other, which is removed once no other contact stays linked to it
 
 ### Requirement: Fixed appointment attributes
 The system SHALL create and update every app-managed appointment with the title `Einsatz <date>`, its day formatted `dd.MM.yyyy`, the floating times 08:00 to 16:00 on that day, type `appointment`, status `confirmed`, show-as `free`, the assignment's project as the only linked project, and the app-managed marker keyword.
@@ -61,10 +61,10 @@ The system SHALL create and update every app-managed appointment with the title 
 - **WHEN** "Max Müller" is assigned to "Projekt Nord" from 12:00 to 16:00 on 2026-11-02
 - **THEN** the appointment for "Projekt Nord" on 2026-11-02 runs from 08:00 to 16:00
 
-#### Scenario: Slot re-allocation leaves the appointment unchanged
+#### Scenario: Slot re-allocation leaves the appointment times unchanged
 - **GIVEN** "Max Müller" is assigned to "Projekt Nord" on 2026-11-02 and its appointment exists
 - **WHEN** a second assignment for "Projekt Süd" is created for "Max Müller" on that day and "Projekt Nord" is re-allocated to 08:00 to 12:00
-- **THEN** the "Projekt Nord" appointment is not updated
+- **THEN** the "Projekt Nord" appointment still runs from 08:00 to 16:00
 - **AND** an appointment for "Projekt Süd" is created from 08:00 to 16:00
 
 #### Scenario: Attributes are restored on update

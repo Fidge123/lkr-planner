@@ -29,26 +29,10 @@ pub(crate) struct AppointmentFields {
     pub(crate) local_end: NaiveDateTime,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub(crate) struct DayliteAppointment {
     #[serde(rename = "self", deserialize_with = "trimmed_string")]
     pub(crate) reference: String,
-    #[serde(default, deserialize_with = "trimmed_string")]
-    pub(crate) subject: String,
-    #[serde(default)]
-    pub(crate) timezone: Option<String>,
-    #[serde(default)]
-    pub(crate) local_start: Option<String>,
-    #[serde(default)]
-    pub(crate) local_end: Option<String>,
-    #[serde(default, rename = "type")]
-    pub(crate) appointment_type: Option<String>,
-    #[serde(default)]
-    pub(crate) status: Option<String>,
-    #[serde(default)]
-    pub(crate) show_as: Option<String>,
-    #[serde(default)]
-    pub(crate) invitations: Option<Vec<Value>>,
     #[serde(default)]
     pub(crate) projects: Option<Vec<DayliteProjectLink>>,
     #[serde(default)]
@@ -93,20 +77,8 @@ impl DayliteAppointment {
             .filter(|reference| !reference.is_empty())
     }
 
-    /// True when patching these fields would change nothing the app owns.
-    pub(crate) fn matches(&self, fields: &AppointmentFields) -> bool {
-        let is = |value: &Option<String>, expected: &str| {
-            value.as_deref().map(str::trim) == Some(expected)
-        };
-        self.subject == fields.subject
-            && is(&self.timezone, FLOATING_TIMEZONE)
-            && parse_local_time(self.local_start.as_deref()) == Some(fields.local_start)
-            && parse_local_time(self.local_end.as_deref()) == Some(fields.local_end)
-            && is(&self.appointment_type, APPOINTMENT_TYPE)
-            && is(&self.status, APPOINTMENT_STATUS)
-            && is(&self.show_as, APPOINTMENT_SHOW_AS)
-            && self.invitations.as_ref().is_none_or(Vec::is_empty)
-            && self.project_refs().eq([fields.project_ref.as_str()])
+    pub(crate) fn links(&self, contact: &str) -> bool {
+        self.contact_refs().any(|linked| linked == contact)
     }
 }
 
@@ -126,7 +98,7 @@ pub(crate) trait AppointmentStore {
         &self,
         reference: &str,
         fields: &AppointmentFields,
-        link: &[String],
+        link: Option<&str>,
     ) -> impl Future<Output = Result<(), DayliteApiError>> + Send;
 
     fn unlink(
@@ -176,7 +148,7 @@ impl AppointmentStore for DayliteAppointments {
         &self,
         reference: &str,
         fields: &AppointmentFields,
-        link: &[String],
+        link: Option<&str>,
     ) -> Result<(), DayliteApiError> {
         with_daylite_tokens(&self.client, |tokens| {
             update_appointment_core(&self.client, tokens, reference, fields, link)
@@ -252,13 +224,13 @@ pub(super) async fn update_appointment_core(
     token_state: DayliteTokenState,
     reference: &str,
     fields: &AppointmentFields,
-    link: &[String],
+    link: Option<&str>,
 ) -> Result<(), DayliteApiError> {
     let mut body = owned_fields_body(fields);
-    if !link.is_empty() {
+    if let Some(contact) = link {
         body.insert(
             "contacts".to_string(),
-            json!({ "add": contact_links(link) }),
+            json!({ "add": [{ "contact": contact }] }),
         );
     }
     patch_appointment(client, token_state, reference, Value::Object(body)).await
@@ -270,7 +242,7 @@ pub(super) async fn unlink_contact_core(
     reference: &str,
     contact: &str,
 ) -> Result<(), DayliteApiError> {
-    let body = json!({ "contacts": { "remove": contact_links(&[contact]) } });
+    let body = json!({ "contacts": { "remove": [{ "contact": contact }] } });
     patch_appointment(client, token_state, reference, body).await
 }
 
@@ -289,13 +261,6 @@ async fn patch_appointment(
         },
     )
     .await
-}
-
-fn contact_links(contacts: &[impl AsRef<str>]) -> Value {
-    contacts
-        .iter()
-        .map(|contact| json!({ "contact": contact.as_ref() }))
-        .collect()
 }
 
 pub(super) async fn delete_appointment_core(
@@ -342,10 +307,6 @@ fn api_path(reference: &str) -> &str {
     reference.strip_prefix("/v1").unwrap_or(reference)
 }
 
-fn parse_local_time(value: Option<&str>) -> Option<NaiveDateTime> {
-    NaiveDateTime::parse_from_str(value?.trim().trim_end_matches('Z'), "%Y-%m-%dT%H:%M:%S%.f").ok()
-}
-
 fn trimmed_string<'de, D: Deserializer<'de>>(deserializer: D) -> Result<String, D::Error> {
     String::deserialize(deserializer).map(trimmed)
 }
@@ -389,7 +350,7 @@ pub(super) async fn record_appointment_lifecycle(
         .try_into()
         .expect("the cassette day should hold only the created appointment");
     let reference = created.reference;
-    update_appointment_core(client, token_state.clone(), &reference, &fields, &[]).await?;
+    update_appointment_core(client, token_state.clone(), &reference, &fields, None).await?;
     unlink_contact_core(client, token_state.clone(), &reference, contact_ref).await?;
     delete_appointment_core(client, token_state, &reference).await
 }
@@ -490,22 +451,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn search_recognizes_padded_owned_fields() {
+    async fn search_reads_padded_references() {
         let (client, _) = mock_client(vec![Ok(mock_response(
             200,
             r#"{"results":[{
                 "self":" /v1/appointments/5000 ",
-                "subject":" Einsatz 02.11.2026 ",
-                "timezone":" floating ",
-                "local_start":"2026-11-02T08:00:00.000",
-                "local_end":"2026-11-02T16:00:00Z",
-                "type":"appointment",
-                "status":"confirmed",
-                "show_as":"free",
-                "invitations":[],
                 "projects":[{"project":" /v1/projects/42 "}],
-                "contacts":[{"contact":" /v1/contacts/1 "},{"contact":"/v1/contacts/2"}],
-                "keywords":["lkr-planner"]
+                "contacts":[{"contact":" /v1/contacts/1 "},{"contact":"/v1/contacts/2"}]
             }]}"#,
         ))]);
 
@@ -515,7 +467,10 @@ mod tests {
                 .expect("search should succeed");
 
         assert_eq!(appointments[0].reference, "/v1/appointments/5000");
-        assert!(appointments[0].matches(&fields()));
+        assert_eq!(
+            appointments[0].project_refs().collect::<Vec<_>>(),
+            ["/v1/projects/42"]
+        );
         assert_eq!(
             appointments[0].contact_refs().collect::<Vec<_>>(),
             ["/v1/contacts/1", "/v1/contacts/2"]
@@ -531,7 +486,7 @@ mod tests {
             valid_token_state(),
             "/v1/appointments/5000",
             &fields(),
-            &[],
+            None,
         )
         .await
         .expect("update should succeed");
@@ -544,7 +499,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn update_adds_contacts_without_replacing_the_linked_ones() {
+    async fn update_adds_the_worker_without_replacing_the_linked_contacts() {
         let (client, transport) = mock_client(vec![Ok(mock_response(204, ""))]);
 
         update_appointment_core(
@@ -552,7 +507,7 @@ mod tests {
             valid_token_state(),
             "/v1/appointments/5000",
             &fields(),
-            &[WORKER.to_string(), "/v1/contacts/2".to_string()],
+            Some(WORKER),
         )
         .await
         .expect("update should succeed");
@@ -560,7 +515,7 @@ mod tests {
         let mut expected = owned_fields();
         expected.insert(
             "contacts".to_string(),
-            json!({ "add": [{ "contact": WORKER }, { "contact": "/v1/contacts/2" }] }),
+            json!({ "add": [{ "contact": WORKER }] }),
         );
         assert_eq!(transport.requests()[0].body, Some(Value::Object(expected)));
     }
@@ -629,11 +584,11 @@ mod tests {
         };
         let project_ref = appointment.project_refs().next().unwrap().to_string();
         let contact_ref = appointment.contact_refs().next().unwrap().to_string();
-        assert!(
-            appointment.matches(&cassette_fields(&project_ref)),
-            "Daylite should store the owned fields as sent: {appointment:?}"
+        assert_eq!(
+            appointment.contact_refs().count(),
+            1,
+            "Daylite should link only the worker, or no appointment would ever be deleted"
         );
-        assert_eq!(appointment.contact_refs().count(), 1);
 
         record_appointment_lifecycle(&client, tokens, &project_ref, &contact_ref)
             .await

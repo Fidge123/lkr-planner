@@ -24,6 +24,18 @@ On a Daylite update, a list sent as an array replaces the whole list, while `{"a
 - Derive the times and title from the assignments
   - Pros: The appointment shows the planned slot and the workers' names at a glance.
   - Cons: Times depend on every worker's slots, so slot re-allocation and every reorder must be synchronized, and the title has to be rewritten on every change.
+- Update the appointment of each of the worker's projects on every synchronization
+  - Pros: No owned field has to be read back and compared, so the search needs only references, projects and contacts.
+  - Cons: One request per project of the worker's day even when nothing changed.
+- Compare the owned fields and update only when one differs
+  - Pros: Saves the request for an unchanged appointment.
+  - Cons: Every owned field has to be parsed and compared, and a format Daylite returns differently makes every comparison fail anyway.
+- Leave duplicates one worker at a time
+  - Pros: A synchronization only ever adds or removes the edited worker, also on duplicates.
+  - Cons: A duplicate stays until each of its workers was edited.
+- Merge duplicates into the lowest Daylite ID in one synchronization
+  - Pros: A duplicate disappears with the first synchronization of any worker on it.
+  - Cons: Needs a takeover of the other workers' contacts and must delete the duplicates only after that update succeeded.
 - Mark app-managed appointments with the keyword `lkr-planner`
   - Pros: Searchable, survives edits in Daylite, and doubles as a visible hint that the app maintains the appointment.
   - Cons: Adds an entry to Daylite's keyword list.
@@ -42,8 +54,8 @@ On a Daylite update, a list sent as an array replaces the whole list, while `{"a
 - After every successful create, update, move and delete, one background task synchronizes the write's touched worker days one after the other: the edited worker on the day the write left and the day it entered, and for a move the target worker first, so the source worker's unlink cannot delete an appointment the target is joining.
 - The worker of an updated, moved or deleted event is the employee whose configured primary calendar holds the event, comparing parsed URLs so host case, default ports and path encoding do not matter; an event in no configured calendar is recorded in telemetry and not synchronized.
 - A failed CalDAV write and a reorder schedule no synchronization.
-- A synchronization reads the day from the worker's primary calendar only, links the worker's contact to the appointment of each project the worker holds, creating it when missing, and unlinks the contact from appointments of projects the worker no longer holds.
-- An appointment whose only linked contact is the worker is deleted instead of unlinked; of several appointments for one project the lowest Daylite ID takes over the others' contacts and the others are deleted once that update succeeded.
+- A synchronization reads the day from the worker's primary calendar only, updates the appointment of each project the worker holds and links the worker's contact to it, creating it when missing, and unlinks the contact from appointments of projects the worker no longer holds.
+- An appointment whose only linked contact is the worker is deleted instead of unlinked; of several appointments for one project the worker is linked to the lowest Daylite ID and leaves the others like appointments of a project it no longer holds.
 - Every appointment is titled `Einsatz <dd.MM.yyyy>` and runs from 08:00 to 16:00 as floating times, with `type: "appointment"`, `status: "confirmed"`, `show_as: "free"`, the project as the only linked project and an empty `invitations` list, because Daylite may otherwise invite the requesting user or keep invitees added later.
 - App-managed appointments carry the keyword `lkr-planner`; only appointments with that keyword are searched, updated or removed, and updates never send `keywords`.
 - Contacts are only ever added or removed one worker at a time, so contacts linked in Daylite or by another device stay linked.
@@ -61,4 +73,5 @@ On a Daylite update, a list sent as an array replaces the whole list, while `{"a
 - An appointment that still links a contact added in Daylite stays after its last worker is unlinked.
 - Deleted appointments go to the Daylite trash, which search excludes, so a re-added assignment creates a fresh appointment.
 - Failed worker days are lost on restart and heal on the next write that touches them; telemetry still holds the failure.
-- Concurrent writes from two devices can still create duplicates, which the next synchronization of a worker on that project day merges.
+- Every synchronization sends one update per project of the worker's day, even when nothing changed.
+- Concurrent writes from two devices can still create duplicates, and a duplicate disappears only once each of its workers was edited.

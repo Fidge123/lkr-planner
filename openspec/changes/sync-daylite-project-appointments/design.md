@@ -33,7 +33,7 @@ See proposal.md for the motivation and `specs/daylite-appointment-sync/spec.md` 
 After a write, the backend synchronizes each touched worker day: it reads that day from the edited worker's primary calendar, searches Daylite for the app-managed appointments on that day, and changes only that worker's links.
 The worker's contact is linked to the appointment of every project the worker holds that day, creating the appointment when the project has none, and unlinked from every appointment of a project the worker no longer holds.
 An appointment whose only linked contact is the worker is deleted instead of unlinked, so an appointment to which a contact was linked in Daylite stays.
-Among several appointments for one project, the lowest Daylite ID is kept, takes over the other appointments' contacts, and the others are deleted once that update succeeded.
+Among several appointments for one project, the worker is linked to the lowest Daylite ID and leaves the others like appointments of a project it no longer holds, so a duplicate disappears once each of its workers was edited.
 
 Alternatives considered:
 
@@ -72,17 +72,18 @@ For floating appointments Daylite reports UTC and local times as equal, so the s
 
 - `subject`: `Einsatz <dd.MM.yyyy>`.
 - Fixed fields on every create and update: `type: "appointment"`, `status: "confirmed"`, `show_as: "free"`, `invitations: []`, `projects: [{"project": <ref>}]`.
-- `contacts`: a create links the edited worker; an update links contacts through `add` and an unlink removes the worker through `remove`, so contacts linked in Daylite or by another device are never resent or dropped.
+- `contacts`: a create links the edited worker; an update links the worker through `add` and an unlink removes the worker through `remove`, so contacts linked in Daylite or by another device are never resent or dropped.
 - `invitations` is always sent as an empty array, because Daylite may otherwise default the requesting user or keep invitees added later.
 
-An update is sent only when a link is missing or one of the fixed fields differs from the searched appointment, which is why the search requests `full-records=true` with an explicit `limit=250`, since full records default to a page size of ten.
+Every synchronization updates the appointment of each project the worker holds without comparing its fields, because these appointments are not synced elsewhere and are rarely edited by hand.
+The search requests `full-records=true` for the linked projects and contacts, with an explicit `limit=250`, since full records default to a page size of ten.
 
 ### Run in the background, serialized per day
 
 The command spawns one task per write with `tauri::async_runtime::spawn` after the CalDAV write returns, so the command result and latency do not change.
 The task synchronizes the write's worker days one after the other in the order the write lists them.
 A process-wide map of per-date `tokio::sync::Mutex` guards serializes synchronizations of the same day, so two quick writes cannot both observe "no appointment" and create duplicates.
-Cross-device races remain possible and are healed by the duplicate rule.
+Cross-device races remain possible and are healed by the duplicate rule as their workers are edited.
 
 ### Failure handling
 
@@ -119,6 +120,8 @@ Alternatives considered:
 - [Other workers' links are never re-checked] → A link left stale by a failed synchronization or an edit outside the app stays until that worker's day is edited again.
 - [An appointment is deleted when the worker is its only linked contact] → If another worker's link was missed earlier, that worker's next edit of the day creates the appointment again.
 - [Daylite might link the requesting user to every appointment] → No appointment would ever be deleted; the recorded cassette shows whether Daylite does this.
+- [Every synchronization updates the appointments of the worker's projects] → One request per project and touched worker day even when nothing changed.
+- [A duplicate stays until each of its workers was edited] → Duplicates only arise when two devices synchronize the same day at once.
 - [Existing assignments gain links one worker at a time] → An appointment can link only some of the project day's workers until each of them is edited.
 - [Manual edits to an app-managed appointment's subject, times, status, invitees or linked projects are overwritten] → Intended; other fields such as notes, details, extra keywords and extra contacts are left untouched.
 - [Daylite `DELETE` only moves the appointment to the trash] → Trashed appointments are excluded from search by default, so a re-added assignment creates a fresh appointment instead of restoring the trashed one.
