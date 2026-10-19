@@ -40,9 +40,9 @@
 ## 7. Documentation and verification
 
 - [x] 7.1 Write `docs/adr/0017-daylite-appointments-mirror-assignments.md` recording the edited-worker synchronization, the linked contacts, the `lkr-planner` keyword marker, the fixed floating times, the empty invitee list, and the failure registry with its event and retry command, including the evaluated options with pros and cons, and verify `bun run test:docs` passes
-- [ ] 7.2 Record a Daylite cassette under `tests/cassettes/` for create, search, update, unlink and delete of an app-managed appointment against a test project and contact, and verify the replay test passes without network access
+- [x] 7.2 Record a Daylite cassette under `tests/cassettes/` for create, search, update, unlink and delete of an app-managed appointment against a test project and contact, and verify the replay test passes without network access
 - [x] 7.3 Run `cargo test` and `cargo clippy` in `src-tauri`, plus `bun test` and `bun run lint`, and verify all pass
-- [ ] 7.4 Manually verify in the running app: assign two workers to one project on a day, check the Daylite appointment's title `Einsatz <date>`, the 08:00 to 16:00 times, its attributes, both linked contacts and the empty invitee list, delete one assignment and then the other, and confirm the first worker is unlinked and the appointment is then removed; then block Daylite access, create an assignment, confirm the alert names the day, restore access, click `Erneut versuchen`, and confirm the alert disappears and the appointment exists
+- [x] 7.4 Manually verify in the running app: assign two workers to one project on a day, check the Daylite appointment's title `Einsatz <date>`, the 08:00 to 16:00 times, its attributes, both linked contacts and the empty invitee list, delete one assignment and then the other, and confirm the first worker is unlinked and the appointment is then removed; then block Daylite access, create an assignment, confirm the alert names the day, restore access, click `Erneut versuchen`, and confirm the alert disappears and the appointment exists
 
 ## Workflow follow-up
 
