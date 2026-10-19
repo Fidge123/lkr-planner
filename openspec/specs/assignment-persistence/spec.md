@@ -27,7 +27,26 @@ The system SHALL distinguish lkr-planner assignments from bare calendar events.
 #### Scenario: Display lkr-planner assignment
 - **WHEN** a VEVENT has a DESCRIPTION first line matching `daylite:/<path>`
 - **THEN** it is shown on a neutral card carrying a strip in its Daylite project's category color (`hex_colour`)
-- **AND** an edit affordance is shown
+- **AND** an edit affordance is shown in the card's action area
+
+#### Scenario: Assignment cards carry an action area
+- **WHEN** an assignment card is rendered
+- **THEN** its actions sit together in one area of the card as icon-only controls in a fixed order
+- **AND** the card itself is not a control: the only things on it that can be triggered are the actions in that area
+
+#### Scenario: Action area in a column wide enough for it
+- **WHEN** the card's column leaves the title useful room beside the actions
+- **THEN** the action area sits on the right edge of the card
+
+#### Scenario: Action area in a narrow column
+- **WHEN** the column is too narrow for that
+- **THEN** the action area moves under the card's times, on its left edge
+- **AND** the title keeps the full height of the card beside both
+
+#### Scenario: The edit affordance is always available on an assignment
+- **WHEN** an assignment card is rendered, including one whose Daylite project could not be resolved
+- **THEN** the edit action is shown
+- **AND** an assignment stays editable and deletable regardless of whether Daylite could be reached
 
 #### Scenario: Category color is applied verbatim
 - **WHEN** an assignment event is rendered with a category color
@@ -51,7 +70,7 @@ The system SHALL distinguish lkr-planner assignments from bare calendar events.
 #### Scenario: Display bare event
 - **WHEN** a VEVENT has no structured Daylite project reference
 - **THEN** it is shown with neutral/grey styling
-- **AND** no edit affordance is shown (read-only)
+- **AND** no action area and no edit affordance are shown (read-only)
 - **AND** covers legacy manually-created events and employee blockers
 
 #### Scenario: Display event start and end time
@@ -64,17 +83,31 @@ The system SHALL distinguish lkr-planner assignments from bare calendar events.
 - **WHEN** the user hovers over any event card
 - **THEN** a visual hover indicator is shown
 
+#### Scenario: Card action hover feedback
+- **WHEN** the user hovers over one of an assignment card's actions
+- **THEN** that action is marked as the thing under the pointer, distinctly from the card's own hover indicator
+
 #### Scenario: Long event titles
 - **WHEN** an event title exceeds the card width
 - **THEN** the title wraps to multiple lines
 - **AND** the card grows vertically to accommodate the text
 
 ### Requirement: Daylite project resolution
-The system SHALL resolve project details for lkr-planner events.
+The system SHALL resolve project details for lkr-planner events in the background after the week's events are displayed.
+
+#### Scenario: Week is displayed before its projects are resolved
+- **WHEN** the events of a week arrive from CalDAV
+- **THEN** they are displayed without waiting for Daylite
+- **AND** an assignment whose project is held in the resolution cache shows the cached name and category, even when the entry is stale
+- **AND** an assignment whose project is not held in the cache shows its event SUMMARY as its title and is marked as pending
+
+#### Scenario: Pending assignment is not shown as unresolved
+- **WHEN** an assignment is marked as pending
+- **THEN** its card shows no warning icon and no German note around its title
 
 #### Scenario: Project resolved from Daylite
-- **WHEN** a VEVENT references a Daylite project that is not held in the resolution cache
-- **THEN** the system queries the Daylite API for the project details including its category
+- **WHEN** a displayed week references a Daylite project that is not held in the resolution cache, or whose cache entry is stale
+- **THEN** the system queries the Daylite API for the project details including its category in the background, without the loading spinner
 - **AND** displays the resolved name and category on success
 
 #### Scenario: Project served from the resolution cache
@@ -84,6 +117,7 @@ The system SHALL resolve project details for lkr-planner events.
 #### Scenario: Project resolution fails
 - **WHEN** a VEVENT references a Daylite project
 - **AND** the query for it does not succeed
+- **AND** no earlier result for it is held in the resolution cache
 - **THEN** the card keeps the event SUMMARY as its title and carries no project status
 - **AND** a red warning icon marks the card
 - **AND** the German note around the title, `"Beschreibung für "` and `" konnte nicht abgerufen werden"`, is shown in italics so the title stays distinguishable
@@ -149,3 +183,33 @@ The system SHALL move an assignment from one employee's CalDAV calendar to anoth
 - **WHEN** creating the VEVENT on the target calendar fails
 - **THEN** the source VEVENT is not deleted
 - **AND** a German error message is returned
+
+### Requirement: Grid reflects own edits without a full reload
+The system SHALL show the result of the user's own edit without reloading the whole week behind the loading spinner.
+
+#### Scenario: Delete removes the card immediately
+- **WHEN** the backend confirms that an assignment was deleted
+- **THEN** its card is removed from the grid immediately
+
+#### Scenario: Only the affected rows are refreshed
+- **WHEN** an assignment is created, edited, deleted, or moved
+- **THEN** the calendar events of only the affected employees are fetched again for the displayed week
+- **AND** their rows are replaced without the loading spinner
+- **AND** the rows of all other employees keep their data
+
+#### Scenario: An older refresh does not undo a newer edit
+- **WHEN** a refresh requested before a later optimistic edit returns
+- **THEN** its result is discarded
+
+### Requirement: Startup loads the displayed week once
+The system SHALL read the local settings before the first week load and reload the week after the startup contact sync only when the sync changed a calendar.
+
+#### Scenario: Contact sync leaves the calendars unchanged
+- **WHEN** the startup contact sync completes
+- **AND** every employee's primary and absence calendar equals the value read before the sync
+- **THEN** the displayed week is not loaded again
+
+#### Scenario: Contact sync changes a calendar
+- **WHEN** the startup contact sync completes
+- **AND** an employee's primary or absence calendar differs from the value read before the sync
+- **THEN** the displayed week is loaded again
