@@ -406,4 +406,7 @@ export interface PlanningGridEmployeesState {
   reloadEmployees: () => void;
 }
 
-export type PlanningGridAssignmentState = PlanningAssignmentsState;
+export type PlanningGridAssignmentState = Omit<
+  PlanningAssignmentsState,
+  "lastLoadedAt" | "refreshAssignments"
+>;

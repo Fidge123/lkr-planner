@@ -18,8 +18,12 @@ The system SHALL fetch the assignments of the displayed week again once 5 minute
 - **THEN** no periodic refresh is started while it stays hidden
 
 #### Scenario: Other loads restart the interval
-- **WHEN** the displayed week is fetched by navigation, by "Daten neu laden", by its "Erneut laden" action or after a write
+- **WHEN** the displayed week is fetched by navigation, by "Daten neu laden" or by its "Erneut laden" action
 - **THEN** the next automatic refresh is due 5 minutes after that fetch completes
+
+#### Scenario: Row refresh after a write
+- **WHEN** the rows of the affected employees are fetched again after a write
+- **THEN** the time of the next automatic refresh is unchanged
 
 #### Scenario: Showing a cached week
 - **WHEN** the user navigates to a week whose assignments were fetched 3 minutes ago and are still cached
@@ -54,7 +58,7 @@ The system SHALL NOT start an automatic refresh while the operating system repor
 - **AND** the refresh starts 5 seconds after the network becomes available
 
 ### Requirement: Automatic refresh discards other cached weeks
-The system SHALL discard every cached week when an automatic refresh starts, so a week shown later is fetched again instead of being shown from data loaded before the refresh.
+The system SHALL discard every cached week other than the displayed one when an automatic refresh starts, and SHALL fetch the displayed week instead of showing it from the cache, so a week shown later is fetched again instead of being shown from data loaded before the refresh.
 
 #### Scenario: Navigating to a previously visited week after a refresh
 - **WHEN** an automatic refresh ran and the user then navigates to a week that was cached before it
@@ -81,6 +85,10 @@ The system SHALL keep the displayed week's assignments on screen while an automa
 - **WHEN** an automatic refresh completes while an assignment is being dragged
 - **THEN** the grid layout under the pointer stays unchanged until the drag ends
 
+#### Scenario: Edit while a refresh runs
+- **WHEN** an assignment is moved or deleted while an automatic refresh runs
+- **THEN** the result of that refresh does not undo the edit in the grid
+
 ### Requirement: Retry a failed automatic refresh once
 The system SHALL retry a failed automatic refresh once after 30 seconds without showing an error, and SHALL show the German error message with its "Erneut laden" action only when the retry fails as well.
 
@@ -95,5 +103,10 @@ The system SHALL retry a failed automatic refresh once after 30 seconds without 
 - **AND** the next automatic refresh is due 5 minutes after the failed retry
 
 #### Scenario: Another load supersedes the retry
-- **WHEN** the displayed week is fetched by navigation, a manual reload or a write before a pending retry runs
+- **WHEN** the displayed week is loaded by navigation or a manual reload before a pending retry runs
 - **THEN** the pending retry is dropped
+
+#### Scenario: Retry falls due while offline
+- **WHEN** the retry falls due while no network connection is available
+- **THEN** no fetch is started and no error is shown
+- **AND** the refresh starts 5 seconds after the network becomes available

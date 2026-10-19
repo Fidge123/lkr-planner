@@ -1,7 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { CalendarCellEvent, ResolvedProject } from "../../generated/tauri";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type {
+  CalendarCellEvent,
+  ResolvedProject,
+  WeekLoadPurpose,
+} from "../../generated/tauri";
 import { commands } from "../../generated/tauri";
-import { toLocalISODate } from "../util";
+import { scheduleTimeout, toLocalISODate } from "../util";
 import {
   applyResolvedProjects,
   type CellTarget,
@@ -22,14 +26,25 @@ type EmployeeErrors = Record<string, string>;
 
 export type { WeekData };
 
-export interface PlanningAssignmentsState {
+export interface PlanningAssignmentsView {
   eventsByEmployee: EmployeeEvents;
   errorsByEmployee: EmployeeErrors;
   isLoading: boolean;
   errorMessage: string | null;
+  /**
+   * Set in the same update as the events, so a consumer can tell whether it is
+   * rendering this week's data or the previous week's, still up during a fetch.
+   */
   loadedWeekStart: string | null;
+  /** When the shown week's data was fetched, or when its load failed. */
+  lastLoadedAt: number | null;
+}
+
+export interface PlanningAssignmentsState extends PlanningAssignmentsView {
   /** Loads the displayed week and its projects again, bypassing both caches. */
   reloadAssignments: () => void;
+  /** Fetches the displayed week again in the background and drops the other cached weeks. */
+  refreshAssignments: () => void;
   /** Replaces the rows of these employees in that week, without the loading state. */
   refreshEmployees: (weekStart: string, employeeRefs: string[]) => void;
   removeEvent: (uid: string) => void;
@@ -45,130 +60,18 @@ export function usePlanningAssignments(
 ): PlanningAssignmentsState {
   // The debounce absorbs rapid navigation; the first known week must not wait it out.
   const debouncedWeekStart = useLeadingDebounce(weekStart, 200) ?? weekStart;
-  const cache = useRef<Record<string, WeekData>>({});
-  const requestIdRef = useRef(0);
-  // The week asked for last, which differs from `loadedWeekStart` while its data loads.
-  const requestedWeekRef = useRef<string | null>(null);
-  const editsRef = useRef(createEditSequence());
-  const [eventsByEmployee, setEventsByEmployee] = useState<EmployeeEvents>({});
-  const [errorsByEmployee, setErrorsByEmployee] = useState<EmployeeErrors>({});
-  const [isLoading, setIsLoading] = useState(true);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  // Set in the same batch as the events, so a consumer can tell whether it is
-  // rendering this week's data or the previous week's, still up during a fetch.
-  const [loadedWeekStart, setLoadedWeekStart] = useState<string | null>(null);
-
-  const show = useCallback((ws: string, data: WeekData) => {
-    setEventsByEmployee(data.eventsByEmployee);
-    setErrorsByEmployee(data.errorsByEmployee);
-    setLoadedWeekStart(ws);
-  }, []);
-
-  const updateWeek = useCallback(
-    (ws: string, transform: (week: WeekData) => WeekData) => {
-      const current = cache.current[ws];
-      if (!current) return;
-      const next = transform(current);
-      if (next === current) return;
-      cache.current[ws] = next;
-      if (requestedWeekRef.current === ws) {
-        show(ws, next);
-      }
-    },
-    [show],
+  const [view, setView] = useState(initialView);
+  const [loader] = useState(() =>
+    createWeekLoader({
+      backend: commands,
+      now: Date.now,
+      schedule: scheduleTimeout,
+      isOnline: () => navigator.onLine,
+      onChange: setView,
+    }),
   );
 
-  const resolveProjects = useCallback(
-    async (ws: string, forceRefresh = false) => {
-      const week = cache.current[ws];
-      if (!week) return;
-      const refs = projectRefsOf(week);
-      if (refs.length === 0) return;
-
-      let resolved: Partial<Record<string, ResolvedProject | null>> | null =
-        null;
-      try {
-        const result = await commands.resolveWeekProjects(refs, forceRefresh);
-        if (result.status === "ok") resolved = result.data;
-      } catch {}
-
-      updateWeek(ws, (current) =>
-        resolved
-          ? applyResolvedProjects(current, resolved)
-          : settlePendingProjects(current, refs),
-      );
-    },
-    [updateWeek],
-  );
-
-  const loadActiveWeek = useCallback(
-    async (ws: string, invalidate = false) => {
-      if (invalidate) {
-        delete cache.current[ws];
-      }
-
-      const id = ++requestIdRef.current;
-      requestedWeekRef.current = ws;
-
-      const cached = cache.current[ws];
-      if (cached) {
-        show(ws, cached);
-        setIsLoading(false);
-        setErrorMessage(null);
-        void resolveProjects(ws);
-        return;
-      }
-
-      setIsLoading(true);
-      try {
-        const result = await commands.loadWeekEvents(ws, null, "display");
-        if (result.status === "error") {
-          if (id !== requestIdRef.current) return;
-          setErrorMessage(result.error);
-          setEventsByEmployee({});
-          setErrorsByEmployee({});
-          setLoadedWeekStart(ws);
-          return;
-        }
-        // Cache unconditionally, even for a superseded request: it's still valid data for that week.
-        // Only the display update below is staleness-gated.
-        cache.current[ws] = groupResults(result.data);
-        void resolveProjects(ws, invalidate);
-        if (id !== requestIdRef.current) return;
-        show(ws, cache.current[ws]);
-        setErrorMessage(null);
-      } catch (error) {
-        if (id !== requestIdRef.current) return;
-        setErrorMessage(
-          error instanceof Error
-            ? error.message
-            : "Die Einsätze konnten nicht geladen werden.",
-        );
-        setEventsByEmployee({});
-        setErrorsByEmployee({});
-        setLoadedWeekStart(ws);
-      } finally {
-        if (id === requestIdRef.current) {
-          setIsLoading(false);
-        }
-      }
-    },
-    [show, resolveProjects],
-  );
-
-  const prefetchWeek = useCallback(
-    async (ws: string) => {
-      if (cache.current[ws]) return;
-      try {
-        const result = await commands.loadWeekEvents(ws, null, "prefetch");
-        if (result.status === "ok") {
-          cache.current[ws] = groupResults(result.data);
-          void resolveProjects(ws);
-        }
-      } catch {}
-    },
-    [resolveProjects],
-  );
+  useEffect(() => () => loader.dispose(), [loader]);
 
   useEffect(() => {
     if (debouncedWeekStart === null) return;
@@ -177,8 +80,8 @@ export function usePlanningAssignments(
     let settleIdle: (() => void) | undefined;
     void loadWeekWithPrefetch({
       weekStart: debouncedWeekStart,
-      loadActive: loadActiveWeek,
-      prefetch: prefetchWeek,
+      loadActive: loader.loadActiveWeek,
+      prefetch: loader.prefetchWeek,
       isCancelled: () => cancelled,
       wait: (ms) =>
         new Promise((resolve) => {
@@ -192,124 +95,301 @@ export function usePlanningAssignments(
       // Clearing the timer alone leaves the sequence suspended on a promise nothing resolves.
       settleIdle?.();
     };
-  }, [debouncedWeekStart, loadActiveWeek, prefetchWeek]);
+  }, [debouncedWeekStart, loader]);
 
   const reloadAssignments = useCallback(() => {
     if (weekStart === null) return;
-    void loadActiveWeek(weekStart, true);
-  }, [weekStart, loadActiveWeek]);
-
-  // A failed refresh falls back to reloading the whole week, or to dropping a week no
-  // longer shown, so the optimistic state never outlives an unknown server state.
-  const refreshEmployees = useCallback(
-    async (ws: string, employeeRefs: string[]) => {
-      if (employeeRefs.length === 0) return;
-      const isCurrent = editsRef.current.requestRefresh();
-      const discard = () => {
-        if (requestedWeekRef.current === ws) {
-          void loadActiveWeek(ws, true);
-        } else {
-          delete cache.current[ws];
-        }
-      };
-      try {
-        const result = await commands.loadWeekEvents(
-          ws,
-          employeeRefs,
-          "refresh",
-        );
-        if (!isCurrent()) return;
-        if (result.status === "error") {
-          discard();
-          return;
-        }
-        updateWeek(ws, (week) =>
-          mergeEmployeeRows(week, employeeRefs, result.data),
-        );
-        void resolveProjects(ws);
-      } catch {
-        if (isCurrent()) discard();
-      }
-    },
-    [loadActiveWeek, resolveProjects, updateWeek],
-  );
-
-  const removeEvent = useCallback(
-    (uid: string) => {
-      editsRef.current.markEdit();
-      for (const ws of Object.keys(cache.current)) {
-        updateWeek(ws, (week) => removeEventFromWeek(week, uid));
-      }
-    },
-    [updateWeek],
-  );
-
-  // A drag can end in a different week than it started, so the source week's cached
-  // copy, which still holds the event in its old slot, is dropped to be fetched again.
-  const invalidateWeeksContaining = useCallback(
-    (uid: string, keep: string | null = null) => {
-      for (const [ws, data] of Object.entries(cache.current)) {
-        if (ws !== keep && findEvent(data, uid)) {
-          delete cache.current[ws];
-        }
-      }
-    },
-    [],
-  );
-
-  const moveEvent = useCallback(
-    (uid: string, target: CellTarget) => {
-      const ws = requestedWeekRef.current;
-      if (ws === null) return null;
-      const event = Object.values(cache.current)
-        .map((week) => findEvent(week, uid))
-        .find((found) => found !== null);
-      editsRef.current.markEdit();
-      invalidateWeeksContaining(uid, ws);
-      if (event) {
-        updateWeek(ws, (week) => relocateEvent(week, event, target));
-      }
-      return ws;
-    },
-    [invalidateWeeksContaining, updateWeek],
-  );
-
-  const getCachedWeek = useCallback(
-    (ws: string) => cache.current[ws] ?? null,
-    [],
-  );
+    void loader.loadActiveWeek(weekStart, "reload");
+  }, [weekStart, loader]);
 
   return useMemo(
     () => ({
-      eventsByEmployee,
-      errorsByEmployee,
-      isLoading,
-      errorMessage,
-      loadedWeekStart,
+      ...view,
       reloadAssignments,
-      refreshEmployees: (ws: string, employeeRefs: string[]) => {
-        void refreshEmployees(ws, employeeRefs);
+      refreshAssignments: () => {
+        void loader.refresh();
       },
-      removeEvent,
-      moveEvent,
+      refreshEmployees: (ws: string, employeeRefs: string[]) => {
+        void loader.refreshEmployees(ws, employeeRefs);
+      },
+      removeEvent: loader.removeEvent,
+      moveEvent: loader.moveEvent,
       invalidateWeeksContaining: (uid: string) =>
-        invalidateWeeksContaining(uid),
-      getCachedWeek,
+        loader.invalidateWeeksContaining(uid),
+      getCachedWeek: loader.getCachedWeek,
     }),
-    [
-      eventsByEmployee,
-      errorsByEmployee,
-      isLoading,
-      errorMessage,
-      loadedWeekStart,
-      reloadAssignments,
-      refreshEmployees,
-      removeEvent,
-      moveEvent,
-      invalidateWeeksContaining,
-      getCachedWeek,
-    ],
+    [view, reloadAssignments, loader],
   );
+}
+
+const initialView: PlanningAssignmentsView = {
+  eventsByEmployee: {},
+  errorsByEmployee: {},
+  isLoading: true,
+  errorMessage: null,
+  loadedWeekStart: null,
+  lastLoadedAt: null,
+};
+
+const emptyWeek: WeekData = { eventsByEmployee: {}, errorsByEmployee: {} };
+
+interface CachedWeek {
+  data: WeekData;
+  fetchedAt: number;
+}
+
+type LoadMode = "show" | "reload" | "refresh" | "retry";
+
+const refreshRetryDelayMs = 30_000;
+
+type FetchResult =
+  | { status: "ok"; data: WeekData }
+  | { status: "error"; error: string };
+
+export interface WeekLoaderDeps {
+  backend: Pick<typeof commands, "loadWeekEvents" | "resolveWeekProjects">;
+  now: () => number;
+  schedule: (callback: () => void, ms: number) => () => void;
+  isOnline: () => boolean;
+  onChange: (view: PlanningAssignmentsView) => void;
+}
+
+export function createWeekLoader({
+  backend,
+  now,
+  schedule,
+  isOnline,
+  onChange,
+}: WeekLoaderDeps) {
+  const cache = new Map<string, CachedWeek>();
+  let requestId = 0;
+  // The week asked for last, which differs from `loadedWeekStart` while its data loads.
+  let requestedWeek: string | null = null;
+  const edits = createEditSequence();
+  let view = initialView;
+  let cancelRetry = () => {};
+
+  const update = (patch: Partial<PlanningAssignmentsView>) => {
+    view = { ...view, ...patch };
+    onChange(view);
+  };
+
+  const shown = (ws: string, data: WeekData) => ({
+    eventsByEmployee: data.eventsByEmployee,
+    errorsByEmployee: data.errorsByEmployee,
+    loadedWeekStart: ws,
+  });
+
+  const updateWeek = (ws: string, transform: (week: WeekData) => WeekData) => {
+    const current = cache.get(ws);
+    if (!current) return;
+    const next = transform(current.data);
+    if (next === current.data) return;
+    cache.set(ws, { ...current, data: next });
+    if (requestedWeek === ws) {
+      update(shown(ws, next));
+    }
+  };
+
+  const resolveProjects = async (ws: string, forceRefresh = false) => {
+    const week = cache.get(ws);
+    if (!week) return;
+    const refs = projectRefsOf(week.data);
+    if (refs.length === 0) return;
+
+    let resolved: Partial<Record<string, ResolvedProject | null>> | null = null;
+    try {
+      const result = await backend.resolveWeekProjects(refs, forceRefresh);
+      if (result.status === "ok") resolved = result.data;
+    } catch {}
+
+    updateWeek(ws, (current) =>
+      resolved
+        ? applyResolvedProjects(current, resolved)
+        : settlePendingProjects(current, refs),
+    );
+  };
+
+  const fetchWeek = async (
+    ws: string,
+    purpose: WeekLoadPurpose,
+  ): Promise<FetchResult> => {
+    try {
+      const result = await backend.loadWeekEvents(ws, null, purpose);
+      return result.status === "ok"
+        ? { status: "ok", data: groupResults(result.data) }
+        : result;
+    } catch (error) {
+      return {
+        status: "error",
+        error:
+          error instanceof Error
+            ? error.message
+            : "Die Einsätze konnten nicht geladen werden.",
+      };
+    }
+  };
+
+  const loadActiveWeek = async (ws: string, mode: LoadMode = "show") => {
+    if (mode === "reload") {
+      cache.delete(ws);
+    }
+
+    if (mode !== "retry") {
+      cancelRetry();
+    }
+
+    const id = ++requestId;
+    requestedWeek = ws;
+    const isAutomatic = mode === "refresh" || mode === "retry";
+    const isUnedited = edits.requestRefresh();
+
+    const cached = cache.get(ws);
+    if (cached && !isAutomatic) {
+      update({
+        ...shown(ws, cached.data),
+        lastLoadedAt: cached.fetchedAt,
+        isLoading: false,
+        errorMessage: null,
+      });
+      void resolveProjects(ws);
+      return;
+    }
+
+    update({ isLoading: true });
+    const result = await fetchWeek(ws, isAutomatic ? "refresh" : "display");
+    const completedAt = now();
+    // An edit made meanwhile wins over this data, which may predate its write; the edit's row refresh follows.
+    const keepsEdit = isAutomatic && !isUnedited() && cache.has(ws);
+    if (result.status === "ok" && !keepsEdit) {
+      // Cache unconditionally, even for a superseded request: it's still valid data for that week.
+      // Only the display update below is staleness-gated.
+      cache.set(ws, { data: result.data, fetchedAt: completedAt });
+      void resolveProjects(ws, mode === "reload");
+    }
+    if (id !== requestId) return;
+
+    // A network still connecting after wake fails the first attempt, which is not worth an error.
+    if (result.status === "error" && mode === "refresh") {
+      cancelRetry = schedule(() => {
+        cancelRetry = () => {};
+        if (isOnline()) void loadActiveWeek(ws, "retry");
+      }, refreshRetryDelayMs);
+      update({ isLoading: false });
+      return;
+    }
+    if (result.status === "error") {
+      update({
+        ...(isAutomatic ? {} : shown(ws, emptyWeek)),
+        errorMessage: result.error,
+        lastLoadedAt: completedAt,
+        isLoading: false,
+      });
+      return;
+    }
+    update({
+      ...(keepsEdit ? {} : shown(ws, result.data)),
+      errorMessage: null,
+      lastLoadedAt: completedAt,
+      isLoading: false,
+    });
+  };
+
+  const refresh = async () => {
+    const ws = requestedWeek;
+    if (ws === null) return;
+    for (const cachedWeek of [...cache.keys()]) {
+      if (cachedWeek !== ws) cache.delete(cachedWeek);
+    }
+    await loadActiveWeek(ws, "refresh");
+  };
+
+  const prefetchWeek = async (ws: string) => {
+    if (cache.has(ws)) return;
+    try {
+      const result = await backend.loadWeekEvents(ws, null, "prefetch");
+      if (result.status === "ok") {
+        cache.set(ws, { data: groupResults(result.data), fetchedAt: now() });
+        void resolveProjects(ws);
+      }
+    } catch {}
+  };
+
+  // A failed refresh falls back to reloading the whole week, or to dropping a week no
+  // longer shown, so the optimistic state never outlives an unknown server state.
+  const refreshEmployees = async (ws: string, employeeRefs: string[]) => {
+    if (employeeRefs.length === 0) return;
+    const isCurrent = edits.requestRefresh();
+    const discard = () => {
+      if (requestedWeek === ws) {
+        void loadActiveWeek(ws, "reload");
+      } else {
+        cache.delete(ws);
+      }
+    };
+    try {
+      const result = await backend.loadWeekEvents(ws, employeeRefs, "refresh");
+      if (!isCurrent()) return;
+      if (result.status === "error") {
+        discard();
+        return;
+      }
+      updateWeek(ws, (week) =>
+        mergeEmployeeRows(week, employeeRefs, result.data),
+      );
+      void resolveProjects(ws);
+    } catch {
+      if (isCurrent()) discard();
+    }
+  };
+
+  const removeEvent = (uid: string) => {
+    edits.markEdit();
+    for (const ws of [...cache.keys()]) {
+      updateWeek(ws, (week) => removeEventFromWeek(week, uid));
+    }
+  };
+
+  // A drag can end in a different week than it started, so the source week's cached
+  // copy, which still holds the event in its old slot, is dropped to be fetched again.
+  const invalidateWeeksContaining = (
+    uid: string,
+    keep: string | null = null,
+  ) => {
+    for (const [ws, week] of cache) {
+      if (ws !== keep && findEvent(week.data, uid)) {
+        cache.delete(ws);
+      }
+    }
+  };
+
+  const moveEvent = (uid: string, target: CellTarget) => {
+    const ws = requestedWeek;
+    if (ws === null) return null;
+    const event = [...cache.values()]
+      .map((week) => findEvent(week.data, uid))
+      .find((found) => found !== null);
+    edits.markEdit();
+    invalidateWeeksContaining(uid, ws);
+    if (event) {
+      updateWeek(ws, (week) => relocateEvent(week, event, target));
+    }
+    return ws;
+  };
+
+  const getCachedWeek = (ws: string) => cache.get(ws)?.data ?? null;
+
+  return {
+    loadActiveWeek,
+    prefetchWeek,
+    refresh,
+    refreshEmployees,
+    removeEvent,
+    moveEvent,
+    invalidateWeeksContaining,
+    getCachedWeek,
+    dispose: () => cancelRetry(),
+  };
 }
 
 export interface WeekLoadSequence {
