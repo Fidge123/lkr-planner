@@ -186,7 +186,7 @@ function withDropPreview(
   return items;
 }
 
-function DropPreviewCard({ title }: { title: string }) {
+function DropPreviewCard({ title }: DropPreviewCardProps) {
   return (
     <li aria-hidden="true">
       <span
@@ -197,6 +197,10 @@ function DropPreviewCard({ title }: { title: string }) {
       </span>
     </li>
   );
+}
+
+interface DropPreviewCardProps {
+  title: string;
 }
 
 interface Props {

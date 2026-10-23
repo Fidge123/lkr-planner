@@ -77,7 +77,7 @@ interface ProjectResultListProps {
   onSelect: (project: DayliteProjectSummary) => void;
 }
 
-function CategoryDot({ color }: { color: string | null }) {
+function CategoryDot({ color }: CategoryDotProps) {
   return (
     <span
       aria-hidden="true"
@@ -85,6 +85,10 @@ function CategoryDot({ color }: { color: string | null }) {
       style={color ? { backgroundColor: color } : undefined}
     />
   );
+}
+
+interface CategoryDotProps {
+  color: string | null;
 }
 
 // Daylite project names contain hard line breaks that would wrap a row onto two lines.

@@ -334,7 +334,7 @@ interface ReloadableAlertProps {
   variant?: keyof typeof alertVariantClass;
 }
 
-function DragPreviewCard({ payload }: { payload: AppointmentDragPayload }) {
+function DragPreviewCard({ payload }: DragPreviewCardProps) {
   return (
     <span
       className={`${assignmentCardClass} ${assignmentStripClass} bg-base-200 text-base-content shadow-lg`}
@@ -347,6 +347,10 @@ function DragPreviewCard({ payload }: { payload: AppointmentDragPayload }) {
       />
     </span>
   );
+}
+
+interface DragPreviewCardProps {
+  payload: AppointmentDragPayload;
 }
 
 interface Props {
