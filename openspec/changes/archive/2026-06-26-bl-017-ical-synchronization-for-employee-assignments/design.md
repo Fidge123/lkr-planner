@@ -1,6 +1,7 @@
 ## Context
 
-With CalDAV as the source of truth (established in BL-015), assignment writes go directly to the employee's primary CalDAV calendar. There is no intermediate local store to sync from — writing to CalDAV IS the persistence operation.
+With CalDAV as the source of truth (established in BL-015), assignment writes go directly to the employee's primary CalDAV calendar.
+There is no intermediate local store to sync from — writing to CalDAV IS the persistence operation.
 
 ## Goals / Non-Goals
 

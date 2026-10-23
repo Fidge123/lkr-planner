@@ -1,6 +1,7 @@
 ## Why
 
-Planners currently have no way to see when employees are absent (Urlaub, Krankenstand, etc.) in the week view, making it easy to accidentally schedule assignments on unavailable days. Adding absence visibility directly in the planning grid prevents scheduling conflicts and reduces manual cross-checking.
+Planners currently have no way to see when employees are absent (Urlaub, Krankenstand, etc.) in the week view, making it easy to accidentally schedule assignments on unavailable days.
+Adding absence visibility directly in the planning grid prevents scheduling conflicts and reduces manual cross-checking.
 
 ## What Changes
 

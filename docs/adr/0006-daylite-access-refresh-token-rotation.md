@@ -33,7 +33,8 @@ The original implementation held one process-wide lock across the whole load, re
 That was wider than the invariant requires and made each call pay a keychain read and a keychain write, while serializing unrelated reads behind each other.
 
 - Hold the token state in memory for the process lifetime, seeded from the keychain on first use.
-- Serialize rotation only. Sending a request with an already valid access token is safe in parallel, because an access token is a bearer credential; only rotation cannot race, since Daylite invalidates a refresh token as it issues the next one.
+- Serialize rotation only.
+  Sending a request with an already valid access token is safe in parallel, because an access token is a bearer credential; only rotation cannot race, since Daylite invalidates a refresh token as it issues the next one.
 - Re-check freshness after acquiring the rotation lock, so callers that queued behind a rotation adopt its result instead of rotating again.
 - Hand out a token only when it has at least 60 seconds of life left, so a leased token outlives the operation it was leased for.
 - Rotate in exactly one place.
@@ -44,7 +45,8 @@ That was wider than the invariant requires and made each call pay a keychain rea
 - Retry a request once when Daylite answers `401`, forcing one rotation first.
   Expiry-driven refresh cannot anticipate a token revoked server-side, which is the case this covers.
   Track a generation on the token state so a burst of rejected requests costs one rotation rather than one per caller.
-- Do not retry an operation that has already mutated the local store. A rejected token surfaces there as an error the caller can retry deliberately.
+- Do not retry an operation that has already mutated the local store.
+  A rejected token surfaces there as an error the caller can retry deliberately.
 
 ## Amendment 2026-10-16: no stranded refresh tokens
 

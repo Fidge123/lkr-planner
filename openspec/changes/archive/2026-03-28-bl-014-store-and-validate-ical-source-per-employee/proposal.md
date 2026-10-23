@@ -1,6 +1,7 @@
 ## Why
 
-The application uses employee iCal sources for assignment synchronization and absence tracking. Users need validation tooling to ensure iCal URLs are valid and accessible before relying on them for planning data.
+The application uses employee iCal sources for assignment synchronization and absence tracking.
+Users need validation tooling to ensure iCal URLs are valid and accessible before relying on them for planning data.
 
 ## What Changes
 

@@ -1,6 +1,7 @@
 # Daylite Search & Filter API
 
-This document describes how the Daylite `_search` endpoints work, based on the OpenAPI spec and official filter documentation. All searchable entity types (`/projects/_search`, `/contacts/_search`, etc.) share the same filter structure.
+This document describes how the Daylite `_search` endpoints work, based on the OpenAPI spec and official filter documentation.
+All searchable entity types (`/projects/_search`, `/contacts/_search`, etc.) share the same filter structure.
 
 ## Endpoint Shape
 

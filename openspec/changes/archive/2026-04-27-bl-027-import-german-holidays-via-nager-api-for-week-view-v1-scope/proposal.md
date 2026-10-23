@@ -1,6 +1,7 @@
 ## Why
 
-The week view needs to display German public holidays to help planners avoid scheduling on holidays. This provides essential context for planning decisions.
+The week view needs to display German public holidays to help planners avoid scheduling on holidays.
+This provides essential context for planning decisions.
 
 ## What Changes
 

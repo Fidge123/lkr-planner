@@ -1,6 +1,8 @@
 ## Why
 
-The weekly planning table currently uses dummy/hardcoded assignment data. This prevents persistent planning - users lose their assignments when the app restarts. This change replaces dummy data with real persistent storage.
+The weekly planning table currently uses dummy/hardcoded assignment data.
+This prevents persistent planning - users lose their assignments when the app restarts.
+This change replaces dummy data with real persistent storage.
 
 ## What Changes
 

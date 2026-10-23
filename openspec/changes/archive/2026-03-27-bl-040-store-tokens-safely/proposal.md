@@ -1,6 +1,7 @@
 ## Why
 
-API tokens stored in plain text files are vulnerable to exposure. We need to use OS-level secure storage (Keychain on macOS) to protect authentication tokens for Planradar and Daylite APIs.
+API tokens stored in plain text files are vulnerable to exposure.
+We need to use OS-level secure storage (Keychain on macOS) to protect authentication tokens for Planradar and Daylite APIs.
 
 ## What Changes
 
