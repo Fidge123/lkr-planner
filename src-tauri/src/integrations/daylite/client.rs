@@ -190,24 +190,14 @@ pub(super) struct DayliteHttpResponse {
     pub body: String,
 }
 
-/// Cloning a reqwest client shares its connection pool rather than copying it.
 fn shared_http_client() -> Result<reqwest::Client, AppError> {
-    static CLIENT: std::sync::OnceLock<Result<reqwest::Client, String>> =
-        std::sync::OnceLock::new();
-    CLIENT
-        .get_or_init(|| {
-            reqwest::Client::builder()
-                .build()
-                .map_err(|error| format!("HTTP-Client konnte nicht erstellt werden: {error}"))
-        })
-        .clone()
-        .map_err(|technical_message| {
-            AppError::new(
-                AppErrorCode::RequestFailed,
-                "Die Verbindung zu Daylite konnte nicht aufgebaut werden.",
-                technical_message,
-            )
-        })
+    crate::http::shared_client().map_err(|technical_message| {
+        AppError::new(
+            AppErrorCode::RequestFailed,
+            "Die Verbindung zu Daylite konnte nicht aufgebaut werden.",
+            technical_message,
+        )
+    })
 }
 
 #[derive(Debug, Clone)]

@@ -83,7 +83,6 @@ use chrono::{Datelike, NaiveDate};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use std::time::Duration;
-use tauri_plugin_http::reqwest;
 
 const NAGER_BASE_URL: &str = "https://date.nager.at/api/v3/PublicHolidays";
 const REQUEST_TIMEOUT_SECS: u64 = 5;
@@ -153,12 +152,13 @@ async fn fetch_holidays_from_api(
 }
 
 async fn fetch_from_url(app: Option<&tauri::AppHandle>, url: &str) -> Result<Vec<Holiday>, String> {
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(REQUEST_TIMEOUT_SECS))
-        .build()
+    let client = crate::http::shared_client()
         .map_err(|_| "Feiertage konnten nicht geladen werden".to_string())?;
 
-    let response = client.get(url).send().await.map_err(|e| {
+    let request = client
+        .get(url)
+        .timeout(Duration::from_secs(REQUEST_TIMEOUT_SECS));
+    let response = request.send().await.map_err(|e| {
         record_request_failure(app, RequestFailure::new("REQUEST_FAILED", e.to_string()));
         "Feiertage konnten nicht geladen werden".to_string()
     })?;

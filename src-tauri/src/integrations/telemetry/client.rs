@@ -20,6 +20,10 @@ impl PostHogClient {
         Self::with_api_key(BUILD_TIME_API_KEY)
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "built once per process for PostHog alone"
+    )]
     pub(crate) fn with_api_key(api_key: Option<&str>) -> Self {
         Self {
             api_key: api_key.map(str::to_string),

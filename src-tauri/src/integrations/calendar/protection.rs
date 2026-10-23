@@ -157,6 +157,10 @@ mod tests {
         }
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "tests need their own client settings"
+    )]
     fn session(base_url: &str) -> CaldavSession {
         CaldavSession {
             telemetry: None,

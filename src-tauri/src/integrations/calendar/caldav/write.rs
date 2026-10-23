@@ -654,6 +654,10 @@ mod tests {
         Some((method, path))
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "tests need their own client settings"
+    )]
     fn test_client() -> reqwest::Client {
         reqwest::Client::builder()
             .timeout(Duration::from_secs(5))
@@ -1062,6 +1066,10 @@ mod tests {
     }
 
     /// A client that bypasses any ambient HTTP(S) proxy so it can reach 127.0.0.1 directly.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "tests need their own client settings"
+    )]
     fn direct_client() -> reqwest::Client {
         reqwest::Client::builder()
             .no_proxy()

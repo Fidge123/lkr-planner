@@ -1,7 +1,5 @@
 use super::types::ZepCalendar;
 use crate::error::{AppError, AppErrorCode};
-use std::time::Duration;
-use tauri_plugin_http::reqwest;
 use tauri_plugin_http::reqwest::Method;
 
 const PROPFIND_BODY: &str = r#"<?xml version="1.0" encoding="utf-8"?>
@@ -12,26 +10,12 @@ const PROPFIND_BODY: &str = r#"<?xml version="1.0" encoding="utf-8"?>
   </d:prop>
 </d:propfind>"#;
 
-/// Cloning a reqwest client shares its connection pool rather than copying it.
-pub(crate) fn shared_caldav_client() -> Result<reqwest::Client, String> {
-    static CLIENT: std::sync::OnceLock<Result<reqwest::Client, String>> =
-        std::sync::OnceLock::new();
-    CLIENT
-        .get_or_init(|| {
-            reqwest::Client::builder()
-                .timeout(Duration::from_secs(30))
-                .build()
-                .map_err(|e| format!("HTTP-Client konnte nicht erstellt werden: {e}"))
-        })
-        .clone()
-}
-
 pub(super) async fn propfind(
     url: &str,
     username: &str,
     password: &str,
 ) -> Result<String, AppError> {
-    let client = shared_caldav_client().map_err(|e| {
+    let client = crate::http::shared_client().map_err(|e| {
         AppError::new(
             AppErrorCode::NetworkError,
             "HTTP-Client konnte nicht initialisiert werden.",
@@ -97,7 +81,7 @@ pub(super) async fn probe_calendar(
     username: &str,
     password: &str,
 ) -> Result<(), AppError> {
-    let client = shared_caldav_client().map_err(|e| {
+    let client = crate::http::shared_client().map_err(|e| {
         AppError::new(
             AppErrorCode::NetworkError,
             "HTTP-Client konnte nicht initialisiert werden.",

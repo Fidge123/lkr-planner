@@ -148,6 +148,10 @@ mod tests {
     use std::sync::Arc;
     use tauri_plugin_http::reqwest;
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "tests need their own client settings"
+    )]
     fn session(telemetry: Option<Arc<TelemetryRecorder>>) -> CaldavSession {
         CaldavSession {
             client: reqwest::Client::new(),

@@ -489,7 +489,7 @@ fn build_caldav_session(
     credentials: crate::integrations::zep::ZepStoredCredentials,
 ) -> Result<CaldavSession, AppError> {
     Ok(CaldavSession {
-        client: crate::integrations::zep::shared_caldav_client()?,
+        client: crate::http::shared_client()?,
         username: credentials.username,
         password: credentials.password,
         base_url: store.api_endpoints.zep_caldav_root_url.clone(),

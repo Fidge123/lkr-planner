@@ -2,6 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-10-17
+- Amended: 2026-10-23 (one HTTP client for every integration)
 
 ## Context
 
@@ -34,6 +35,7 @@ At startup the planning grid loaded the displayed week, ADR 0011's contact sync 
 - Resolved projects are written to `daylite-projects.json` in the app cache directory after a resolution that fetched anything, and read back at startup as stale entries, so a wall-clock change cannot make a restored entry look fresh.
 - The reload menu passes `force_refresh`, which bypasses freshness; the fixed-appointment guard keeps reading Daylite directly.
 - All Daylite commands share one HTTP client, and so do all ZEP CalDAV requests, so connections stay open between commands.
+  Since 2026-10-23 Daylite, CalDAV and the holiday import share `crate::http::shared_client`, and Clippy rejects building a client anywhere else.
 - At startup the frontend reads the local store before the first week load, and reloads the week after the contact sync of ADR 0011 only when an employee's primary or absence calendar changed.
 - This supersedes ADR 0007 and amends the startup sequence of ADR 0011.
 

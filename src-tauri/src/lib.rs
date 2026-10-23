@@ -3,6 +3,7 @@ use tauri::{Emitter, Manager};
 use tauri_plugin_updater::UpdaterExt;
 
 pub mod error;
+mod http;
 mod integrations;
 pub mod secret_manager;
 
