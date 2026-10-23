@@ -1,6 +1,16 @@
 use super::super::shared::{trimmed, trimmed_or_none};
+use super::api::current_timestamp_iso8601;
 use super::types::{DayliteContactSummary, PlanningContactRecord};
-use crate::integrations::local_store::{DayliteContactCacheEntry, DayliteContactUrl};
+use crate::integrations::local_store::{DayliteContactCacheEntry, DayliteContactUrl, LocalStore};
+
+pub(crate) fn cache_contacts(store: &mut LocalStore, contacts: &[PlanningContactRecord]) {
+    store.daylite_cache.last_synced_at = Some(current_timestamp_iso8601());
+    store.daylite_cache.contacts = contacts
+        .iter()
+        .cloned()
+        .map(map_planning_contact_to_cache_entry)
+        .collect();
+}
 
 pub(super) fn map_daylite_contact_summary(contact: DayliteContactSummary) -> PlanningContactRecord {
     let full_name = trimmed_or_none(contact.full_name)

@@ -14,7 +14,7 @@ use crate::integrations::daylite::client::{
     DayliteApiClient, DayliteHttpMethod, DayliteHttpRequest,
 };
 use crate::integrations::daylite::shared::{
-    with_daylite_tokens_once, DayliteSearchResult, DayliteTokenState,
+    run_daylite_command, with_daylite_tokens_once, DayliteSearchResult, DayliteTokenState,
 };
 use crate::integrations::local_store::LocalStore;
 use chrono::{SecondsFormat, Utc};
@@ -90,6 +90,15 @@ pub(in crate::integrations::daylite) async fn update_contact_ical_urls_core(
         .collect();
 
     Ok(())
+}
+
+pub(crate) async fn fetch_planning_contacts(
+    app: &tauri::AppHandle,
+) -> Result<Vec<PlanningContactRecord>, AppError> {
+    run_daylite_command(app.clone(), async |client, tokens| {
+        list_contacts_core(client, tokens).await
+    })
+    .await
 }
 
 pub(in crate::integrations::daylite) async fn list_contacts_core(
