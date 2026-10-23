@@ -2,6 +2,8 @@ use tauri::menu::{Menu, MenuItem, Submenu};
 use tauri::{Emitter, Manager};
 use tauri_plugin_updater::UpdaterExt;
 
+#[cfg(test)]
+mod architecture;
 pub mod error;
 mod http;
 mod integrations;
