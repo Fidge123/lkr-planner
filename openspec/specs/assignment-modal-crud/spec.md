@@ -5,17 +5,22 @@ Give planners one modal to create, edit, and delete the assignment of an employe
 ## Requirements
 
 ### Requirement: Open modal from cell interaction
-The system SHALL open the assignment modal when user clicks an employee/day cell.
+The system SHALL open the assignment modal in create mode when the user clicks the add affordance of an employee/day cell, and in edit mode when the user triggers an assignment card's edit action.
 
 #### Scenario: Click empty cell opens create mode
-- **WHEN** user clicks on an employee/day cell without assignment
+- **WHEN** user clicks the add affordance on an employee/day cell without assignment
 - **THEN** modal opens in create mode
 - **AND** employee and day are pre-selected
 
 #### Scenario: Click assigned cell opens edit mode
-- **WHEN** user clicks on an employee/day cell with existing assignment
-- **THEN** modal opens in edit mode
+- **WHEN** the user triggers the edit action on an assignment card in an employee/day cell
+- **THEN** modal opens in edit mode for that assignment
 - **AND** current assignment is pre-populated
+
+#### Scenario: Clicking an assignment card opens nothing
+- **WHEN** the user clicks an assignment card anywhere other than its action controls
+- **THEN** no modal opens
+- **AND** the modal is reached through the card's edit action instead
 
 ### Requirement: Create new assignment
 The system SHALL allow assigning a project to an employee/day.
@@ -71,17 +76,22 @@ The system SHALL handle unsaved changes properly.
 - **AND** user can save, discard, or cancel
 
 ### Requirement: Grid reload after save
-The system SHALL reload the weekly grid after a successful save or delete.
+The system SHALL refresh only the edited employee's row of the displayed week after a successful save or delete, without the loading spinner.
 
-#### Scenario: Grid reloads after save
+#### Scenario: Row refreshes after save
 - **WHEN** assignment is saved successfully
-- **THEN** weekly grid reloads from backend without full page reload
+- **THEN** the modal closes
+- **AND** the employee's calendar events of the displayed week are fetched again and replace that row without the loading spinner
 - **AND** the new or updated assignment is visible
 
-#### Scenario: Grid reloads after delete
+#### Scenario: Card is removed after delete
 - **WHEN** assignment is deleted successfully
-- **THEN** weekly grid reloads from backend without full page reload
-- **AND** the cell is shown as empty
+- **THEN** the modal closes and the card is removed from the grid immediately
+- **AND** the employee's row is then refreshed without the loading spinner
+
+#### Scenario: Failed row refresh
+- **WHEN** the refresh of the employee's row fails
+- **THEN** the whole displayed week is loaded again
 
 ### Requirement: Project picker
 The system SHALL provide a project picker in the modal for selecting a project.

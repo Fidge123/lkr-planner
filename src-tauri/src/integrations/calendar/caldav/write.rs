@@ -308,12 +308,13 @@ pub(crate) async fn create_assignment_core(
     Ok(resource_url)
 }
 
+/// Returns the event's date before the write, if it could be read.
 pub(crate) async fn update_assignment_core(
     session: &CaldavSession,
     href: &str,
     uid: &str,
     write: &AssignmentWrite,
-) -> Result<(), String> {
+) -> Result<Option<String>, String> {
     let resource_url = resolve_href(href, &session.base_url)?;
 
     refuse_absence_calendar(session, &resource_url, "update_assignment")?;
@@ -363,13 +364,13 @@ pub(crate) async fn update_assignment_core(
         }
         None => reallocate_day_best_effort(session, calendar_url, &write.date).await,
     }
-    if let Some(previous) = previous_date {
-        if previous != write.date {
-            reallocate_day_best_effort(session, calendar_url, &previous).await;
+    if let Some(previous) = &previous_date {
+        if *previous != write.date {
+            reallocate_day_best_effort(session, calendar_url, previous).await;
         }
     }
 
-    Ok(())
+    Ok(previous_date)
 }
 
 /// Moving a card within its own cell changes nothing but the day's ordering, so the event is
@@ -395,10 +396,11 @@ pub(crate) async fn reorder_assignment_core(
     replan_day_until_settled(session, calendar_url, date, Some(placement)).await
 }
 
+/// Returns the event's date before the delete, if it could be read.
 pub(crate) async fn delete_assignment_core(
     session: &CaldavSession,
     href: &str,
-) -> Result<(), String> {
+) -> Result<Option<String>, String> {
     let resource_url = resolve_href(href, &session.base_url)?;
 
     refuse_absence_calendar(session, &resource_url, "delete_assignment")?;
@@ -429,40 +431,43 @@ pub(crate) async fn delete_assignment_core(
     let status = response.status().as_u16();
     // Treat a missing event as success: delete is idempotent (no error if already absent).
     if status == 404 {
-        return Ok(());
+        return Ok(event_date);
     }
     if !(200..300).contains(&status) {
         return Err(format!("Kalenderserver antwortete mit HTTP {status}"));
     }
 
-    if let Some(date) = event_date {
+    if let Some(date) = &event_date {
         let calendar_url = parent_collection_url(&resource_url);
-        reallocate_day_best_effort(session, calendar_url, &date).await;
+        reallocate_day_best_effort(session, calendar_url, date).await;
     }
 
-    Ok(())
+    Ok(event_date)
 }
 
-/// A failed target create returns `Err` and leaves the source untouched; a failed
-/// source delete returns `SourceDeleteFailed` for the caller to reconcile.
+/// A failed target create returns `Err` and leaves the source untouched; a failed source delete returns `SourceDeleteFailed` for the caller to reconcile.
+/// Also returns the source's date, if the source was removed and its date could be read.
 pub(crate) async fn move_assignment_core(
     session: &CaldavSession,
     source_href: &str,
     target_calendar_url: &str,
     write: &AssignmentWrite,
-) -> Result<MoveAssignmentResult, String> {
+) -> Result<(MoveAssignmentResult, Option<String>), String> {
     let new_href = create_assignment_core(session, target_calendar_url, write).await?;
 
     match delete_assignment_core(session, source_href).await {
-        Ok(()) => Ok(MoveAssignmentResult::Moved { new_href }),
+        Ok(source_date) => Ok((MoveAssignmentResult::Moved { new_href }, source_date)),
         Err(error) => {
             eprintln!(
                 "calendar: move_assignment source delete failed after target create: {error}"
             );
-            Ok(MoveAssignmentResult::SourceDeleteFailed {
-                new_href,
-                source_href: source_href.to_string(),
-            })
+            Ok((
+                MoveAssignmentResult::SourceDeleteFailed {
+                    new_href,
+                    source_href: source_href.to_string(),
+                },
+                None,
+            ))
         }
     }
 }
@@ -470,7 +475,7 @@ pub(crate) async fn move_assignment_core(
 /// CalDAV servers return root-absolute hrefs; joining one onto a `base_url` that
 /// already contains a path would duplicate the path segment and produce a 404,
 /// so the href is resolved against the scheme+host origin only.
-pub(super) fn resolve_href(href: &str, base_url: &str) -> Result<String, String> {
+pub(crate) fn resolve_href(href: &str, base_url: &str) -> Result<String, String> {
     if href.starts_with("http://") || href.starts_with("https://") {
         return Ok(href.to_string());
     }
@@ -529,11 +534,19 @@ async fn put_ical(
 }
 
 fn targets_absence_calendar(target_url: &str, absence_urls: &[String]) -> bool {
-    let target = target_url.trim_end_matches('/');
-    absence_urls.iter().any(|raw| {
-        let absence = raw.trim_end_matches('/');
-        !absence.is_empty() && (target == absence || target.starts_with(&format!("{absence}/")))
-    })
+    absence_urls
+        .iter()
+        .any(|absence| lies_in_calendar(target_url, absence))
+}
+
+/// Both sides are parsed, because hand-typed calendar URLs differ from server hrefs in host case, default ports and path encoding.
+pub(crate) fn lies_in_calendar(target_url: &str, calendar_url: &str) -> bool {
+    let normalized = |url: &str| {
+        reqwest::Url::parse(url).map_or_else(|_| url.to_string(), |parsed| parsed.to_string())
+    };
+    let (target, calendar) = (normalized(target_url), normalized(calendar_url));
+    let (target, calendar) = (target.trim_end_matches('/'), calendar.trim_end_matches('/'));
+    !calendar.is_empty() && (target == calendar || target.starts_with(&format!("{calendar}/")))
 }
 
 #[cfg(test)]
@@ -553,6 +566,18 @@ mod tests {
 
     impl TestServer {
         async fn spawn(routes: Vec<(&'static str, &'static str, u16)>) -> Self {
+            Self::spawn_with_bodies(
+                routes
+                    .into_iter()
+                    .map(|(method, prefix, status)| (method, prefix, status, ""))
+                    .collect(),
+            )
+            .await
+        }
+
+        async fn spawn_with_bodies(
+            routes: Vec<(&'static str, &'static str, u16, &'static str)>,
+        ) -> Self {
             let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
                 .await
                 .expect("bind test server");
@@ -575,13 +600,14 @@ mod tests {
                             .lock()
                             .unwrap()
                             .push((method.clone(), path.clone()));
-                        let status = routes
+                        let (status, body) = routes
                             .iter()
-                            .find(|(m, prefix, _)| *m == method && path.starts_with(prefix))
-                            .map(|(_, _, status)| *status)
-                            .unwrap_or(404);
+                            .find(|(m, prefix, _, _)| *m == method && path.starts_with(prefix))
+                            .map(|(_, _, status, body)| (*status, *body))
+                            .unwrap_or((404, ""));
                         let response = format!(
-                            "HTTP/1.1 {status} Test\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                            "HTTP/1.1 {status} Test\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                            body.len()
                         );
                         let _ = stream.write_all(response.as_bytes()).await;
                         let _ = stream.shutdown().await;
@@ -667,13 +693,74 @@ mod tests {
         }
     }
 
+    const STORED_EVENT: &str = "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:old-uid\r\nSUMMARY:Projekt Nord\r\nDESCRIPTION:daylite:/v1/projects/42\r\nDTSTART:20260706T080000\r\nDTEND:20260706T160000\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+
+    #[tokio::test]
+    async fn update_assignment_core_reports_the_date_the_event_had_before_the_write() {
+        let server = TestServer::spawn_with_bodies(vec![
+            ("GET", "/cal/", 200, STORED_EVENT),
+            ("PUT", "/cal/", 204, ""),
+        ])
+        .await;
+
+        let previous_date = update_assignment_core(
+            &move_session(&server.base_url, vec![]),
+            "/cal/old-uid.ics",
+            "old-uid",
+            &move_write(),
+        )
+        .await
+        .expect("update should succeed");
+
+        assert_eq!(previous_date.as_deref(), Some("2026-07-06"));
+    }
+
+    #[tokio::test]
+    async fn delete_assignment_core_reports_the_date_of_the_deleted_event() {
+        let server = TestServer::spawn_with_bodies(vec![
+            ("GET", "/cal/", 200, STORED_EVENT),
+            ("DELETE", "/cal/", 204, ""),
+        ])
+        .await;
+
+        let previous_date =
+            delete_assignment_core(&move_session(&server.base_url, vec![]), "/cal/old-uid.ics")
+                .await
+                .expect("delete should succeed");
+
+        assert_eq!(previous_date.as_deref(), Some("2026-07-06"));
+    }
+
+    #[tokio::test]
+    async fn move_assignment_core_reports_the_date_the_source_had() {
+        let server = TestServer::spawn_with_bodies(vec![
+            ("PUT", "/target/", 201, ""),
+            ("GET", "/source/", 200, STORED_EVENT),
+            ("DELETE", "/source/", 204, ""),
+        ])
+        .await;
+        let target_calendar = format!("{}/target", server.base_url);
+
+        let (result, previous_date) = move_assignment_core(
+            &move_session(&server.base_url, vec![]),
+            "/source/old-uid.ics",
+            &target_calendar,
+            &move_write(),
+        )
+        .await
+        .expect("move should succeed");
+
+        assert!(matches!(result, MoveAssignmentResult::Moved { .. }));
+        assert_eq!(previous_date.as_deref(), Some("2026-07-06"));
+    }
+
     #[tokio::test]
     async fn move_assignment_core_creates_on_target_then_deletes_source() {
         let server =
             TestServer::spawn(vec![("PUT", "/target/", 201), ("DELETE", "/source/", 204)]).await;
         let target_calendar = format!("{}/target", server.base_url);
 
-        let result = move_assignment_core(
+        let (result, _) = move_assignment_core(
             &move_session(&server.base_url, vec![]),
             "/source/old-uid.ics",
             &target_calendar,
@@ -715,7 +802,7 @@ mod tests {
             TestServer::spawn(vec![("PUT", "/target/", 201), ("DELETE", "/source/", 500)]).await;
         let target_calendar = format!("{}/target", server.base_url);
 
-        let result = move_assignment_core(
+        let (result, previous_date) = move_assignment_core(
             &move_session(&server.base_url, vec![]),
             "/source/old-uid.ics",
             &target_calendar,
@@ -733,6 +820,7 @@ mod tests {
         };
         assert!(new_href.starts_with(&format!("{target_calendar}/")));
         assert_eq!(source_href, "/source/old-uid.ics");
+        assert_eq!(previous_date, None, "the source still holds the event");
     }
 
     #[tokio::test]
@@ -1085,5 +1173,51 @@ mod tests {
             "https://app.zep.de/caldav/admin/emp/primary",
             &[],
         ));
+    }
+
+    #[test]
+    fn a_calendar_holds_its_resources_however_its_url_is_written() {
+        let resource = "https://app.zep.de/caldav/admin/emp1/uid-1.ics";
+        let cases = [
+            (
+                "same spelling",
+                "https://app.zep.de/caldav/admin/emp1/",
+                resource,
+                true,
+            ),
+            (
+                "upper-case host",
+                "https://App.zep.de/caldav/admin/emp1/",
+                resource,
+                true,
+            ),
+            (
+                "explicit default port",
+                "https://app.zep.de:443/caldav/admin/emp1",
+                resource,
+                true,
+            ),
+            (
+                "non-ASCII path",
+                "https://app.zep.de/caldav/admin/jürgen-einsatz/",
+                "https://app.zep.de/caldav/admin/j%C3%BCrgen-einsatz/uid-1.ics",
+                true,
+            ),
+            (
+                "sibling with a longer name",
+                "https://app.zep.de/caldav/admin/emp1/",
+                "https://app.zep.de/caldav/admin/emp10/uid-1.ics",
+                false,
+            ),
+            ("no calendar", "", resource, false),
+        ];
+
+        for (label, calendar, target, expected) in cases {
+            assert_eq!(
+                lies_in_calendar(target, calendar),
+                expected,
+                "case: {label}"
+            );
+        }
     }
 }

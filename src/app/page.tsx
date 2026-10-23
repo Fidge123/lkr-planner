@@ -16,6 +16,7 @@ import type {
   PlanningContactRecord,
 } from "../generated/tauri";
 import type { ProjectCategoryColors } from "../services/daylite-categories";
+import { AppointmentSyncAlert } from "./components/appointment-sync-alert";
 import { MoveReconciliationDialog } from "./components/move-reconciliation-dialog";
 import {
   AssignmentCardBody,
@@ -27,6 +28,7 @@ import { WeekTable } from "./components/week-table";
 import { filterVisibleEmployees } from "./employee-visibility";
 import type { AppointmentDragPayload } from "./hooks/use-appointment-drag";
 import { useAppointmentDrag } from "./hooks/use-appointment-drag";
+import { useAppointmentSyncFailures } from "./hooks/use-appointment-sync-failures";
 import { type HolidaysState, useHolidays } from "./hooks/use-holidays";
 import type { PlanningAssignmentsState } from "./hooks/use-planning-assignments";
 import { usePlanningEmployees } from "./hooks/use-planning-employees";
@@ -147,6 +149,7 @@ export function PlanningGridTable({
     errorMessage: holidayErrorMessage,
     reloadHolidays,
   } = holidaysState;
+  const appointmentSync = useAppointmentSyncFailures();
   const visibleEmployees = filterVisibleEmployees(
     employees,
     employeeSettings,
@@ -232,6 +235,11 @@ export function PlanningGridTable({
           message={holidayErrorMessage}
           onReload={reloadHolidays}
           variant="warning"
+        />
+        <AppointmentSyncAlert
+          failedDates={appointmentSync.failedDates}
+          isRetrying={appointmentSync.isRetrying}
+          onRetry={() => void appointmentSync.retry()}
         />
         {drag.errorMessage ? (
           <section className="toast toast-top toast-center z-50">

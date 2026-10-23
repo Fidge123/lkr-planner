@@ -124,11 +124,23 @@ pub fn record_failure<E: TelemetryError>(
     integration: Integration,
     error: &E,
 ) {
-    let Some(state) = app.try_state::<TelemetryState>() else {
+    let recorder = app
+        .try_state::<TelemetryState>()
+        .map(|state| Arc::clone(state.recorder()));
+    record_failure_with(recorder.as_deref(), operation, integration, error);
+}
+
+pub fn record_failure_with<E: TelemetryError + ?Sized>(
+    recorder: Option<&TelemetryRecorder>,
+    operation: Operation,
+    integration: Integration,
+    error: &E,
+) {
+    let Some(recorder) = recorder else {
         return;
     };
 
-    state.record(
+    recorder.record(
         TelemetryEvent::error_occurred(
             operation,
             integration,

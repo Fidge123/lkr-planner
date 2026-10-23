@@ -809,17 +809,7 @@ mod tests {
 
     #[tokio::test]
     async fn query_overdue_projects_replays_vcr_cassette() {
-        // The cassette is produced by the live recording harness (`record_daylite_cassettes_from_live_api`), which needs real Daylite credentials.
-        // Skip instead of failing until it has been recorded.
-        let cassette_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../tests/cassettes/daylite-overdue-projects.json");
-        if !cassette_path.exists() {
-            eprintln!(
-                "skipping query_overdue_projects_replays_vcr_cassette: cassette not recorded yet"
-            );
-            return;
-        }
-
+        // Recorded by `record_daylite_cassettes_from_live_api`, which needs real Daylite credentials.
         let client = DayliteApiClient::with_replay_cassette("daylite-overdue-projects.json")
             .expect("replay client should be created");
 

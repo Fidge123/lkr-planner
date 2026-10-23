@@ -74,7 +74,7 @@ The system SHALL record an error event when a backend operation fails, when an o
 - **AND** the displayed message does not depend on the outcome of telemetry recording
 
 ### Requirement: Performance events
-The system SHALL record the measured duration of backend commands, outbound integration requests, and application startup.
+The system SHALL record the measured duration of backend commands, outbound integration requests, and application startup, and SHALL record background work under operation names distinct from the waits a user sees.
 
 #### Scenario: Backend command duration
 - **GIVEN** telemetry is enabled
@@ -85,6 +85,17 @@ The system SHALL record the measured duration of backend commands, outbound inte
 - **GIVEN** telemetry is enabled
 - **WHEN** a request to an integration completes
 - **THEN** a performance event is recorded carrying the integration name, the request kind, the duration in milliseconds, and the response status when one was received
+
+#### Scenario: Background week loads are distinguishable
+- **GIVEN** telemetry is enabled
+- **WHEN** a week is loaded to prefetch it, or to refresh the rows of an edit
+- **THEN** its performance event carries the operation `prefetch_week_events` or `refresh_week_events` instead of `load_week_events`
+
+#### Scenario: Project resolution is recorded on its own
+- **GIVEN** telemetry is enabled
+- **WHEN** the Daylite projects of a week are resolved
+- **THEN** a performance event with the operation `resolve_week_projects` is recorded
+- **AND** each project lookup is recorded as an outbound Daylite request
 
 #### Scenario: Startup duration
 - **GIVEN** telemetry is enabled
