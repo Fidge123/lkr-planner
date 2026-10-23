@@ -22,21 +22,21 @@
     "@tailwindcss/vite": "^4.3.3",
     "@tauri-apps/api": "^2.12.4",
     "daisyui": "^5.7.50",
-    "lucide-react": "^1.58.0",
+    "lucide-react": "^1.61.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "tailwindcss": "^4.3.3"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.15",
-    "@fission-ai/openspec": "^1.14.2",
-    "@tauri-apps/cli": "^2.12.3",
-    "@types/bun": "^1.4.3",
+    "@fission-ai/openspec": "^1.14.3",
+    "@tauri-apps/cli": "^2.12.4",
+    "@types/bun": "^1.4.4",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
     "smol-toml": "^1.9.1",
     "typescript": "~7.0.2",
-    "vite": "^8.3.4"
+    "vite": "^8.3.5"
   }
 }
