@@ -36,9 +36,7 @@ pub(super) fn merge_contact_ical_urls(
     merged_urls
 }
 
-/// A changed or removed calendar URL clears the stored connection-test result,
-/// because it no longer describes the current URL (see docs/adr/0011 for the
-/// Daylite-as-source-of-truth reconciliation).
+/// Changed or removed calendar URLs clear the stored connection-test result (docs/adr/0011).
 pub(super) fn reconcile_employee_calendars_from_contacts(
     settings: &mut Vec<EmployeeSetting>,
     contacts: &[PlanningContactRecord],

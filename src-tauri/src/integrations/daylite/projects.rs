@@ -99,13 +99,10 @@ pub struct DayliteProjectSummary {
 
 const OVERDUE_CATEGORY: &str = "Überfällig";
 pub(crate) const FIXED_APPOINTMENT_CATEGORY: &str = "Termin FIX geplant";
-// The Daylite API has no multi-value operator for scalar fields, so the overdue
-// query pairs the category filter with each status as OR clauses to stay a
-// single call.
+// Daylite has no multi-value operator for scalar fields, so statuses are OR-ed in one call.
 const OVERDUE_STATUSES: [&str; 2] = ["new_status", "in_progress"];
 const OVERDUE_DISPLAY_LIMIT: usize = 5;
-// Daylite applies its own ordering when truncating server-side, so a wider
-// candidate pool keeps the projects with the lowest IDs deterministic.
+// Daylite truncates in its own order; a wide pool keeps the lowest IDs deterministic.
 const OVERDUE_CANDIDATE_LIMIT: u16 = 50;
 
 async fn daylite_query_overdue_projects_inner(
@@ -156,8 +153,7 @@ pub(super) async fn query_overdue_projects_core(
         .results
         .into_iter()
         .map(normalize_project_summary)
-        // The search filters on the overdue category, so every result carries it even
-        // though Daylite omits the field from these records.
+        // Daylite omits the category from these records; the search filter guarantees it.
         .map(|project| DayliteProjectSummary {
             category: Some(OVERDUE_CATEGORY.to_string()),
             ..project
@@ -405,8 +401,7 @@ pub(crate) async fn fetch_project_by_reference(
 }
 
 async fn fetch_project(client: &DayliteApiClient, project_ref: &str) -> Option<ResolvedProject> {
-    // The project_ref is an absolute API path like "/v1/projects/3001".
-    // The DayliteApiClient base_url already includes the version prefix, so strip "/v1".
+    // `project_ref` is an absolute path with `/v1`, which the client's base_url already includes.
     let path = project_ref.strip_prefix("/v1").unwrap_or(project_ref);
     if path.is_empty() {
         return None;

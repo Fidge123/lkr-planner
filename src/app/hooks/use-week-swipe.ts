@@ -54,7 +54,7 @@ export function useWeekSwipe({
         scrollWidth: container.scrollWidth,
         clientWidth: container.clientWidth,
       });
-      // Only a gesture that is running (or just ran) owns the wheel; anything else stays the grid's own scroll.
+      // Only a running or just-finished gesture owns the wheel; otherwise the grid scrolls.
       if (next.phase === "idle") return;
       event.preventDefault();
       stateRef.current = next;

@@ -122,11 +122,9 @@ async fn fetch_event(
     Ok(Some(event))
 }
 
-/// Re-plans and re-PUTs the day until no PUT is rejected with 412, so a plan that raced a
-/// concurrent edit is rebuilt against the day's current state instead of being retried as is.
+/// Re-plans on 412 so a plan raced by a concurrent edit is rebuilt against the day's current state.
 ///
-/// Each PUT carries If-Match only when the day REPORT supplied an ETag, so a server that
-/// omits one degrades to an unguarded write rather than blocking re-allocation.
+/// PUTs go unguarded (no If-Match) when the day REPORT supplied no ETag.
 async fn replan_day_until_settled(
     session: &CaldavSession,
     calendar_url: &str,
@@ -152,7 +150,7 @@ async fn replan_day_until_settled(
     ))
 }
 
-/// The updates target distinct resources and do not depend on each other, so they go out concurrently.
+/// Updates are independent per resource, so they are sent concurrently.
 /// Returns `true` when a PUT was rejected with 412 and the day needs re-planning.
 async fn put_slot_updates(
     session: &CaldavSession,
@@ -194,7 +192,7 @@ async fn put_slot_updates(
     Ok(conflicted)
 }
 
-/// Failures are logged instead of returned: the primary write already succeeded, so surfacing an error here would invite a retry that duplicates the event.
+/// Failures are only logged: returning them would invite a retry that duplicates the primary write.
 /// The next write on this day converges anyway.
 async fn reallocate_day_best_effort(session: &CaldavSession, calendar_url: &str, date: &str) {
     if let Err(e) = replan_day_until_settled(session, calendar_url, date, None).await {
@@ -205,8 +203,8 @@ async fn reallocate_day_best_effort(session: &CaldavSession, calendar_url: &str,
     }
 }
 
-/// The returned plan carries both the pending event's own slot and the PUTs for its neighbours, so one fetch serves the whole write.
-/// `None` means the day could not be planned and the caller must fall back to a full re-allocation.
+/// The plan holds the pending event's slot and its neighbours' PUTs, so one fetch serves the write.
+/// `None` means the day could not be planned, so the caller re-allocates the whole day.
 async fn plan_day_for_pending_write(
     session: &CaldavSession,
     calendar_url: &str,
@@ -253,8 +251,6 @@ async fn apply_planned_updates_best_effort(
     }
 }
 
-/// A day that could not be planned falls back to the lone-assignment case: the full window
-/// and the first position.
 fn placed_or_full_window(plan: &Option<DayPlan>) -> (u32, NaiveTime, NaiveTime) {
     plan.as_ref()
         .and_then(|plan| plan.placed)
@@ -320,8 +316,7 @@ pub(crate) async fn update_assignment_core(
     refuse_absence_calendar(session, &resource_url, "update_assignment")?;
 
     let calendar_url = parent_collection_url(&resource_url);
-    // Read the event's current day before the PUT overwrites it: moving an assignment to
-    // another day leaves the source day needing re-allocation too.
+    // Read the day before the PUT overwrites it, since a move also re-allocates the source day.
     let (previous_date, plan) = tokio::join!(
         fetch_event_date(session, &resource_url),
         plan_day_for_pending_write(session, calendar_url, write, uid),
@@ -373,9 +368,7 @@ pub(crate) async fn update_assignment_core(
     Ok(previous_date)
 }
 
-/// Moving a card within its own cell changes nothing but the day's ordering, so the event is
-/// never rewritten from the payload: the day is re-sequenced and the affected events, this one
-/// included, are patched in place.
+/// Re-sequences the day without rewriting the event from the payload; affected events are patched in place.
 pub(crate) async fn reorder_assignment_core(
     session: &CaldavSession,
     href: &str,
@@ -405,8 +398,7 @@ pub(crate) async fn delete_assignment_core(
 
     refuse_absence_calendar(session, &resource_url, "delete_assignment")?;
 
-    // Read the event's day before deleting so the remaining same-day assignments
-    // can be re-allocated afterwards.
+    // Read the day before deleting so the remaining same-day assignments can be re-allocated.
     let event_date = match fetch_event_date(session, &resource_url).await {
         Ok(d) => d,
         Err(e) => {
@@ -429,7 +421,7 @@ pub(crate) async fn delete_assignment_core(
         .map_err(|e| format!("Einsatz konnte nicht gelöscht werden: {e}"))?;
 
     let status = response.status().as_u16();
-    // Treat a missing event as success: delete is idempotent (no error if already absent).
+    // DELETE is idempotent, so 404 counts as success.
     if status == 404 {
         return Ok(event_date);
     }
@@ -445,8 +437,9 @@ pub(crate) async fn delete_assignment_core(
     Ok(event_date)
 }
 
-/// A failed target create returns `Err` and leaves the source untouched; a failed source delete returns `SourceDeleteFailed` for the caller to reconcile.
-/// Also returns the source's date, if the source was removed and its date could be read.
+/// A failed target create returns `Err` and leaves the source untouched.
+/// A failed source delete returns `SourceDeleteFailed` for the caller to reconcile.
+/// Returns the source's date when it was removed and readable.
 pub(crate) async fn move_assignment_core(
     session: &CaldavSession,
     source_href: &str,
@@ -472,9 +465,7 @@ pub(crate) async fn move_assignment_core(
     }
 }
 
-/// CalDAV servers return root-absolute hrefs; joining one onto a `base_url` that
-/// already contains a path would duplicate the path segment and produce a 404,
-/// so the href is resolved against the scheme+host origin only.
+/// Resolves against the origin because CalDAV hrefs are root-absolute and a base path would be duplicated.
 pub(crate) fn resolve_href(href: &str, base_url: &str) -> Result<String, String> {
     if href.starts_with("http://") || href.starts_with("https://") {
         return Ok(href.to_string());
@@ -487,9 +478,7 @@ pub(crate) fn resolve_href(href: &str, base_url: &str) -> Result<String, String>
     Ok(resolved.to_string())
 }
 
-/// Safety guard every assignment write goes through: writes must never land in an
-/// absence calendar, even if the store is misconfigured (primary == absence) or an
-/// href is corrupted.
+/// Guards every assignment write against absence calendars, even if primary equals absence or an href is corrupt.
 fn refuse_absence_calendar(
     session: &CaldavSession,
     target_url: &str,
@@ -539,7 +528,7 @@ fn targets_absence_calendar(target_url: &str, absence_urls: &[String]) -> bool {
         .any(|absence| lies_in_calendar(target_url, absence))
 }
 
-/// Both sides are parsed, because hand-typed calendar URLs differ from server hrefs in host case, default ports and path encoding.
+/// Both sides are normalized, since hand-typed URLs differ from server hrefs in host case, default ports and encoding.
 pub(crate) fn lies_in_calendar(target_url: &str, calendar_url: &str) -> bool {
     let normalized = |url: &str| {
         reqwest::Url::parse(url).map_or_else(|_| url.to_string(), |parsed| parsed.to_string())
@@ -557,8 +546,7 @@ mod tests {
     use std::time::Duration;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-    /// Routes are matched by method + path prefix, and every request is recorded
-    /// in arrival order.
+    /// Routes match by method and path prefix; every request is recorded in arrival order.
     struct TestServer {
         base_url: String,
         received: Arc<Mutex<Vec<(String, String)>>>,
@@ -775,9 +763,7 @@ mod tests {
         assert!(new_href.starts_with(&format!("{target_calendar}/")));
         assert!(new_href.ends_with(".ics"));
 
-        // Slot re-allocation reads the affected days around both writes (REPORT before the
-        // create, GET before the delete), so assert on the writes and their order rather
-        // than on an exact request count.
+        // Re-allocation adds reads around the writes, so assert on write order, not the request count.
         let requests = server.requests();
         let writes: Vec<_> = requests
             .iter()
@@ -918,8 +904,6 @@ mod tests {
 
     const TEST_DATE: &str = "2026-05-06";
 
-    /// The delete cleans up the event the create made, so the flow leaves the server as it
-    /// found it.
     async fn run_write_path_flow(
         session: &CaldavSession,
         calendar_url: &str,
@@ -970,9 +954,7 @@ mod tests {
     }
 
     impl RadicaleServer {
-        /// Panics rather than skipping on any failure, so a missing `uv`, a failed
-        /// on-demand install, or a server that never starts fails the test instead of
-        /// silently passing without exercising the write path.
+        /// Panics on any startup failure instead of skipping, so the test never passes silently.
         fn start() -> Self {
             let port = free_tcp_port();
             let dir =
@@ -991,8 +973,7 @@ mod tests {
             )
             .expect("radicale config should be writable");
 
-            // Redirected to files (not piped) so a chatty server can never block on a full
-            // pipe buffer; read back into the panic message if startup fails.
+            // Logs go to files, not pipes, so a chatty server cannot block on a full pipe buffer.
             let stdout = std::fs::File::create(dir.join("stdout.log"))
                 .expect("stdout log file should be creatable");
             let stderr = std::fs::File::create(dir.join("stderr.log"))
@@ -1007,9 +988,7 @@ mod tests {
             #[cfg(unix)]
             {
                 use std::os::unix::process::CommandExt;
-                // `uvx` forks the real Radicale interpreter rather than exec-replacing
-                // itself, so it becomes a separate process; making it its own process
-                // group leader lets Drop kill the whole group instead of orphaning it.
+                // uvx forks Radicale instead of exec-replacing itself, so it needs its own process group.
                 command.process_group(0);
             }
 
@@ -1057,8 +1036,7 @@ mod tests {
 
     impl Drop for RadicaleServer {
         fn drop(&mut self) {
-            // Kill the whole process group `uvx` and the Radicale it forked belong to;
-            // `child.kill()` alone only reaches the immediate `uvx` process and leaves Radicale running, reparented to init.
+            // child.kill() only reaches uvx and orphans the forked Radicale, so kill the whole process group.
             #[cfg(unix)]
             {
                 let pgid = self.child.id();

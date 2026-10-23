@@ -21,7 +21,7 @@ import { loadDayliteContacts } from "./services/daylite-contacts";
 function App() {
   const [weekOffset, setWeekOffset] = useState(0);
   const [showWeekend, setShowWeekend] = useState(false);
-  // The weekend setting decides which week is shown on a weekend, so no week loads before it is read.
+  // On a weekend the weekend setting decides which week is shown, so no week loads before it is read.
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   useRerenderOnDayChange();
   const weekStart = getWeekStart(weekOffset, showWeekend);

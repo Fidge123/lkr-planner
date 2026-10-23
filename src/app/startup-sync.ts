@@ -8,10 +8,7 @@ export interface StartupSync {
   isCancelled: () => boolean;
 }
 
-/**
- * The contact sync reconciles calendar URLs from Daylite into the local store, so the
- * week loaded before it only has to be loaded again when a calendar actually changed.
- */
+/** Reloads the week only when the contact sync changed a calendar URL. */
 export async function runStartupSync({
   readSettings,
   syncContacts,

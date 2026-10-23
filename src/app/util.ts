@@ -57,8 +57,7 @@ export function isToday(day: Date) {
   return day.toDateString() === today.toDateString();
 }
 
-// Must stay local-time based: the backend fetches [weekStart, weekStart + 7d),
-// so a UTC-shifted start would drop the last displayed day east of UTC.
+// Must stay local time: the backend fetches [weekStart, weekStart + 7d), so a UTC start drops the last day east of UTC.
 export function getWeekStart(weekOffset: number, showWeekend = false): string {
   return toLocalISODate(getWeekDays(weekOffset, showWeekend)[0]);
 }
@@ -70,7 +69,7 @@ export function toLocalISODate(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
-// ISO 8601: the week of a date is the week holding the Thursday of that date's week, and week 1 is the one holding 4 January.
+// ISO 8601: a date's week is the one holding its Thursday; week 1 holds 4 January.
 export function getIsoWeek(date: Date): number {
   const thursday = thursdayOfWeek(date);
   const firstThursday = thursdayOfWeek(new Date(thursday.getFullYear(), 0, 4));
@@ -102,7 +101,7 @@ export interface MonthWeek {
   days: Date[];
 }
 
-// The Thursday's month always holds the whole displayed week together with the month before it.
+// The Thursday's month holds the displayed week together with the month before it.
 export function pickerAnchorMonth(weekDays: Date[]): YearMonth {
   const thursday = thursdayOfWeek(weekDays[0]);
   return { year: thursday.getFullYear(), month: thursday.getMonth() };

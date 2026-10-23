@@ -34,8 +34,7 @@ export function MoveReconciliationDialog({
       }
       onResolved();
     } catch {
-      // The generated bindings re-throw Error-typed rejections (IPC failures);
-      // without this the dialog would stay disabled forever.
+      // Bindings re-throw Error-typed rejections; without this catch the dialog stays disabled.
       setErrorMessage("Der Einsatz konnte nicht gelöscht werden.");
       setPendingChoice(null);
     }

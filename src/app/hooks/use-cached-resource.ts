@@ -23,9 +23,8 @@ export interface ResourceUpdate<T> {
 }
 
 /**
- * A failing preload is an optimisation that missed, never a user-facing error, so it
- * cannot reject: an escaping rejection would skip the `isLoading: false` update and
- * leave the caller loading forever.
+ * A failed preload is a missed optimisation, not an error, so it must not reject.
+ * A rejection would skip `isLoading: false` and leave the caller loading forever.
  */
 export async function runResourceLoad<T>(
   { load, preload, errorMessage }: ResourceLoadSpec<T>,
@@ -58,8 +57,7 @@ export function useCachedResource<T>(
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // A superseded request must not overwrite a newer one's result, and the
-  // spec object is rebuilt every render, so both are read through refs.
+  // Superseded requests must not overwrite newer results, and the spec changes every render; both live in refs.
   const requestIdRef = useRef(0);
   const specRef = useRef(spec);
   specRef.current = spec;

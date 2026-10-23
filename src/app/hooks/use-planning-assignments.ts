@@ -54,8 +54,7 @@ export function usePlanningAssignments(
   const [errorsByEmployee, setErrorsByEmployee] = useState<EmployeeErrors>({});
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  // Set in the same batch as the events, so a consumer can tell whether it is
-  // rendering this week's data or the previous week's, still up during a fetch.
+  // Set in the same batch as the events, so consumers can tell which week's data is rendered mid-fetch.
   const [loadedWeekStart, setLoadedWeekStart] = useState<string | null>(null);
 
   const show = useCallback((ws: string, data: WeekData) => {
@@ -199,8 +198,7 @@ export function usePlanningAssignments(
     void loadActiveWeek(weekStart, true);
   }, [weekStart, loadActiveWeek]);
 
-  // A failed refresh falls back to reloading the whole week, or to dropping a week no
-  // longer shown, so the optimistic state never outlives an unknown server state.
+  // A failed refresh reloads the week, or drops it when no longer shown, so optimistic state never outlives an unknown server state.
   const refreshEmployees = useCallback(
     async (ws: string, employeeRefs: string[]) => {
       if (employeeRefs.length === 0) return;
@@ -244,8 +242,7 @@ export function usePlanningAssignments(
     [updateWeek],
   );
 
-  // A drag can end in a different week than it started, so the source week's cached
-  // copy, which still holds the event in its old slot, is dropped to be fetched again.
+  // A drag may end in another week, so the source week's cache, still holding the old slot, is dropped.
   const invalidateWeeksContaining = useCallback(
     (uid: string, keep: string | null = null) => {
       for (const [ws, data] of Object.entries(cache.current)) {
@@ -323,8 +320,8 @@ export interface WeekLoadSequence {
 const prefetchIdleMs = 400;
 
 /**
- * A prefetch competes with the active week for CalDAV connections and Daylite requests.
- * A started week load cannot be called off, so it waits for the user to settle first.
+ * A prefetch competes with the active week for CalDAV and Daylite requests.
+ * A started week load cannot be cancelled, so it waits for the user to settle first.
  */
 export async function loadWeekWithPrefetch({
   weekStart,

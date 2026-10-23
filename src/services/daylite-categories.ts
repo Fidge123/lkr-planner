@@ -39,8 +39,7 @@ async function fetchProjectCategoryColors(): Promise<ProjectCategoryColors> {
     .dayliteProjectCategoryColors()
     .catch(() => null);
   if (!result || result.status === "error") {
-    // A missed color is cosmetic, so the failure is not surfaced; dropping the
-    // promise lets the next opened modal try again.
+    // Cosmetic, so the failure is not surfaced; clearing inFlight lets the next modal retry.
     inFlight = null;
     return {};
   }

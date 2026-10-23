@@ -21,7 +21,6 @@ export interface AppointmentDragPayload {
   position: number;
 }
 
-/** Live geometry of one rendered assignment card. */
 export interface CardRect {
   uid: string;
   top: number;
@@ -29,9 +28,8 @@ export interface CardRect {
 }
 
 /**
- * Droppable payload of a day cell. The cell is the only drop zone: the position inside it
- * comes from the cards' geometry, so an inserted drop preview never becomes a target of its
- * own and the cell keeps its highlight wherever the pointer sits within it.
+ * The cell is the only drop zone; the position within it comes from card geometry.
+ * An inserted preview therefore never becomes a target, and the cell keeps its highlight.
  */
 export interface DropZoneData {
   kind: "cell";
@@ -45,8 +43,8 @@ export interface DropCellTarget {
   employeeRef: string;
   date: string;
   /**
-   * Insertion position among the target cell's assignments, counted without the dragged
-   * card. Equal to the number of those cards when the drop appends.
+   * Insertion position among the target cell's assignments, excluding the dragged card.
+   * Equals the number of those cards when the drop appends.
    */
   orderIndex: number;
 }
@@ -54,11 +52,8 @@ export interface DropCellTarget {
 export type DropAction = "none" | "reorder" | "reschedule" | "move";
 
 /**
- * The insertion position is the number of cards the pointer has already passed, so a pointer
- * in a card's upper half lands before it and one in its lower half lands after it.
- *
- * Inserting a preview at this index only moves cards that already sit below the pointer, so
- * the index it yields does not change once the preview is on screen and cannot oscillate.
+ * The index counts the cards the pointer has passed, so a card's upper half lands before it.
+ * A preview only moves cards below the pointer, so the index stays stable and cannot oscillate.
  */
 export function insertionIndexAt(cards: CardRect[], pointerY: number): number {
   return cards.filter((card) => card.top + card.height / 2 < pointerY).length;
@@ -69,8 +64,7 @@ export function resolveDropTarget(
   zone: DropZoneData,
   pointerY: number,
 ): DropCellTarget {
-  // The dragged card is never its own neighbour: the backend positions it among the day's
-  // other assignments, so excluding it here makes the index directly the persisted one.
+  // The backend indexes among the day's other assignments, so the dragged card is excluded.
   const others = zone.cardRects().filter((card) => card.uid !== source.uid);
   return {
     employeeRef: zone.employeeRef,
@@ -99,8 +93,7 @@ export type DropOutcome =
 
 const edgeZoneWidth = 48;
 const edgeDwellMs = 1000;
-// Without a cooldown the dwell restarts the instant it fires, so holding a
-// moment too long after a jump compounds into several weeks at once.
+// Without a cooldown the dwell restarts as soon as it fires, compounding into several weeks after a jump.
 const edgeCooldownMs = 1000;
 
 export function decideDropAction(
@@ -169,8 +162,7 @@ interface DropDeps {
   >;
 }
 
-// Both paths rebuild the VEVENT from the payload, so properties added in other
-// calendar clients are not preserved.
+// Both paths rebuild the VEVENT from the payload, dropping properties set by other calendar clients.
 export async function performDrop(
   source: AppointmentDragPayload,
   target: DropCellTarget,
@@ -324,7 +316,7 @@ export function useAppointmentDrag({
 }: UseAppointmentDragArgs): AppointmentDragState {
   const [activePayload, setActivePayload] =
     useState<AppointmentDragPayload | null>(null);
-  // Source of truth for the drop: dnd-kit's `active.data` is a mutable ref which unmounts when pulled to another week, so data captured at drag start must be used.
+  // `active.data` is a mutable ref that unmounts when the drag leaves the week, so capture it at drag start.
   const activePayloadRef = useRef<AppointmentDragPayload | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [dropPreview, setDropPreview] = useState<DropPreview | null>(null);
@@ -353,7 +345,7 @@ export function useAppointmentDrag({
   const refreshEmployeesRef = useRef(refreshEmployees);
   refreshEmployeesRef.current = refreshEmployees;
 
-  // Held for the reconciliation path, which reloads only once the user resolves the dialog, long after the drop cleared activePayloadRef.
+  // The reconciliation path reloads after the dialog closes, long after the drop cleared activePayloadRef.
   const droppedUidRef = useRef<string | null>(null);
 
   const navigatorRef = useRef<EdgeHoverNavigator | null>(null);
@@ -454,8 +446,7 @@ export function useAppointmentDrag({
           }
           refreshAffectedRows();
         })
-        // The generated bindings re-throw Error-typed rejections (IPC failures)
-        // instead of returning a status object; without this the drop fails silently.
+        // Bindings re-throw Error-typed rejections; without this catch the drop fails silently.
         .catch(() => {
           setErrorMessage("Der Einsatz konnte nicht verschoben werden.");
           refreshAffectedRows();

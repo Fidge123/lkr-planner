@@ -13,7 +13,7 @@ export interface CacheLoadOptions {
 interface TtlCacheOptions<T> {
   ttlMs: number;
   load: () => Promise<T[]>;
-  /** Prefixes the error thrown when neither the cache nor the fallback can serve. */
+  /** Prefix of the error thrown when neither cache nor fallback can serve. */
   failureMessage: string;
   /** Consulted only when the load fails and nothing is held in memory. */
   fallback?: () => Promise<T[]>;
@@ -23,18 +23,12 @@ interface TtlCacheOptions<T> {
 
 export interface TtlCache<T> {
   get: (options?: CacheLoadOptions) => Promise<CacheLoadResult<T>>;
-  /**
-   * Publishes already-known data without counting as a fetch, so a caller that has
-   * read it from elsewhere can spare the fallback a second read of the same source.
-   */
+  /** Stores known data without counting as a fetch, sparing the fallback a second read. */
   seed: (data: T[]) => void;
   reset: () => void;
 }
 
-/**
- * Concurrent callers share one in-flight request, so a screen that mounts several
- * consumers at once still costs a single backend round trip.
- */
+/** Concurrent callers share one in-flight request, so a burst costs one round trip. */
 export function createTtlCache<T>({
   ttlMs,
   load,
@@ -44,8 +38,7 @@ export function createTtlCache<T>({
 }: TtlCacheOptions<T>): TtlCache<T> {
   let entry: { data: T[]; fetchedAtMs: number } | null = null;
   let inFlight: Promise<CacheLoadResult<T>> | null = null;
-  // Bumped whenever a request is superseded, so a chain that is still settling
-  // cannot write its result over the newer one that replaced it.
+  // Bumped per request and on reset, so a settling chain cannot overwrite a newer result.
   let generation = 0;
 
   function startLoad(): Promise<CacheLoadResult<T>> {
@@ -70,8 +63,7 @@ export function createTtlCache<T>({
           } satisfies CacheLoadResult<T>;
         }
 
-        // A failing fallback must not replace the load failure the caller needs to
-        // see, nor escape as a rejection this catch never wrapped.
+        // A failing fallback must not mask the load error, nor reject unwrapped.
         const fromDisk = (await fallback?.().catch(() => [])) ?? [];
         if (fromDisk.length > 0) {
           if (isCurrent()) {
@@ -101,8 +93,7 @@ export function createTtlCache<T>({
         return { data: entry.data, source: "cache" };
       }
 
-      // A forced refresh asks for data newer than now, so it must not adopt a
-      // request that was already running when the caller asked.
+      // A forced refresh must not adopt a request already running.
       if (forceRefresh) {
         inFlight = null;
       }
@@ -114,14 +105,13 @@ export function createTtlCache<T>({
 
     seed(data: T[]): void {
       if (entry || data.length === 0) return;
-      // Stamped as already expired: unlike the fallback, which runs because the
-      // network just failed, seeding happens before the load and must not suppress it.
+      // Stamped expired, so the pre-load seed does not suppress the network load.
       entry = { data, fetchedAtMs: now() - ttlMs };
     },
 
     reset(): void {
-      // Supersedes any settling chain: without this its `then` would repopulate the
-      // entry just cleared, and its `finally` would clear a later request's slot.
+      // Supersedes a settling chain: its `then` would repopulate the cleared entry.
+      // Its `finally` would also clear a later request's slot.
       generation += 1;
       entry = null;
       inFlight = null;
@@ -130,10 +120,8 @@ export function createTtlCache<T>({
 }
 
 /**
- * Callers reach this cache through unwrapCommandResult, which always throws an Error
- * with a message, so the last resort is unreachable today. It keeps whatever the value
- * stringifies to rather than a fixed sentence, because if some future loader does
- * reject with something else, that detail is the only clue there will be.
+ * Unreachable today: unwrapCommandResult always throws an Error with a message.
+ * Returns String(error) because a future loader may reject with other values.
  */
 function readErrorMessage(error: unknown): string {
   if (error instanceof Error && error.message.trim().length > 0) {

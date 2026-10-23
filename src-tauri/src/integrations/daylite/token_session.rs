@@ -114,7 +114,7 @@ impl TokenSession {
     }
 
     /// Exiting mid-rotation would strand the keychain on a refresh token Daylite already retired.
-    /// Flags before queueing, so callers already waiting for the lock cannot start a rotation either.
+    /// Flag before locking so queued waiters cannot start a rotation.
     pub(super) async fn close(&self) -> Result<(), DayliteApiError> {
         self.closing.store(true, Ordering::SeqCst);
         let _guard = self.rotation.lock().await;

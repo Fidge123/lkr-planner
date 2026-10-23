@@ -317,8 +317,7 @@ describe("insertionIndexAt", () => {
   });
 
   it("is stable once a preview is spliced in at the index it returned", () => {
-    // Inserting a 50px preview at index 1 pushes only the cards already below the pointer
-    // further down, so re-measuring must yield the same index instead of oscillating.
+    // The preview only moves cards below the pointer, so re-measuring must yield the same index.
     const pointerY = 125;
     const index = insertionIndexAt(stackedCards, pointerY);
     const shifted = stackedCards.map((card, i) =>
@@ -362,8 +361,7 @@ describe("resolveDropTarget", () => {
   });
 
   it("does not count the dragged card as its own neighbour", () => {
-    // The dragged card is one of the three, so a pointer below all of them resolves to 2
-    // rather than 3 in its own cell.
+    // The dragged card is one of the three, so a pointer below all of them resolves to 2, not 3.
     const target = resolveDropTarget(payload, cellZone(ownCellCards), 400);
 
     expect(target.orderIndex).toBe(2);
@@ -378,8 +376,6 @@ describe("resolveDropTarget", () => {
   });
 });
 
-// Composes the whole drop gesture the grid runs on drag end: the cell under the pointer plus
-// the cards' geometry become an insertion position, which decides the action and the command.
 describe("drop gesture end to end", () => {
   it("reorders a card to the front of its own day", async () => {
     const deps = okDeps();

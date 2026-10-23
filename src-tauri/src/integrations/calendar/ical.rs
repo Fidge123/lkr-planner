@@ -3,8 +3,7 @@ use icalendar::{Calendar, CalendarComponent, CalendarDateTime, Component, DatePe
 
 use super::types::RawVEvent;
 
-/// X-property carrying the assignment's position among its same-day siblings.
-/// It survives re-slotting because `patch_event_slot` copies every line it does not rewrite.
+/// Assignment position among same-day siblings, preserved because `patch_event_slot` copies unrewritten lines.
 pub(super) const ORDER_PROPERTY: &str = "X-LKR-ORDER";
 
 pub(crate) fn build_ical_payload(
@@ -65,8 +64,7 @@ pub(super) fn parse_ical_events(ical_text: &str) -> Result<Vec<RawVEvent>, Strin
             let start_time = ical_time(&start);
             let raw_end = event.get_end();
             let end_time = raw_end.as_ref().and_then(ical_time);
-            // Only DATE-valued DTEND is captured; DATE-TIME DTEND is intentionally ignored here
-            // because absence expansion only applies to all-day (VALUE=DATE) events.
+            // Only DATE-valued DTEND is read; absence expansion applies to all-day (VALUE=DATE) events only.
             let dtend = raw_end.as_ref().and_then(|dt| match dt {
                 DatePerhapsTime::Date(d) => Some(*d),
                 _ => None,

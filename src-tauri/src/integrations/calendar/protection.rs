@@ -6,8 +6,7 @@ use crate::integrations::telemetry::observe::RequestFailure;
 
 pub(crate) const FIXED_APPOINTMENT_MESSAGE: &str = "Dieser Termin ist als 'Termin FIX geplant' gesperrt und kann nicht geändert, auf einen anderen Tag verschoben oder gelöscht werden.";
 
-/// Refuses a write to an event whose Daylite project is a fixed appointment.
-/// The link comes from the event, never the caller: an override decides only whether to proceed, not what counts as protected.
+/// The project link is read from the event, so an override only skips the check.
 pub(crate) async fn refuse_protected_event(
     session: &CaldavSession,
     href: &str,
@@ -111,7 +110,6 @@ mod tests {
 
     const UNREADABLE_EVENT: &str = "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:uid-1\r\nSUMMARY:Projekt Nord\r\nDTSTART;VALUE=DATE:20260506\r\nEND:VEVENT\r\nEND:VCALENDA";
 
-    /// Serves one event to every GET and records how often it was asked.
     struct EventServer {
         base_url: String,
         requests: Arc<Mutex<usize>>,
@@ -173,7 +171,6 @@ mod tests {
         }
     }
 
-    /// Records whether the guard reached the Daylite lookup, and answers with the given category.
     fn lookup(
         category: Option<&'static str>,
         calls: Arc<Mutex<usize>>,

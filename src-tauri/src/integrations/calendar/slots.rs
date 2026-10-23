@@ -16,10 +16,8 @@ pub(super) fn full_window() -> (NaiveTime, NaiveTime) {
     )
 }
 
-/// `uids` arrives in the day's canonical order, which `sequence_day` establishes, so the
-/// first UID gets the earliest slot.
-/// Boundary i sits at start + (i * length) / n minutes, so the first slot starts at
-/// 08:00, the last ends at 16:00, and adjacent slots share a boundary without overlap.
+/// `uids` must be in the canonical order from `sequence_day`; the first gets the earliest slot.
+/// Boundary i is at start + (i * length) / n minutes, so adjacent slots share one.
 pub(super) fn allocate_slots(uids: &[String]) -> Vec<(String, NaiveTime, NaiveTime)> {
     let n = uids.len() as u32;
     if n == 0 {
@@ -50,13 +48,13 @@ pub(super) struct SlotUpdate {
     pub(super) payload: String,
 }
 
-/// One assignment singled out of the day, either because the caller is about to write it itself or because it is being moved to a new position within the day.
+/// An assignment singled out for placement within the day.
 #[derive(Clone, Copy)]
 pub(super) struct DayPlacement<'a> {
     pub(super) uid: &'a str,
-    /// Requested position among the day's assignments. `None` keeps the event where it already sits, or appends it when the day does not contain it yet.
+    /// Requested position. `None` keeps the current position, or appends when the day lacks the event.
     pub(super) order_index: Option<u32>,
-    /// True when the caller PUTs this event itself, so the plan must not update it as well.
+    /// True when the caller PUTs this event itself, so the plan must not update it.
     pub(super) written_by_caller: bool,
 }
 
@@ -66,17 +64,10 @@ pub(super) struct DayPlan {
     pub(super) updates: Vec<SlotUpdate>,
 }
 
-/// Only events whose DESCRIPTION first line is a `daylite:` reference take part, so bare, absence, and holiday events are never re-slotted.
-/// Events already sitting in their slot are skipped so repeated runs converge without extra writes.
-///
-/// Excluded events keep whatever times they already have and take no share of the window,
-/// so the participating assignments are spread across the full 08:00-16:00 window and may overlap an excluded event.
-/// That is intended: the alternative would be to silently shrink everyone else's slot on the guess that the untouched event still occupies its old times.
-///
-/// The day is re-sequenced to a dense 0..n-1 ordering on every call, so an event is updated whenever its order index or its slot times no longer match.
-///
-/// A `placement` names an event the caller singles out: it lands at the requested position,
-/// and when `written_by_caller` is set the caller PUTs it itself, so no update is planned for it and each event is written exactly once per operation.
+/// Only events whose DESCRIPTION first line is a `daylite:` reference take part, so bare, absence and holiday events are never re-slotted.
+/// Events already in their slot are skipped, so repeated runs converge without writes.
+/// Excluded events keep their times and take no window share, so participants may overlap them on purpose.
+/// A `placement` lands at its requested position; when `written_by_caller` is set, the caller PUTs it and no update is planned.
 /// Its resulting index and slot come back via `DayPlan::placed`.
 pub(super) fn plan_slot_updates(
     events: &[RawVEvent],
@@ -135,10 +126,7 @@ pub(super) fn plan_slot_updates(
     }
 }
 
-/// Ranks the day's assignments and returns the UIDs in the order the allocation runs on.
-///
-/// Existing events take odd sort keys so a requested position `d` (key `2d`) lands ahead of
-/// whoever currently occupies rank `d` rather than tying with it.
+/// Existing events take odd keys, so a requested position `d` (key `2d`) sorts ahead of the event at rank `d`.
 fn sequence_day(
     assignments: &[(PendingEvent, &RawVEvent)],
     placement: Option<&DayPlacement>,
@@ -159,9 +147,8 @@ fn sequence_day(
     }
 
     if let Some(placement) = placement {
-        // An event the caller is not writing and that this plan cannot patch takes no slot:
-        // allocating one would shrink every other assignment's window for a slot that stays
-        // empty, because the event itself is never rewritten.
+        // A placement the caller does not write and this plan cannot patch is never rewritten,
+        // so a slot for it would stay empty and shrink the others' windows.
         if placement.written_by_caller || current_position.is_some() {
             let position = placement.order_index.or(current_position);
             keys.push((
@@ -175,10 +162,8 @@ fn sequence_day(
     keys.into_iter().map(|(_, uid)| uid.to_string()).collect()
 }
 
-/// Assignments are ordered by their persisted index. Two that share one are read the way a
-/// planner reads the cell: the earlier start comes first, a longer assignment wins an
-/// identical start, and the canonical UID keeps the ordering total. Assignments without an
-/// index or without times sort last.
+/// Ordered by persisted index, then earlier start, then longer duration, then UID for a total order.
+/// Missing index or times sort last.
 fn ordering_key(pending: &PendingEvent) -> (u32, u32, Reverse<u32>, &str) {
     let start = minute_of_time(pending.start_time.as_deref());
     let end = minute_of_time(pending.end_time.as_deref());
@@ -200,10 +185,8 @@ fn minute_of_time(time: Option<&str>) -> Option<u32> {
     Some(hours.parse::<u32>().ok()? * 60 + minutes.parse::<u32>().ok()?)
 }
 
-/// Every line other than the VEVENT's own DTSTART/DTEND and order property is copied through
-/// untouched, so user-added content (extra DESCRIPTION lines, LOCATION, alarms) survives
-/// re-slotting and a VTIMEZONE's DTSTART is left alone. A missing DTEND or order property is
-/// inserted before END:VEVENT.
+/// Only the VEVENT's own DTSTART, DTEND and order property are rewritten; other lines survive untouched.
+/// A missing DTEND or order property is inserted before END:VEVENT.
 fn patch_event_slot(
     raw_ical: &str,
     date: &str,
@@ -252,19 +235,12 @@ fn patch_event_slot(
     out.join("\r\n") + "\r\n"
 }
 
-/// True if `patch_event_slot` can safely rewrite this resource's DTSTART/DTEND. It cannot,
-/// and the event is therefore excluded from re-allocation rather than corrupt it, when:
-/// - a rewritten property inside the VEVENT (DTSTART, DTEND, or the order property) is folded
-///   across physical lines (patch replaces only
-///   the first line and would orphan the continuation). Folds elsewhere are harmless because
-///   patch copies every other line through untouched, so they are deliberately allowed,
-/// - the resource holds more than one VEVENT (patch shares its DTEND-insertion state, so a
-///   recurrence override would be squashed onto the first component's slot),
-/// - the VEVENT expresses its end via DURATION (patch adds a DTEND, which RFC 5545 §3.6.1
-///   forbids alongside DURATION),
-/// - the VEVENT belongs to a repeating series through RRULE, RDATE, or RECURRENCE-ID.
-///   Patching the master moves every occurrence, and only the master's own start date
-///   triggers re-allocation, so the later occurrences would never be corrected, or
+/// True if `patch_event_slot` can safely rewrite this resource. It cannot, and the event is excluded from re-allocation, when:
+/// - a rewritten property (DTSTART, DTEND, or the order property) is folded across physical lines,
+///   since patch replaces only the first line; folds elsewhere are copied through and deliberately allowed,
+/// - the resource holds more than one VEVENT, since patch shares its DTEND state and would squash an override onto the first slot,
+/// - the VEVENT uses DURATION, which RFC 5545 §3.6.1 forbids alongside the DTEND that patch adds,
+/// - the VEVENT belongs to a series via RRULE, RDATE, or RECURRENCE-ID, since only the master's start triggers re-allocation, so later occurrences would never be corrected, or
 /// - the event does not start and end on the same day (see `spans_multiple_days`).
 fn can_patch_slot(raw_ical: &str) -> bool {
     let mut in_vevent = false;
@@ -307,9 +283,7 @@ fn can_patch_slot(raw_ical: &str) -> bool {
     vevent_count <= 1 && !spans_multiple_days(dtstart, dtend)
 }
 
-/// True when the event covers more than one day. `patch_event_slot` writes both DTSTART and
-/// DTEND with the single day being allocated, which would silently collapse a longer span
-/// onto its first day.
+/// True when the event spans several days, which `patch_event_slot` would silently collapse onto one.
 fn spans_multiple_days(dtstart: Option<&str>, dtend: Option<&str>) -> bool {
     let (Some(dtstart), Some(dtend)) = (dtstart, dtend) else {
         return false;
@@ -327,15 +301,13 @@ fn spans_multiple_days(dtstart: Option<&str>, dtend: Option<&str>) -> bool {
     last_day != start
 }
 
-/// True when the line carries the named iCal property, i.e. the name is followed by a
-/// parameter (`;`) or the value separator (`:`) rather than being a longer property's prefix.
+/// True when the line is the named iCal property, not one whose name merely starts with it.
 fn is_property(line: &str, name: &str) -> bool {
     line.strip_prefix(name)
         .is_some_and(|rest| rest.starts_with(':') || rest.starts_with(';'))
 }
 
-/// The value of a property line, i.e. everything after the last colon, which separates any
-/// parameters from the value.
+/// Everything after the last colon, which ends any parameters.
 fn property_value(line: &str) -> Option<&str> {
     line.rsplit_once(':').map(|(_, value)| value)
 }
@@ -571,8 +543,7 @@ mod tests {
 
     #[test]
     fn same_day_update_counts_its_own_event_only_once() {
-        // The event being updated is still on the server; passing it as extra_uid must
-        // not double-count it in the allocation or plan a second PUT for it.
+        // The updated event is still on the server, so it must be neither counted twice nor PUT twice.
         let events = vec![
             ordered_assignment_event("uid-a", "2026-05-06", "08:00", "12:00", 0),
             ordered_assignment_event("uid-b", "2026-05-06", "12:00", "16:00", 1),
@@ -630,8 +601,7 @@ mod tests {
 
     #[test]
     fn assignment_without_href_is_left_alone() {
-        // Without a CalDAV href there is nothing to PUT; the event must not shift
-        // its neighbours' slots either.
+        // Without an href nothing can be PUT, and neighbours' slots must not shift.
         let mut orphan = assignment_event("uid-a", "2026-05-06", "08:00", "16:00");
         orphan.href = String::new();
         let events = vec![
@@ -745,8 +715,7 @@ mod tests {
             updates.iter().all(|u| u.uid != "uid-a"),
             "a DURATION-based event must never be re-slotted"
         );
-        // Intended: the excluded event keeps its 08:00-16:00 times and takes no share of the
-        // window, so the two remaining assignments split the full window and overlap it.
+        // Intended: the excluded event keeps its times, and the other two split the full window over it.
         assert_eq!(
             updates.len(),
             2,
@@ -897,9 +866,8 @@ mod tests {
 
     #[test]
     fn reordering_an_event_that_cannot_be_patched_allocates_no_slot_for_it() {
-        // uid-x is excluded from re-slotting, so the reorder cannot move it. Allocating a
-        // slot for it anyway would split the day three ways and leave 08:00-10:40 empty
-        // while squeezing the two assignments that can be written.
+        // uid-x is excluded from re-slotting, so it cannot move.
+        // A slot for it would leave 08:00-10:40 empty while squeezing the two writable assignments.
         let mut excluded = ordered_assignment_event("uid-x", "2026-05-06", "09:00", "17:00", 0);
         excluded.raw_ical = excluded
             .raw_ical

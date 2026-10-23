@@ -87,8 +87,7 @@ function CategoryDot({ color }: { color: string | null }) {
   );
 }
 
-// Daylite project names carry hard line breaks, which would turn a row into a
-// ragged two-line block.
+// Daylite project names contain hard line breaks that would wrap a row onto two lines.
 function singleLine(name: string): string {
   return name.replace(/\s+/g, " ").trim();
 }

@@ -119,8 +119,7 @@ pub struct HolidayCacheEntry {
     pub holidays: Vec<CachedHoliday>,
 }
 
-// Kept separate from holidays::Holiday so the on-disk cache schema and the API
-// surface can evolve independently.
+// Separate from holidays::Holiday so the on-disk cache and API surface evolve independently.
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct CachedHoliday {

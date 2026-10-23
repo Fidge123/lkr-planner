@@ -322,15 +322,13 @@ mod tests {
 
         assert_eq!(calendars.len(), 3);
         assert_eq!(calendars[0].display_name, "Jörg Schröder - Einsatz");
-        // XML entity &amp; must be decoded to & by the parser, not returned literally
         assert_eq!(calendars[1].display_name, "Müller & Söhne - Einsatz");
         assert_eq!(calendars[2].display_name, "Günther Weiß - Einsatz");
     }
 
     #[test]
     fn vcr_alternate_namespace_prefix_is_handled_correctly() {
-        // Uses xmlns:dav="DAV:" and xmlns:caldav="urn:ietf:params:xml:ns:caldav" instead of the typical d:/c: prefixes.
-        // The parser matches by namespace URI, not prefix string.
+        // The parser matches by namespace URI, not prefix.
         let body = include_str!("zep_vcr/propfind_alternate_ns_prefix.xml");
         let calendars = parse_propfind_calendars(body, "https://app.zep.de/caldav/admin");
 

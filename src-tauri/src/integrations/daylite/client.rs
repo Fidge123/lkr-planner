@@ -54,8 +54,7 @@ impl DayliteApiClient {
         }
     }
 
-    /// Points at a port nothing listens on, so a cassette miss fails fast instead
-    /// of reaching the live API.
+    /// Unreachable port, so a cassette miss fails fast instead of reaching the live API.
     #[cfg(test)]
     pub(super) fn with_replay_cassette(cassette_file_name: &str) -> Result<Self, DayliteApiError> {
         Self::with_record_replay(
@@ -495,9 +494,7 @@ mod tests {
 
     #[tokio::test]
     async fn replays_recorded_response_without_network_call() {
-        // The env lock guards only the VCR_MODE mutation and the read that follows it;
-        // once the config is captured the replay touches no shared state, so the guard
-        // is dropped before the awaits rather than held across them.
+        // The env lock covers only the VCR_MODE mutation and read, so it is dropped before the awaits.
         let transport = {
             let _guard = env_lock().lock().expect("env lock should not be poisoned");
             let cassette_path = cassette_path("daylite-client-replay.json");

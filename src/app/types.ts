@@ -16,13 +16,13 @@ export interface CellEvent {
   href: string | null;
   /** Daylite project reference (e.g. "/v1/projects/42"). Null for non-assignment events. */
   projectRef: string | null;
-  /** Daylite project status. Null for non-assignment events and for assignments whose project is pending or could not be resolved. */
+  /** Daylite project status. Null for non-assignments and for pending or unresolved projects. */
   projectStatus: string | null;
-  /** Color of the resolved project's Daylite category, shown as a strip on the card. Null when the project has no category color. */
+  /** Daylite category color of the project, shown as a card strip. Null without a category color. */
   categoryColor: string | null;
-  /** Position among the day's assignments. Null for events that carry no order index yet. */
+  /** Position among the day's assignments. Null until the event has an order index. */
   orderIndex: number | null;
-  /** The project was not cached when the week loaded and is still being resolved. */
+  /** Project was not cached when the week loaded and is still being resolved. */
   projectPending: boolean;
 }
 
@@ -44,14 +44,14 @@ function absenceCategoryColor(title: string): string {
   return absenceCodeColors[code] ?? defaultAbsenceColor;
 }
 
-/** An assignment carries no status while its project is pending and after it could not be read. */
+/** No status while the project is pending or could not be read. */
 export function isUnresolvedAssignment(event: CellEvent): boolean {
   return (
     event.projectRef !== null && !event.projectStatus && !event.projectPending
   );
 }
 
-/** What a card is highlighted by. Null for bare events and absences, which are not highlightable. */
+/** Highlight key of a card. Null for bare events and absences, which cannot be highlighted. */
 export function highlightKey(event: CellEvent): string | null {
   return event.kind === "assignment" ? event.projectRef : null;
 }
@@ -60,7 +60,7 @@ export function isHighlighted(
   event: CellEvent,
   activeKey: string | null,
 ): boolean {
-  // Bare events and absences all key to null, so an equality test alone would group them with each other.
+  // Bare events and absences key to null; equality alone would group them together.
   return activeKey !== null && highlightKey(event) === activeKey;
 }
 
@@ -72,7 +72,7 @@ export function nextHighlight(
   return current === key ? null : key;
 }
 
-/** A highlight belongs to the week it was activated in and applies to no other. */
+/** Scoped to the week it was activated in. */
 export interface ActiveHighlight {
   key: string;
   weekStart: string;

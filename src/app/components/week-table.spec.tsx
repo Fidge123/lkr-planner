@@ -84,7 +84,6 @@ function employee(self: string, nickname: string): PlanningContactRecord {
 const kowalski = employee("/v1/contacts/1", "Kowalski");
 const meier = employee("/v1/contacts/2", "Meier");
 
-/** One marked title per highlighted card. */
 function markedTitles(html: string): string[] {
   return [
     ...html.matchAll(

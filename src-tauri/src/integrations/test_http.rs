@@ -2,8 +2,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-/// Answers every request with an empty JSON body and keeps the connection open,
-/// counting accepted connections so a test can tell whether a client reused one.
+/// Keeps connections open with empty JSON bodies and counts accepted connections.
 pub(crate) async fn spawn_keep_alive_server() -> (String, Arc<AtomicUsize>) {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
         .await

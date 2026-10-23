@@ -27,8 +27,7 @@ fn daylite_open_project_inner(app: tauri::AppHandle, project_ref: String) -> Res
 
 const OPEN_FAILED_MESSAGE: &str = "Das Projekt konnte in Daylite nicht geöffnet werden.";
 
-/// Not a query string and not `daylite4:`: the parameters sit in the authority position,
-/// and a URL type would normalize both away.
+/// Not `daylite4:` and not a query string: parameters sit in the authority, which a URL type would normalize away.
 fn project_deep_link_url(project_ref: &str) -> Result<String, String> {
     let id = project_ref
         .trim()

@@ -74,8 +74,7 @@ export function useAssignmentModal({
     filterInputRef.current?.focus();
   }, []);
 
-  // A callback ref, not an effect: the dialog element is remounted whenever the modal swaps to the delete or unsaved-changes dialog and back,
-  // so a mount effect would leave the listener detached after the swap.
+  // A callback ref, not a mount effect: the dialog remounts on each swap, which would detach the listener.
   // requestClose is read through a ref because the listener outlives the render that attached it.
   const requestCloseRef = useRef<() => void>(() => {});
   const dialogRef = useCallback((dialog: HTMLDialogElement | null) => {

@@ -355,8 +355,7 @@ describe("TimetableCell drop preview", () => {
   });
 
   it("skips the dragged card when counting the preview position", () => {
-    // The dragged card does not occupy a position in the day it is dropped into, so an
-    // index of 1 still lands after the one remaining card.
+    // The dragged card occupies no position, so index 1 lands after the one remaining card.
     const html = renderPreview({
       draggedUid: "uid-first",
       dropPreview: { ...preview, orderIndex: 1 },

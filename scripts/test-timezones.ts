@@ -1,7 +1,6 @@
 import { spawnSync } from "node:child_process";
 
-// CI runners default to UTC, where a value built in local time and one built in
-// UTC are indistinguishable, so every bug from mixing the two passes unnoticed.
+// CI defaults to UTC, where local-time and UTC values are indistinguishable, hiding bugs that mix them.
 const timezones = [
   "UTC",
   "Europe/Berlin", // production timezone
