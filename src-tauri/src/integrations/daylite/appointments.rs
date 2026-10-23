@@ -562,14 +562,6 @@ mod tests {
     #[tokio::test]
     async fn appointment_lifecycle_replays_vcr_cassette() {
         // Recorded by `record_daylite_cassettes_from_live_api` with `DAYLITE_VCR_SCOPE=all`, which needs real Daylite credentials.
-        let cassette_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../tests/cassettes/daylite-appointments.json");
-        if !cassette_path.exists() {
-            eprintln!(
-                "skipping appointment_lifecycle_replays_vcr_cassette: cassette not recorded yet"
-            );
-            return;
-        }
         let client = DayliteApiClient::with_replay_cassette("daylite-appointments.json")
             .expect("replay client should be created");
         let tokens = crate::integrations::daylite::test_support::token_state(
