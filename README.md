@@ -6,20 +6,24 @@ It is built with Tauri, React, TypeScript, and Bun.
 ## Current Scope
 
 The current implementation covers the weekly planning view with full assignment CRUD, CalDAV synchronization, Daylite project/employee data, Daylite appointments for planned project days, and German holiday display.
-The backlog is now centered on Planradar project linking, assignment modal quality-of-life features, and drag-and-drop replanning.
+The backlog is now centered on Planradar project linking and assignment modal quality-of-life features.
 
 ### Implemented
 
-- Daylite authentication with refresh-token rotation and documented token flow in [docs/daylite-authentication-flow.md](/Users/flori/dev/lkr-planner/docs/daylite-authentication-flow.md)
+- Daylite authentication with refresh-token rotation and documented token flow in [docs/daylite-authentication-flow.md](docs/daylite-authentication-flow.md)
 - Typed Daylite API foundation for project and contact read/search operations
 - Local application store for persisted configuration and cached integration data
 - Secure OS-level token and credential storage via the system keychain (`keyring-core`)
-- Employee source switched to Daylite contacts (`Monteur` category)
+- Employee source switched to Daylite contacts (`Monteur` and `Test` categories)
 - Employee ZEP CalDAV calendar URLs are read from and written back to Daylite contact `urls`, with connection validation and diagnostics
 - Daylite project overview rendered below the planning table
 - Weekly planning table backed by real, persisted assignment data instead of dummy data
 - Assignment modal CRUD flow (create, edit, delete) for weekly planning
 - Live Daylite project search/filter in the assignment modal
+- Default suggestions in the assignment modal: the most recently assigned project followed by overdue projects
+- Next-day quick-add suggestion for consecutive daily assignments
+- Deterministic daily time-slot allocation for same-day assignments
+- Drag-and-drop of assignment cards across days and employees, including in-day reordering
 - Calendar cell composition and rendering for assignments, holidays, absences, and appointments
 - Employee absence display from the ZEP absence calendar
 - German holiday import for the week view (Nager.Date API)
@@ -28,14 +32,10 @@ The backlog is now centered on Planradar project linking, assignment modal quali
 - Daylite appointments that mirror each planned project day, linked to the project and the assigned workers, with a German alert and retry when the synchronization fails
 - Record/replay HTTP (VCR) testing infrastructure for integration tests
 - Opt-in error and performance telemetry to PostHog, configurable under settings "Diagnose"
-- ADR-based architecture documentation in [docs/adr](/Users/flori/dev/lkr-planner/docs/adr)
+- ADR-based architecture documentation in [docs/adr](docs/adr)
 
 ### Planned / In Backlog
 
-- Default suggestions in the assignment modal
-- Next-day quick-add suggestion behavior
-- Deterministic daily time-slot allocation for assignment sync
-- Drag-and-drop of assignment cards across days and employees, including in-day reordering
 - Planradar API client, existing-project linking, project creation, and archived-project reactivation
 - Daylite-to-Planradar project comparison
 
@@ -135,7 +135,7 @@ When adding or refreshing committed cassette files, keep them under `tests/casse
 
 #### Record Live Daylite Cassettes
 
-The live-record harness is an ignored Rust test in [recording_harness.rs](/Users/flori/dev/lkr-planner/src-tauri/src/integrations/daylite/recording_harness.rs#L74).
+The live-record harness is an ignored Rust test in [recording_harness.rs](src-tauri/src/integrations/daylite/recording_harness.rs).
 It writes the standard Daylite cassette files in `tests/cassettes/` using the real API.
 
 Required environment variables:
@@ -149,21 +149,24 @@ Required environment variables:
 Optional environment variables:
 
 - `DAYLITE_VCR_SCOPE=readonly|all`
-- `DAYLITE_VCR_CONTACT_REFERENCE`
-- `DAYLITE_VCR_PRIMARY_ICAL_URL`
-- `DAYLITE_VCR_ABSENCE_ICAL_URL`
-- `DAYLITE_VCR_APPOINTMENT_PROJECT_REFERENCE`
 
 `DAYLITE_VCR_SCOPE` defaults to `readonly`.
 That records only the read-only cassettes:
 
 - `daylite-refresh-tokens.json`
-- `daylite-list-projects.json`
 - `daylite-search-projects.json`
+- `daylite-overdue-projects.json`
 - `daylite-list-contacts.json`
 
 Use `DAYLITE_VCR_SCOPE=all` only when you intentionally want to refresh the mutating cassettes `daylite-update-contact-ical-urls.json` and `daylite-appointments.json`.
-For that mode you must also provide `DAYLITE_VCR_CONTACT_REFERENCE`, `DAYLITE_VCR_PRIMARY_ICAL_URL`, `DAYLITE_VCR_ABSENCE_ICAL_URL`, and `DAYLITE_VCR_APPOINTMENT_PROJECT_REFERENCE`.
+That mode additionally requires:
+
+- `DAYLITE_VCR_CONTACT_REFERENCE` (a test contact whose calendar URLs are rewritten and that is linked to the recorded appointment)
+- `DAYLITE_VCR_PRIMARY_ICAL_URL` (the primary calendar URL written to that contact)
+- `DAYLITE_VCR_ABSENCE_ICAL_URL` (the absence calendar URL written to that contact)
+- `DAYLITE_VCR_APPOINTMENT_PROJECT_REFERENCE` (a test project the recorded appointment is linked to)
+
+The contact recording writes the given calendar URLs to the contact, so pass its real URLs if the contact appears in the planning grid.
 The appointment recording creates an app-managed appointment on 2030-01-07 linked to that test project and the test contact, searches and edits it, unlinks the contact and deletes it, which leaves it in the Daylite trash.
 
 Read-only recording example:
@@ -171,7 +174,7 @@ Read-only recording example:
 ```bash
 VCR_MODE=record \
 DAYLITE_VCR_SCOPE=readonly \
-DAYLITE_BASE_URL="https://app.daylite.app/api/v1" \
+DAYLITE_BASE_URL="https://api.marketcircle.net/v1" \
 DAYLITE_REFRESH_TOKEN="..." \
 DAYLITE_VCR_PROJECT_SEARCH_TERM="Nord" \
 DAYLITE_VCR_PROJECT_NO_MATCH_SEARCH_TERM="XXXXX" \
@@ -184,7 +187,7 @@ Record all cassettes, including the live contact PATCH and appointment cassettes
 ```bash
 VCR_MODE=record \
 DAYLITE_VCR_SCOPE=all \
-DAYLITE_BASE_URL="https://app.daylite.app/api/v1" \
+DAYLITE_BASE_URL="https://api.marketcircle.net/v1" \
 DAYLITE_REFRESH_TOKEN="..." \
 DAYLITE_VCR_PROJECT_SEARCH_TERM="Nord" \
 DAYLITE_VCR_PROJECT_NO_MATCH_SEARCH_TERM="XXXXX" \
@@ -199,7 +202,7 @@ cargo test --manifest-path src-tauri/Cargo.toml \
 After recording:
 
 1. Inspect the updated cassette JSON and confirm no `Authorization`, `Cookie`, or `x-api-key` values were written.
-2. Replay the full Rust suite without `VCR_MODE`:
+2. Replay the full Rust suite without `VCR_MODE`; a replay test fails when its cassette is missing, so commit every recorded cassette:
 
 ```bash
 cargo test --manifest-path src-tauri/Cargo.toml
