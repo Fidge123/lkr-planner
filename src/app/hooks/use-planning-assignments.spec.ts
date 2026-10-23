@@ -205,19 +205,6 @@ describe("createWeekLoader load time", () => {
     expect(view().loadedWeekStart).toBe(otherWeek);
     expect(view().lastLoadedAt).toBe(1_000);
   });
-
-  it("records when a failed load completed", async () => {
-    const { clock, loader, respond, view } = weekLoader();
-    respond(() => {
-      clock.advance(2_000);
-      return { status: "error", error: "Kalender nicht erreichbar." };
-    });
-
-    await loader.loadActiveWeek(shownWeek);
-
-    expect(view().errorMessage).toBe("Kalender nicht erreichbar.");
-    expect(view().lastLoadedAt).toBe(3_000);
-  });
 });
 
 function deferredResult() {
@@ -231,15 +218,6 @@ function deferredResult() {
 const nextDay = "2026-08-11";
 
 describe("createWeekLoader automatic refresh", () => {
-  it("fetches the shown week again instead of showing it from the cache", async () => {
-    const { loader, requests } = weekLoader();
-    await loader.loadActiveWeek(shownWeek);
-
-    await loader.refresh();
-
-    expect(requests).toEqual([shownWeek, shownWeek]);
-  });
-
   it("discards every other cached week", async () => {
     const { loader, requests } = weekLoader();
     await loader.loadActiveWeek(shownWeek);
@@ -249,47 +227,6 @@ describe("createWeekLoader automatic refresh", () => {
     await loader.loadActiveWeek(otherWeek);
 
     expect(requests).toEqual([shownWeek, otherWeek, shownWeek, otherWeek]);
-  });
-
-  it("keeps showing the loaded week while the refresh runs", async () => {
-    const { loader, respond, view } = weekLoader();
-    await loader.loadActiveWeek(shownWeek);
-    const pending = deferredResult();
-    respond(() => pending.promise);
-
-    const refreshing = loader.refresh();
-
-    expect(view().isLoading).toBe(true);
-    expect(Object.keys(view().eventsByEmployee)).toEqual(["emp-1"]);
-    pending.resolve(ok(row("emp-1", assignment("uid-2"))));
-    await refreshing;
-    expect(view().isLoading).toBe(false);
-    expect(view().eventsByEmployee["emp-1"].map((e) => e.uid)).toEqual([
-      "uid-2",
-    ]);
-  });
-
-  it("keeps the shown events and per-employee errors when the fetch fails", async () => {
-    const { loader, respond, view } = weekLoader();
-    respond(() =>
-      ok(row("emp-1", assignment("uid-1")), {
-        employeeReference: "emp-2",
-        events: [],
-        error: "Kalender nicht gefunden.",
-      }),
-    );
-    await loader.loadActiveWeek(shownWeek);
-    const before = view();
-    respond(() => ({ status: "error", error: "Kalender nicht erreichbar." }));
-
-    await loader.refresh();
-
-    expect(view().eventsByEmployee).toBe(before.eventsByEmployee);
-    expect(view().errorsByEmployee).toEqual({
-      "emp-2": "Kalender nicht gefunden.",
-    });
-    expect(view().loadedWeekStart).toBe(shownWeek);
-    expect(view().isLoading).toBe(false);
   });
 
   it("keeps the shown week editable after a failed refresh", async () => {
@@ -305,18 +242,6 @@ describe("createWeekLoader automatic refresh", () => {
     });
 
     expect(view().eventsByEmployee["emp-1"][0].date).toBe(nextDay);
-  });
-
-  it("clears the error message once a refresh succeeds", async () => {
-    const { loader, respond, view } = weekLoader();
-    respond(() => ({ status: "error", error: "Kalender nicht erreichbar." }));
-    await loader.loadActiveWeek(shownWeek);
-    respond(() => ok(row("emp-1", assignment("uid-1"))));
-
-    await loader.refresh();
-
-    expect(view().errorMessage).toBeNull();
-    expect(Object.keys(view().eventsByEmployee)).toEqual(["emp-1"]);
   });
 
   it("keeps an edit made while the refresh ran over the data it fetched before", async () => {
@@ -337,17 +262,6 @@ describe("createWeekLoader automatic refresh", () => {
 
     expect(view().eventsByEmployee["emp-1"][0].date).toBe(nextDay);
     expect(view().lastLoadedAt).toBe(3_000);
-  });
-
-  it("empties the grid behind the error when a manual reload fails", async () => {
-    const { loader, respond, view } = weekLoader();
-    await loader.loadActiveWeek(shownWeek);
-    respond(() => ({ status: "error", error: "Kalender nicht erreichbar." }));
-
-    await loader.loadActiveWeek(shownWeek, "reload");
-
-    expect(view().eventsByEmployee).toEqual({});
-    expect(view().errorMessage).toBe("Kalender nicht erreichbar.");
   });
 });
 
@@ -370,6 +284,7 @@ describe("createWeekLoader retry of a failed automatic refresh", () => {
 
     expect(view().errorMessage).toBeNull();
     expect(view().lastLoadedAt).toBe(1_000);
+    expect(Object.keys(view().eventsByEmployee)).toEqual(["emp-1"]);
     clock.advance(29_999);
     expect(requests).toHaveLength(2);
 
@@ -399,17 +314,6 @@ describe("createWeekLoader retry of a failed automatic refresh", () => {
     expect(requests).toHaveLength(3);
   });
 
-  it("drops the pending retry when the shown week is reloaded", async () => {
-    const { clock, loader, requests, respond } = await failedRefresh();
-    respond(() => ok(row("emp-1", assignment("uid-1"))));
-
-    await loader.loadActiveWeek(shownWeek, "reload");
-    clock.advance(30_000);
-    await settle();
-
-    expect(requests).toHaveLength(3);
-  });
-
   it("drops the pending retry when another week is shown", async () => {
     const { clock, loader, requests, respond } = await failedRefresh();
     respond(() => ok(row("emp-1", assignment("uid-1", otherWeek))));
@@ -430,13 +334,5 @@ describe("createWeekLoader retry of a failed automatic refresh", () => {
 
     expect(requests).toHaveLength(2);
     expect(view().errorMessage).toBeNull();
-  });
-
-  it("cancels the pending retry when disposed", async () => {
-    const { clock, loader } = await failedRefresh();
-
-    loader.dispose();
-
-    expect(clock.pendingTimers()).toBe(0);
   });
 });

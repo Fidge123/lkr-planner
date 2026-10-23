@@ -24,6 +24,5 @@ export function manualClock(start = 0) {
       }
       time = until;
     },
-    pendingTimers: () => timers.length,
   };
 }

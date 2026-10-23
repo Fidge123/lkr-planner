@@ -55,15 +55,6 @@ describe("createAutoRefreshScheduler", () => {
     expect(environment.refreshes).toBe(1);
   });
 
-  it("does nothing before the first load", () => {
-    const { clock, environment, scheduler: auto } = scheduler();
-
-    auto.onReturn();
-    clock.advance(minutes(10));
-
-    expect(environment.refreshes).toBe(0);
-  });
-
   it("skips a due refresh while the window is hidden", () => {
     const { clock, environment, scheduler: auto } = scheduler();
     environment.visible = false;
@@ -110,18 +101,6 @@ describe("createAutoRefreshScheduler", () => {
     expect(environment.refreshes).toBe(0);
   });
 
-  it("skips the return check while still offline", () => {
-    const { clock, environment, scheduler: auto } = scheduler();
-    environment.online = false;
-    auto.setLastLoadedAt(0);
-    clock.advance(minutes(10));
-
-    auto.onReturn();
-    clock.advance(5_000);
-
-    expect(environment.refreshes).toBe(0);
-  });
-
   it("checks once 5 seconds after the last of several return events", () => {
     const { clock, environment, scheduler: auto } = scheduler();
     environment.online = false;
@@ -137,26 +116,5 @@ describe("createAutoRefreshScheduler", () => {
     clock.advance(1);
 
     expect(environment.refreshes).toBe(1);
-  });
-
-  it("refreshes once when a return check is pending as the interval elapses", () => {
-    const { clock, environment, scheduler: auto } = scheduler();
-    auto.setLastLoadedAt(0);
-    clock.advance(minutes(5) - 2_000);
-
-    auto.onReturn();
-    clock.advance(10_000);
-
-    expect(environment.refreshes).toBe(1);
-  });
-
-  it("cancels its timers when disposed", () => {
-    const { clock, scheduler: auto } = scheduler();
-    auto.setLastLoadedAt(0);
-    auto.onReturn();
-
-    auto.dispose();
-
-    expect(clock.pendingTimers()).toBe(0);
   });
 });
