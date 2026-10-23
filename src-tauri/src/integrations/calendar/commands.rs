@@ -97,27 +97,14 @@ pub async fn update_assignment(
 #[specta::specta]
 pub async fn move_assignment(
     app: tauri::AppHandle,
-    href: String,
-    target_employee_reference: String,
-    date: String,
-    project_ref: String,
-    project_name: String,
-    order_index: Option<u32>,
+    input: MoveAssignmentInput,
 ) -> Result<MoveAssignmentResult, AppError> {
     let handle = app.clone();
     observe(
         &handle,
         Operation::MoveAssignment,
         Integration::Zep,
-        move_assignment_inner(
-            app,
-            href,
-            target_employee_reference,
-            date,
-            project_ref,
-            project_name,
-            order_index,
-        ),
+        move_assignment_inner(app, input),
     )
     .await
 }
@@ -126,17 +113,14 @@ pub async fn move_assignment(
 #[specta::specta]
 pub async fn reorder_assignment(
     app: tauri::AppHandle,
-    href: String,
-    uid: String,
-    date: String,
-    order_index: u32,
+    input: ReorderAssignmentInput,
 ) -> Result<(), AppError> {
     let handle = app.clone();
     observe(
         &handle,
         Operation::ReorderAssignment,
         Integration::Zep,
-        reorder_assignment_inner(app, href, uid, date, order_index),
+        reorder_assignment_inner(app, input),
     )
     .await
 }
@@ -367,6 +351,26 @@ pub struct UpdateAssignmentInput {
     pub override_protection: bool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct MoveAssignmentInput {
+    pub href: String,
+    pub target_employee_reference: String,
+    pub date: String,
+    pub project_ref: String,
+    pub project_name: String,
+    pub order_index: Option<u32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ReorderAssignmentInput {
+    pub href: String,
+    pub uid: String,
+    pub date: String,
+    pub order_index: u32,
+}
+
 async fn create_assignment_inner(
     app: tauri::AppHandle,
     input: CreateAssignmentInput,
@@ -499,12 +503,14 @@ async fn update_assignment_inner(
 
 async fn move_assignment_inner(
     app: tauri::AppHandle,
-    href: String,
-    target_employee_reference: String,
-    date: String,
-    project_ref: String,
-    project_name: String,
-    order_index: Option<u32>,
+    MoveAssignmentInput {
+        href,
+        target_employee_reference,
+        date,
+        project_ref,
+        project_name,
+        order_index,
+    }: MoveAssignmentInput,
 ) -> Result<MoveAssignmentResult, AppError> {
     let store = crate::integrations::local_store::load_local_store(app.clone())?;
 
@@ -539,10 +545,12 @@ async fn move_assignment_inner(
 
 async fn reorder_assignment_inner(
     app: tauri::AppHandle,
-    href: String,
-    uid: String,
-    date: String,
-    order_index: u32,
+    ReorderAssignmentInput {
+        href,
+        uid,
+        date,
+        order_index,
+    }: ReorderAssignmentInput,
 ) -> Result<(), AppError> {
     let store = crate::integrations::local_store::load_local_store(app.clone())?;
     let session = load_caldav_session(&app, &store)?;

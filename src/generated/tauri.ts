@@ -21,8 +21,8 @@ export const commands = {
 	dayliteListCachedContacts: () => typedError<PlanningContactRecord[], AppError>(__TAURI_INVOKE("daylite_list_cached_contacts")),
 	createAssignment: (input: CreateAssignmentInput) => typedError<string, AppError>(__TAURI_INVOKE("create_assignment", { input })),
 	updateAssignment: (input: UpdateAssignmentInput) => typedError<null, AppError>(__TAURI_INVOKE("update_assignment", { input })),
-	moveAssignment: (href: string, targetEmployeeReference: string, date: string, projectRef: string, projectName: string, orderIndex: number | null) => typedError<MoveAssignmentResult, AppError>(__TAURI_INVOKE("move_assignment", { href, targetEmployeeReference, date, projectRef, projectName, orderIndex })),
-	reorderAssignment: (href: string, uid: string, date: string, orderIndex: number) => typedError<null, AppError>(__TAURI_INVOKE("reorder_assignment", { href, uid, date, orderIndex })),
+	moveAssignment: (input: MoveAssignmentInput) => typedError<MoveAssignmentResult, AppError>(__TAURI_INVOKE("move_assignment", { input })),
+	reorderAssignment: (input: ReorderAssignmentInput) => typedError<null, AppError>(__TAURI_INVOKE("reorder_assignment", { input })),
 	deleteAssignment: (href: string, overrideProtection: boolean) => typedError<null, AppError>(__TAURI_INVOKE("delete_assignment", { href, overrideProtection })),
 	/**  Returns nothing; the failures event reports the worker days still failing. */
 	retryDayliteAppointmentSync: () => __TAURI_INVOKE<void>("retry_daylite_appointment_sync"),
@@ -196,6 +196,15 @@ export type LocalStore = {
 	telemetry?: TelemetrySettings,
 };
 
+export type MoveAssignmentInput = {
+	href: string,
+	targetEmployeeReference: string,
+	date: string,
+	projectRef: string,
+	projectName: string,
+	orderIndex: number | null,
+};
+
 /**  CalDAV has no atomic cross-collection move, so the target copy is created first and the source deleted afterwards, which can leave a partial move. */
 export type MoveAssignmentResult = { kind: "moved"; newHref: string } | 
 /**  The assignment now exists twice. */
@@ -207,6 +216,13 @@ export type PlanningContactRecord = {
 	nickname?: string | null,
 	category?: string | null,
 	urls?: DayliteContactUrl[],
+};
+
+export type ReorderAssignmentInput = {
+	href: string,
+	uid: string,
+	date: string,
+	orderIndex: number,
 };
 
 export type ResolvedProject = {

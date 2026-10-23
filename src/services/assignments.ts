@@ -2,7 +2,9 @@ import {
   type CreateAssignmentInput,
   commands,
   type EmployeeWeekEvents,
+  type MoveAssignmentInput,
   type MoveAssignmentResult,
+  type ReorderAssignmentInput,
   type ResolvedProject,
   type UpdateAssignmentInput,
   type WeekLoadPurpose,
@@ -45,53 +47,16 @@ export function updateAssignment(input: UpdateAssignmentInput): Promise<null> {
   return callCommand(commands.updateAssignment(input), saveFailedMessage);
 }
 
-export interface MoveAssignmentInput {
-  href: string;
-  targetEmployeeReference: string;
-  date: string;
-  projectRef: string;
-  projectName: string;
-  orderIndex: number | null;
+export function moveAssignment(
+  input: MoveAssignmentInput,
+): Promise<MoveAssignmentResult> {
+  return callCommand(commands.moveAssignment(input), moveFailedMessage);
 }
 
-export function moveAssignment({
-  href,
-  targetEmployeeReference,
-  date,
-  projectRef,
-  projectName,
-  orderIndex,
-}: MoveAssignmentInput): Promise<MoveAssignmentResult> {
-  return callCommand(
-    commands.moveAssignment(
-      href,
-      targetEmployeeReference,
-      date,
-      projectRef,
-      projectName,
-      orderIndex,
-    ),
-    moveFailedMessage,
-  );
-}
-
-export interface ReorderAssignmentInput {
-  href: string;
-  uid: string;
-  date: string;
-  orderIndex: number;
-}
-
-export function reorderAssignment({
-  href,
-  uid,
-  date,
-  orderIndex,
-}: ReorderAssignmentInput): Promise<null> {
-  return callCommand(
-    commands.reorderAssignment(href, uid, date, orderIndex),
-    moveFailedMessage,
-  );
+export function reorderAssignment(
+  input: ReorderAssignmentInput,
+): Promise<null> {
+  return callCommand(commands.reorderAssignment(input), moveFailedMessage);
 }
 
 export function deleteAssignment(
