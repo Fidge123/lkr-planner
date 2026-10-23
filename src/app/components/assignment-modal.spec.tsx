@@ -1,8 +1,13 @@
-import { describe, expect, it } from "bun:test";
+import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import type {
   CalendarCellEvent,
   DayliteProjectSummary,
+  UpdateAssignmentInput,
 } from "../../generated/tauri";
+import { resetLastAssignedProject } from "../../services/assignment-suggestions";
+import { commandFailed, commandOk } from "../../test/app-error";
+import { mockCommands } from "../../test/mock-commands";
 import { renderComponent } from "../../test/render-component";
 import { AssignmentModal } from "./assignment-modal";
 import {
@@ -13,177 +18,211 @@ import {
   resolveSaveAction,
   resolveWriteIntent,
 } from "./assignment-modal-logic";
-import { DeleteConfirmDialog } from "./delete-confirm-dialog";
 import {
   ProjectResultList,
   ProjectResultPlaceholder,
   SuggestionEmptyState,
 } from "./project-result-list";
 
-const baseProps = {
-  employeeReference: "ref-123",
-  date: "2026-05-06",
-  onSave: () => {},
-  onClose: () => {},
-};
-
-const fixedAssignment: CalendarCellEvent = {
-  uid: "uid-9",
-  kind: "assignment",
-  title: "Projekt Fix",
-  projectStatus: "in_progress",
-  projectCategory: "Termin FIX geplant",
-  projectRef: "/v1/projects/9",
-  date: "2026-05-06",
-  startTime: "08:00",
-  endTime: "16:00",
-  href: "/calendars/user/cal/uid-9.ics",
-  orderIndex: null,
-  projectPending: false,
-};
+const mockUpdateAssignment = mock((_input: UpdateAssignmentInput) =>
+  commandOk(null),
+);
+const mockDeleteAssignment = mock((_href: string, _override: boolean) =>
+  commandOk(null),
+);
+const onSave = mock(() => {});
+const onClose = mock(() => {});
 
 function project(name: string, ref: string): DayliteProjectSummary {
   return { self: ref, name, status: "in_progress" };
 }
 
+const overdueProject = project("Projekt Nord", "/v1/projects/10");
+
+mockCommands({
+  dayliteQueryOverdueProjects: () => commandOk([overdueProject]),
+  dayliteProjectCategoryColors: () => commandOk({}),
+  updateAssignment: mockUpdateAssignment,
+  deleteAssignment: mockDeleteAssignment,
+});
+
+const plannableAssignment: CalendarCellEvent = {
+  uid: "uid-1",
+  kind: "assignment",
+  title: "Projekt Alpha",
+  projectStatus: "in_progress",
+  projectCategory: null,
+  projectRef: "/v1/projects/1",
+  date: "2026-05-06",
+  startTime: "08:00",
+  endTime: "16:00",
+  href: "/calendars/user/cal/uid-1.ics",
+  orderIndex: null,
+  projectPending: false,
+};
+
+const fixedAssignment: CalendarCellEvent = {
+  ...plannableAssignment,
+  uid: "uid-9",
+  title: "Projekt Fix",
+  projectCategory: "Termin FIX geplant",
+  projectRef: "/v1/projects/9",
+  href: "/calendars/user/cal/uid-9.ics",
+};
+
+function renderModal(assignment: CalendarCellEvent | null) {
+  return renderComponent(
+    <AssignmentModal
+      assignment={assignment}
+      employeeReference="ref-123"
+      date="2026-05-06"
+      onSave={onSave}
+      onClose={onClose}
+    />,
+  );
+}
+
+const button = (name: string) =>
+  screen.getByRole<HTMLButtonElement>("button", { name });
+const projectInput = () => screen.getByRole<HTMLInputElement>("combobox");
+
 describe("AssignmentModal", () => {
+  beforeEach(() => {
+    resetLastAssignedProject();
+    for (const fn of [
+      mockUpdateAssignment,
+      mockDeleteAssignment,
+      onSave,
+      onClose,
+    ]) {
+      fn.mockClear();
+    }
+  });
+
   it("create mode: renders the project filter input and save button", () => {
-    const html = renderComponent(
-      <AssignmentModal {...baseProps} assignment={null} />,
-    ).container.innerHTML;
+    const html = renderModal(null).container.innerHTML;
 
-    expect(html).toContain("<dialog");
-    expect(html).toContain("Einsatz erstellen");
-    expect(html).toContain('role="combobox"');
-    expect(html).toContain("Projekt suchen...");
+    expect(screen.getByText("Einsatz erstellen")).toBeDefined();
+    expect(projectInput().placeholder).toBe("Projekt suchen...");
     expect(html).not.toContain("<select");
-    expect(html).toContain("Speichern");
-    expect(html).not.toContain("Löschen");
+    expect(button("Speichern").disabled).toBe(true);
+    expect(screen.queryByRole("button", { name: "Löschen" })).toBeNull();
   });
 
-  it("create mode: starts with an empty result list (empty default state)", () => {
-    const html = renderComponent(
-      <AssignmentModal {...baseProps} assignment={null} />,
-    ).container.innerHTML;
+  it("create mode: reserves the suggestion rows until the suggestions are loaded", async () => {
+    const { container } = renderModal(null);
 
-    expect(html).not.toContain('id="assignment-project-results"');
-  });
-
-  it("reserves the suggestion rows until the suggestions are loaded", () => {
-    const html = renderComponent(
-      <AssignmentModal {...baseProps} assignment={null} />,
-    ).container.innerHTML;
-
-    expect(html.match(/skeleton/g)).toHaveLength(5);
+    expect(container.innerHTML.match(/skeleton/g)).toHaveLength(5);
+    expect(await screen.findByText("Projekt Nord")).toBeDefined();
+    expect(container.innerHTML).not.toContain("skeleton");
   });
 
   it("edit mode: shows the selected project and the delete button", () => {
-    const existingAssignment: CalendarCellEvent = {
-      uid: "uid-1",
-      kind: "assignment",
-      title: "Projekt Alpha",
-      projectStatus: "in_progress",
-      projectCategory: null,
-      projectRef: "/v1/projects/1",
-      date: "2026-05-06",
-      startTime: "08:00",
-      endTime: "16:00",
-      href: "/calendars/user/cal/uid-1.ics",
-      orderIndex: null,
-      projectPending: false,
-    };
+    renderModal(plannableAssignment);
 
-    const html = renderComponent(
-      <AssignmentModal {...baseProps} assignment={existingAssignment} />,
-    ).container.innerHTML;
-
-    expect(html).toContain("<dialog");
-    expect(html).toContain("Einsatz bearbeiten");
-    expect(html).toContain('role="combobox"');
-    expect(html).toContain("Ausgewählt:");
-    expect(html).toContain("Projekt Alpha");
-    expect(html).toContain("Speichern");
-    expect(html).toContain("Löschen");
+    expect(screen.getByText("Einsatz bearbeiten")).toBeDefined();
+    expect(screen.getByText("Projekt Alpha").textContent).toBe("Projekt Alpha");
+    expect(button("Speichern").disabled).toBe(false);
+    expect(button("Löschen").disabled).toBe(false);
+    expect(screen.queryByText("Bearbeitung entsperren")).toBeNull();
   });
 
-  it("edit mode: locks the picker, save and delete for a fixed appointment", () => {
-    const html = renderComponent(
-      <AssignmentModal {...baseProps} assignment={fixedAssignment} />,
-    ).container.innerHTML;
+  it("asks before discarding a selected project and keeps editing on request", async () => {
+    renderModal(null);
+    fireEvent.click(await screen.findByText("Projekt Nord"));
 
-    expect(html).toContain("Termin FIX geplant");
-    expect(html).toContain("Bearbeitung entsperren");
-    expect(html.match(/<input[^>]*type="checkbox"[^>]*checked/)).toBeNull();
+    fireEvent.click(button("Abbrechen"));
+
+    expect(screen.getByText("Ungespeicherte Änderungen")).toBeDefined();
+    fireEvent.click(button("Weiterbearbeiten"));
+    expect(screen.getByText("Einsatz erstellen")).toBeDefined();
+    fireEvent.click(button("Abbrechen"));
+    fireEvent.click(button("Verwerfen"));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("deletes only after confirmation", async () => {
+    renderModal(plannableAssignment);
+
+    fireEvent.click(button("Löschen"));
+    expect(screen.getByText("Einsatz löschen")).toBeDefined();
+    expect(mockDeleteAssignment).not.toHaveBeenCalled();
+    fireEvent.click(button("Endgültig löschen"));
+
+    await waitFor(() =>
+      expect(onSave).toHaveBeenCalledWith({ kind: "delete" }),
+    );
+    expect(mockDeleteAssignment).toHaveBeenCalledWith(
+      plannableAssignment.href,
+      false,
+    );
+  });
+
+  it("shows the backend's rejection in the delete confirmation", async () => {
+    const rejection =
+      "Dieser Termin ist als 'Termin FIX geplant' gesperrt und kann nicht geändert oder gelöscht werden.";
+    mockDeleteAssignment.mockImplementationOnce(() => commandFailed(rejection));
+    renderModal(plannableAssignment);
+
+    fireEvent.click(button("Löschen"));
+    fireEvent.click(button("Endgültig löschen"));
+
+    expect(await screen.findByText(rejection)).toBeDefined();
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it("locks the picker, save and delete for a fixed appointment", () => {
+    renderModal(fixedAssignment);
+
+    expect(screen.getByText(/Termin FIX geplant/)).toBeDefined();
     expect(
-      html.match(/<input(?=[^>]*role="combobox")[^>]*disabled/),
-    ).not.toBeNull();
-    expect(html.match(/<button[^>]*disabled[^>]*>Löschen/)).not.toBeNull();
-    expect(html.match(/<button[^>]*disabled[^>]*>Speichern/)).not.toBeNull();
+      screen.getByRole<HTMLInputElement>("checkbox", {
+        name: "Bearbeitung entsperren",
+      }).checked,
+    ).toBe(false);
+    expect(projectInput().disabled).toBe(true);
+    expect(button("Löschen").disabled).toBe(true);
+    expect(button("Speichern").disabled).toBe(true);
   });
 
-  it("edit mode: keeps save and delete enabled for a plannable assignment", () => {
-    const assignment: CalendarCellEvent = {
-      uid: "uid-1",
-      kind: "assignment",
-      title: "Projekt Alpha",
-      projectStatus: "in_progress",
-      projectCategory: null,
-      projectRef: "/v1/projects/1",
-      date: "2026-05-06",
-      startTime: "08:00",
-      endTime: "16:00",
-      href: "/calendars/user/cal/uid-1.ics",
-      orderIndex: null,
-      projectPending: false,
-    };
+  it("saves an unlocked fixed appointment with the override", async () => {
+    renderModal(fixedAssignment);
 
-    const html = renderComponent(
-      <AssignmentModal {...baseProps} assignment={assignment} />,
-    ).container.innerHTML;
+    fireEvent.click(screen.getByText("Bearbeitung entsperren"));
+    expect(projectInput().disabled).toBe(false);
+    fireEvent.click(button("Speichern"));
 
-    expect(html).not.toContain("Termin FIX geplant");
-    expect(html).not.toContain("Bearbeitung entsperren");
-    expect(html.match(/<button[^>]*disabled[^>]*>Löschen/)).toBeNull();
-    expect(html.match(/<button[^>]*disabled[^>]*>Speichern/)).toBeNull();
+    await waitFor(() => expect(onSave).toHaveBeenCalled());
+    expect(mockUpdateAssignment).toHaveBeenCalledWith(
+      expect.objectContaining({
+        href: fixedAssignment.href,
+        overrideProtection: true,
+      }),
+    );
   });
 
-  it("unsaved changes dialog renders when closing modal with dirty state", () => {
-    const html = renderComponent(
-      <AssignmentModal {...baseProps} assignment={null} showUnsavedConfirm />,
-    ).container.innerHTML;
+  it("deletes an unlocked fixed appointment with the override", async () => {
+    renderModal(fixedAssignment);
 
-    expect(html).toContain("Ungespeicherte Änderungen");
-    expect(html).toContain("Verwerfen");
-    expect(html).toContain("Weiterbearbeiten");
+    fireEvent.click(screen.getByText("Bearbeitung entsperren"));
+    fireEvent.click(button("Löschen"));
+    fireEvent.click(button("Endgültig löschen"));
+
+    await waitFor(() => expect(onSave).toHaveBeenCalled());
+    expect(mockDeleteAssignment).toHaveBeenCalledWith(
+      fixedAssignment.href,
+      true,
+    );
   });
 
-  it("delete confirmation dialog renders correctly", () => {
-    const existingAssignment: CalendarCellEvent = {
-      uid: "uid-2",
-      kind: "assignment",
-      title: "Projekt Beta",
-      projectStatus: "new_status",
-      projectCategory: null,
-      projectRef: "/v1/projects/2",
-      date: "2026-05-06",
-      startTime: null,
-      endTime: null,
-      href: "/calendars/user/cal/uid-2.ics",
-      orderIndex: null,
-      projectPending: false,
-    };
+  it("locks a fixed appointment again when the modal reopens", () => {
+    const { unmount } = renderModal(fixedAssignment);
+    fireEvent.click(screen.getByText("Bearbeitung entsperren"));
+    unmount();
 
-    const html = renderComponent(
-      <AssignmentModal
-        {...baseProps}
-        assignment={existingAssignment}
-        showDeleteConfirm
-      />,
-    ).container.innerHTML;
+    renderModal(fixedAssignment);
 
-    expect(html).toContain("Einsatz löschen");
-    expect(html).toContain("Endgültig löschen");
-    expect(html).toContain("Abbrechen");
+    expect(projectInput().disabled).toBe(true);
   });
 });
 
@@ -420,25 +459,6 @@ describe("isProtectedAssignment", () => {
 
   it("leaves an assignment without a resolved category plannable", () => {
     expect(isProtectedAssignment(null)).toBe(false);
-  });
-});
-
-describe("DeleteConfirmDialog", () => {
-  it("shows the backend's rejection message for a stale delete attempt", () => {
-    const rejection =
-      "Dieser Termin ist als 'Termin FIX geplant' gesperrt und kann nicht geändert oder gelöscht werden.";
-
-    const html = renderComponent(
-      <DeleteConfirmDialog
-        isDeleting={false}
-        errorMessage={rejection}
-        onCancel={() => {}}
-        onConfirm={() => {}}
-        onRequestClose={() => {}}
-      />,
-    ).container.innerHTML;
-
-    expect(html).toContain("Termin FIX geplant");
   });
 });
 

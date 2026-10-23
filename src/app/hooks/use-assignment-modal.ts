@@ -31,8 +31,6 @@ export function useAssignmentModal({
   date,
   onSave,
   onClose,
-  initialShowDeleteConfirm,
-  initialShowUnsavedConfirm,
 }: Input) {
   const isEditMode = assignment !== null;
 
@@ -49,12 +47,8 @@ export function useAssignmentModal({
   >(null);
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(
-    initialShowDeleteConfirm,
-  );
-  const [showUnsavedConfirm, setShowUnsavedConfirm] = useState(
-    initialShowUnsavedConfirm,
-  );
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showUnsavedConfirm, setShowUnsavedConfirm] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
   const [isUnlocked, setIsUnlocked] = useState(false);
   const filterInputRef = useRef<HTMLInputElement>(null);
@@ -250,6 +244,4 @@ interface Input {
   date: string;
   onSave: (action: ModalSaveAction) => void;
   onClose: () => void;
-  initialShowDeleteConfirm: boolean;
-  initialShowUnsavedConfirm: boolean;
 }
