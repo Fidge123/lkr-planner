@@ -12,7 +12,7 @@ use super::caldav::{
     reorder_assignment_core, update_assignment_core, AssignmentWrite, CaldavSession,
 };
 use super::events::{
-    classify_event, map_absence_raw_events_for_week, resolve_event, sort_events_absences_first,
+    classify_event, map_absence_raw_events_for_week, resolve_event, sort_week_events,
 };
 use super::protection::{refuse_protected_day_change, refuse_protected_event};
 use super::types::{CalendarCellEvent, EmployeeWeekEvents, MoveAssignmentResult, PendingEvent};
@@ -371,7 +371,7 @@ fn assemble_week_events(
         // Deduplicate by UID to guard against CalDAV servers redelivering the same event.
         let mut seen_uids = HashSet::new();
         events.retain(|e| seen_uids.insert(e.uid.clone()));
-        sort_events_absences_first(&mut events);
+        sort_week_events(&mut events);
         results.push(EmployeeWeekEvents {
             employee_reference: fetch.employee_reference,
             events,

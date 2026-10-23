@@ -3,7 +3,7 @@ import { ExternalLink, Highlighter, Pencil, TriangleAlert } from "lucide-react";
 import type { ReactNode } from "react";
 import { useRef } from "react";
 import { openProjectInDaylite } from "../../services/daylite-deep-link";
-import { assignmentPositions, sortCellEvents } from "../cell-order";
+import { assignmentPositions } from "../cell-order";
 import type {
   AppointmentDragPayload,
   CardRect,
@@ -33,8 +33,7 @@ export function TimetableCell({
   onSuggestionClick,
   onToggleHighlight = () => {},
 }: Props) {
-  const orderedEvents = sortCellEvents(events);
-  const positions = assignmentPositions(orderedEvents);
+  const positions = assignmentPositions(events);
   const conflict = hasAbsenceConflict(events);
 
   // Measured on demand rather than tracked in state: the drop position is only ever read
@@ -75,7 +74,7 @@ export function TimetableCell({
             Abwesenheit und Termin am selben Tag
           </li>
         ) : null}
-        {withDropPreview(orderedEvents, preview, draggedUid, (event) =>
+        {withDropPreview(events, preview, draggedUid, (event) =>
           event.kind === "absence" ? (
             <li key={event.uid}>
               <span

@@ -295,17 +295,6 @@ describe("TimetableCell", () => {
     expect(html).not.toContain("border-l-4");
     expect(html).toContain("bg-base-200");
   });
-
-  it("renders assignment cards sorted by their order index", () => {
-    const html = renderCell({
-      events: [
-        assignment({ uid: "uid-later", title: "Zweiter", orderIndex: 1 }),
-        assignment({ uid: "uid-earlier", title: "Erster", orderIndex: 0 }),
-      ],
-    });
-
-    expect(html.indexOf("Erster")).toBeLessThan(html.indexOf("Zweiter"));
-  });
 });
 
 describe("TimetableCell drop preview", () => {
