@@ -3,7 +3,7 @@ import type {
   CalendarCellEvent,
   PlanningContactRecord,
 } from "../generated/tauri";
-import { renderWithQueries } from "../test/render-with-queries";
+import { renderComponent } from "../test/render-component";
 import type { HolidaysState } from "./hooks/use-holidays";
 import { categoryColorsQuery } from "./hooks/use-project-category-colors";
 import {
@@ -47,7 +47,7 @@ function renderGrid({
   showWeekend?: boolean;
   categoryColors?: Record<string, string>;
 } = {}): string {
-  return renderWithQueries(
+  return renderComponent(
     <PlanningGridTable
       weekDays={getWeekDays(weekOffset, showWeekend)}
       employeeState={defaultEmployeeState}
@@ -59,7 +59,7 @@ function renderGrid({
       {...overrides}
     />,
     [[categoryColorsQuery.queryKey, categoryColors]],
-  );
+  ).container.innerHTML;
 }
 
 const employee: PlanningContactRecord = {
@@ -187,7 +187,7 @@ describe("planning grid assignment states", () => {
     });
 
     expect(html).toContain("Projekt Nord");
-    expect(html).toContain("border-left-color:#8bc34a");
+    expect(html).toContain("border-left-color: #8bc34a");
   });
 
   it("renders bare event in cell with neutral style and no edit affordance", () => {

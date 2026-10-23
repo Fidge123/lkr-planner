@@ -1,10 +1,9 @@
 import { describe, expect, it } from "bun:test";
-import { renderToStaticMarkup } from "react-dom/server";
 import type {
   CalendarCellEvent,
   DayliteProjectSummary,
 } from "../../generated/tauri";
-import { renderWithQueries } from "../../test/render-with-queries";
+import { renderComponent } from "../../test/render-component";
 import { AssignmentModal } from "./assignment-modal";
 import {
   isProtectedAssignment,
@@ -49,9 +48,9 @@ function project(name: string, ref: string): DayliteProjectSummary {
 
 describe("AssignmentModal", () => {
   it("create mode: renders the project filter input and save button", () => {
-    const html = renderWithQueries(
+    const html = renderComponent(
       <AssignmentModal {...baseProps} assignment={null} />,
-    );
+    ).container.innerHTML;
 
     expect(html).toContain("<dialog");
     expect(html).toContain("Einsatz erstellen");
@@ -63,17 +62,17 @@ describe("AssignmentModal", () => {
   });
 
   it("create mode: starts with an empty result list (empty default state)", () => {
-    const html = renderWithQueries(
+    const html = renderComponent(
       <AssignmentModal {...baseProps} assignment={null} />,
-    );
+    ).container.innerHTML;
 
     expect(html).not.toContain('id="assignment-project-results"');
   });
 
   it("reserves the suggestion rows until the suggestions are loaded", () => {
-    const html = renderWithQueries(
+    const html = renderComponent(
       <AssignmentModal {...baseProps} assignment={null} />,
-    );
+    ).container.innerHTML;
 
     expect(html.match(/skeleton/g)).toHaveLength(5);
   });
@@ -94,9 +93,9 @@ describe("AssignmentModal", () => {
       projectPending: false,
     };
 
-    const html = renderWithQueries(
+    const html = renderComponent(
       <AssignmentModal {...baseProps} assignment={existingAssignment} />,
-    );
+    ).container.innerHTML;
 
     expect(html).toContain("<dialog");
     expect(html).toContain("Einsatz bearbeiten");
@@ -108,9 +107,9 @@ describe("AssignmentModal", () => {
   });
 
   it("edit mode: locks the picker, save and delete for a fixed appointment", () => {
-    const html = renderWithQueries(
+    const html = renderComponent(
       <AssignmentModal {...baseProps} assignment={fixedAssignment} />,
-    );
+    ).container.innerHTML;
 
     expect(html).toContain("Termin FIX geplant");
     expect(html).toContain("Bearbeitung entsperren");
@@ -138,9 +137,9 @@ describe("AssignmentModal", () => {
       projectPending: false,
     };
 
-    const html = renderWithQueries(
+    const html = renderComponent(
       <AssignmentModal {...baseProps} assignment={assignment} />,
-    );
+    ).container.innerHTML;
 
     expect(html).not.toContain("Termin FIX geplant");
     expect(html).not.toContain("Bearbeitung entsperren");
@@ -149,9 +148,9 @@ describe("AssignmentModal", () => {
   });
 
   it("unsaved changes dialog renders when closing modal with dirty state", () => {
-    const html = renderWithQueries(
+    const html = renderComponent(
       <AssignmentModal {...baseProps} assignment={null} showUnsavedConfirm />,
-    );
+    ).container.innerHTML;
 
     expect(html).toContain("Ungespeicherte Änderungen");
     expect(html).toContain("Verwerfen");
@@ -174,13 +173,13 @@ describe("AssignmentModal", () => {
       projectPending: false,
     };
 
-    const html = renderWithQueries(
+    const html = renderComponent(
       <AssignmentModal
         {...baseProps}
         assignment={existingAssignment}
         showDeleteConfirm
       />,
-    );
+    ).container.innerHTML;
 
     expect(html).toContain("Einsatz löschen");
     expect(html).toContain("Endgültig löschen");
@@ -190,7 +189,7 @@ describe("AssignmentModal", () => {
 
 describe("ProjectResultList", () => {
   it("renders the filtered projects as selectable options", () => {
-    const html = renderToStaticMarkup(
+    const html = renderComponent(
       <ProjectResultList
         projects={[
           project("Projekt Nord", "/v1/projects/10"),
@@ -199,7 +198,7 @@ describe("ProjectResultList", () => {
         highlightedIndex={-1}
         onSelect={() => {}}
       />,
-    );
+    ).container.innerHTML;
 
     expect(html).toContain('id="assignment-project-results"');
     expect(html).toContain("Projekt Nord");
@@ -208,19 +207,19 @@ describe("ProjectResultList", () => {
   });
 
   it("renders nothing for an empty result list (empty default state)", () => {
-    const html = renderToStaticMarkup(
+    const html = renderComponent(
       <ProjectResultList
         projects={[]}
         highlightedIndex={-1}
         onSelect={() => {}}
       />,
-    );
+    ).container.innerHTML;
 
     expect(html).toBe("");
   });
 
   it("marks the highlighted option as selected", () => {
-    const html = renderToStaticMarkup(
+    const html = renderComponent(
       <ProjectResultList
         projects={[
           project("Projekt Nord", "/v1/projects/10"),
@@ -229,7 +228,7 @@ describe("ProjectResultList", () => {
         highlightedIndex={1}
         onSelect={() => {}}
       />,
-    );
+    ).container.innerHTML;
 
     expect(html).toContain('aria-current="true"');
     expect(html).toContain('aria-current="false"');
@@ -237,7 +236,7 @@ describe("ProjectResultList", () => {
   });
 
   it("marks each result with a dot in its daylite category color", () => {
-    const html = renderToStaticMarkup(
+    const html = renderComponent(
       <ProjectResultList
         projects={[
           { ...project("Projekt Nord", "/v1/projects/10"), category: "Bau" },
@@ -250,15 +249,15 @@ describe("ProjectResultList", () => {
         highlightedIndex={-1}
         onSelect={() => {}}
       />,
-    );
+    ).container.innerHTML;
 
-    expect(html).toContain("background-color:#8bc34a");
+    expect(html).toContain("background-color: #8bc34a");
     expect(html.match(/rounded-full/g)).toHaveLength(2);
     expect(html).toContain("bg-base-content/30");
   });
 
   it("keeps the category dot colored on the selected row", () => {
-    const html = renderToStaticMarkup(
+    const html = renderComponent(
       <ProjectResultList
         projects={[
           { ...project("Projekt Nord", "/v1/projects/10"), category: "Bau" },
@@ -267,34 +266,35 @@ describe("ProjectResultList", () => {
         highlightedIndex={0}
         onSelect={() => {}}
       />,
-    );
+    ).container.innerHTML;
 
     expect(html).toContain("bg-primary text-primary-content");
-    expect(html).toContain("background-color:#8bc34a");
+    expect(html).toContain("background-color: #8bc34a");
   });
 
   it("reserves rows of the same height as the loaded results", () => {
-    const placeholder = renderToStaticMarkup(<ProjectResultPlaceholder />);
-    const loaded = renderToStaticMarkup(
+    const placeholder = renderComponent(<ProjectResultPlaceholder />).container
+      .innerHTML;
+    const loaded = renderComponent(
       <ProjectResultList
         projects={[project("Projekt Nord", "/v1/projects/10")]}
         highlightedIndex={-1}
         onSelect={() => {}}
       />,
-    );
+    ).container.innerHTML;
 
     expect(placeholder.match(/h-8/g)).toHaveLength(5);
     expect(loaded).toContain("h-8");
   });
 
   it("renders a project name with hard line breaks as a single line", () => {
-    const html = renderToStaticMarkup(
+    const html = renderComponent(
       <ProjectResultList
         projects={[project("DARAMIC LLC,\n Norderstedt", "/v1/projects/10")]}
         highlightedIndex={-1}
         onSelect={() => {}}
       />,
-    );
+    ).container.innerHTML;
 
     expect(html).toContain("DARAMIC LLC, Norderstedt");
     expect(html).toContain("truncate");
@@ -340,41 +340,41 @@ describe("resolveDisplayedProjects", () => {
 
 describe("SuggestionEmptyState", () => {
   it("shows the German message when no suggestions are available", () => {
-    const html = renderToStaticMarkup(
+    const html = renderComponent(
       <SuggestionEmptyState filter="" suggestionsLoaded suggestionCount={0} />,
-    );
+    ).container.innerHTML;
 
     expect(html).toContain("Keine Vorschläge verfügbar");
   });
 
   it("shows nothing while the suggestions are still loading", () => {
-    const html = renderToStaticMarkup(
+    const html = renderComponent(
       <SuggestionEmptyState
         filter=""
         suggestionsLoaded={false}
         suggestionCount={0}
       />,
-    );
+    ).container.innerHTML;
 
     expect(html).toBe("");
   });
 
   it("shows nothing when suggestions are available", () => {
-    const html = renderToStaticMarkup(
+    const html = renderComponent(
       <SuggestionEmptyState filter="" suggestionsLoaded suggestionCount={3} />,
-    );
+    ).container.innerHTML;
 
     expect(html).toBe("");
   });
 
   it("shows nothing while a filter is set", () => {
-    const html = renderToStaticMarkup(
+    const html = renderComponent(
       <SuggestionEmptyState
         filter="Nord"
         suggestionsLoaded
         suggestionCount={0}
       />,
-    );
+    ).container.innerHTML;
 
     expect(html).toBe("");
   });
@@ -428,7 +428,7 @@ describe("DeleteConfirmDialog", () => {
     const rejection =
       "Dieser Termin ist als 'Termin FIX geplant' gesperrt und kann nicht geändert oder gelöscht werden.";
 
-    const html = renderToStaticMarkup(
+    const html = renderComponent(
       <DeleteConfirmDialog
         isDeleting={false}
         errorMessage={rejection}
@@ -436,7 +436,7 @@ describe("DeleteConfirmDialog", () => {
         onConfirm={() => {}}
         onRequestClose={() => {}}
       />,
-    );
+    ).container.innerHTML;
 
     expect(html).toContain("Termin FIX geplant");
   });

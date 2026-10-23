@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
-import { renderToStaticMarkup } from "react-dom/server";
 import { mockCommands } from "../../test/mock-commands";
+import { renderComponent } from "../../test/render-component";
 
 const mockCaptureFrontendError = mock(() => Promise.resolve(null));
 
@@ -14,11 +14,11 @@ describe("AppErrorBoundary", () => {
   });
 
   it("renders its children while nothing failed", () => {
-    const html = renderToStaticMarkup(
+    const html = renderComponent(
       <AppErrorBoundary>
         <p>Wochenplanung</p>
       </AppErrorBoundary>,
-    );
+    ).container.innerHTML;
 
     expect(html).toContain("Wochenplanung");
   });
@@ -33,7 +33,7 @@ describe("AppErrorBoundary", () => {
     const boundary = new AppErrorBoundary({ children: null });
     boundary.state = { hasError: true };
 
-    const html = renderToStaticMarkup(boundary.render());
+    const html = renderComponent(boundary.render()).container.innerHTML;
 
     expect(html).toContain("Es ist ein unerwarteter Fehler aufgetreten");
   });

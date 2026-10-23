@@ -3,13 +3,13 @@ import type {
   CalendarCellEvent,
   PlanningContactRecord,
 } from "../../generated/tauri";
-import { renderWithQueries } from "../../test/render-with-queries";
+import { renderComponent } from "../../test/render-component";
 import { WeekTable } from "./week-table";
 
 function renderTable(
   overrides: Partial<Parameters<typeof WeekTable>[0]> = {},
 ): string {
-  return renderWithQueries(
+  return renderComponent(
     <WeekTable
       weekDays={[17, 18, 19, 20, 21].map((day) => new Date(2026, 7, day))}
       employees={[]}
@@ -21,7 +21,7 @@ function renderTable(
       onOpenIcalDialog={() => {}}
       {...overrides}
     />,
-  );
+  ).container.innerHTML;
 }
 
 describe("WeekTable", () => {

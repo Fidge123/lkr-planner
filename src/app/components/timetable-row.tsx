@@ -168,8 +168,7 @@ export function TimetableRow({
       </tr>
 
       {/* The grid's scroll container is isolated, so a modal inside it could not paint over the header. */}
-      {/* The document guard is for bun specs, which render this row with react-dom/server. */}
-      {modalState === null || typeof document === "undefined"
+      {modalState === null
         ? null
         : createPortal(
             <AssignmentModal

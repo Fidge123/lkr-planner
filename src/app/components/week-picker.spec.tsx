@@ -6,7 +6,7 @@ import {
   it,
   setSystemTime,
 } from "bun:test";
-import { renderToStaticMarkup } from "react-dom/server";
+import { renderComponent } from "../../test/render-component";
 import { WeekPicker } from "./week-picker";
 
 function renderPicker(monday: Date): string {
@@ -14,11 +14,11 @@ function renderPicker(monday: Date): string {
     (i) =>
       new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + i),
   );
-  return renderToStaticMarkup(
+  return renderComponent(
     <WeekPicker weekDays={weekDays} onJumpToWeek={() => {}}>
       KW
     </WeekPicker>,
-  );
+  ).container.innerHTML;
 }
 
 function monthTitles(html: string): string[] {

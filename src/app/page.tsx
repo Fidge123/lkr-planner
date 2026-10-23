@@ -255,17 +255,14 @@ export function PlanningGridTable({
             onToggleHighlight={toggleHighlight}
             onJumpToWeek={onJumpToWeek}
           />
-          {/* Not for Tauri: bun tests render through react-dom/server, which has no `document`. */}
-          {typeof document === "undefined"
-            ? null
-            : createPortal(
-                <DragOverlay style={{ pointerEvents: "none" }}>
-                  {drag.activePayload ? (
-                    <DragPreviewCard payload={drag.activePayload} />
-                  ) : null}
-                </DragOverlay>,
-                document.body,
-              )}
+          {createPortal(
+            <DragOverlay style={{ pointerEvents: "none" }}>
+              {drag.activePayload ? (
+                <DragPreviewCard payload={drag.activePayload} />
+              ) : null}
+            </DragOverlay>,
+            document.body,
+          )}
         </DndContext>
       </section>
 

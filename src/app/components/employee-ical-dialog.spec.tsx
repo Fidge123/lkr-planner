@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import { renderToStaticMarkup } from "react-dom/server";
 import type { PlanningContactRecord, ZepCalendar } from "../../generated/tauri";
+import { renderComponent } from "../../test/render-component";
 import type { ZepCalendarsState } from "../hooks/use-zep-calendars";
 import { CalendarSection } from "./calendar-section";
 import { EmployeeIcalDialog } from "./employee-ical-dialog";
@@ -33,7 +33,7 @@ const ownEmployee: PlanningContactRecord = {
 function renderSection(
   overrides: Partial<Parameters<typeof CalendarSection>[0]> = {},
 ): string {
-  return renderToStaticMarkup(
+  return renderComponent(
     <CalendarSection
       title="Einsatz"
       source="primary"
@@ -47,13 +47,13 @@ function renderSection(
       isDisabled={false}
       {...overrides}
     />,
-  );
+  ).container.innerHTML;
 }
 
 function renderDialog(
   overrides: Partial<Parameters<typeof EmployeeIcalDialog>[0]> = {},
 ): string {
-  return renderToStaticMarkup(
+  return renderComponent(
     <EmployeeIcalDialog
       employee={ownEmployee}
       employeeSetting={null}
@@ -62,7 +62,7 @@ function renderDialog(
       calendarState={calendarState()}
       {...overrides}
     />,
-  );
+  ).container.innerHTML;
 }
 
 describe("CalendarSection", () => {

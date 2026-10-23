@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { renderToStaticMarkup } from "react-dom/server";
+import { renderComponent } from "../../test/render-component";
 import {
   hrefToDelete,
   type MoveReconciliation,
@@ -13,12 +13,12 @@ describe("MoveReconciliationDialog", () => {
   };
 
   it("renders the title and all three option labels", () => {
-    const html = renderToStaticMarkup(
+    const html = renderComponent(
       <MoveReconciliationDialog
         reconciliation={reconciliation}
         onResolved={() => {}}
       />,
-    );
+    ).container.innerHTML;
 
     expect(html).toContain("Einsatz doppelt vorhanden");
     expect(html).toContain("Original erneut löschen");
@@ -27,20 +27,20 @@ describe("MoveReconciliationDialog", () => {
   });
 
   it("renders nothing when reconciliation is null", () => {
-    const html = renderToStaticMarkup(
+    const html = renderComponent(
       <MoveReconciliationDialog reconciliation={null} onResolved={() => {}} />,
-    );
+    ).container.innerHTML;
 
     expect(html).toBe("");
   });
 
   it("renders no modal-backdrop, so the dialog blocks until a choice is made", () => {
-    const html = renderToStaticMarkup(
+    const html = renderComponent(
       <MoveReconciliationDialog
         reconciliation={reconciliation}
         onResolved={() => {}}
       />,
-    );
+    ).container.innerHTML;
 
     expect(html).not.toContain("modal-backdrop");
   });
