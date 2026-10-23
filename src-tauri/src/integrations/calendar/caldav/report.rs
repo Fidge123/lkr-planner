@@ -16,7 +16,7 @@ pub(crate) async fn fetch_calendar_events(
     fetch_events_in_range(session, calendar_url, week_start, week_end).await
 }
 
-pub(super) async fn fetch_events_in_range(
+pub(crate) async fn fetch_events_in_range(
     session: &CaldavSession,
     calendar_url: &str,
     range_start: NaiveDate,

@@ -24,6 +24,8 @@ export const commands = {
 	moveAssignment: (href: string, targetEmployeeReference: string, date: string, projectRef: string, projectName: string, orderIndex: number | null) => typedError<MoveAssignmentResult, string>(__TAURI_INVOKE("move_assignment", { href, targetEmployeeReference, date, projectRef, projectName, orderIndex })),
 	reorderAssignment: (href: string, uid: string, date: string, orderIndex: number) => typedError<null, string>(__TAURI_INVOKE("reorder_assignment", { href, uid, date, orderIndex })),
 	deleteAssignment: (href: string, overrideProtection: boolean) => typedError<null, string>(__TAURI_INVOKE("delete_assignment", { href, overrideProtection })),
+	/**  Returns nothing; the failures event reports the worker days still failing. */
+	retryDayliteAppointmentSync: () => __TAURI_INVOKE<void>("retry_daylite_appointment_sync"),
 	zepSaveCredentials: (rootUrl: string, username: string, password: string) => typedError<null, ZepError>(__TAURI_INVOKE("zep_save_credentials", { rootUrl, username, password })),
 	zepLoadCredentials: () => typedError<{
 	rootUrl: string,

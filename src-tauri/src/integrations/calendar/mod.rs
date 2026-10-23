@@ -1,3 +1,4 @@
+mod appointment_sync;
 mod caldav;
 pub mod commands;
 mod events;

@@ -2,8 +2,11 @@ use chrono::NaiveDate;
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use specta::Type;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 
+use super::appointment_sync::{
+    event_worker, retry_failed_in_app, schedule_appointment_sync, WorkerDay,
+};
 use super::caldav::{
     create_assignment_core, delete_assignment_core, fetch_calendar_events, move_assignment_core,
     reorder_assignment_core, update_assignment_core, AssignmentWrite, CaldavSession,
@@ -152,6 +155,13 @@ pub async fn delete_assignment(
         delete_assignment_inner(app, href, override_protection),
     )
     .await
+}
+
+/// Returns nothing; the failures event reports the worker days still failing.
+#[tauri::command]
+#[specta::specta]
+pub async fn retry_daylite_appointment_sync(app: tauri::AppHandle) {
+    retry_failed_in_app(&app).await;
 }
 
 async fn load_week_events_inner(
@@ -368,20 +378,51 @@ async fn create_assignment_inner(
 
     let session = load_caldav_session(&app, &store)?;
 
-    create_assignment_core(
-        &session,
-        &calendar_url,
-        &AssignmentWrite {
-            date: input.date,
-            project_ref: input.project_ref,
-            project_name: input.project_name,
-            order_index: None,
-        },
-    )
-    .await
+    let write = AssignmentWrite {
+        date: input.date,
+        project_ref: input.project_ref,
+        project_name: input.project_name,
+        order_index: None,
+    };
+    let href = create_assignment_core(&session, &calendar_url, &write).await?;
+    let worker = Some(input.employee_reference.as_str());
+    schedule_appointment_sync(&app, worker_days(worker, [Some(write.date.as_str())]));
+    Ok(href)
 }
 
-fn resolve_employee_calendar_url(
+fn worker_days<'a>(
+    worker: Option<&str>,
+    dates: impl IntoIterator<Item = Option<&'a str>>,
+) -> Vec<WorkerDay> {
+    let Some(worker) = worker else {
+        return Vec::new();
+    };
+    dates
+        .into_iter()
+        .flatten()
+        .filter_map(|date| NaiveDate::parse_from_str(date, "%Y-%m-%d").ok())
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .map(|date| WorkerDay {
+            worker: worker.to_string(),
+            date,
+        })
+        .collect()
+}
+
+/// Target first, so the source's unlink cannot delete the appointment the target is joining.
+fn move_worker_days(
+    target: &str,
+    target_date: &str,
+    source: Option<&str>,
+    source_date: Option<&str>,
+) -> Vec<WorkerDay> {
+    let mut touched = worker_days(Some(target), [Some(target_date)]);
+    touched.extend(worker_days(source, [source_date]));
+    touched
+}
+
+pub(super) fn resolve_employee_calendar_url(
     store: &crate::integrations::local_store::LocalStore,
     employee_reference: &str,
 ) -> Result<String, String> {
@@ -395,7 +436,7 @@ fn resolve_employee_calendar_url(
         .ok_or_else(|| "Kein Kalender für diesen Mitarbeiter konfiguriert.".to_string())
 }
 
-fn load_caldav_session(
+pub(super) fn load_caldav_session(
     app: &tauri::AppHandle,
     store: &crate::integrations::local_store::LocalStore,
 ) -> Result<CaldavSession, String> {
@@ -434,6 +475,7 @@ async fn update_assignment_inner(
         .map_err(|e| e.user_message)?;
     let session = load_caldav_session(&app, &store)?;
 
+    let handle = app.clone();
     refuse_protected_event(
         &session,
         &input.href,
@@ -445,18 +487,17 @@ async fn update_assignment_inner(
     )
     .await?;
 
-    update_assignment_core(
-        &session,
-        &input.href,
-        &input.uid,
-        &AssignmentWrite {
-            date: input.date,
-            project_ref: input.project_ref,
-            project_name: input.project_name,
-            order_index: input.order_index,
-        },
-    )
-    .await
+    let write = AssignmentWrite {
+        date: input.date,
+        project_ref: input.project_ref,
+        project_name: input.project_name,
+        order_index: input.order_index,
+    };
+    let previous_date = update_assignment_core(&session, &input.href, &input.uid, &write).await?;
+    let worker = event_worker(&handle, &store, &session, &input.href);
+    let dates = [Some(write.date.as_str()), previous_date.as_deref()];
+    schedule_appointment_sync(&handle, worker_days(worker.as_deref(), dates));
+    Ok(())
 }
 
 async fn move_assignment_inner(
@@ -475,23 +516,29 @@ async fn move_assignment_inner(
 
     let session = load_caldav_session(&app, &store)?;
 
+    let handle = app.clone();
     refuse_protected_day_change(&session, &href, &date, |reference: String| async move {
         crate::integrations::daylite::projects::fetch_project_by_reference(app, &reference).await
     })
     .await?;
 
-    move_assignment_core(
-        &session,
-        &href,
-        &target_calendar_url,
-        &AssignmentWrite {
-            date,
-            project_ref,
-            project_name,
-            order_index,
-        },
-    )
-    .await
+    let write = AssignmentWrite {
+        date,
+        project_ref,
+        project_name,
+        order_index,
+    };
+    let (moved, source_date) =
+        move_assignment_core(&session, &href, &target_calendar_url, &write).await?;
+    let source = event_worker(&handle, &store, &session, &href);
+    let touched = move_worker_days(
+        &target_employee_reference,
+        &write.date,
+        source.as_deref(),
+        source_date.as_deref(),
+    );
+    schedule_appointment_sync(&handle, touched);
+    Ok(moved)
 }
 
 async fn reorder_assignment_inner(
@@ -517,6 +564,7 @@ async fn delete_assignment_inner(
         .map_err(|e| e.user_message)?;
     let session = load_caldav_session(&app, &store)?;
 
+    let handle = app.clone();
     refuse_protected_event(
         &session,
         &href,
@@ -528,7 +576,13 @@ async fn delete_assignment_inner(
     )
     .await?;
 
-    delete_assignment_core(&session, &href).await
+    let previous_date = delete_assignment_core(&session, &href).await?;
+    let worker = event_worker(&handle, &store, &session, &href);
+    schedule_appointment_sync(
+        &handle,
+        worker_days(worker.as_deref(), [previous_date.as_deref()]),
+    );
+    Ok(())
 }
 
 #[cfg(test)]
@@ -597,6 +651,68 @@ mod tests {
         assert_eq!(
             WeekLoadPurpose::Refresh.operation(),
             Operation::RefreshWeekEvents
+        );
+    }
+
+    fn on(worker: &str, date: &str) -> WorkerDay {
+        WorkerDay {
+            worker: worker.to_string(),
+            date: NaiveDate::parse_from_str(date, "%Y-%m-%d").unwrap(),
+        }
+    }
+
+    #[test]
+    fn a_write_touches_the_workers_day_it_left_and_the_day_it_entered() {
+        let cases = [
+            (
+                "two days",
+                worker_days(
+                    Some("/v1/contacts/1"),
+                    [Some("2026-11-03"), Some("2026-11-02")],
+                ),
+                vec![
+                    on("/v1/contacts/1", "2026-11-02"),
+                    on("/v1/contacts/1", "2026-11-03"),
+                ],
+            ),
+            (
+                "one day once",
+                worker_days(
+                    Some("/v1/contacts/1"),
+                    [Some("2026-11-02"), Some("2026-11-02")],
+                ),
+                vec![on("/v1/contacts/1", "2026-11-02")],
+            ),
+            (
+                "an unknown or unreadable date",
+                worker_days(Some("/v1/contacts/1"), [None, Some("kein-datum")]),
+                vec![],
+            ),
+            (
+                "an unknown worker",
+                worker_days(None, [Some("2026-11-02")]),
+                vec![],
+            ),
+        ];
+
+        for (label, touched, expected) in cases {
+            assert_eq!(touched, expected, "case: {label}");
+        }
+    }
+
+    #[test]
+    fn a_move_synchronizes_the_target_worker_before_the_source_worker() {
+        assert_eq!(
+            move_worker_days(
+                "/v1/contacts/2",
+                "2026-11-02",
+                Some("/v1/contacts/1"),
+                Some("2026-11-02"),
+            ),
+            [
+                on("/v1/contacts/2", "2026-11-02"),
+                on("/v1/contacts/1", "2026-11-02"),
+            ]
         );
     }
 

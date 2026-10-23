@@ -1,3 +1,4 @@
+pub(crate) mod appointments;
 pub mod auth;
 mod auth_flow;
 pub mod categories;

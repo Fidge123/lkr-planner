@@ -24,6 +24,7 @@ pub enum Operation {
     DayliteOpenProject,
     DayliteListContacts,
     DayliteListCachedContacts,
+    DayliteAppointmentSync,
     ZepSaveCredentials,
     ZepLoadCredentials,
     ZepTestCredentials,
@@ -184,6 +185,10 @@ mod tests {
             "daylite_search_projects"
         );
         assert_eq!(dimension(&Operation::CaldavWrite), "caldav_write");
+        assert_eq!(
+            dimension(&Operation::DayliteAppointmentSync),
+            "daylite_appointment_sync"
+        );
     }
 
     #[test]

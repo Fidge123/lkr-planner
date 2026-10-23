@@ -100,7 +100,7 @@ The system SHALL filter projects by status in the Daylite API search body.
 The system SHALL return a German error message when the Daylite API request times out.
 
 #### Scenario: Handle API timeout
-- **WHEN** Daylite API request times out (after 5 seconds)
+- **WHEN** Daylite API request times out (after 7 seconds)
 - **THEN** return error code `Timeout`
 - **AND** return user message `"Zeitüberschreitung bei der Daylite-Anfrage"`
 
