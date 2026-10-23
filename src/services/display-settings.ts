@@ -1,33 +1,25 @@
-import { commands, type DisplaySettings } from "../generated/tauri";
+import {
+  commands,
+  type DisplaySettings,
+  type LocalStore,
+} from "../generated/tauri";
 import { callCommand } from "./command-result";
-import { loadLocalStore } from "./local-store";
 
-const defaultDisplaySettings: Required<DisplaySettings> = {
-  hideNonPlannableEmployees: true,
-  showWeekend: false,
-};
-
-export async function loadDisplaySettings(): Promise<
-  Required<DisplaySettings>
-> {
-  const store = await loadLocalStore();
+export function displaySettingsOf(
+  store: LocalStore | undefined,
+): Required<DisplaySettings> {
   return {
     hideNonPlannableEmployees:
-      store.displaySettings?.hideNonPlannableEmployees ??
-      defaultDisplaySettings.hideNonPlannableEmployees,
-    showWeekend:
-      store.displaySettings?.showWeekend ?? defaultDisplaySettings.showWeekend,
+      store?.displaySettings?.hideNonPlannableEmployees ?? true,
+    showWeekend: store?.displaySettings?.showWeekend ?? false,
   };
 }
 
-export async function saveDisplaySettings(
-  patch: Partial<DisplaySettings>,
-): Promise<void> {
-  await callCommand(
-    commands.saveDisplaySettings({
-      ...(await loadDisplaySettings()),
-      ...patch,
-    }),
+export function saveDisplaySettings(
+  settings: Required<DisplaySettings>,
+): Promise<null> {
+  return callCommand(
+    commands.saveDisplaySettings(settings),
     "Die Anzeige-Einstellung konnte nicht gespeichert werden.",
   );
 }

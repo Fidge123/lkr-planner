@@ -6,27 +6,26 @@ import { DataLoadingIndicator } from "./app/components/data-loading-indicator";
 import { EmployeeIcalDialog } from "./app/components/employee-ical-dialog";
 import { SettingsDialog } from "./app/components/settings/settings-dialog";
 import { useCalendarAutoRefresh } from "./app/hooks/use-calendar-auto-refresh";
+import { localStoreQuery, useLocalStore } from "./app/hooks/use-local-store";
 import { usePlanningAssignments } from "./app/hooks/use-planning-assignments";
 import { contactsQuery } from "./app/hooks/use-planning-employees";
-import { categoryColorsQuery } from "./app/hooks/use-project-category-colors";
 import { useReloadDataMenu } from "./app/hooks/use-reload-data-menu";
 import { useRerenderOnDayChange } from "./app/hooks/use-rerender-on-day-change";
 import { useZepCalendars } from "./app/hooks/use-zep-calendars";
 import { PlanningGrid } from "./app/page";
 import { runStartupSync } from "./app/startup-sync";
 import { getWeekStart, weekOffsetFor } from "./app/util";
-import type { EmployeeSetting, PlanningContactRecord } from "./generated/tauri";
-import { loadLocalStore } from "./services/local-store";
+import type { PlanningContactRecord } from "./generated/tauri";
 
 function App() {
   const [weekOffset, setWeekOffset] = useState(0);
-  const [showWeekend, setShowWeekend] = useState(false);
-  // On a weekend the weekend setting decides which week is shown, so no week loads before it is read.
-  const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const localStore = useLocalStore();
+  const { showWeekend, hideNonPlannableEmployees } = localStore.displaySettings;
   useRerenderOnDayChange();
   const weekStart = getWeekStart(weekOffset, showWeekend);
+  // On a weekend the weekend setting decides which week is shown, so no week loads before it is read.
   const planningAssignmentsState = usePlanningAssignments(
-    settingsLoaded ? weekStart : null,
+    localStore.isLoaded ? weekStart : null,
   );
   useCalendarAutoRefresh(
     planningAssignmentsState.lastLoadedAt,
@@ -39,33 +38,7 @@ function App() {
   const [icalDialogEmployee, setIcalDialogEmployee] =
     useState<PlanningContactRecord | null>(null);
 
-  const [employeeSettings, setEmployeeSettings] = useState<EmployeeSetting[]>(
-    [],
-  );
-  const [employeeSettingsError, setEmployeeSettingsError] = useState<
-    string | null
-  >(null);
-  const [hideNonPlannableEmployees, setHideNonPlannableEmployees] =
-    useState(true);
   const zepCalendarsState = useZepCalendars();
-
-  const loadEmployeeSettings = useCallback(async () => {
-    try {
-      const store = await loadLocalStore();
-      setEmployeeSettings(store.employeeSettings);
-      setHideNonPlannableEmployees(
-        store.displaySettings?.hideNonPlannableEmployees ?? true,
-      );
-      setShowWeekend(store.displaySettings?.showWeekend ?? false);
-      setEmployeeSettingsError(null);
-      return store.employeeSettings;
-    } catch (error) {
-      setEmployeeSettingsError((error as Error).message);
-      return null;
-    } finally {
-      setSettingsLoaded(true);
-    }
-  }, []);
 
   const reloadAssignmentsRef = useRef(
     planningAssignmentsState.reloadAssignments,
@@ -75,7 +48,11 @@ function App() {
   useEffect(() => {
     let cancelled = false;
     void runStartupSync({
-      readSettings: loadEmployeeSettings,
+      readSettings: () =>
+        queryClient.fetchQuery({ ...localStoreQuery, staleTime: 0 }).then(
+          (store) => store.employeeSettings,
+          () => null,
+        ),
       syncContacts: async () => {
         await queryClient.fetchQuery(contactsQuery);
       },
@@ -85,7 +62,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [loadEmployeeSettings, queryClient]);
+  }, [queryClient]);
 
   const handleOpenIcalDialog = useCallback(
     (employee: PlanningContactRecord) => {
@@ -109,24 +86,16 @@ function App() {
   );
 
   const reloadData = useCallback(() => {
-    void queryClient.invalidateQueries({
-      queryKey: categoryColorsQuery.queryKey,
-    });
-    void loadEmployeeSettings();
-    void queryClient.invalidateQueries({ queryKey: contactsQuery.queryKey });
+    void queryClient.invalidateQueries();
     planningAssignmentsState.reloadAssignments();
-  }, [
-    loadEmployeeSettings,
-    queryClient,
-    planningAssignmentsState.reloadAssignments,
-  ]);
+  }, [queryClient, planningAssignmentsState.reloadAssignments]);
 
   useReloadDataMenu(reloadData);
 
   const handleSettingsSaved = useCallback(() => {
-    void loadEmployeeSettings();
+    void queryClient.invalidateQueries({ queryKey: localStoreQuery.queryKey });
     planningAssignmentsState.reloadAssignments();
-  }, [loadEmployeeSettings, planningAssignmentsState.reloadAssignments]);
+  }, [queryClient, planningAssignmentsState.reloadAssignments]);
 
   return (
     <article className="h-screen flex flex-col">
@@ -173,11 +142,11 @@ function App() {
       </header>
 
       <main className="flex-1 min-h-0 overflow-hidden">
-        {employeeSettingsError ? (
+        {localStore.errorMessage ? (
           <section className="alert alert-error m-4">
             <span>
               Einstellungen konnten nicht geladen werden:{" "}
-              {employeeSettingsError}
+              {localStore.errorMessage}
             </span>
           </section>
         ) : null}
@@ -185,7 +154,7 @@ function App() {
           weekOffset={weekOffset}
           showWeekend={showWeekend}
           assignmentState={planningAssignmentsState}
-          employeeSettings={employeeSettings}
+          employeeSettings={localStore.employeeSettings}
           hideNonPlannableEmployees={hideNonPlannableEmployees}
           onOpenIcalDialog={handleOpenIcalDialog}
           onNavigateWeek={handleNavigateWeek}
@@ -196,14 +165,13 @@ function App() {
       <SettingsDialog
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
-        onDisplaySettingsChanged={loadEmployeeSettings}
       />
 
       <EmployeeIcalDialog
         employee={icalDialogEmployee}
         employeeSetting={
           icalDialogEmployee
-            ? (employeeSettings.find(
+            ? (localStore.employeeSettings.find(
                 (s) => s.dayliteContactReference === icalDialogEmployee.self,
               ) ?? null)
             : null
