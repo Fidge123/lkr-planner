@@ -27,8 +27,6 @@ export function WeekTable({
   draggedUid = null,
   activeHighlight = null,
   onOpenIcalDialog,
-  onReloadAssignments,
-  onAssignmentWritten,
   onToggleHighlight,
   onJumpToWeek,
 }: WeekTableProps) {
@@ -103,8 +101,6 @@ export function WeekTable({
             draggedUid={draggedUid}
             activeHighlight={activeHighlight}
             onOpenIcalDialog={onOpenIcalDialog}
-            onReloadAssignments={onReloadAssignments}
-            onAssignmentWritten={onAssignmentWritten}
             onToggleHighlight={onToggleHighlight}
           />
         ))}
@@ -136,8 +132,6 @@ export interface WeekTableProps {
   draggedUid?: string | null;
   activeHighlight?: string | null;
   onOpenIcalDialog: (employee: PlanningContactRecord) => void;
-  onReloadAssignments: () => void;
-  onAssignmentWritten: (employeeRef: string, removedUid: string | null) => void;
   onToggleHighlight?: (event: CellEvent) => void;
   onJumpToWeek?: (day: Date) => void;
 }

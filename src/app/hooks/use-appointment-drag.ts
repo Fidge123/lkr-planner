@@ -10,6 +10,7 @@ import {
   updateAssignment,
 } from "../../services/assignments";
 import type { MoveReconciliation } from "../components/move-reconciliation-dialog";
+import { useWeekCache } from "./use-planning-assignments";
 
 export interface AppointmentDragPayload {
   uid: string;
@@ -256,20 +257,16 @@ export interface AppointmentDragState {
 }
 
 interface UseAppointmentDragArgs {
+  /** The displayed week, which a drop edits. */
+  weekStart: string;
   onNavigateWeek: (direction: -1 | 1) => void;
-  reloadAssignments: () => void;
-  invalidateWeeksContaining: (uid: string) => void;
-  moveEvent: (uid: string, target: DropCellTarget) => string | null;
-  refreshEmployees: (weekStart: string, employeeRefs: string[]) => void;
 }
 
 export function useAppointmentDrag({
+  weekStart,
   onNavigateWeek,
-  reloadAssignments,
-  invalidateWeeksContaining,
-  moveEvent,
-  refreshEmployees,
 }: UseAppointmentDragArgs): AppointmentDragState {
+  const cache = useWeekCache();
   const [activePayload, setActivePayload] =
     useState<AppointmentDragPayload | null>(null);
   // `active.data` is a mutable ref that unmounts when the drag leaves the week, so capture it at drag start.
@@ -292,14 +289,8 @@ export function useAppointmentDrag({
 
   const onNavigateWeekRef = useRef(onNavigateWeek);
   onNavigateWeekRef.current = onNavigateWeek;
-  const reloadAssignmentsRef = useRef(reloadAssignments);
-  reloadAssignmentsRef.current = reloadAssignments;
-  const invalidateWeeksContainingRef = useRef(invalidateWeeksContaining);
-  invalidateWeeksContainingRef.current = invalidateWeeksContaining;
-  const moveEventRef = useRef(moveEvent);
-  moveEventRef.current = moveEvent;
-  const refreshEmployeesRef = useRef(refreshEmployees);
-  refreshEmployeesRef.current = refreshEmployees;
+  const weekStartRef = useRef(weekStart);
+  weekStartRef.current = weekStart;
 
   // The reconciliation path reloads after the dialog closes, long after the drop cleared activePayloadRef.
   const droppedUidRef = useRef<string | null>(null);
@@ -380,10 +371,10 @@ export function useAppointmentDrag({
       if (decideDropAction(source, target) === "none") return;
 
       // A rejected write is undone by the same refresh that confirms a successful one.
-      const editedWeek = moveEventRef.current(source.uid, target);
+      const editedWeek = weekStartRef.current;
+      cache.moveEvent(editedWeek, source.uid, target);
       const refreshAffectedRows = () => {
-        if (editedWeek === null) return;
-        refreshEmployeesRef.current(editedWeek, [
+        void cache.refreshEmployees(editedWeek, [
           ...new Set([source.employeeRef, target.employeeRef]),
         ]);
       };
@@ -402,7 +393,7 @@ export function useAppointmentDrag({
         refreshAffectedRows();
       });
     },
-    [targetOf],
+    [cache, targetOf],
   );
 
   const onDragCancel = useCallback(() => {
@@ -417,11 +408,11 @@ export function useAppointmentDrag({
   const resolveReconciliation = useCallback(() => {
     setReconciliation(null);
     if (droppedUidRef.current !== null) {
-      invalidateWeeksContainingRef.current(droppedUidRef.current);
+      cache.dropWeeksContaining(droppedUidRef.current);
       droppedUidRef.current = null;
     }
-    reloadAssignmentsRef.current();
-  }, []);
+    void cache.reload(weekStartRef.current);
+  }, [cache]);
 
   return {
     activePayload,

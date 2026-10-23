@@ -10,6 +10,7 @@ import { recordLastAssignedProject } from "../../services/assignment-suggestions
 import { createAssignment } from "../../services/assignments";
 import type { ProjectCategoryColors } from "../../services/daylite-categories";
 import type { DropPreview } from "../hooks/use-appointment-drag";
+import { useWeekCache } from "../hooks/use-planning-assignments";
 import type { GhostSuggestion, ModalSaveAction } from "../next-day-quick-add";
 import { isGhostVisible, nextGhostState } from "../next-day-quick-add";
 import type { CellEvent } from "../types";
@@ -29,8 +30,6 @@ export function TimetableRow({
   draggedUid = null,
   activeHighlight = null,
   onOpenIcalDialog,
-  onReloadAssignments,
-  onAssignmentWritten,
   onToggleHighlight,
 }: Props) {
   const showWarning = needsAttention(employeeSetting);
@@ -45,6 +44,12 @@ export function TimetableRow({
     setGhost(null);
   }
 
+  const cache = useWeekCache();
+  const handleWritten = (removedUid: string | null) => {
+    if (removedUid !== null) cache.removeEvent(removedUid);
+    void cache.refreshEmployees(weekStart, [employee.self]);
+  };
+
   const openCreateModal = (date: string) =>
     setModalState({ date, assignment: null });
 
@@ -58,7 +63,7 @@ export function TimetableRow({
       action.kind === "delete" ? (modalState?.assignment?.uid ?? null) : null;
     setModalState(null);
     setGhost((current) => nextGhostState(current, action, isoWeekDays));
-    onAssignmentWritten(employee.self, removedUid);
+    handleWritten(removedUid);
   };
 
   const handleSuggestionClick = async (suggestion: GhostSuggestion) => {
@@ -88,7 +93,7 @@ export function TimetableRow({
         isoWeekDays,
       ),
     );
-    onAssignmentWritten(employee.self, null);
+    handleWritten(null);
   };
 
   return (
@@ -121,7 +126,7 @@ export function TimetableRow({
               <button
                 type="button"
                 className="btn btn-xs btn-ghost"
-                onClick={onReloadAssignments}
+                onClick={() => void cache.reload(weekStart)}
               >
                 Erneut laden
               </button>
@@ -215,8 +220,6 @@ interface Props {
   draggedUid?: string | null;
   activeHighlight?: string | null;
   onOpenIcalDialog: (employee: PlanningContactRecord) => void;
-  onReloadAssignments: () => void;
   /** A deleted assignment's UID lets the card disappear before the row is refreshed. */
-  onAssignmentWritten: (employeeRef: string, removedUid: string | null) => void;
   onToggleHighlight?: (event: CellEvent) => void;
 }

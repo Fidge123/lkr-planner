@@ -1,15 +1,15 @@
 import { describe, expect, it, setSystemTime } from "bun:test";
-import { renderToStaticMarkup } from "react-dom/server";
 import type {
   CalendarCellEvent,
   PlanningContactRecord,
 } from "../../generated/tauri";
+import { renderWithQueries } from "../../test/render-with-queries";
 import { WeekTable } from "./week-table";
 
 function renderTable(
   overrides: Partial<Parameters<typeof WeekTable>[0]> = {},
 ): string {
-  return renderToStaticMarkup(
+  return renderWithQueries(
     <WeekTable
       weekDays={[17, 18, 19, 20, 21].map((day) => new Date(2026, 7, day))}
       employees={[]}
@@ -20,8 +20,6 @@ function renderTable(
       holidays={[]}
       isEmployeeLoading={false}
       onOpenIcalDialog={() => {}}
-      onReloadAssignments={() => {}}
-      onAssignmentWritten={() => {}}
       {...overrides}
     />,
   );

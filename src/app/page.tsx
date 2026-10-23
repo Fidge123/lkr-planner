@@ -134,13 +134,7 @@ export function PlanningGridTable({
     errorMessage: employeeErrorMessage,
     reloadEmployees,
   } = employeeState;
-  const {
-    reloadAssignments,
-    invalidateWeeksContaining,
-    moveEvent,
-    refreshEmployees,
-    removeEvent,
-  } = assignmentState;
+  const { reloadAssignments } = assignmentState;
   const {
     holidays,
     errorMessage: holidayErrorMessage,
@@ -157,22 +151,12 @@ export function PlanningGridTable({
   const dragSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
   );
+  const weekStart = toLocalISODate(weekDays[0]);
   const drag = useAppointmentDrag({
+    weekStart,
     onNavigateWeek: onNavigateWeek ?? (() => {}),
-    reloadAssignments,
-    invalidateWeeksContaining,
-    moveEvent,
-    refreshEmployees,
   });
   const isDragActive = drag.activePayload !== null;
-  const weekStart = toLocalISODate(weekDays[0]);
-  const handleAssignmentWritten = (
-    employeeRef: string,
-    removedUid: string | null,
-  ) => {
-    if (removedUid !== null) removeEvent(removedUid);
-    refreshEmployees(weekStart, [employeeRef]);
-  };
 
   const [highlight, setHighlight] = useState<ActiveHighlight | null>(null);
   const activeHighlight = activeHighlightForWeek(highlight, weekStart);
@@ -274,8 +258,6 @@ export function PlanningGridTable({
             draggedUid={drag.activePayload?.uid ?? null}
             activeHighlight={activeHighlight}
             onOpenIcalDialog={onOpenIcalDialog}
-            onReloadAssignments={reloadAssignments}
-            onAssignmentWritten={handleAssignmentWritten}
             onToggleHighlight={toggleHighlight}
             onJumpToWeek={onJumpToWeek}
           />
@@ -318,8 +300,6 @@ export function PlanningGridTable({
               holidays={holidays}
               isEmployeeLoading={isEmployeeLoading}
               onOpenIcalDialog={onOpenIcalDialog}
-              onReloadAssignments={reloadAssignments}
-              onAssignmentWritten={handleAssignmentWritten}
             />
           </DndContext>
         </aside>

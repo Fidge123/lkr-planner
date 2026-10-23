@@ -1,9 +1,9 @@
 import { beforeAll, describe, expect, it, setSystemTime } from "bun:test";
-import { renderToStaticMarkup } from "react-dom/server";
 import type {
   CalendarCellEvent,
   PlanningContactRecord,
 } from "../generated/tauri";
+import { renderWithQueries } from "../test/render-with-queries";
 import type { HolidaysState } from "./hooks/use-holidays";
 import {
   type PlanningGridAssignmentState,
@@ -27,10 +27,6 @@ const defaultAssignmentState: PlanningGridAssignmentState = {
   errorMessage: null,
   loadedWeekStart: null,
   reloadAssignments: () => {},
-  refreshEmployees: () => {},
-  removeEvent: () => {},
-  moveEvent: () => null,
-  invalidateWeeksContaining: () => {},
   getCachedWeek: () => null,
 };
 
@@ -48,7 +44,7 @@ function renderGrid({
   weekOffset?: number;
   showWeekend?: boolean;
 } = {}): string {
-  return renderToStaticMarkup(
+  return renderWithQueries(
     <PlanningGridTable
       weekDays={getWeekDays(weekOffset, showWeekend)}
       employeeState={defaultEmployeeState}

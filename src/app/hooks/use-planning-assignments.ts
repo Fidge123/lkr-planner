@@ -18,7 +18,7 @@ import {
   sortedProjectRefs,
   type WeekCache,
 } from "../week-cache";
-import type { CellTarget, WeekData } from "../week-data";
+import type { WeekData } from "../week-data";
 import { useLeadingDebounce } from "./use-leading-debounce";
 
 type EmployeeEvents = Record<string, CalendarCellEvent[]>;
@@ -42,12 +42,6 @@ export interface PlanningAssignmentsState extends PlanningAssignmentsView {
   reloadAssignments: () => void;
   /** For automatic refreshes: keeps the shown data on failure and retries once before showing an error. */
   refreshAssignments: () => void;
-  /** Replaces the rows of these employees in that week, without the loading state. */
-  refreshEmployees: (weekStart: string, employeeRefs: string[]) => void;
-  removeEvent: (uid: string) => void;
-  /** Shows the event at the drop target before the write lands, returning the week it edited. */
-  moveEvent: (uid: string, target: CellTarget) => string | null;
-  invalidateWeeksContaining: (uid: string) => void;
   getCachedWeek: (weekStart: string) => WeekData | null;
 }
 
@@ -112,17 +106,6 @@ export function usePlanningAssignments(
       refreshAssignments: () => {
         if (shownWeek !== null) void cache.refresh(shownWeek);
       },
-      refreshEmployees: (ws: string, employeeRefs: string[]) => {
-        void cache.refreshEmployees(ws, employeeRefs);
-      },
-      removeEvent: cache.removeEvent,
-      moveEvent: (uid: string, target: CellTarget) => {
-        if (shownWeek === null) return null;
-        cache.moveEvent(shownWeek, uid, target);
-        return shownWeek;
-      },
-      invalidateWeeksContaining: (uid: string) =>
-        cache.dropWeeksContaining(uid),
       getCachedWeek: cache.cachedWeek,
     }),
     [cache, weekStart, shownWeek],
