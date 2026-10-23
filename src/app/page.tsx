@@ -15,7 +15,6 @@ import type {
   EmployeeSetting,
   PlanningContactRecord,
 } from "../generated/tauri";
-import type { ProjectCategoryColors } from "../services/daylite-categories";
 import { AppointmentSyncAlert } from "./components/appointment-sync-alert";
 import { MoveReconciliationDialog } from "./components/move-reconciliation-dialog";
 import {
@@ -30,9 +29,9 @@ import type { AppointmentDragPayload } from "./hooks/use-appointment-drag";
 import { useAppointmentDrag } from "./hooks/use-appointment-drag";
 import { useAppointmentSyncFailures } from "./hooks/use-appointment-sync-failures";
 import { type HolidaysState, useHolidays } from "./hooks/use-holidays";
+import { useLocalStore } from "./hooks/use-local-store";
 import type { PlanningAssignmentsState } from "./hooks/use-planning-assignments";
 import { usePlanningEmployees } from "./hooks/use-planning-employees";
-import { useProjectCategoryColors } from "./hooks/use-project-category-colors";
 import { useWeekSwipe } from "./hooks/use-week-swipe";
 import type { ActiveHighlight, CellEvent } from "./types";
 import { activeHighlightForWeek, highlightKey, nextHighlight } from "./types";
@@ -87,8 +86,6 @@ export function PlanningGrid({
   weekOffset,
   showWeekend = false,
   assignmentState,
-  employeeSettings = [],
-  hideNonPlannableEmployees = true,
   onOpenIcalDialog = () => {},
   onNavigateWeek,
   onJumpToWeek,
@@ -98,7 +95,7 @@ export function PlanningGrid({
 
   const employeeState = usePlanningEmployees();
   const holidaysState = useHolidays(weekStart);
-  const categoryColors = useProjectCategoryColors();
+  const { employeeSettings, displaySettings } = useLocalStore();
 
   return (
     <PlanningGridTable
@@ -106,9 +103,8 @@ export function PlanningGrid({
       employeeState={employeeState}
       assignmentState={assignmentState}
       employeeSettings={employeeSettings}
-      hideNonPlannableEmployees={hideNonPlannableEmployees}
+      hideNonPlannableEmployees={displaySettings.hideNonPlannableEmployees}
       holidaysState={holidaysState}
-      categoryColors={categoryColors}
       onOpenIcalDialog={onOpenIcalDialog}
       onNavigateWeek={onNavigateWeek}
       onJumpToWeek={onJumpToWeek}
@@ -123,7 +119,6 @@ export function PlanningGridTable({
   employeeSettings,
   hideNonPlannableEmployees,
   holidaysState,
-  categoryColors,
   onOpenIcalDialog,
   onNavigateWeek,
   onJumpToWeek,
@@ -251,7 +246,6 @@ export function PlanningGridTable({
             employeeSettings={employeeSettings}
             eventsByEmployee={eventsByEmployee}
             errorsByEmployee={errorsByEmployee}
-            categoryColors={categoryColors}
             holidays={holidays}
             isEmployeeLoading={isEmployeeLoading}
             dropPreview={drag.dropPreview}
@@ -296,7 +290,6 @@ export function PlanningGridTable({
               employeeSettings={employeeSettings}
               eventsByEmployee={incomingWeek?.eventsByEmployee ?? {}}
               errorsByEmployee={incomingWeek?.errorsByEmployee ?? {}}
-              categoryColors={categoryColors}
               holidays={holidays}
               isEmployeeLoading={isEmployeeLoading}
               onOpenIcalDialog={onOpenIcalDialog}
@@ -360,8 +353,6 @@ interface Props {
   weekOffset: number;
   showWeekend?: boolean;
   assignmentState: PlanningGridAssignmentState;
-  employeeSettings?: EmployeeSetting[];
-  hideNonPlannableEmployees?: boolean;
   onOpenIcalDialog?: (employee: PlanningContactRecord) => void;
   onNavigateWeek?: (direction: -1 | 1) => void;
   onJumpToWeek?: (day: Date) => void;
@@ -374,7 +365,6 @@ export interface PlanningGridTableProps {
   employeeSettings: EmployeeSetting[];
   hideNonPlannableEmployees: boolean;
   holidaysState: HolidaysState;
-  categoryColors: ProjectCategoryColors;
   onOpenIcalDialog: (employee: PlanningContactRecord) => void;
   onNavigateWeek?: (direction: -1 | 1) => void;
   onJumpToWeek?: (day: Date) => void;

@@ -5,6 +5,7 @@ import type {
 } from "../generated/tauri";
 import { renderWithQueries } from "../test/render-with-queries";
 import type { HolidaysState } from "./hooks/use-holidays";
+import { categoryColorsQuery } from "./hooks/use-project-category-colors";
 import {
   type PlanningGridAssignmentState,
   type PlanningGridEmployeesState,
@@ -39,10 +40,12 @@ const defaultHolidaysState: HolidaysState = {
 function renderGrid({
   weekOffset = 0,
   showWeekend = false,
+  categoryColors = {},
   ...overrides
 }: Partial<PlanningGridTableProps> & {
   weekOffset?: number;
   showWeekend?: boolean;
+  categoryColors?: Record<string, string>;
 } = {}): string {
   return renderWithQueries(
     <PlanningGridTable
@@ -52,10 +55,10 @@ function renderGrid({
       employeeSettings={[]}
       hideNonPlannableEmployees={false}
       holidaysState={defaultHolidaysState}
-      categoryColors={{}}
       onOpenIcalDialog={() => {}}
       {...overrides}
     />,
+    [[categoryColorsQuery.queryKey, categoryColors]],
   );
 }
 

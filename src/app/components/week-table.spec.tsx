@@ -16,7 +16,6 @@ function renderTable(
       employeeSettings={[]}
       eventsByEmployee={{}}
       errorsByEmployee={{}}
-      categoryColors={{}}
       holidays={[]}
       isEmployeeLoading={false}
       onOpenIcalDialog={() => {}}

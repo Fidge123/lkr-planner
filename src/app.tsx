@@ -20,7 +20,7 @@ import type { PlanningContactRecord } from "./generated/tauri";
 function App() {
   const [weekOffset, setWeekOffset] = useState(0);
   const localStore = useLocalStore();
-  const { showWeekend, hideNonPlannableEmployees } = localStore.displaySettings;
+  const { showWeekend } = localStore.displaySettings;
   useRerenderOnDayChange();
   const weekStart = getWeekStart(weekOffset, showWeekend);
   // On a weekend the weekend setting decides which week is shown, so no week loads before it is read.
@@ -146,8 +146,6 @@ function App() {
           weekOffset={weekOffset}
           showWeekend={showWeekend}
           assignmentState={planningAssignmentsState}
-          employeeSettings={localStore.employeeSettings}
-          hideNonPlannableEmployees={hideNonPlannableEmployees}
           onOpenIcalDialog={setIcalDialogEmployee}
           onNavigateWeek={handleNavigateWeek}
           onJumpToWeek={handleJumpToWeek}

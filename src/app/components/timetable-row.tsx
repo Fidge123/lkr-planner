@@ -8,9 +8,9 @@ import type {
 } from "../../generated/tauri";
 import { recordLastAssignedProject } from "../../services/assignment-suggestions";
 import { createAssignment } from "../../services/assignments";
-import type { ProjectCategoryColors } from "../../services/daylite-categories";
 import type { DropPreview } from "../hooks/use-appointment-drag";
 import { useWeekCache } from "../hooks/use-planning-assignments";
+import { useProjectCategoryColors } from "../hooks/use-project-category-colors";
 import type { GhostSuggestion, ModalSaveAction } from "../next-day-quick-add";
 import { isGhostVisible, nextGhostState } from "../next-day-quick-add";
 import type { CellEvent } from "../types";
@@ -23,7 +23,6 @@ export function TimetableRow({
   employee,
   calendarEvents,
   calendarError,
-  categoryColors,
   week,
   employeeSetting,
   dropPreview = null,
@@ -45,6 +44,7 @@ export function TimetableRow({
   }
 
   const cache = useWeekCache();
+  const categoryColors = useProjectCategoryColors();
   const handleWritten = (removedUid: string | null) => {
     if (removedUid !== null) cache.removeEvent(removedUid);
     void cache.refreshEmployees(weekStart, [employee.self]);
@@ -210,7 +210,6 @@ interface Props {
   employee: PlanningContactRecord;
   calendarEvents: CalendarCellEvent[];
   calendarError: string | null;
-  categoryColors: ProjectCategoryColors;
   week: {
     days: Date[];
     holidayDates: Set<string>;
