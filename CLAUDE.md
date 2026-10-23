@@ -40,6 +40,7 @@ Avoid `---` between headers and avoid em dashes.
 
 - All third-party API logic must be implemented in the Rust backend
 - The frontend should only communicate with the backend via Tauri commands (`invoke`)
+- Only modules in `src/services` may call the generated `commands`, and Biome rejects the import anywhere else
 
 ## Working with the backlog
 

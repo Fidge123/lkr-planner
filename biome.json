@@ -23,7 +23,21 @@
   "linter": {
     "enabled": true,
     "rules": {
-      "preset": "recommended"
+      "preset": "recommended",
+      "style": {
+        "noRestrictedImports": {
+          "level": "error",
+          "options": {
+            "patterns": [
+              {
+                "group": ["**/generated/tauri"],
+                "importNamePattern": "commands",
+                "message": "Call backend commands through a service in src/services (ADR 0002)."
+              }
+            ]
+          }
+        }
+      }
     }
   },
   "javascript": {
@@ -43,5 +57,17 @@
         "organizeImports": "on"
       }
     }
-  }
+  },
+  "overrides": [
+    {
+      "includes": ["src/services/**", "src/test/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": "off"
+          }
+        }
+      }
+    }
+  ]
 }
