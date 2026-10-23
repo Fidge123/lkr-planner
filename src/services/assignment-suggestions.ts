@@ -1,4 +1,5 @@
 import { commands, type DayliteProjectSummary } from "../generated/tauri";
+import { callCommand } from "./command-result";
 
 const SUGGESTION_LIMIT = 5;
 
@@ -28,14 +29,9 @@ export function combineSuggestions(
   return suggestions.slice(0, SUGGESTION_LIMIT);
 }
 
-export async function loadDefaultSuggestions(): Promise<
-  DayliteProjectSummary[]
-> {
-  return combineSuggestions(getLastAssignedProject(), await queryOverdue());
-}
-
-async function queryOverdue(): Promise<DayliteProjectSummary[]> {
-  const result = await commands.dayliteQueryOverdueProjects().catch(() => null);
-  if (!result || result.status === "error") return [];
-  return result.data;
+export function loadOverdueProjects(): Promise<DayliteProjectSummary[]> {
+  return callCommand(
+    commands.dayliteQueryOverdueProjects(),
+    "Die überfälligen Projekte konnten nicht geladen werden.",
+  );
 }

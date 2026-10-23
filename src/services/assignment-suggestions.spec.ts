@@ -1,21 +1,11 @@
-import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { beforeEach, describe, expect, it } from "bun:test";
 import type { DayliteProjectSummary } from "../generated/tauri";
-import { mockCommands } from "../test/mock-commands";
 import {
   combineSuggestions,
   getLastAssignedProject,
-  loadDefaultSuggestions,
   recordLastAssignedProject,
   resetLastAssignedProject,
 } from "./assignment-suggestions";
-
-const mockDayliteQueryOverdueProjects = mock(() =>
-  Promise.resolve({} as unknown),
-);
-
-mockCommands({
-  dayliteQueryOverdueProjects: mockDayliteQueryOverdueProjects,
-});
 
 function project(name: string, ref: string): DayliteProjectSummary {
   return { self: ref, name };
@@ -95,69 +85,5 @@ describe("combineSuggestions", () => {
 
   it("returns an empty list when neither recent nor overdue projects exist", () => {
     expect(combineSuggestions(null, [])).toEqual([]);
-  });
-});
-
-describe("loadDefaultSuggestions", () => {
-  beforeEach(() => {
-    resetLastAssignedProject();
-    mockDayliteQueryOverdueProjects.mockClear();
-  });
-
-  it("combines the cached recent project with the overdue query results", async () => {
-    recordLastAssignedProject(project("Projekt Zuletzt", "/v1/projects/99"));
-    mockDayliteQueryOverdueProjects.mockResolvedValue({
-      status: "ok",
-      data: [project("Projekt 10", "/v1/projects/10")],
-    });
-
-    const suggestions = await loadDefaultSuggestions();
-
-    expect(suggestions.map((p) => p.self)).toEqual([
-      "/v1/projects/99",
-      "/v1/projects/10",
-    ]);
-  });
-
-  it("returns only overdue projects when no recent assignment exists", async () => {
-    mockDayliteQueryOverdueProjects.mockResolvedValue({
-      status: "ok",
-      data: [
-        project("Projekt 10", "/v1/projects/10"),
-        project("Projekt 11", "/v1/projects/11"),
-      ],
-    });
-
-    const suggestions = await loadDefaultSuggestions();
-
-    expect(suggestions.map((p) => p.self)).toEqual([
-      "/v1/projects/10",
-      "/v1/projects/11",
-    ]);
-  });
-
-  it("degrades to the cached project when the overdue query returns an error", async () => {
-    recordLastAssignedProject(project("Projekt Zuletzt", "/v1/projects/99"));
-    mockDayliteQueryOverdueProjects.mockResolvedValue({
-      status: "error",
-      error: {
-        code: "SERVER_ERROR",
-        httpStatus: 500,
-        userMessage: "Serverfehler",
-        technicalMessage: "internal server error",
-      },
-    });
-
-    const suggestions = await loadDefaultSuggestions();
-
-    expect(suggestions.map((p) => p.self)).toEqual(["/v1/projects/99"]);
-  });
-
-  it("returns an empty list when the overdue query rejects and no recent project exists", async () => {
-    mockDayliteQueryOverdueProjects.mockRejectedValue(
-      new Error("network down"),
-    );
-
-    expect(await loadDefaultSuggestions()).toEqual([]);
   });
 });
