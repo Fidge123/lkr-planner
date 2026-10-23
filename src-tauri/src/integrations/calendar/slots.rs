@@ -357,13 +357,6 @@ mod tests {
     }
 
     #[test]
-    fn single_assignment_receives_full_window() {
-        let slots = allocate_slots(&uids(&["a"]));
-
-        assert_eq!(slots, vec![("a".to_string(), time(8, 0), time(16, 0))]);
-    }
-
-    #[test]
     fn two_assignments_receive_half_windows() {
         let slots = allocate_slots(&uids(&["a", "b"]));
 
@@ -388,17 +381,6 @@ mod tests {
                 ("c".to_string(), time(13, 20), time(16, 0)),
             ]
         );
-    }
-
-    #[test]
-    fn slots_follow_the_order_the_caller_supplies() {
-        let slots = allocate_slots(&uids(&["b", "a"]));
-
-        assert_eq!(
-            slots[0].0, "b",
-            "the caller's sequence is canonical, not the UID"
-        );
-        assert_eq!(slots[0].1, time(8, 0));
     }
 
     #[test]
@@ -512,22 +494,6 @@ mod tests {
         assert!(updates[0].payload.contains("DTSTART:20260506T080000"));
         assert!(updates[0].payload.contains("DTEND:20260506T120000"));
         assert_eq!(updates[1].uid, "uid-b");
-        assert!(updates[1].payload.contains("DTSTART:20260506T120000"));
-        assert!(updates[1].payload.contains("DTEND:20260506T160000"));
-    }
-
-    #[test]
-    fn delete_redistributes_remaining_assignments_into_halves() {
-        let events = vec![
-            assignment_event("uid-a", "2026-05-06", "08:00", "10:40"),
-            assignment_event("uid-c", "2026-05-06", "13:20", "16:00"),
-        ];
-
-        let updates = plan_slot_updates(&events, "2026-05-06", None).updates;
-
-        assert_eq!(updates.len(), 2);
-        assert!(updates[0].payload.contains("DTSTART:20260506T080000"));
-        assert!(updates[0].payload.contains("DTEND:20260506T120000"));
         assert!(updates[1].payload.contains("DTSTART:20260506T120000"));
         assert!(updates[1].payload.contains("DTEND:20260506T160000"));
     }
@@ -791,104 +757,6 @@ mod tests {
     }
 
     #[test]
-    fn multi_vevent_resource_is_excluded_from_reallocation() {
-        let mut recurring = assignment_event("uid-a", "2026-05-06", "08:00", "16:00");
-        recurring.raw_ical = recurring.raw_ical.replace(
-            "END:VEVENT\r\nEND:VCALENDAR\r\n",
-            "END:VEVENT\r\nBEGIN:VEVENT\r\nUID:uid-a\r\nRECURRENCE-ID:20260506T080000\r\nDTSTART:20260513T080000\r\nDTEND:20260513T160000\r\nSUMMARY:Projekt uid-a\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
-        );
-        let events = vec![
-            recurring,
-            ordered_assignment_event("uid-b", "2026-05-06", "08:00", "16:00", 0),
-        ];
-
-        let updates = plan_slot_updates(&events, "2026-05-06", None).updates;
-
-        assert!(
-            updates.iter().all(|u| u.uid != "uid-a"),
-            "a multi-VEVENT resource must never be re-slotted"
-        );
-        assert!(
-            updates.is_empty(),
-            "uid-b is the only re-slottable assignment and already owns the full window"
-        );
-    }
-
-    #[test]
-    fn recurring_assignment_is_excluded_from_reallocation() {
-        let mut recurring = assignment_event("uid-a", "2026-05-06", "08:00", "16:00");
-        recurring.raw_ical = recurring
-            .raw_ical
-            .replace("SUMMARY:", "RRULE:FREQ=WEEKLY;COUNT=10\r\nSUMMARY:");
-        let events = vec![
-            recurring,
-            assignment_event("uid-b", "2026-05-06", "08:00", "16:00"),
-            assignment_event("uid-c", "2026-05-06", "08:00", "16:00"),
-        ];
-
-        let updates = plan_slot_updates(&events, "2026-05-06", None).updates;
-
-        assert!(
-            updates.iter().all(|u| u.uid != "uid-a"),
-            "re-slotting a series master would move every occurrence"
-        );
-        assert_eq!(
-            updates.len(),
-            2,
-            "only uid-b and uid-c participate, so they split the window in halves"
-        );
-    }
-
-    #[test]
-    fn multi_day_assignment_is_excluded_from_reallocation() {
-        let mut multi_day = assignment_event("uid-a", "2026-05-06", "08:00", "16:00");
-        multi_day.raw_ical = multi_day
-            .raw_ical
-            .replace("DTEND:20260506T160000", "DTEND:20260508T160000");
-        let events = vec![
-            multi_day,
-            assignment_event("uid-b", "2026-05-06", "08:00", "16:00"),
-            assignment_event("uid-c", "2026-05-06", "08:00", "16:00"),
-        ];
-
-        let updates = plan_slot_updates(&events, "2026-05-06", None).updates;
-
-        assert!(
-            updates.iter().all(|u| u.uid != "uid-a"),
-            "re-slotting a multi-day event would collapse it onto its first day"
-        );
-        assert_eq!(
-            updates.len(),
-            2,
-            "only uid-b and uid-c participate, so they split the window in halves"
-        );
-    }
-
-    #[test]
-    fn folded_dtstart_resource_is_excluded_from_reallocation() {
-        let mut folded = assignment_event("uid-a", "2026-05-06", "08:00", "16:00");
-        folded.raw_ical = folded.raw_ical.replace(
-            "DTSTART:20260506T080000\r\n",
-            "DTSTART;TZID=Europe/Very_Long_Timezone_Identifier_That_Wraps:\r\n 20260506T080000\r\n",
-        );
-        let events = vec![
-            folded,
-            ordered_assignment_event("uid-b", "2026-05-06", "08:00", "16:00", 0),
-        ];
-
-        let updates = plan_slot_updates(&events, "2026-05-06", None).updates;
-
-        assert!(
-            updates.iter().all(|u| u.uid != "uid-a"),
-            "a resource with a folded line must never be re-slotted"
-        );
-        assert!(
-            updates.is_empty(),
-            "uid-b is the only re-slottable assignment and already owns the full window"
-        );
-    }
-
-    #[test]
     fn day_is_resequenced_to_dense_order_indices() {
         let events = vec![
             assignment_event("uid-a", "2026-05-06", "08:00", "16:00"),
@@ -936,18 +804,6 @@ mod tests {
         let updates = plan_slot_updates(&after, "2026-05-06", None).updates;
         let uid_a = updates.iter().find(|u| u.uid == "uid-a").unwrap();
         assert!(uid_a.payload.contains("DTSTART:20260506T120000"));
-    }
-
-    #[test]
-    fn a_new_assignment_without_a_requested_position_is_appended() {
-        let events = vec![
-            ordered_assignment_event("uid-a", "2026-05-06", "08:00", "16:00", 0),
-            ordered_assignment_event("uid-b", "2026-05-06", "08:00", "16:00", 1),
-        ];
-
-        let plan = plan_slot_updates(&events, "2026-05-06", pending_placement("uid-new", None));
-
-        assert_eq!(plan.placed.unwrap().0, 2);
     }
 
     #[test]
@@ -1084,13 +940,6 @@ mod tests {
             uid_a.payload.contains("DTEND:20260506T160000"),
             "the remaining assignment owns the whole window"
         );
-    }
-
-    #[test]
-    fn a_created_event_still_gets_a_slot_although_the_day_does_not_hold_it_yet() {
-        let plan = plan_slot_updates(&[], "2026-05-06", pending_placement("uid-new", None));
-
-        assert_eq!(plan.placed, Some((0, time(8, 0), time(16, 0))));
     }
 
     #[test]

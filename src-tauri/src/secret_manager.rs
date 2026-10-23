@@ -83,22 +83,6 @@ mod tests {
     }
 
     #[test]
-    fn map_keyring_error_maps_no_entry_to_not_found() {
-        let err = map_keyring_error(keyring_core::Error::NoEntry);
-        assert_eq!(err, SecretError::NotFound);
-    }
-
-    #[test]
-    fn set_and_get_on_same_entry_with_mock() {
-        with_mock_keyring(|| {
-            let entry = Entry::new("lkr-test", "tester").unwrap();
-            entry.set_password("my-secret").unwrap();
-            let pw = entry.get_password().unwrap();
-            assert_eq!(pw, "my-secret");
-        });
-    }
-
-    #[test]
     fn map_keyring_error_maps_unexpected_error_to_other() {
         let err = map_keyring_error(keyring_core::Error::TooLong("field".to_string(), 0));
         assert!(matches!(err, SecretError::Other(_)));

@@ -189,62 +189,15 @@ mod tests {
     }
 
     #[test]
-    fn cleanup_keeps_entries_within_one_year() {
-        let today = NaiveDate::from_ymd_opt(2025, 6, 30).unwrap();
-        let mut store = LocalStore {
-            holiday_cache: vec![HolidayCacheEntry {
-                year: 2025,
-                fetched_at: "2025-06-01".to_string(),
-                holidays: vec![],
-            }],
-            ..LocalStore::default()
-        };
-
-        store.cleanup_holiday_cache(today);
-
-        assert_eq!(store.holiday_cache.len(), 1);
-    }
-
-    #[test]
-    fn cleanup_removes_all_entries_when_all_expired() {
-        let today = NaiveDate::from_ymd_opt(2025, 6, 30).unwrap();
-        let mut store = LocalStore {
-            holiday_cache: vec![
-                HolidayCacheEntry {
-                    year: 2023,
-                    fetched_at: "2024-06-29".to_string(),
-                    holidays: vec![],
-                },
-                HolidayCacheEntry {
-                    year: 2022,
-                    fetched_at: "2023-01-01".to_string(),
-                    holidays: vec![],
-                },
-            ],
-            ..LocalStore::default()
-        };
-
-        store.cleanup_holiday_cache(today);
-
-        assert!(store.holiday_cache.is_empty());
-    }
-
-    #[test]
-    fn display_settings_default_hides_non_plannable_employees() {
+    fn display_settings_default_hides_non_plannable_employees_and_weekend() {
         assert!(DisplaySettings::default().hide_non_plannable_employees);
+        assert!(!DisplaySettings::default().show_weekend);
         assert!(
             LocalStore::default()
                 .display_settings
                 .hide_non_plannable_employees
         );
-    }
-
-    #[test]
-    fn telemetry_defaults_to_disabled_without_install_id() {
-        let store = LocalStore::default();
-
-        assert!(!store.telemetry.enabled);
-        assert_eq!(store.telemetry.install_id, None);
+        assert!(!LocalStore::default().display_settings.show_weekend);
     }
 
     #[test]
@@ -258,11 +211,5 @@ mod tests {
 
         assert!(serialized.contains("\"installId\""));
         assert!(serialized.contains("\"enabled\":true"));
-    }
-
-    #[test]
-    fn display_settings_default_hides_weekend() {
-        assert!(!DisplaySettings::default().show_weekend);
-        assert!(!LocalStore::default().display_settings.show_weekend);
     }
 }

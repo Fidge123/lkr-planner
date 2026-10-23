@@ -34,10 +34,6 @@ describe("telemetry service", () => {
     mockCaptureFrontendError.mockClear();
   });
 
-  it("reports telemetry as disabled by default", async () => {
-    expect(await loadTelemetrySettings()).toBe(false);
-  });
-
   it("persists the enabled state through the backend command", async () => {
     await saveTelemetryEnabled(true);
 

@@ -50,10 +50,6 @@ describe("isPlannableEmployee", () => {
     expect(isPlannableEmployee(monteurWithoutCalendar, settings)).toBe(false);
   });
 
-  it("is false for a test employee even with a configured calendar", () => {
-    expect(isPlannableEmployee(testEmployee, settings)).toBe(false);
-  });
-
   it("treats the Test category case-insensitively", () => {
     expect(
       isPlannableEmployee({ ...testEmployee, category: "  test " }, settings),

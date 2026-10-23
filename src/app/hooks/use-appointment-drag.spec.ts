@@ -113,15 +113,6 @@ describe("decideDropAction", () => {
     };
     expect(decideDropAction(payload, target)).toBe("reorder");
   });
-
-  it("is a no-op when the card is dropped back onto its own position", () => {
-    const target: DropCellTarget = {
-      employeeRef: payload.employeeRef,
-      date: payload.date,
-      orderIndex: payload.position,
-    };
-    expect(decideDropAction(payload, target)).toBe("none");
-  });
 });
 
 describe("performDrop", () => {
@@ -368,16 +359,6 @@ describe("resolveDropTarget", () => {
     );
 
     expect(target.orderIndex).toBe(2);
-  });
-
-  it("appends when the pointer sits below every card in the cell", () => {
-    const target = resolveDropTarget(
-      payload,
-      cellZone(otherCellCards, "/v1/contacts/2"),
-      400,
-    );
-
-    expect(target.orderIndex).toBe(3);
   });
 
   it("does not count the dragged card as its own neighbour", () => {

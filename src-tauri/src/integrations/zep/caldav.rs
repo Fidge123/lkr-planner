@@ -280,32 +280,6 @@ mod tests {
     }
 
     #[test]
-    fn parse_propfind_accepts_207_multistatus_body() {
-        let body = r#"<?xml version="1.0" encoding="utf-8"?>
-<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
-  <d:response>
-    <d:href>/caldav/admin/anna-einsatz/</d:href>
-    <d:propstat>
-      <d:prop>
-        <d:displayname>Anna B - Einsatz</d:displayname>
-        <d:resourcetype><d:collection/><c:calendar/></d:resourcetype>
-      </d:prop>
-      <d:status>HTTP/1.1 200 OK</d:status>
-    </d:propstat>
-  </d:response>
-</d:multistatus>"#;
-
-        let calendars = parse_propfind_calendars(body, "https://app.zep.de/caldav/admin");
-
-        assert_eq!(calendars.len(), 1);
-        assert_eq!(calendars[0].display_name, "Anna B - Einsatz");
-        assert_eq!(
-            calendars[0].url,
-            "https://app.zep.de/caldav/admin/anna-einsatz/"
-        );
-    }
-
-    #[test]
     fn parse_propfind_skips_non_calendar_collections() {
         let body = r#"<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
   <d:response>

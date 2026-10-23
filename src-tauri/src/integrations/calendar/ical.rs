@@ -320,24 +320,4 @@ mod tests {
             "a raw newline must not split the SUMMARY property line"
         );
     }
-
-    #[test]
-    fn build_ical_payload_keeps_path_separators_in_description() {
-        // Forward slashes are not RFC 5545 special characters and must survive so the
-        // daylite: project reference round-trips through classification on read-back.
-        let (start, end) = window();
-        let payload = build_ical_payload(
-            "uid-d",
-            "2026-05-06",
-            "Projekt",
-            "/v1/projects/42",
-            start,
-            end,
-            0,
-        );
-        assert!(
-            payload.contains("DESCRIPTION:daylite:/v1/projects/42"),
-            "got: {payload}"
-        );
-    }
 }

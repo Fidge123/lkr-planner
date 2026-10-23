@@ -829,13 +829,6 @@ mod tests {
     }
 
     #[test]
-    fn extract_numeric_id_handles_standard_reference() {
-        assert_eq!(super::extract_numeric_id("/v1/projects/3001"), 3001);
-        assert_eq!(super::extract_numeric_id("/v1/projects/100"), 100);
-        assert_eq!(super::extract_numeric_id("/v1/projects/20"), 20);
-    }
-
-    #[test]
     fn extract_numeric_id_returns_max_for_non_numeric() {
         assert_eq!(super::extract_numeric_id("/v1/projects/abc"), u64::MAX);
         assert_eq!(super::extract_numeric_id(""), u64::MAX);

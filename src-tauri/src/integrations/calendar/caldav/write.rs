@@ -916,22 +916,17 @@ mod tests {
         );
     }
 
-    use super::super::report::discover_calendar_by_name;
-
     const TEST_DATE: &str = "2026-05-06";
 
     /// The delete cleans up the event the create made, so the flow leaves the server as it
     /// found it.
     async fn run_write_path_flow(
         session: &CaldavSession,
-        home_set_url: &str,
-        calendar_name: &str,
+        calendar_url: &str,
     ) -> Result<(), String> {
-        let calendar_url = discover_calendar_by_name(session, home_set_url, calendar_name).await?;
-
         let href = create_assignment_core(
             session,
-            &calendar_url,
+            calendar_url,
             &AssignmentWrite {
                 date: TEST_DATE.to_string(),
                 project_ref: "/v1/projects/42".to_string(),
@@ -1058,10 +1053,6 @@ mod tests {
         fn base_url(&self) -> String {
             format!("http://127.0.0.1:{}", self.port)
         }
-
-        fn home_set_url(&self) -> String {
-            format!("http://127.0.0.1:{}/testuser/", self.port)
-        }
     }
 
     impl Drop for RadicaleServer {
@@ -1101,9 +1092,12 @@ mod tests {
             .unwrap()
     }
 
-    /// The production client never issues MKCALENDAR, so the test seeds the calendar itself
-    /// and discovery then finds it by name.
-    async fn seed_radicale_calendar(server: &RadicaleServer, calid: &str, display_name: &str) {
+    /// The production client never issues MKCALENDAR, so the test seeds the calendar itself.
+    async fn seed_radicale_calendar(
+        server: &RadicaleServer,
+        calid: &str,
+        display_name: &str,
+    ) -> String {
         let url = format!("{}/testuser/{calid}/", server.base_url());
         let body = format!(
             "<C:mkcalendar xmlns:D=\"DAV:\" xmlns:C=\"urn:ietf:params:xml:ns:caldav\"><D:set><D:prop><D:displayname>{display_name}</D:displayname></D:prop></D:set></C:mkcalendar>"
@@ -1122,12 +1116,13 @@ mod tests {
             (200..300).contains(&status),
             "MKCALENDAR failed: HTTP {status}"
         );
+        url
     }
 
     #[tokio::test]
     async fn caldav_write_path_against_disposable_radicale() {
         let server = RadicaleServer::start();
-        seed_radicale_calendar(&server, "neuburg", "neuburg-termine").await;
+        let calendar_url = seed_radicale_calendar(&server, "neuburg", "neuburg-termine").await;
 
         let session = CaldavSession {
             telemetry: None,
@@ -1138,7 +1133,7 @@ mod tests {
             absence_urls: vec![],
         };
 
-        run_write_path_flow(&session, &server.home_set_url(), "neuburg-termine")
+        run_write_path_flow(&session, &calendar_url)
             .await
             .expect("write path against disposable radicale should succeed");
     }

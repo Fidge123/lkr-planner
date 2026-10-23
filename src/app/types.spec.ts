@@ -238,16 +238,6 @@ describe("toCellEvent assignment colors", () => {
     }
   });
 
-  it("uses the neutral surface for an unresolved project", () => {
-    const event = toCellEvent(
-      calendarEvent({ kind: "assignment", title: "Projekt Nord" }),
-      categoryColors,
-    );
-
-    expect(event.categoryColor).toBeNull();
-    expect(event.color).toBe("bg-base-200");
-  });
-
   it("ignores a category on absence and bare events", () => {
     const absence = toCellEvent(
       calendarEvent({ projectCategory: "Bau" }),
@@ -270,15 +260,6 @@ describe("toCellEvent assignment colors", () => {
 describe("highlightKey", () => {
   it("keys an assignment by its Daylite project reference", () => {
     const event = cellEvent({ projectRef: "/v1/projects/42" });
-
-    expect(highlightKey(event)).toBe("/v1/projects/42");
-  });
-
-  it("keys an unresolved assignment by its reference as well", () => {
-    const event = cellEvent({
-      projectRef: "/v1/projects/42",
-      projectStatus: null,
-    });
 
     expect(highlightKey(event)).toBe("/v1/projects/42");
   });

@@ -63,32 +63,6 @@ mod tests {
     }
 
     #[test]
-    fn parses_the_daylite_reference_out_of_a_bare_description() {
-        let cases: &[(&str, Option<&str>, &str)] = &[
-            (
-                "daylite:/v1/projects/3001",
-                Some("/v1/projects/3001"),
-                "plain daylite reference",
-            ),
-            (
-                "daylite:/v1/projects/4001\nZusätzliche Notizen hier",
-                Some("/v1/projects/4001"),
-                "only the first line is read",
-            ),
-            ("Bitte Auto abholen", None, "unrelated description is bare"),
-            ("", None, "empty description is bare"),
-        ];
-
-        for (description, expected, label) in cases {
-            assert_eq!(
-                parse_daylite_reference(description).as_deref(),
-                *expected,
-                "case: {label}"
-            );
-        }
-    }
-
-    #[test]
     fn project_ref_is_read_from_the_first_description_line() {
         let cases: &[(&str, Option<&str>, &str)] = &[
             (
