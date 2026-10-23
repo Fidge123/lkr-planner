@@ -1,5 +1,5 @@
 import { TriangleAlert } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import type {
   CalendarCellEvent,
@@ -44,7 +44,11 @@ export function TimetableRow({
 
   const cache = useWeekCache();
   const categoryColors = useProjectCategoryColors();
-  const eventsByDay = cellEventsByDay(calendarEvents, categoryColors);
+  // The compiler leaves this unmemoized, which would hand every card new props on each render.
+  const eventsByDay = useMemo(
+    () => cellEventsByDay(calendarEvents, categoryColors),
+    [calendarEvents, categoryColors],
+  );
   const handleWritten = (removedUid: string | null) => {
     if (removedUid !== null) cache.removeEvent(removedUid);
     void cache.refreshEmployees(weekStart, [employee.self]);
@@ -134,9 +138,9 @@ export function TimetableRow({
           </td>
         ) : (
           isoWeekDays.map((isoDay) => {
-            const dayEvents = eventsByDay.get(isoDay) ?? noEvents;
+            const dayEvents = eventsByDay[isoDay] ?? noEvents;
             const suggestion =
-              ghost && isGhostVisible(ghost, isoDay, dayEvents)
+              ghost && isGhostVisible(ghost, isoDay, dayEvents.length)
                 ? ghost
                 : undefined;
             return (

@@ -9,7 +9,9 @@ export const categoryColorsQuery = queryOptions({
   queryFn: loadProjectCategoryColors,
 });
 
+const noColors: ProjectCategoryColors = {};
+
 /** A missing color is cosmetic, so a failed load shows no colors and the next mount tries again. */
 export function useProjectCategoryColors(): ProjectCategoryColors {
-  return useQuery(categoryColorsQuery).data ?? {};
+  return useQuery(categoryColorsQuery).data ?? noColors;
 }

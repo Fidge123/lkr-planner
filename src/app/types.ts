@@ -104,13 +104,13 @@ export function hasAbsenceConflict(events: CellEvent[]): boolean {
 export function cellEventsByDay(
   events: CalendarCellEvent[],
   categoryColors: ProjectCategoryColors,
-): Map<string, CellEvent[]> {
-  const byDay = new Map<string, CellEvent[]>();
+): Partial<Record<string, CellEvent[]>> {
+  const byDay: Partial<Record<string, CellEvent[]>> = {};
   for (const event of events) {
     const cellEvent = toCellEvent(event, categoryColors);
-    const day = byDay.get(event.date);
+    const day = byDay[event.date];
     if (day) day.push(cellEvent);
-    else byDay.set(event.date, [cellEvent]);
+    else byDay[event.date] = [cellEvent];
   }
   return byDay;
 }
