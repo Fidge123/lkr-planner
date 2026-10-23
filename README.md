@@ -5,7 +5,7 @@ It is built with Tauri, React, TypeScript, and Bun.
 
 ## Current Scope
 
-The current implementation covers the weekly planning view with full assignment CRUD, CalDAV synchronization, Daylite project/employee data, and German holiday display.
+The current implementation covers the weekly planning view with full assignment CRUD, CalDAV synchronization, Daylite project/employee data, Daylite appointments for planned project days, and German holiday display.
 The backlog is now centered on Planradar project linking, assignment modal quality-of-life features, and drag-and-drop replanning.
 
 ### Implemented
@@ -25,6 +25,7 @@ The backlog is now centered on Planradar project linking, assignment modal quali
 - German holiday import for the week view (Nager.Date API)
 - Weekend visibility toggle for the planning table
 - CalDAV synchronization for assignment create/update/delete operations
+- Daylite appointments that mirror each planned project day, linked to the project and the assigned workers, with a German alert and retry when the synchronization fails
 - Record/replay HTTP (VCR) testing infrastructure for integration tests
 - Opt-in error and performance telemetry to PostHog, configurable under settings "Diagnose"
 - ADR-based architecture documentation in [docs/adr](/Users/flori/dev/lkr-planner/docs/adr)
@@ -47,7 +48,8 @@ The app supports a planner workflow where assignments are managed in a weekly vi
 
 The application integrates with the [Daylite API](https://developer.daylite.app/reference/getting-started).
 Daylite is the source of truth for project and employee master data.
-Current work covers authentication, token refresh handling, project reads, and employee contact/iCal configuration.
+Current work covers authentication, token refresh handling, project reads, employee contact/iCal configuration, and project day appointments.
+After every assignment create, update, move and delete, a background task links the edited worker to the project's `Einsatz <date>` appointment for that day and unlinks the worker from projects it left, as recorded in [ADR 0017](docs/adr/0017-daylite-appointments-mirror-assignments.md).
 
 ### Planradar
 
