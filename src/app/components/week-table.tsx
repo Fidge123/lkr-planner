@@ -7,6 +7,7 @@ import type {
   PlanningContactRecord,
 } from "../../generated/tauri";
 import type { DropPreview } from "../hooks/use-appointment-drag";
+import { useToday } from "../hooks/use-today";
 import type { CellEvent } from "../types";
 import { getIsoWeek, toLocalISODate } from "../util";
 import { stickyHeaderClass, TimetableHeader } from "./timetable-header";
@@ -28,6 +29,7 @@ export function WeekTable({
   onToggleHighlight,
   onJumpToWeek,
 }: WeekTableProps) {
+  const today = useToday();
   const holidayByDate = new Map(holidays.map((h) => [h.date, h.name]));
   const holidayDates = new Set(holidays.map((h) => h.date));
 
@@ -63,7 +65,11 @@ export function WeekTable({
         <tr>
           <th className={`w-40 p-4 font-bold bg-base-100 ${stickyHeaderClass}`}>
             {onJumpToWeek ? (
-              <WeekPicker weekDays={weekDays} onJumpToWeek={onJumpToWeek}>
+              <WeekPicker
+                weekDays={weekDays}
+                today={today}
+                onJumpToWeek={onJumpToWeek}
+              >
                 {calendarWeek}
               </WeekPicker>
             ) : (
@@ -76,6 +82,7 @@ export function WeekTable({
             <TimetableHeader
               key={day.getTime()}
               day={day}
+              isToday={toLocalISODate(day) === today}
               holiday={holidayByDate.get(toLocalISODate(day))}
             />
           ))}
@@ -88,7 +95,7 @@ export function WeekTable({
             employee={employee}
             calendarEvents={eventsByEmployee[employee.self] ?? []}
             calendarError={errorsByEmployee[employee.self] ?? null}
-            week={{ days: weekDays, holidayDates }}
+            week={{ days: weekDays, holidayDates, today }}
             employeeSetting={
               employeeSettings.find(
                 (s) => s.dayliteContactReference === employee.self,

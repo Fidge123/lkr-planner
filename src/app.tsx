@@ -10,19 +10,20 @@ import { localStoreQuery, useLocalStore } from "./app/hooks/use-local-store";
 import { usePlanningAssignments } from "./app/hooks/use-planning-assignments";
 import { contactsQuery } from "./app/hooks/use-planning-employees";
 import { useReloadDataMenu } from "./app/hooks/use-reload-data-menu";
-import { useRerenderOnDayChange } from "./app/hooks/use-rerender-on-day-change";
+import { useToday } from "./app/hooks/use-today";
 import { useZepCalendars } from "./app/hooks/use-zep-calendars";
 import { PlanningGrid } from "./app/page";
 import { runStartupSync } from "./app/startup-sync";
-import { getWeekStart, weekOffsetFor } from "./app/util";
+import { getWeekDays, toLocalISODate, weekOffsetFor } from "./app/util";
 import type { PlanningContactRecord } from "./generated/tauri";
 
 function App() {
   const [weekOffset, setWeekOffset] = useState(0);
   const localStore = useLocalStore();
   const { showWeekend } = localStore.displaySettings;
-  useRerenderOnDayChange();
-  const weekStart = getWeekStart(weekOffset, showWeekend);
+  const today = useToday();
+  const weekDays = getWeekDays(today, weekOffset, showWeekend);
+  const weekStart = toLocalISODate(weekDays[0]);
   // On a weekend the weekend setting decides which week is shown, so no week loads before it is read.
   const planningAssignmentsState = usePlanningAssignments(
     localStore.isLoaded ? weekStart : null,
@@ -73,8 +74,8 @@ function App() {
   }, []);
 
   const handleJumpToWeek = useCallback(
-    (day: Date) => setWeekOffset(weekOffsetFor(day, showWeekend)),
-    [showWeekend],
+    (day: Date) => setWeekOffset(weekOffsetFor(today, day, showWeekend)),
+    [today, showWeekend],
   );
 
   const reloadData = useCallback(() => {
@@ -143,8 +144,7 @@ function App() {
           </section>
         ) : null}
         <PlanningGrid
-          weekOffset={weekOffset}
-          showWeekend={showWeekend}
+          weekDays={weekDays}
           assignmentState={planningAssignmentsState}
           onOpenIcalDialog={setIcalDialogEmployee}
           onNavigateWeek={handleNavigateWeek}

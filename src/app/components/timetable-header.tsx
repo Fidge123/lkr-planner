@@ -1,9 +1,9 @@
-import { isToday, toLocalISODate } from "../util";
+import { toLocalISODate } from "../util";
 
-export function TimetableHeader({ day, holiday }: Props) {
+export function TimetableHeader({ day, isToday, holiday }: Props) {
   const isHoliday = Boolean(holiday);
   return (
-    <th key={day.getTime()} className={headerClass(day, isHoliday)}>
+    <th key={day.getTime()} className={headerClass(isToday, isHoliday)}>
       <time dateTime={toLocalISODate(day)}>
         {day.toLocaleDateString("de-DE", {
           weekday: "long",
@@ -22,14 +22,15 @@ export function TimetableHeader({ day, holiday }: Props) {
 export const stickyHeaderClass =
   "sticky top-0 z-10 shadow-[0_1px_0_0_var(--color-base-300)]";
 
-function headerClass(day: Date, isHoliday: boolean): string {
+function headerClass(isToday: boolean, isHoliday: boolean): string {
   const sticky = `text-center ${stickyHeaderClass}`;
-  if (isToday(day)) return `${sticky} bg-primary text-primary-content`;
+  if (isToday) return `${sticky} bg-primary text-primary-content`;
   if (isHoliday) return `${sticky} bg-base-100 text-base-content/50`;
   return `${sticky} bg-base-100`;
 }
 
 interface Props {
   day: Date;
+  isToday: boolean;
   holiday?: string;
 }

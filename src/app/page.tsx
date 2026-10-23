@@ -35,7 +35,7 @@ import { usePlanningEmployees } from "./hooks/use-planning-employees";
 import { useWeekSwipe } from "./hooks/use-week-swipe";
 import type { ActiveHighlight, CellEvent } from "./types";
 import { activeHighlightForWeek, highlightKey, nextHighlight } from "./types";
-import { getWeekDays, shiftWeekDays, toLocalISODate } from "./util";
+import { shiftWeekDays, toLocalISODate } from "./util";
 import { swipeSettleMs } from "./week-swipe";
 
 // The pointer, not the dragged card's box, picks the target cell and the position within the cell
@@ -83,14 +83,12 @@ function useFrozenDuringDrag<T>(
 }
 
 export function PlanningGrid({
-  weekOffset,
-  showWeekend = false,
+  weekDays,
   assignmentState,
   onOpenIcalDialog = () => {},
   onNavigateWeek,
   onJumpToWeek,
 }: Props) {
-  const weekDays = getWeekDays(weekOffset, showWeekend);
   const weekStart = toLocalISODate(weekDays[0]);
 
   const employeeState = usePlanningEmployees();
@@ -351,8 +349,7 @@ interface DragPreviewCardProps {
 }
 
 interface Props {
-  weekOffset: number;
-  showWeekend?: boolean;
+  weekDays: Date[];
   assignmentState: PlanningGridAssignmentState;
   onOpenIcalDialog?: (employee: PlanningContactRecord) => void;
   onNavigateWeek?: (direction: -1 | 1) => void;

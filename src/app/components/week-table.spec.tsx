@@ -1,4 +1,5 @@
-import { describe, expect, it, setSystemTime } from "bun:test";
+import { describe, expect, it, jest, setSystemTime } from "bun:test";
+import { act, screen } from "@testing-library/react";
 import type {
   CalendarCellEvent,
   PlanningContactRecord,
@@ -27,6 +28,25 @@ function renderTable(
 describe("WeekTable", () => {
   it("labels the header corner with the calendar week of the displayed days", () => {
     expect(renderTable()).toContain("KW 34");
+  });
+
+  it("moves the today highlight to the next day at midnight", () => {
+    const highlightedDays = () =>
+      screen
+        .getAllByRole("columnheader")
+        .filter((header) => header.className.includes("bg-primary"))
+        .map((header) => header.querySelector("time")?.dateTime);
+    jest.useFakeTimers({ now: new Date(2026, 7, 19, 23, 59, 30) });
+    try {
+      renderTable();
+      expect(highlightedDays()).toEqual(["2026-08-19"]);
+
+      act(() => jest.advanceTimersByTime(60_000));
+
+      expect(highlightedDays()).toEqual(["2026-08-20"]);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it("keeps the date row fixed at the top of the scrolling grid", () => {

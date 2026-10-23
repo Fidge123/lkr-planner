@@ -1,11 +1,4 @@
-import {
-  afterAll,
-  beforeAll,
-  describe,
-  expect,
-  it,
-  setSystemTime,
-} from "bun:test";
+import { describe, expect, it } from "bun:test";
 import { renderComponent } from "../../test/render-component";
 import { WeekPicker } from "./week-picker";
 
@@ -15,7 +8,7 @@ function renderPicker(monday: Date): string {
       new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + i),
   );
   return renderComponent(
-    <WeekPicker weekDays={weekDays} onJumpToWeek={() => {}}>
+    <WeekPicker weekDays={weekDays} today="2026-10-17" onJumpToWeek={() => {}}>
       KW
     </WeekPicker>,
   ).container.innerHTML;
@@ -46,13 +39,6 @@ function highlightedWeeks(html: string): string[] {
 }
 
 describe("WeekPicker", () => {
-  beforeAll(() => {
-    setSystemTime(new Date(2026, 9, 17, 12));
-  });
-  afterAll(() => {
-    setSystemTime();
-  });
-
   it("renders the picker as a light-dismiss popover opened by its trigger", () => {
     const html = renderPicker(new Date(2026, 9, 12));
 

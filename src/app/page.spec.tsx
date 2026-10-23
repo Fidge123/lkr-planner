@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it, setSystemTime } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import type {
   CalendarCellEvent,
   PlanningContactRecord,
@@ -13,6 +13,8 @@ import {
   type PlanningGridTableProps,
 } from "./page";
 import { getWeekDays } from "./util";
+
+const today = "2026-01-28";
 
 const defaultEmployeeState: PlanningGridEmployeesState = {
   employees: [],
@@ -49,7 +51,7 @@ function renderGrid({
 } = {}): string {
   return renderComponent(
     <PlanningGridTable
-      weekDays={getWeekDays(weekOffset, showWeekend)}
+      weekDays={getWeekDays(today, weekOffset, showWeekend)}
       employeeState={defaultEmployeeState}
       assignmentState={defaultAssignmentState}
       employeeSettings={[]}
@@ -100,10 +102,6 @@ function withEvents(events: CalendarCellEvent[]) {
 }
 
 describe("planning grid employee states", () => {
-  beforeAll(() => {
-    setSystemTime(new Date(2026, 0, 28, 9, 0, 0));
-  });
-
   it("keeps the pinned date row in its own stacking context so a swiped week covers it", () => {
     const scrollContainer =
       renderGrid().match(/<section class="[^"]*overflow-auto[^"]*"/)?.[0] ?? "";
@@ -164,10 +162,6 @@ describe("planning grid employee states", () => {
 });
 
 describe("planning grid assignment states", () => {
-  beforeAll(() => {
-    setSystemTime(new Date(2026, 0, 28, 9, 0, 0));
-  });
-
   it("shows german error banner with retry when assignment fetch fails", () => {
     const html = renderGrid({
       assignmentState: {
@@ -243,10 +237,6 @@ describe("planning grid assignment states", () => {
 });
 
 describe("planning grid drag-and-drop wiring", () => {
-  beforeAll(() => {
-    setSystemTime(new Date(2026, 0, 28, 9, 0, 0));
-  });
-
   it("renders assignment cards as draggable inside the drag context", () => {
     const html = renderGrid({
       onNavigateWeek: () => {},
@@ -261,10 +251,6 @@ describe("planning grid drag-and-drop wiring", () => {
 });
 
 describe("planning grid weekend visibility", () => {
-  beforeAll(() => {
-    setSystemTime(new Date(2026, 0, 28, 9, 0, 0));
-  });
-
   const countDayColumns = (html: string) => (html.match(/<time/g) ?? []).length;
 
   it("gives each day column a machine-readable date matching its visible date", () => {

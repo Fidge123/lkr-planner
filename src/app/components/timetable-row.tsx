@@ -15,7 +15,7 @@ import type { GhostSuggestion, ModalSaveAction } from "../next-day-quick-add";
 import { isGhostVisible, nextGhostState } from "../next-day-quick-add";
 import type { CellEvent } from "../types";
 import { toCellEvent } from "../types";
-import { isToday, toLocalISODate } from "../util";
+import { toLocalISODate } from "../util";
 import { AssignmentModal } from "./assignment-modal";
 import { TimetableCell } from "./timetable-cell";
 
@@ -148,7 +148,7 @@ export function TimetableRow({
             return (
               <TimetableCell
                 key={day.toISOString()}
-                isToday={isToday(day)}
+                isToday={isoDay === week.today}
                 isHoliday={week.holidayDates.has(isoDay)}
                 employeeRef={employee.self}
                 date={isoDay}
@@ -212,6 +212,7 @@ interface Props {
   week: {
     days: Date[];
     holidayDates: Set<string>;
+    today: string;
   };
   employeeSetting: EmployeeSetting | null;
   dropPreview?: DropPreview | null;
