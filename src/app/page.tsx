@@ -85,7 +85,6 @@ function useFrozenDuringDrag<T>(
 export function PlanningGrid({
   weekOffset,
   showWeekend = false,
-  employeeState,
   assignmentState,
   employeeSettings = [],
   hideNonPlannableEmployees = true,
@@ -97,13 +96,13 @@ export function PlanningGrid({
   const weekDays = getWeekDays(weekOffset, showWeekend);
   const weekStart = toLocalISODate(weekDays[0]);
 
-  const fallbackEmployeesState = usePlanningEmployees();
+  const employeeState = usePlanningEmployees();
   const holidaysState = useHolidays(weekStart);
 
   return (
     <PlanningGridTable
       weekDays={weekDays}
-      employeeState={employeeState ?? fallbackEmployeesState}
+      employeeState={employeeState}
       assignmentState={assignmentState}
       employeeSettings={employeeSettings}
       hideNonPlannableEmployees={hideNonPlannableEmployees}
@@ -379,7 +378,6 @@ function DragPreviewCard({ payload }: { payload: AppointmentDragPayload }) {
 interface Props {
   weekOffset: number;
   showWeekend?: boolean;
-  employeeState?: PlanningGridEmployeesState;
   assignmentState: PlanningGridAssignmentState;
   employeeSettings?: EmployeeSetting[];
   hideNonPlannableEmployees?: boolean;

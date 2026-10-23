@@ -1,3 +1,4 @@
+import { useIsFetching, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import "./app.css";
 import { ChevronLeft, ChevronRight, Settings } from "lucide-react";
@@ -6,7 +7,7 @@ import { EmployeeIcalDialog } from "./app/components/employee-ical-dialog";
 import { SettingsDialog } from "./app/components/settings/settings-dialog";
 import { useCalendarAutoRefresh } from "./app/hooks/use-calendar-auto-refresh";
 import { usePlanningAssignments } from "./app/hooks/use-planning-assignments";
-import { usePlanningEmployees } from "./app/hooks/use-planning-employees";
+import { contactsQuery } from "./app/hooks/use-planning-employees";
 import { useProjectCategoryColors } from "./app/hooks/use-project-category-colors";
 import { useReloadDataMenu } from "./app/hooks/use-reload-data-menu";
 import { useRerenderOnDayChange } from "./app/hooks/use-rerender-on-day-change";
@@ -16,7 +17,6 @@ import { runStartupSync } from "./app/startup-sync";
 import { getWeekStart, weekOffsetFor } from "./app/util";
 import type { EmployeeSetting, PlanningContactRecord } from "./generated/tauri";
 import { resetProjectCategoryColors } from "./services/daylite-categories";
-import { loadDayliteContacts } from "./services/daylite-contacts";
 import { loadLocalStore } from "./services/local-store";
 
 function App() {
@@ -33,7 +33,9 @@ function App() {
     planningAssignmentsState.lastLoadedAt,
     planningAssignmentsState.refreshAssignments,
   );
-  const planningEmployeesState = usePlanningEmployees();
+  const queryClient = useQueryClient();
+  const isLoadingEmployees =
+    useIsFetching({ queryKey: contactsQuery.queryKey }) > 0;
   const categoryColors = useProjectCategoryColors();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [icalDialogEmployee, setIcalDialogEmployee] =
@@ -77,7 +79,7 @@ function App() {
     void runStartupSync({
       readSettings: loadEmployeeSettings,
       syncContacts: async () => {
-        await loadDayliteContacts();
+        await queryClient.fetchQuery(contactsQuery);
       },
       reloadWeek: () => reloadAssignmentsRef.current(),
       isCancelled: () => cancelled,
@@ -85,7 +87,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [loadEmployeeSettings]);
+  }, [loadEmployeeSettings, queryClient]);
 
   const handleOpenIcalDialog = useCallback(
     (employee: PlanningContactRecord) => {
@@ -111,11 +113,11 @@ function App() {
   const reloadData = useCallback(() => {
     resetProjectCategoryColors();
     void loadEmployeeSettings();
-    planningEmployeesState.reloadEmployees();
+    void queryClient.invalidateQueries({ queryKey: contactsQuery.queryKey });
     planningAssignmentsState.reloadAssignments();
   }, [
     loadEmployeeSettings,
-    planningEmployeesState.reloadEmployees,
+    queryClient,
     planningAssignmentsState.reloadAssignments,
   ]);
 
@@ -140,10 +142,7 @@ function App() {
             <Settings className="size-6 text-base-content/50" />
           </button>
           <DataLoadingIndicator
-            isLoading={
-              planningAssignmentsState.isLoading ||
-              planningEmployeesState.isLoading
-            }
+            isLoading={planningAssignmentsState.isLoading || isLoadingEmployees}
           />
         </div>
         <nav className="navbar-end gap-2">
@@ -186,7 +185,6 @@ function App() {
           weekOffset={weekOffset}
           showWeekend={showWeekend}
           assignmentState={planningAssignmentsState}
-          employeeState={planningEmployeesState}
           employeeSettings={employeeSettings}
           categoryColors={categoryColors}
           hideNonPlannableEmployees={hideNonPlannableEmployees}
