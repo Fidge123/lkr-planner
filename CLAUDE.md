@@ -51,6 +51,8 @@ Avoid `---` between headers and avoid em dashes.
 - Components read backend data through query hooks in `src/app/hooks` and edit displayed weeks through `useWeekCache`
 - A component that only renders receives its data as props, so its specs need no seeded queries
 - Component specs mount through `renderComponent` and reach a state by clicking or typing, never through props that only tests set
+- The React Compiler memoizes components, so add `useMemo` or `useCallback` only where a measurement shows it misses a value
+- Read the date through `useToday` and pass `today` to date helpers, never read the clock during render
 
 ### Adding a feature
 
