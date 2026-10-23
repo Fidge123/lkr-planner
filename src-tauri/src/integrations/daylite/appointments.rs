@@ -20,7 +20,7 @@ const FLOATING_TIMEZONE: &str = "floating";
 /// Full records otherwise default to a page of ten.
 const SEARCH_LIMIT: u16 = 250;
 const LOCAL_TIME_FORMAT: &str = "%Y-%m-%dT%H:%M:%S";
-/// Longer than the default, because a create that times out may still land in Daylite and a retry then creates it twice.
+/// A timed-out create may still land in Daylite, and a retry would then create it twice.
 const SYNC_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Debug, Clone, PartialEq, Eq)]

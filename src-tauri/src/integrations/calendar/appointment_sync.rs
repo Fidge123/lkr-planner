@@ -219,7 +219,6 @@ pub(super) fn appointment_sync() -> &'static AppointmentSync {
     SYNC.get_or_init(AppointmentSync::default)
 }
 
-/// Spawned, so Daylite never adds latency to a planner action.
 pub(super) fn schedule_appointment_sync(app: &tauri::AppHandle, worker_days: Vec<WorkerDay>) {
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
