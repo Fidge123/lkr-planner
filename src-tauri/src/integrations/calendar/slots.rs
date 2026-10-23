@@ -2,7 +2,7 @@ use chrono::{NaiveDate, NaiveTime};
 use std::cmp::Reverse;
 use std::collections::HashMap;
 
-use super::events::classify_event;
+use super::events::{classify_event, ordering_key};
 use super::ical::ORDER_PROPERTY;
 use super::types::{PendingEvent, RawVEvent};
 
@@ -169,34 +169,6 @@ fn pending_order(pending: &PendingEvent) -> (u32, u32, Reverse<u32>, &str) {
         pending.end_time.as_deref(),
         &pending.uid,
     )
-}
-
-/// Ordered by persisted index, then earlier start, then longer duration, then UID for a total order.
-/// Missing index or times sort last.
-pub(super) fn ordering_key<'a>(
-    order_index: Option<u32>,
-    start_time: Option<&str>,
-    end_time: Option<&str>,
-    uid: &'a str,
-) -> (u32, u32, Reverse<u32>, &'a str) {
-    let start = minute_of_time(start_time);
-    let end = minute_of_time(end_time);
-    let duration = match (start, end) {
-        (Some(start), Some(end)) => end.saturating_sub(start),
-        _ => 0,
-    };
-    (
-        order_index.unwrap_or(u32::MAX),
-        start.unwrap_or(u32::MAX),
-        Reverse(duration),
-        uid,
-    )
-}
-
-/// Minutes since midnight for an `HH:MM` time, `None` for an all-day or malformed one.
-fn minute_of_time(time: Option<&str>) -> Option<u32> {
-    let (hours, minutes) = time?.split_once(':')?;
-    Some(hours.parse::<u32>().ok()? * 60 + minutes.parse::<u32>().ok()?)
 }
 
 /// Only the VEVENT's own DTSTART, DTEND and order property are rewritten; other lines survive untouched.
