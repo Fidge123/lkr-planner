@@ -49,7 +49,8 @@ Avoid `---` between headers and avoid em dashes.
 
 - Only modules in `src/services` call the generated `commands`, each through `callCommand`, and Biome rejects the import anywhere else
 - Components read backend data through query hooks in `src/app/hooks` and edit displayed weeks through `useWeekCache`
-- A component that only renders receives its data as props, so its specs need no query client
+- A component that only renders receives its data as props, so its specs need no seeded queries
+- Component specs mount through `renderComponent` and reach a state by clicking or typing, never through props that only tests set
 
 ### Adding a feature
 
