@@ -8,7 +8,7 @@ import { SettingsDialog } from "./app/components/settings/settings-dialog";
 import { useCalendarAutoRefresh } from "./app/hooks/use-calendar-auto-refresh";
 import { usePlanningAssignments } from "./app/hooks/use-planning-assignments";
 import { contactsQuery } from "./app/hooks/use-planning-employees";
-import { useProjectCategoryColors } from "./app/hooks/use-project-category-colors";
+import { categoryColorsQuery } from "./app/hooks/use-project-category-colors";
 import { useReloadDataMenu } from "./app/hooks/use-reload-data-menu";
 import { useRerenderOnDayChange } from "./app/hooks/use-rerender-on-day-change";
 import { useZepCalendars } from "./app/hooks/use-zep-calendars";
@@ -16,7 +16,6 @@ import { PlanningGrid } from "./app/page";
 import { runStartupSync } from "./app/startup-sync";
 import { getWeekStart, weekOffsetFor } from "./app/util";
 import type { EmployeeSetting, PlanningContactRecord } from "./generated/tauri";
-import { resetProjectCategoryColors } from "./services/daylite-categories";
 import { loadLocalStore } from "./services/local-store";
 
 function App() {
@@ -36,7 +35,6 @@ function App() {
   const queryClient = useQueryClient();
   const isLoadingEmployees =
     useIsFetching({ queryKey: contactsQuery.queryKey }) > 0;
-  const categoryColors = useProjectCategoryColors();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [icalDialogEmployee, setIcalDialogEmployee] =
     useState<PlanningContactRecord | null>(null);
@@ -111,7 +109,9 @@ function App() {
   );
 
   const reloadData = useCallback(() => {
-    resetProjectCategoryColors();
+    void queryClient.invalidateQueries({
+      queryKey: categoryColorsQuery.queryKey,
+    });
     void loadEmployeeSettings();
     void queryClient.invalidateQueries({ queryKey: contactsQuery.queryKey });
     planningAssignmentsState.reloadAssignments();
@@ -186,7 +186,6 @@ function App() {
           showWeekend={showWeekend}
           assignmentState={planningAssignmentsState}
           employeeSettings={employeeSettings}
-          categoryColors={categoryColors}
           hideNonPlannableEmployees={hideNonPlannableEmployees}
           onOpenIcalDialog={handleOpenIcalDialog}
           onNavigateWeek={handleNavigateWeek}

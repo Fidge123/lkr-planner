@@ -32,6 +32,7 @@ import { useAppointmentSyncFailures } from "./hooks/use-appointment-sync-failure
 import { type HolidaysState, useHolidays } from "./hooks/use-holidays";
 import type { PlanningAssignmentsState } from "./hooks/use-planning-assignments";
 import { usePlanningEmployees } from "./hooks/use-planning-employees";
+import { useProjectCategoryColors } from "./hooks/use-project-category-colors";
 import { useWeekSwipe } from "./hooks/use-week-swipe";
 import type { ActiveHighlight, CellEvent } from "./types";
 import { activeHighlightForWeek, highlightKey, nextHighlight } from "./types";
@@ -88,7 +89,6 @@ export function PlanningGrid({
   assignmentState,
   employeeSettings = [],
   hideNonPlannableEmployees = true,
-  categoryColors = {},
   onOpenIcalDialog = () => {},
   onNavigateWeek,
   onJumpToWeek,
@@ -98,6 +98,7 @@ export function PlanningGrid({
 
   const employeeState = usePlanningEmployees();
   const holidaysState = useHolidays(weekStart);
+  const categoryColors = useProjectCategoryColors();
 
   return (
     <PlanningGridTable
@@ -381,7 +382,6 @@ interface Props {
   assignmentState: PlanningGridAssignmentState;
   employeeSettings?: EmployeeSetting[];
   hideNonPlannableEmployees?: boolean;
-  categoryColors?: ProjectCategoryColors;
   onOpenIcalDialog?: (employee: PlanningContactRecord) => void;
   onNavigateWeek?: (direction: -1 | 1) => void;
   onJumpToWeek?: (day: Date) => void;

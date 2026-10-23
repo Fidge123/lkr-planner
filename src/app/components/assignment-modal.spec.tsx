@@ -4,6 +4,7 @@ import type {
   CalendarCellEvent,
   DayliteProjectSummary,
 } from "../../generated/tauri";
+import { renderWithQueries } from "../../test/render-with-queries";
 import { AssignmentModal } from "./assignment-modal";
 import {
   isProtectedAssignment,
@@ -48,7 +49,7 @@ function project(name: string, ref: string): DayliteProjectSummary {
 
 describe("AssignmentModal", () => {
   it("create mode: renders the project filter input and save button", () => {
-    const html = renderToStaticMarkup(
+    const html = renderWithQueries(
       <AssignmentModal {...baseProps} assignment={null} />,
     );
 
@@ -62,7 +63,7 @@ describe("AssignmentModal", () => {
   });
 
   it("create mode: starts with an empty result list (empty default state)", () => {
-    const html = renderToStaticMarkup(
+    const html = renderWithQueries(
       <AssignmentModal {...baseProps} assignment={null} />,
     );
 
@@ -70,7 +71,7 @@ describe("AssignmentModal", () => {
   });
 
   it("reserves the suggestion rows until the suggestions are loaded", () => {
-    const html = renderToStaticMarkup(
+    const html = renderWithQueries(
       <AssignmentModal {...baseProps} assignment={null} />,
     );
 
@@ -93,7 +94,7 @@ describe("AssignmentModal", () => {
       projectPending: false,
     };
 
-    const html = renderToStaticMarkup(
+    const html = renderWithQueries(
       <AssignmentModal {...baseProps} assignment={existingAssignment} />,
     );
 
@@ -107,7 +108,7 @@ describe("AssignmentModal", () => {
   });
 
   it("edit mode: locks the picker, save and delete for a fixed appointment", () => {
-    const html = renderToStaticMarkup(
+    const html = renderWithQueries(
       <AssignmentModal {...baseProps} assignment={fixedAssignment} />,
     );
 
@@ -137,7 +138,7 @@ describe("AssignmentModal", () => {
       projectPending: false,
     };
 
-    const html = renderToStaticMarkup(
+    const html = renderWithQueries(
       <AssignmentModal {...baseProps} assignment={assignment} />,
     );
 
@@ -148,7 +149,7 @@ describe("AssignmentModal", () => {
   });
 
   it("unsaved changes dialog renders when closing modal with dirty state", () => {
-    const html = renderToStaticMarkup(
+    const html = renderWithQueries(
       <AssignmentModal {...baseProps} assignment={null} showUnsavedConfirm />,
     );
 
@@ -173,7 +174,7 @@ describe("AssignmentModal", () => {
       projectPending: false,
     };
 
-    const html = renderToStaticMarkup(
+    const html = renderWithQueries(
       <AssignmentModal
         {...baseProps}
         assignment={existingAssignment}
