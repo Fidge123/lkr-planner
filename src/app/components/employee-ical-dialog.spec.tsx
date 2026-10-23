@@ -13,7 +13,6 @@ function calendarState(
     isLoading: false,
     errorMessage: null,
     reload: () => {},
-    ensureLoaded: () => {},
     ...overrides,
   };
 }

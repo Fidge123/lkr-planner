@@ -38,7 +38,7 @@ function App() {
   const [icalDialogEmployee, setIcalDialogEmployee] =
     useState<PlanningContactRecord | null>(null);
 
-  const zepCalendarsState = useZepCalendars();
+  const zepCalendarsState = useZepCalendars(icalDialogEmployee !== null);
 
   const reloadAssignmentsRef = useRef(
     planningAssignmentsState.reloadAssignments,
@@ -63,14 +63,6 @@ function App() {
       cancelled = true;
     };
   }, [queryClient]);
-
-  const handleOpenIcalDialog = useCallback(
-    (employee: PlanningContactRecord) => {
-      setIcalDialogEmployee(employee);
-      zepCalendarsState.ensureLoaded();
-    },
-    [zepCalendarsState.ensureLoaded],
-  );
 
   const handleIcalDialogClose = () => {
     setIcalDialogEmployee(null);
@@ -156,7 +148,7 @@ function App() {
           assignmentState={planningAssignmentsState}
           employeeSettings={localStore.employeeSettings}
           hideNonPlannableEmployees={hideNonPlannableEmployees}
-          onOpenIcalDialog={handleOpenIcalDialog}
+          onOpenIcalDialog={setIcalDialogEmployee}
           onNavigateWeek={handleNavigateWeek}
           onJumpToWeek={handleJumpToWeek}
         />
