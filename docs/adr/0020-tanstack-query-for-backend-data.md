@@ -29,3 +29,4 @@ Each pattern guarded against superseded responses in its own way, and each new f
 
 - The TTL cache, the generic resource hook and the hand-written loading hooks are removed as their data moves to queries.
 - Components that only render receive data as props, so their tests need no query client.
+- The week cache keeps the loading, edit and refresh rules of ADRs 0015, 0016 and 0018; the retry of a failed automatic refresh now also waits while the window is hidden.
