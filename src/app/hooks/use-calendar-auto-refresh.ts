@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { scheduleTimeout } from "../util";
 
 const autoRefreshIntervalMs = 5 * 60_000;
-// Wi-Fi and VPN are often still connecting right after wake, and a Daylite token rotation lost there signs the user out.
+// A Daylite token rotation lost on a network still connecting after wake signs the user out.
 const returnSettleDelayMs = 5_000;
 
 export function useCalendarAutoRefresh(
@@ -46,10 +46,7 @@ export interface AutoRefreshDeps {
   refresh: () => void;
 }
 
-/**
- * Timers of a hidden window are throttled and a sleeping machine freezes them,
- * so a return to the window checks the age of the data again instead of trusting the timer.
- */
+/** Hidden windows throttle timers and sleep freezes them, so a return re-checks the data's age. */
 export function createAutoRefreshScheduler({
   now,
   schedule,

@@ -31,10 +31,7 @@ export interface PlanningAssignmentsView {
   errorsByEmployee: EmployeeErrors;
   isLoading: boolean;
   errorMessage: string | null;
-  /**
-   * Set in the same update as the events, so a consumer can tell whether it is
-   * rendering this week's data or the previous week's, still up during a fetch.
-   */
+  /** The week the shown events belong to, which lags the requested week during a fetch. */
   loadedWeekStart: string | null;
   /** When the shown week's data was fetched, or when its load failed. */
   lastLoadedAt: number | null;
@@ -43,7 +40,7 @@ export interface PlanningAssignmentsView {
 export interface PlanningAssignmentsState extends PlanningAssignmentsView {
   /** Loads the displayed week and its projects again, bypassing both caches. */
   reloadAssignments: () => void;
-  /** Fetches the displayed week again in the background and drops the other cached weeks. */
+  /** For automatic refreshes: keeps the shown data on failure and retries once before showing an error. */
   refreshAssignments: () => void;
   /** Replaces the rows of these employees in that week, without the loading state. */
   refreshEmployees: (weekStart: string, employeeRefs: string[]) => void;
@@ -163,7 +160,6 @@ export function createWeekLoader({
 }: WeekLoaderDeps) {
   const cache = new Map<string, CachedWeek>();
   let requestId = 0;
-  // The week asked for last, which differs from `loadedWeekStart` while its data loads.
   let requestedWeek: string | null = null;
   const edits = createEditSequence();
   let view = initialView;
@@ -259,17 +255,16 @@ export function createWeekLoader({
     update({ isLoading: true });
     const result = await fetchWeek(ws, isAutomatic ? "refresh" : "display");
     const completedAt = now();
-    // An edit made meanwhile wins over this data, which may predate its write; the edit's row refresh follows.
+    // An edit made meanwhile may postdate this data; its own row refresh follows.
     const keepsEdit = isAutomatic && !isUnedited() && cache.has(ws);
     if (result.status === "ok" && !keepsEdit) {
-      // Cache unconditionally, even for a superseded request: it's still valid data for that week.
-      // Only the display update below is staleness-gated.
+      // A superseded request still caches its data; only showing it is gated.
       cache.set(ws, { data: result.data, fetchedAt: completedAt });
       void resolveProjects(ws, mode === "reload");
     }
     if (id !== requestId) return;
 
-    // A network still connecting after wake fails the first attempt, which is not worth an error.
+    // The first attempt often fails on a network still connecting after wake.
     if (result.status === "error" && mode === "refresh") {
       cancelRetry = schedule(() => {
         cancelRetry = () => {};
@@ -315,8 +310,7 @@ export function createWeekLoader({
     } catch {}
   };
 
-  // A failed refresh falls back to reloading the whole week, or to dropping a week no
-  // longer shown, so the optimistic state never outlives an unknown server state.
+  // A failed row refresh must not leave optimistic state on screen.
   const refreshEmployees = async (ws: string, employeeRefs: string[]) => {
     if (employeeRefs.length === 0) return;
     const isCurrent = edits.requestRefresh();
@@ -350,8 +344,7 @@ export function createWeekLoader({
     }
   };
 
-  // A drag can end in a different week than it started, so the source week's cached
-  // copy, which still holds the event in its old slot, is dropped to be fetched again.
+  // A drop into another week leaves the source week's cached copy with the event in its old slot.
   const invalidateWeeksContaining = (
     uid: string,
     keep: string | null = null,
