@@ -61,8 +61,7 @@ Alternative considered: keep `project_ref` and add a separate `is_custom` flag.
 Rejected because every call site would need to check two fields, and forgetting the second one is exactly the bug class that would make custom appointments silently non-re-slotted or protected.
 
 ### One content value on the write commands
-`AssignmentWrite`, `CreateAssignmentInput`, `UpdateAssignmentInput` and `move_assignment` replace `project_ref` and `project_name` with `content: AssignmentContent`, a serde-tagged enum:
-`{ kind: "project", projectRef, projectName }` or `{ kind: "custom", title }`.
+`AssignmentWrite`, `CreateAssignmentInput`, `UpdateAssignmentInput` and `move_assignment` replace `project_ref` and `project_name` with `content: AssignmentContent`, a serde-tagged enum: `{ kind: "project", projectRef, projectName }` or `{ kind: "custom", title }`.
 `build_ical_payload` takes the content and writes either the `daylite:` or the `lkr-planner:custom` DESCRIPTION, with the project name or the title as SUMMARY.
 The backend trims the custom title and rejects a blank one with a German error, so the modal's disabled save is not the only guard.
 

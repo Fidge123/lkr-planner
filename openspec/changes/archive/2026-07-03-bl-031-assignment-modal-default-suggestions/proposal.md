@@ -1,6 +1,7 @@
 ## Why
 
-The assignment modal needs to show default suggestions when opened. This helps users quickly select frequently used or overdue projects without typing.
+The assignment modal needs to show default suggestions when opened.
+This helps users quickly select frequently used or overdue projects without typing.
 
 ## What Changes
 

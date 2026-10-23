@@ -10,9 +10,7 @@ Archive a completed change in the experimental workflow.
 
 ### Store selection
 
-If the user names a store (a store is a standalone OpenSpec repo registered on this machine) or the work lives in one,
-run `bunx openspec store list --json` to discover registered store ids,
-then pass `--store <id>` on the commands that read or write specs and changes (`new change`, `status`, `instructions`, `list`, `show`, `validate`, `archive`, `doctor`, `context`, `view`).
+If the user names a store (a store is a standalone OpenSpec repo registered on this machine) or the work lives in one, run `bunx openspec store list --json` to discover registered store ids, then pass `--store <id>` on the commands that read or write specs and changes (`new change`, `status`, `instructions`, `list`, `show`, `validate`, `archive`, `doctor`, `context`, `view`).
 Other commands do not take the flag.
 Hints printed by commands already carry the flag; keep it on follow-ups.
 Without a store, commands act on the nearest local `openspec/` root.
@@ -110,8 +108,7 @@ Before a selected sync writes any main spec, run `bunx openspec instructions spe
 Require a zero exit status and valid artifact-instruction JSON.
 If the lookup fails or returns invalid JSON, report the error and stop before writing any main spec or moving the change.
 A valid response with omitted `rules` is the no-rules case.
-Apply returned `rules` only to the content and form of main specs produced by this merge;
-do not use them as archive guidance, change CLI behavior, or copy the rule text into any output file.
+Apply returned `rules` only to the content and form of main specs produced by this merge; do not use them as archive guidance, change CLI behavior, or copy the rule text into any output file.
 
 Then run the `/opsx:sync` workflow inline (agent-driven intelligent merge) for change '<name>', passing the delta spec analysis and the fetched specs-rule snapshot from above, and wait for it to finish.
 The inline sync must reuse that snapshot without fetching `specs` instructions again.

@@ -20,7 +20,8 @@
 
 ## 4. Settings dialog toggle
 
-- [x] 4.1 (RED) Add a failing test that the settings dialog renders a "Wochenende anzeigen" toggle (static SSR render via `renderToStaticMarkup`, matching the existing component test style; the project has no DOM test tooling so interaction is not unit-tested, exactly as for the existing `hideNonPlannableEmployees` toggle). Save-and-refresh wiring mirrors the proven `hideNonPlannableEmployees` flow and its persistence is covered by the service tests in section 3
+- [x] 4.1 (RED) Add a failing test that the settings dialog renders a "Wochenende anzeigen" toggle (static SSR render via `renderToStaticMarkup`, matching the existing component test style; the project has no DOM test tooling so interaction is not unit-tested, exactly as for the existing `hideNonPlannableEmployees` toggle).
+      Save-and-refresh wiring mirrors the proven `hideNonPlannableEmployees` flow and its persistence is covered by the service tests in section 3
 - [x] 4.2 (GREEN) Load `showWeekend` into the dialog state, add the German-labelled toggle with a short description under the "Anzeige" section, and on save persist the value and trigger the planning-view refresh (matching the existing `hideNonPlannableEmployees` save-then-reload flow)
 
 ## 5. Planning view wiring
@@ -30,4 +31,6 @@
 
 ## 6. Verification
 
-- [x] 6.1 Run `bun lint`, `bun test`, and `cargo test` and confirm all are green. `bun lint`, `bunx tsc --noEmit`, and `bun test` (99 pass) are green; `cargo test` passes 131 tests including the new `local_store` cases. The only `cargo test` failures are 7 pre-existing Daylite VCR cassette-replay tests, which fail because the cassettes are git-crypt encrypted and not decrypted in this container (unrelated to this change)
+- [x] 6.1 Run `bun lint`, `bun test`, and `cargo test` and confirm all are green.
+      `bun lint`, `bunx tsc --noEmit`, and `bun test` (99 pass) are green; `cargo test` passes 131 tests including the new `local_store` cases.
+      The only `cargo test` failures are 7 pre-existing Daylite VCR cassette-replay tests, which fail because the cassettes are git-crypt encrypted and not decrypted in this container (unrelated to this change)

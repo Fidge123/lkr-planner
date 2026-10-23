@@ -6,7 +6,8 @@ Each Daylite employee is mapped to their ZEP calendar(s) by name (calendar names
 The admin credentials are stored once in macOS keychain and reused for all employees.
 
 Daylite contacts hold the derived full calendar URL (for interoperability).
-The local store holds the ZEP calendar name (the identifier used to select and construct the URL). Daylite remains the master record.
+The local store holds the ZEP calendar name (the identifier used to select and construct the URL).
+Daylite remains the master record.
 
 Non-ZEP employees (those without a ZEP calendar) have no calendar integration in this change.
 Custom/external iCal URL support is deferred to a future change.

@@ -1,6 +1,8 @@
 ## Context
 
-The local store already has `zep_absence_calendar`, `absence_ical_last_tested_at`, and `absence_ical_last_test_passed` on `EmployeeSetting`. The `EmployeeIcalDialog` already renders a full "Abwesenheit" section for configuring and testing the absence calendar URL. The `IcalSource` enum already has `Primary` and `Absence` variants.
+The local store already has `zep_absence_calendar`, `absence_ical_last_tested_at`, and `absence_ical_last_test_passed` on `EmployeeSetting`.
+The `EmployeeIcalDialog` already renders a full "Abwesenheit" section for configuring and testing the absence calendar URL.
+The `IcalSource` enum already has `Primary` and `Absence` variants.
 
 What is missing: the backend does not fetch from absence calendars, `CalendarEventKind` has no `Absence` variant, and the frontend does not render absence events distinctly.
 
@@ -35,10 +37,13 @@ Absence events carry a `title` (the iCal SUMMARY, e.g. "Urlaub") and `date`, but
 
 ### Concurrent fetch per employee
 For each employee with both a primary and absence calendar configured, fetch both concurrently.
-Only the primary calendar failure sets `EmployeeWeekEvents.error`. Absence calendar failures are silently skipped — the calendar is optional and its unavailability should not block the row from rendering.
+Only the primary calendar failure sets `EmployeeWeekEvents.error`.
+Absence calendar failures are silently skipped — the calendar is optional and its unavailability should not block the row from rendering.
 
 ### Frontend: `CellEvent` kind extended to `"absence"`
-`types.ts` adds `"absence"` to the `CellEvent.kind` union. `toCellEvent` maps `Absence` events to `bg-info/30` color (light blue — distinct from `bg-warning` used by deferred assignments). `TimetableCell` renders absence events using the same non-interactive (`span`) path as bare events, with the info color applied.
+`types.ts` adds `"absence"` to the `CellEvent.kind` union.
+`toCellEvent` maps `Absence` events to `bg-info/30` color (light blue — distinct from `bg-warning` used by deferred assignments).
+`TimetableCell` renders absence events using the same non-interactive (`span`) path as bare events, with the info color applied.
 
 ### No changes to settings dialog or ZEP service
 The "Abwesenheit" calendar section in `EmployeeIcalDialog` is already fully implemented.
