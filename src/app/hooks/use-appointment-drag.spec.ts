@@ -1,5 +1,4 @@
 import { describe, expect, it, mock } from "bun:test";
-import { mockCommands } from "../../test/mock-commands";
 import type {
   AppointmentDragPayload,
   CardRect,
@@ -7,7 +6,6 @@ import type {
   DropZoneData,
 } from "./use-appointment-drag";
 import {
-  commandDropDeps,
   computeEdgeZone,
   decideDropAction,
   EdgeHoverNavigator,
@@ -15,15 +13,6 @@ import {
   performDrop,
   resolveDropTarget,
 } from "./use-appointment-drag";
-
-const updateAssignmentCommand = mock(
-  async (): Promise<CommandResult<null>> => ({ status: "ok", data: null }),
-);
-mockCommands({
-  updateAssignment: updateAssignmentCommand,
-  reorderAssignment: mock(),
-  moveAssignment: mock(),
-});
 
 const payload: AppointmentDragPayload = {
   uid: "uid-1",
@@ -55,27 +44,25 @@ function cellZone(
   return { kind: "cell", employeeRef, date, cardRects: () => cards };
 }
 
-type CommandResult<T> =
-  | { status: "ok"; data: T }
-  | { status: "error"; error: string };
 type MoveData =
   | { kind: "moved"; newHref: string }
   | { kind: "sourceDeleteFailed"; newHref: string; sourceHref: string };
 
 const okDeps = () => ({
-  updateAssignment: mock(
-    async (): Promise<CommandResult<null>> => ({ status: "ok", data: null }),
-  ),
-  reorderAssignment: mock(
-    async (): Promise<CommandResult<null>> => ({ status: "ok", data: null }),
-  ),
+  updateAssignment: mock(async () => null),
+  reorderAssignment: mock(async () => null),
   moveAssignment: mock(
-    async (): Promise<CommandResult<MoveData>> => ({
-      status: "ok",
-      data: { kind: "moved", newHref: "/calendars/emp-b/new.ics" },
+    async (): Promise<MoveData> => ({
+      kind: "moved",
+      newHref: "/calendars/emp-b/new.ics",
     }),
   ),
 });
+
+const rejecting = (message: string) =>
+  mock(async (): Promise<never> => {
+    throw new Error(message);
+  });
 
 describe("decideDropAction", () => {
   it("is a no-op for the originating cell", () => {
@@ -152,14 +139,15 @@ describe("performDrop", () => {
     );
 
     expect(outcome).toEqual({ kind: "done" });
-    expect(deps.updateAssignment).toHaveBeenCalledWith(
-      payload.href,
-      payload.uid,
-      "2026-07-08",
-      payload.projectRef,
-      payload.title,
-      2,
-    );
+    expect(deps.updateAssignment).toHaveBeenCalledWith({
+      href: payload.href,
+      uid: payload.uid,
+      date: "2026-07-08",
+      projectRef: payload.projectRef,
+      projectName: payload.title,
+      orderIndex: 2,
+      overrideProtection: false,
+    });
     expect(deps.moveAssignment).not.toHaveBeenCalled();
   });
 
@@ -172,14 +160,14 @@ describe("performDrop", () => {
     );
 
     expect(outcome).toEqual({ kind: "done" });
-    expect(deps.moveAssignment).toHaveBeenCalledWith(
-      payload.href,
-      "/v1/contacts/2",
-      "2026-07-08",
-      payload.projectRef,
-      payload.title,
-      0,
-    );
+    expect(deps.moveAssignment).toHaveBeenCalledWith({
+      href: payload.href,
+      targetEmployeeReference: "/v1/contacts/2",
+      date: "2026-07-08",
+      projectRef: payload.projectRef,
+      projectName: payload.title,
+      orderIndex: 0,
+    });
     expect(deps.updateAssignment).not.toHaveBeenCalled();
   });
 
@@ -196,12 +184,12 @@ describe("performDrop", () => {
     );
 
     expect(outcome).toEqual({ kind: "done" });
-    expect(deps.reorderAssignment).toHaveBeenCalledWith(
-      payload.href,
-      payload.uid,
-      payload.date,
-      0,
-    );
+    expect(deps.reorderAssignment).toHaveBeenCalledWith({
+      href: payload.href,
+      uid: payload.uid,
+      date: payload.date,
+      orderIndex: 0,
+    });
     expect(deps.updateAssignment).not.toHaveBeenCalled();
     expect(deps.moveAssignment).not.toHaveBeenCalled();
   });
@@ -209,12 +197,7 @@ describe("performDrop", () => {
   it("surfaces the backend error when a reorder fails", async () => {
     const deps = {
       ...okDeps(),
-      reorderAssignment: mock(
-        async (): Promise<CommandResult<null>> => ({
-          status: "error",
-          error: "Kalenderserver antwortete mit HTTP 500",
-        }),
-      ),
+      reorderAssignment: rejecting("Kalenderserver antwortete mit HTTP 500"),
     };
     const outcome = await performDrop(
       payload,
@@ -231,11 +214,8 @@ describe("performDrop", () => {
   it("surfaces the backend error when the target employee has no calendar", async () => {
     const deps = {
       ...okDeps(),
-      moveAssignment: mock(
-        async (): Promise<CommandResult<MoveData>> => ({
-          status: "error",
-          error: "Kein Kalender für diesen Mitarbeiter konfiguriert.",
-        }),
+      moveAssignment: rejecting(
+        "Kein Kalender für diesen Mitarbeiter konfiguriert.",
       ),
     };
     const outcome = await performDrop(
@@ -254,13 +234,10 @@ describe("performDrop", () => {
     const deps = {
       ...okDeps(),
       moveAssignment: mock(
-        async (): Promise<CommandResult<MoveData>> => ({
-          status: "ok",
-          data: {
-            kind: "sourceDeleteFailed",
-            newHref: "/calendars/emp-b/new.ics",
-            sourceHref: payload.href,
-          },
+        async (): Promise<MoveData> => ({
+          kind: "sourceDeleteFailed",
+          newHref: "/calendars/emp-b/new.ics",
+          sourceHref: payload.href,
         }),
       ),
     };
@@ -280,12 +257,7 @@ describe("performDrop", () => {
   it("returns the backend error message when the command fails", async () => {
     const deps = {
       ...okDeps(),
-      updateAssignment: mock(
-        async (): Promise<CommandResult<null>> => ({
-          status: "error",
-          error: "Kalenderserver antwortete mit HTTP 500",
-        }),
-      ),
+      updateAssignment: rejecting("Kalenderserver antwortete mit HTTP 500"),
     };
     const outcome = await performDrop(
       payload,
@@ -408,12 +380,12 @@ describe("drop gesture end to end", () => {
     const outcome = await performDrop(payload, target, deps);
 
     expect(outcome).toEqual({ kind: "done" });
-    expect(deps.reorderAssignment).toHaveBeenCalledWith(
-      payload.href,
-      payload.uid,
-      payload.date,
-      0,
-    );
+    expect(deps.reorderAssignment).toHaveBeenCalledWith({
+      href: payload.href,
+      uid: payload.uid,
+      date: payload.date,
+      orderIndex: 0,
+    });
     expect(deps.moveAssignment).not.toHaveBeenCalled();
     expect(deps.updateAssignment).not.toHaveBeenCalled();
   });
@@ -430,14 +402,14 @@ describe("drop gesture end to end", () => {
     const outcome = await performDrop(payload, target, deps);
 
     expect(outcome).toEqual({ kind: "done" });
-    expect(deps.moveAssignment).toHaveBeenCalledWith(
-      payload.href,
-      "/v1/contacts/2",
-      "2026-07-08",
-      payload.projectRef,
-      payload.title,
-      1,
-    );
+    expect(deps.moveAssignment).toHaveBeenCalledWith({
+      href: payload.href,
+      targetEmployeeReference: "/v1/contacts/2",
+      date: "2026-07-08",
+      projectRef: payload.projectRef,
+      projectName: payload.title,
+      orderIndex: 1,
+    });
   });
 
   it("appends when the drop lands on the empty area of another employee's cell", async () => {
@@ -451,14 +423,14 @@ describe("drop gesture end to end", () => {
     const outcome = await performDrop(payload, target, deps);
 
     expect(outcome).toEqual({ kind: "done" });
-    expect(deps.moveAssignment).toHaveBeenCalledWith(
-      payload.href,
-      "/v1/contacts/2",
-      "2026-07-08",
-      payload.projectRef,
-      payload.title,
-      3,
-    );
+    expect(deps.moveAssignment).toHaveBeenCalledWith({
+      href: payload.href,
+      targetEmployeeReference: "/v1/contacts/2",
+      date: "2026-07-08",
+      projectRef: payload.projectRef,
+      projectName: payload.title,
+      orderIndex: 3,
+    });
   });
 });
 
@@ -543,22 +515,5 @@ describe("EdgeHoverNavigator", () => {
     await Bun.sleep(30);
 
     expect(onNavigate.mock.calls).toEqual([[1]]);
-  });
-});
-
-describe("commandDropDeps", () => {
-  it("rescheduling a drag never overrides the fixed-appointment protection", async () => {
-    await commandDropDeps().updateAssignment(
-      "/cal/uid-1.ics",
-      "uid-1",
-      "2026-07-08",
-      "/v1/projects/42",
-      "Projekt Nord",
-      0,
-    );
-
-    expect(updateAssignmentCommand).toHaveBeenCalledWith(
-      expect.objectContaining({ overrideProtection: false }),
-    );
   });
 });

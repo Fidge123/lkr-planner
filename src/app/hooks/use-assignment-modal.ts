@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  type CalendarCellEvent,
-  commands,
-  type DayliteProjectSummary,
+import type {
+  CalendarCellEvent,
+  DayliteProjectSummary,
 } from "../../generated/tauri";
 import { recordLastAssignedProject } from "../../services/assignment-suggestions";
 import {
-  commandErrorMessage,
+  createAssignment,
+  deleteAssignment,
+  updateAssignment,
+} from "../../services/assignments";
+import {
   isProtectedAssignment,
   nextHighlightIndex,
   resolveDisplayedProjects,
@@ -154,8 +157,9 @@ export function useAssignmentModal({
 
     const projectName = selectedProjectName || assignment?.title || "";
 
-    const result: { status: string; error?: string } = assignment?.href
-      ? await commands.updateAssignment({
+    try {
+      if (assignment?.href) {
+        await updateAssignment({
           href: assignment.href,
           uid: assignment.uid,
           date,
@@ -164,17 +168,17 @@ export function useAssignmentModal({
           // Editing an assignment must not move it within its day.
           orderIndex: null,
           overrideProtection: isUnlocked,
-        })
-      : await commands.createAssignment({
+        });
+      } else {
+        await createAssignment({
           employeeReference,
           date,
           projectRef: selectedProjectRef,
           projectName,
         });
-
-    const writeError = commandErrorMessage(result);
-    if (writeError) {
-      setErrorMessage(writeError);
+      }
+    } catch (error) {
+      setErrorMessage((error as Error).message);
       setIsSaving(false);
       return;
     }
@@ -197,10 +201,10 @@ export function useAssignmentModal({
     }
     setIsSaving(true);
     setErrorMessage(null);
-    const result = await commands.deleteAssignment(assignment.href, isUnlocked);
-    const deleteError = commandErrorMessage(result);
-    if (deleteError) {
-      setErrorMessage(deleteError);
+    try {
+      await deleteAssignment(assignment.href, isUnlocked);
+    } catch (error) {
+      setErrorMessage((error as Error).message);
       setIsSaving(false);
       return;
     }

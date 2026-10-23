@@ -7,7 +7,6 @@ import type {
 import { mockCommands } from "../../test/mock-commands";
 import { AssignmentModal } from "./assignment-modal";
 import {
-  commandErrorMessage,
   isProtectedAssignment,
   nextHighlightIndex,
   resolveDisplayedProjects,
@@ -436,30 +435,6 @@ describe("isProtectedAssignment", () => {
 
   it("leaves an assignment without a resolved category plannable", () => {
     expect(isProtectedAssignment(null)).toBe(false);
-  });
-});
-
-describe("commandErrorMessage", () => {
-  it("surfaces the backend's German rejection message", () => {
-    const rejection =
-      "Dieser Termin ist als 'Termin FIX geplant' gesperrt und kann nicht geändert oder gelöscht werden.";
-
-    expect(commandErrorMessage({ status: "error", error: rejection })).toBe(
-      rejection,
-    );
-  });
-
-  it("reports no error for a successful write", () => {
-    expect(commandErrorMessage({ status: "ok" })).toBeNull();
-  });
-
-  it("keeps a message-less rejection an error instead of reading as success", () => {
-    expect(commandErrorMessage({ status: "error", error: "" })).toBe(
-      "Die Änderung konnte nicht gespeichert werden.",
-    );
-    expect(commandErrorMessage({ status: "error" })).toBe(
-      "Die Änderung konnte nicht gespeichert werden.",
-    );
   });
 });
 

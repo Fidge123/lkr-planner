@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { commands } from "../../generated/tauri";
+import { deleteAssignment } from "../../services/assignments";
 
 export function MoveReconciliationDialog({
   reconciliation,
@@ -23,20 +23,10 @@ export function MoveReconciliationDialog({
     setErrorMessage(null);
     try {
       // A half-finished move must always be able to drop its duplicate, even for a fixed appointment.
-      const result = await commands.deleteAssignment(
-        hrefToDelete(choice, reconciliation),
-        true,
-      );
-      if (result.status === "error") {
-        setErrorMessage(result.error);
-        setPendingChoice(null);
-        return;
-      }
+      await deleteAssignment(hrefToDelete(choice, reconciliation), true);
       onResolved();
-    } catch {
-      // The generated bindings re-throw Error-typed rejections (IPC failures);
-      // without this the dialog would stay disabled forever.
-      setErrorMessage("Der Einsatz konnte nicht gelöscht werden.");
+    } catch (error) {
+      setErrorMessage((error as Error).message);
       setPendingChoice(null);
     }
   };

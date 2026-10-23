@@ -13,16 +13,6 @@ export function isProtectedAssignment(
   return projectCategory === fixedAppointmentCategory;
 }
 
-const genericWriteError = "Die Änderung konnte nicht gespeichert werden.";
-
-// Keyed on the status: an error carrying no message must not read as success.
-export function commandErrorMessage(result: {
-  status: string;
-  error?: string;
-}): string | null {
-  return result.status === "error" ? result.error || genericWriteError : null;
-}
-
 export function resolveDisplayedProjects(
   filter: string,
   suggestions: DayliteProjectSummary[],

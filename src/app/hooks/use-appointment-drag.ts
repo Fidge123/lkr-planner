@@ -4,7 +4,11 @@ import type {
   DragStartEvent,
 } from "@dnd-kit/core";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { commands, type MoveAssignmentResult } from "../../generated/tauri";
+import {
+  moveAssignment,
+  reorderAssignment,
+  updateAssignment,
+} from "../../services/assignments";
 import type { MoveReconciliation } from "../components/move-reconciliation-dialog";
 
 export interface AppointmentDragPayload {
@@ -119,62 +123,18 @@ export function decideDropAction(
   return "none";
 }
 
-// A drag is not a deliberate enough gesture to carry a protection override.
-export function commandDropDeps(): DropDeps {
-  return {
-    updateAssignment: (href, uid, date, projectRef, projectName, orderIndex) =>
-      commands.updateAssignment({
-        href,
-        uid,
-        date,
-        projectRef,
-        projectName,
-        orderIndex,
-        overrideProtection: false,
-      }),
-    reorderAssignment: commands.reorderAssignment,
-    moveAssignment: commands.moveAssignment,
-  };
-}
-
-interface DropDeps {
-  updateAssignment: (
-    href: string,
-    uid: string,
-    date: string,
-    projectRef: string,
-    projectName: string,
-    orderIndex: number,
-  ) => Promise<
-    { status: "ok"; data: null } | { status: "error"; error: string }
-  >;
-  reorderAssignment: (
-    href: string,
-    uid: string,
-    date: string,
-    orderIndex: number,
-  ) => Promise<
-    { status: "ok"; data: null } | { status: "error"; error: string }
-  >;
-  moveAssignment: (
-    href: string,
-    targetEmployeeReference: string,
-    date: string,
-    projectRef: string,
-    projectName: string,
-    orderIndex: number,
-  ) => Promise<
-    | { status: "ok"; data: MoveAssignmentResult }
-    | { status: "error"; error: string }
-  >;
-}
+const assignmentWrites = {
+  updateAssignment,
+  reorderAssignment,
+  moveAssignment,
+};
 
 // Both paths rebuild the VEVENT from the payload, so properties added in other
 // calendar clients are not preserved.
 export async function performDrop(
   source: AppointmentDragPayload,
   target: DropCellTarget,
-  deps: DropDeps,
+  deps: typeof assignmentWrites = assignmentWrites,
 ): Promise<DropOutcome> {
   const action = decideDropAction(source, target);
 
@@ -182,53 +142,49 @@ export async function performDrop(
     return { kind: "none" };
   }
 
-  if (action === "reorder") {
-    const result = await deps.reorderAssignment(
-      source.href,
-      source.uid,
-      source.date,
-      target.orderIndex,
-    );
-    if (result.status === "error") {
-      return { kind: "error", message: result.error };
+  try {
+    if (action === "reorder") {
+      await deps.reorderAssignment({
+        href: source.href,
+        uid: source.uid,
+        date: source.date,
+        orderIndex: target.orderIndex,
+      });
+      return { kind: "done" };
     }
-    return { kind: "done" };
-  }
 
-  if (action === "reschedule") {
-    const result = await deps.updateAssignment(
-      source.href,
-      source.uid,
-      target.date,
-      source.projectRef,
-      source.title,
-      target.orderIndex,
-    );
-    if (result.status === "error") {
-      return { kind: "error", message: result.error };
+    if (action === "reschedule") {
+      await deps.updateAssignment({
+        href: source.href,
+        uid: source.uid,
+        date: target.date,
+        projectRef: source.projectRef,
+        projectName: source.title,
+        orderIndex: target.orderIndex,
+        // A drag is not a deliberate enough gesture to carry a protection override.
+        overrideProtection: false,
+      });
+      return { kind: "done" };
     }
-    return { kind: "done" };
-  }
 
-  const result = await deps.moveAssignment(
-    source.href,
-    target.employeeRef,
-    target.date,
-    source.projectRef,
-    source.title,
-    target.orderIndex,
-  );
-  if (result.status === "error") {
-    return { kind: "error", message: result.error };
+    const moved = await deps.moveAssignment({
+      href: source.href,
+      targetEmployeeReference: target.employeeRef,
+      date: target.date,
+      projectRef: source.projectRef,
+      projectName: source.title,
+      orderIndex: target.orderIndex,
+    });
+    return moved.kind === "sourceDeleteFailed"
+      ? {
+          kind: "partialMove",
+          newHref: moved.newHref,
+          sourceHref: moved.sourceHref,
+        }
+      : { kind: "done" };
+  } catch (error) {
+    return { kind: "error", message: (error as Error).message };
   }
-  if (result.data.kind === "sourceDeleteFailed") {
-    return {
-      kind: "partialMove",
-      newHref: result.data.newHref,
-      sourceHref: result.data.sourceHref,
-    };
-  }
-  return { kind: "done" };
 }
 
 export function computeEdgeZone(
@@ -440,26 +396,19 @@ export function useAppointmentDrag({
         ]);
       };
 
-      void performDrop(source, target, commandDropDeps())
-        .then((outcome) => {
-          if (outcome.kind === "partialMove") {
-            droppedUidRef.current = source.uid;
-            setReconciliation({
-              newHref: outcome.newHref,
-              sourceHref: outcome.sourceHref,
-            });
-          }
-          if (outcome.kind === "error") {
-            setErrorMessage(outcome.message);
-          }
-          refreshAffectedRows();
-        })
-        // The generated bindings re-throw Error-typed rejections (IPC failures)
-        // instead of returning a status object; without this the drop fails silently.
-        .catch(() => {
-          setErrorMessage("Der Einsatz konnte nicht verschoben werden.");
-          refreshAffectedRows();
-        });
+      void performDrop(source, target).then((outcome) => {
+        if (outcome.kind === "partialMove") {
+          droppedUidRef.current = source.uid;
+          setReconciliation({
+            newHref: outcome.newHref,
+            sourceHref: outcome.sourceHref,
+          });
+        }
+        if (outcome.kind === "error") {
+          setErrorMessage(outcome.message);
+        }
+        refreshAffectedRows();
+      });
     },
     [targetOf],
   );

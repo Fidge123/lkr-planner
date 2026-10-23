@@ -1,13 +1,13 @@
 import { TriangleAlert } from "lucide-react";
 import { useState } from "react";
 import { createPortal } from "react-dom";
-import {
-  type CalendarCellEvent,
-  commands,
-  type EmployeeSetting,
-  type PlanningContactRecord,
+import type {
+  CalendarCellEvent,
+  EmployeeSetting,
+  PlanningContactRecord,
 } from "../../generated/tauri";
 import { recordLastAssignedProject } from "../../services/assignment-suggestions";
+import { createAssignment } from "../../services/assignments";
 import type { ProjectCategoryColors } from "../../services/daylite-categories";
 import type { DropPreview } from "../hooks/use-appointment-drag";
 import type { GhostSuggestion, ModalSaveAction } from "../next-day-quick-add";
@@ -62,13 +62,16 @@ export function TimetableRow({
   };
 
   const handleSuggestionClick = async (suggestion: GhostSuggestion) => {
-    const result = await commands.createAssignment({
-      employeeReference: employee.self,
-      date: suggestion.date,
-      projectRef: suggestion.projectRef,
-      projectName: suggestion.projectName,
-    });
-    if (result.status === "error") return;
+    try {
+      await createAssignment({
+        employeeReference: employee.self,
+        date: suggestion.date,
+        projectRef: suggestion.projectRef,
+        projectName: suggestion.projectName,
+      });
+    } catch {
+      return;
+    }
     recordLastAssignedProject({
       self: suggestion.projectRef,
       name: suggestion.projectName,
