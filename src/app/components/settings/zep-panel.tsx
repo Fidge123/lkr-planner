@@ -18,15 +18,18 @@ export function ZepSettingsPanel({ onClose }: Props) {
     setStatus(null);
     setPasswordInput("");
     let isActive = true;
-    void loadZepCredentials().then((info: ZepCredentialsInfo | null) => {
-      if (!isActive) {
-        return;
-      }
-      if (info) {
-        setRootUrlInput(info.rootUrl);
-        setUsernameInput(info.username);
-      }
-    });
+    void loadZepCredentials()
+      .then((info: ZepCredentialsInfo | null) => {
+        if (isActive && info) {
+          setRootUrlInput(info.rootUrl);
+          setUsernameInput(info.username);
+        }
+      })
+      .catch((error: Error) => {
+        if (isActive) {
+          setStatus({ type: "error", message: error.message });
+        }
+      });
     return () => {
       isActive = false;
     };
