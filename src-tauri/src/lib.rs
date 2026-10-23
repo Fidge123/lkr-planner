@@ -13,7 +13,7 @@ const RELOAD_DATA_EVENT: &str = "reload-data";
 fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
     tauri_specta::Builder::<tauri::Wry>::new().commands(tauri_specta::collect_commands![
         integrations::local_store::load_local_store,
-        integrations::local_store::save_local_store,
+        integrations::local_store::save_display_settings,
         integrations::calendar::commands::load_week_events,
         integrations::holidays::get_holidays_for_week,
         integrations::daylite::auth::daylite_connect_refresh_token,

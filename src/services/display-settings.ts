@@ -23,15 +23,10 @@ export async function loadDisplaySettings(): Promise<
 export async function saveDisplaySettings(
   patch: Partial<DisplaySettings>,
 ): Promise<void> {
-  const store = await loadLocalStore();
   await callCommand(
-    commands.saveLocalStore({
-      ...store,
-      displaySettings: {
-        ...defaultDisplaySettings,
-        ...store.displaySettings,
-        ...patch,
-      },
+    commands.saveDisplaySettings({
+      ...(await loadDisplaySettings()),
+      ...patch,
     }),
     "Die Anzeige-Einstellung konnte nicht gespeichert werden.",
   );

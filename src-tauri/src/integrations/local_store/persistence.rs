@@ -1,4 +1,4 @@
-use super::types::LocalStore;
+use super::types::{DisplaySettings, LocalStore};
 use crate::error::{AppError, AppErrorCode};
 use crate::integrations::telemetry::events::{Integration, Operation};
 use crate::integrations::telemetry::observe::record_failure;
@@ -28,8 +28,11 @@ pub fn load_local_store(app: tauri::AppHandle) -> Result<LocalStore, AppError> {
 
 #[tauri::command]
 #[specta::specta]
-pub fn save_local_store(app: tauri::AppHandle, store: LocalStore) -> Result<(), AppError> {
-    update_local_store(&app, |current| *current = store)
+pub fn save_display_settings(
+    app: tauri::AppHandle,
+    settings: DisplaySettings,
+) -> Result<(), AppError> {
+    update_local_store(&app, |store| store.display_settings = settings)
 }
 
 /// Writers must change the store only through this, so concurrent commands cannot drop each other's changes.

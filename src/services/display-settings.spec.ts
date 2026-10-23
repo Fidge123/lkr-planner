@@ -12,23 +12,21 @@ let store: { displaySettings?: DisplaySettings } & Record<string, unknown>;
 const mockLoadLocalStore = mock(() =>
   Promise.resolve({ status: "ok" as const, data: store }),
 );
-const mockSaveLocalStore = mock(
-  (next: { displaySettings?: DisplaySettings } & Record<string, unknown>) => {
-    store = next;
-    return Promise.resolve({ status: "ok" as const, data: null });
-  },
-);
+const mockSaveDisplaySettings = mock((settings: DisplaySettings) => {
+  store = { ...store, displaySettings: settings };
+  return Promise.resolve({ status: "ok" as const, data: null });
+});
 
 mockCommands({
   loadLocalStore: mockLoadLocalStore,
-  saveLocalStore: mockSaveLocalStore,
+  saveDisplaySettings: mockSaveDisplaySettings,
 });
 
 describe("display settings service", () => {
   beforeEach(() => {
     store = { apiEndpoints: {}, employeeSettings: [] };
     mockLoadLocalStore.mockClear();
-    mockSaveLocalStore.mockClear();
+    mockSaveDisplaySettings.mockClear();
   });
 
   it("saving one setting preserves the other stored settings", async () => {

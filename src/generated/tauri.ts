@@ -6,7 +6,7 @@ import { invoke as __TAURI_INVOKE } from "@tauri-apps/api/core";
 /** Commands */
 export const commands = {
 	loadLocalStore: () => typedError<LocalStore, AppError>(__TAURI_INVOKE("load_local_store")),
-	saveLocalStore: (store: LocalStore) => typedError<null, AppError>(__TAURI_INVOKE("save_local_store", { store })),
+	saveDisplaySettings: (settings: DisplaySettings) => typedError<null, AppError>(__TAURI_INVOKE("save_display_settings", { settings })),
 	/**  Without employee references, every employee with a calendar is loaded. */
 	loadWeekEvents: (weekStart: string, employeeReferences: string[] | null, purpose: WeekLoadPurpose) => typedError<EmployeeWeekEvents[], AppError>(__TAURI_INVOKE("load_week_events", { weekStart, employeeReferences, purpose })),
 	getHolidaysForWeek: (weekStart: string) => typedError<Holiday[], AppError>(__TAURI_INVOKE("get_holidays_for_week", { weekStart })),
