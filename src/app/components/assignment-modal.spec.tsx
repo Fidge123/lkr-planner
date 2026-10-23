@@ -141,6 +141,23 @@ describe("AssignmentModal", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  it("closes on Escape, but asks first once a project was selected", async () => {
+    const pressEscape = () =>
+      fireEvent(
+        screen.getByRole("dialog"),
+        new Event("cancel", { cancelable: true }),
+      );
+    renderModal(null);
+
+    pressEscape();
+    expect(onClose).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(await screen.findByText("Projekt Nord"));
+    pressEscape();
+    expect(screen.getByText("Ungespeicherte Änderungen")).toBeDefined();
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   it("deletes only after confirmation", async () => {
     renderModal(plannableAssignment);
 

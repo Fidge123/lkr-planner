@@ -1,5 +1,5 @@
 import { useIsFetching, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 import "./app.css";
 import { ChevronLeft, ChevronRight, Settings } from "lucide-react";
 import { DataLoadingIndicator } from "./app/components/data-loading-indicator";
@@ -41,10 +41,9 @@ function App() {
 
   const zepCalendarsState = useZepCalendars(icalDialogEmployee !== null);
 
-  const reloadAssignmentsRef = useRef(
-    planningAssignmentsState.reloadAssignments,
+  const reloadWeek = useEffectEvent(() =>
+    planningAssignmentsState.reloadAssignments(),
   );
-  reloadAssignmentsRef.current = planningAssignmentsState.reloadAssignments;
 
   useEffect(() => {
     let cancelled = false;
@@ -57,7 +56,7 @@ function App() {
       syncContacts: async () => {
         await queryClient.fetchQuery(contactsQuery);
       },
-      reloadWeek: () => reloadAssignmentsRef.current(),
+      reloadWeek: () => reloadWeek(),
       isCancelled: () => cancelled,
     });
     return () => {
@@ -69,26 +68,24 @@ function App() {
     setIcalDialogEmployee(null);
   };
 
-  const handleNavigateWeek = useCallback((direction: -1 | 1) => {
+  const handleNavigateWeek = (direction: -1 | 1) => {
     setWeekOffset((prev) => prev + direction);
-  }, []);
+  };
 
-  const handleJumpToWeek = useCallback(
-    (day: Date) => setWeekOffset(weekOffsetFor(today, day, showWeekend)),
-    [today, showWeekend],
-  );
+  const handleJumpToWeek = (day: Date) =>
+    setWeekOffset(weekOffsetFor(today, day, showWeekend));
 
-  const reloadData = useCallback(() => {
+  const reloadData = () => {
     void queryClient.invalidateQueries();
     planningAssignmentsState.reloadAssignments();
-  }, [queryClient, planningAssignmentsState.reloadAssignments]);
+  };
 
   useReloadDataMenu(reloadData);
 
-  const handleSettingsSaved = useCallback(() => {
+  const handleSettingsSaved = () => {
     void queryClient.invalidateQueries({ queryKey: localStoreQuery.queryKey });
     planningAssignmentsState.reloadAssignments();
-  }, [queryClient, planningAssignmentsState.reloadAssignments]);
+  };
 
   return (
     <article className="h-screen flex flex-col">

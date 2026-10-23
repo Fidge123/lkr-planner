@@ -19,16 +19,15 @@ export function MoveReconciliationDialog({
       return;
     }
 
+    const duplicateHref =
+      choice === "retryDeleteSource"
+        ? reconciliation.sourceHref
+        : reconciliation.newHref;
     setPendingChoice(choice);
     setErrorMessage(null);
     try {
       // A half-finished move must always be able to drop its duplicate, even for a fixed appointment.
-      await deleteAssignment(
-        choice === "retryDeleteSource"
-          ? reconciliation.sourceHref
-          : reconciliation.newHref,
-        true,
-      );
+      await deleteAssignment(duplicateHref, true);
       onResolved();
     } catch (error) {
       setErrorMessage((error as Error).message);
