@@ -1,4 +1,4 @@
-# ADR 0017: Periodic Calendar Refresh from the Frontend
+# ADR 0018: Periodic Calendar Refresh from the Frontend
 
 - Status: Accepted
 - Date: 2026-10-19

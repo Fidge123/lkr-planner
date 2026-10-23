@@ -17,7 +17,7 @@
 ## 3. Wiring and decision record
 
 - [x] 3.1 Call `useCalendarAutoRefresh` in `src/app.tsx` with `lastLoadedAt` and `refreshAssignments` from `planningAssignmentsState`, and verify `bun run build` type-checks
-- [x] 3.2 Write ADR `docs/adr/0017-periodic-calendar-refresh.md` recording client-side polling over push or backend polling and the offline, settle delay and retry rules that protect Daylite token rotation after wake, and verify `bun run test:docs` passes
+- [x] 3.2 Write ADR `docs/adr/0018-periodic-calendar-refresh.md` recording client-side polling over push or backend polling and the offline, settle delay and retry rules that protect Daylite token rotation after wake, and verify `bun run test:docs` passes
 
 ## 4. Verification
 
