@@ -4,7 +4,10 @@ import type {
   ResolvedProject,
   WeekLoadPurpose,
 } from "../../generated/tauri";
-import { commands } from "../../generated/tauri";
+import {
+  loadWeekEvents,
+  resolveWeekProjects,
+} from "../../services/assignments";
 import { scheduleTimeout, toLocalISODate } from "../util";
 import {
   applyResolvedProjects,
@@ -60,7 +63,7 @@ export function usePlanningAssignments(
   const [view, setView] = useState(initialView);
   const [loader] = useState(() =>
     createWeekLoader({
-      backend: commands,
+      backend: { loadWeekEvents, resolveWeekProjects },
       now: Date.now,
       schedule: scheduleTimeout,
       isOnline: () => navigator.onLine,
@@ -144,7 +147,10 @@ type FetchResult =
   | { status: "error"; error: string };
 
 export interface WeekLoaderDeps {
-  backend: Pick<typeof commands, "loadWeekEvents" | "resolveWeekProjects">;
+  backend: {
+    loadWeekEvents: typeof loadWeekEvents;
+    resolveWeekProjects: typeof resolveWeekProjects;
+  };
   now: () => number;
   schedule: (callback: () => void, ms: number) => () => void;
   isOnline: () => boolean;
@@ -195,8 +201,7 @@ export function createWeekLoader({
 
     let resolved: Partial<Record<string, ResolvedProject | null>> | null = null;
     try {
-      const result = await backend.resolveWeekProjects(refs, forceRefresh);
-      if (result.status === "ok") resolved = result.data;
+      resolved = await backend.resolveWeekProjects(refs, forceRefresh);
     } catch {}
 
     updateWeek(ws, (current) =>
@@ -211,18 +216,10 @@ export function createWeekLoader({
     purpose: WeekLoadPurpose,
   ): Promise<FetchResult> => {
     try {
-      const result = await backend.loadWeekEvents(ws, null, purpose);
-      return result.status === "ok"
-        ? { status: "ok", data: groupResults(result.data) }
-        : result;
+      const entries = await backend.loadWeekEvents(ws, null, purpose);
+      return { status: "ok", data: groupResults(entries) };
     } catch (error) {
-      return {
-        status: "error",
-        error:
-          error instanceof Error
-            ? error.message
-            : "Die Einsätze konnten nicht geladen werden.",
-      };
+      return { status: "error", error: (error as Error).message };
     }
   };
 
@@ -302,11 +299,9 @@ export function createWeekLoader({
   const prefetchWeek = async (ws: string) => {
     if (cache.has(ws)) return;
     try {
-      const result = await backend.loadWeekEvents(ws, null, "prefetch");
-      if (result.status === "ok") {
-        cache.set(ws, { data: groupResults(result.data), fetchedAt: now() });
-        void resolveProjects(ws);
-      }
+      const entries = await backend.loadWeekEvents(ws, null, "prefetch");
+      cache.set(ws, { data: groupResults(entries), fetchedAt: now() });
+      void resolveProjects(ws);
     } catch {}
   };
 
@@ -322,15 +317,9 @@ export function createWeekLoader({
       }
     };
     try {
-      const result = await backend.loadWeekEvents(ws, employeeRefs, "refresh");
+      const entries = await backend.loadWeekEvents(ws, employeeRefs, "refresh");
       if (!isCurrent()) return;
-      if (result.status === "error") {
-        discard();
-        return;
-      }
-      updateWeek(ws, (week) =>
-        mergeEmployeeRows(week, employeeRefs, result.data),
-      );
+      updateWeek(ws, (week) => mergeEmployeeRows(week, employeeRefs, entries));
       void resolveProjects(ws);
     } catch {
       if (isCurrent()) discard();

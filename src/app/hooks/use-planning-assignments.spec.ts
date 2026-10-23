@@ -105,9 +105,7 @@ describe("loadWeekWithPrefetch", () => {
 const shownWeek = "2026-08-10";
 const otherWeek = "2026-08-17";
 
-type LoadResult =
-  | { status: "ok"; data: EmployeeWeekEvents[] }
-  | { status: "error"; error: string };
+type LoadResult = EmployeeWeekEvents[];
 
 function assignment(uid: string, date = shownWeek): CalendarCellEvent {
   return {
@@ -127,7 +125,11 @@ function assignment(uid: string, date = shownWeek): CalendarCellEvent {
 }
 
 function ok(...rows: EmployeeWeekEvents[]): LoadResult {
-  return { status: "ok", data: rows };
+  return rows;
+}
+
+function unreachable(): LoadResult {
+  throw new Error("Kalender nicht erreichbar.");
 }
 
 function row(
@@ -153,7 +155,7 @@ function weekLoader() {
         requests.push(weekStart);
         return respond(weekStart);
       },
-      resolveWeekProjects: async () => ({ status: "ok", data: {} }),
+      resolveWeekProjects: async () => ({}),
     },
     now: clock.now,
     schedule: clock.schedule,
@@ -232,7 +234,7 @@ describe("createWeekLoader automatic refresh", () => {
   it("keeps the shown week editable after a failed refresh", async () => {
     const { loader, respond, view } = weekLoader();
     await loader.loadActiveWeek(shownWeek);
-    respond(() => ({ status: "error", error: "Kalender nicht erreichbar." }));
+    respond(unreachable);
     await loader.refresh();
 
     loader.moveEvent("uid-1", {
@@ -266,11 +268,6 @@ describe("createWeekLoader automatic refresh", () => {
 });
 
 describe("createWeekLoader retry of a failed automatic refresh", () => {
-  const unreachable = (): LoadResult => ({
-    status: "error",
-    error: "Kalender nicht erreichbar.",
-  });
-
   async function failedRefresh() {
     const setup = weekLoader();
     await setup.loader.loadActiveWeek(shownWeek);
