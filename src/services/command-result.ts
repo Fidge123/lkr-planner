@@ -4,7 +4,7 @@ type CommandResult<T> =
   | { status: "ok"; data: T }
   | { status: "error"; error: AppError };
 
-export function unwrapCommandResult<T>(
+function unwrapCommandResult<T>(
   result: CommandResult<T>,
   fallbackMessage: string,
 ): T {

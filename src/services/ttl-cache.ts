@@ -120,7 +120,7 @@ export function createTtlCache<T>({
 }
 
 /**
- * Unreachable today: unwrapCommandResult always throws an Error with a message.
+ * Unreachable today: callCommand always throws an Error with a message.
  * Returns String(error) because a future loader may reject with other values.
  */
 function readErrorMessage(error: unknown): string {

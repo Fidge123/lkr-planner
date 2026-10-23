@@ -1,5 +1,5 @@
 import { commands, type DisplaySettings } from "../generated/tauri";
-import { unwrapCommandResult } from "./command-result";
+import { callCommand } from "./command-result";
 import { loadLocalStore } from "./local-store";
 
 const defaultDisplaySettings: Required<DisplaySettings> = {
@@ -24,8 +24,8 @@ export async function saveDisplaySettings(
   patch: Partial<DisplaySettings>,
 ): Promise<void> {
   const store = await loadLocalStore();
-  unwrapCommandResult(
-    await commands.saveLocalStore({
+  await callCommand(
+    commands.saveLocalStore({
       ...store,
       displaySettings: {
         ...defaultDisplaySettings,

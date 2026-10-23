@@ -1,5 +1,5 @@
 import { commands, type DayliteProjectSummary } from "../generated/tauri";
-import { unwrapCommandResult } from "./command-result";
+import { callCommand } from "./command-result";
 
 const DISPLAY_LIMIT = 5;
 const CANDIDATE_LIMIT = 50;
@@ -7,8 +7,8 @@ const CANDIDATE_LIMIT = 50;
 export async function searchProjectsForAssignmentPicker(
   searchTerm: string,
 ): Promise<DayliteProjectSummary[]> {
-  const result = unwrapCommandResult(
-    await commands.dayliteSearchProjects({
+  const result = await callCommand(
+    commands.dayliteSearchProjects({
       searchTerm,
       limit: CANDIDATE_LIMIT,
       statuses: ["new_status", "in_progress"],

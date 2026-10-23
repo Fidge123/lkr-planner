@@ -1,5 +1,5 @@
 import { commands, type PlanningContactRecord } from "../generated/tauri";
-import { unwrapCommandResult } from "./command-result";
+import { callCommand } from "./command-result";
 import {
   type CacheLoadOptions,
   type CacheLoadResult,
@@ -11,9 +11,9 @@ const DEFAULT_DAYLITE_CONTACT_CACHE_TTL_MS = 30_000;
 const contactCache = createTtlCache<PlanningContactRecord>({
   ttlMs: DEFAULT_DAYLITE_CONTACT_CACHE_TTL_MS,
   failureMessage: "Mitarbeiterladen fehlgeschlagen",
-  load: async () =>
-    unwrapCommandResult(
-      await commands.dayliteListContacts(),
+  load: () =>
+    callCommand(
+      commands.dayliteListContacts(),
       "Die Daten konnten nicht von Daylite geladen werden.",
     ),
   fallback: () => loadCachedDayliteContacts(),
