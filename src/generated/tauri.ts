@@ -39,6 +39,9 @@ export const commands = {
 	telemetryCaptureFrontendError: (error: FrontendErrorInput) => __TAURI_INVOKE<void>("telemetry_capture_frontend_error", { error }),
 };
 
+/* Constants */
+export const FIXED_APPOINTMENT_CATEGORY = "Termin FIX geplant" as const;
+
 /* Types */
 export type ApiEndpoints = {
 	dayliteBaseUrl: string,

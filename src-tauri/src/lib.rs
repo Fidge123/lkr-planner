@@ -12,34 +12,39 @@ const RELOAD_DATA_MENU_ID: &str = "reload-data";
 const RELOAD_DATA_EVENT: &str = "reload-data";
 
 fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
-    tauri_specta::Builder::<tauri::Wry>::new().commands(tauri_specta::collect_commands![
-        integrations::local_store::load_local_store,
-        integrations::local_store::save_display_settings,
-        integrations::calendar::commands::load_week_events,
-        integrations::holidays::get_holidays_for_week,
-        integrations::daylite::auth::daylite_connect_refresh_token,
-        integrations::daylite::projects::daylite_search_projects,
-        integrations::daylite::projects::daylite_query_overdue_projects,
-        integrations::daylite::projects::resolve_week_projects,
-        integrations::daylite::categories::daylite_project_category_colors,
-        integrations::daylite::deep_link::daylite_open_project,
-        integrations::daylite::contacts::commands::daylite_list_contacts,
-        integrations::daylite::contacts::commands::daylite_list_cached_contacts,
-        integrations::calendar::commands::create_assignment,
-        integrations::calendar::commands::update_assignment,
-        integrations::calendar::commands::move_assignment,
-        integrations::calendar::commands::reorder_assignment,
-        integrations::calendar::commands::delete_assignment,
-        integrations::calendar::commands::retry_daylite_appointment_sync,
-        integrations::zep::commands::zep_save_credentials,
-        integrations::zep::commands::zep_load_credentials,
-        integrations::zep::commands::zep_test_credentials,
-        integrations::zep::commands::zep_discover_calendars,
-        integrations::zep::commands::zep_save_and_test_calendar,
-        integrations::telemetry::commands::telemetry_get_settings,
-        integrations::telemetry::commands::telemetry_set_enabled,
-        integrations::telemetry::commands::telemetry_capture_frontend_error,
-    ])
+    tauri_specta::Builder::<tauri::Wry>::new()
+        .constant(
+            "FIXED_APPOINTMENT_CATEGORY",
+            integrations::daylite::projects::FIXED_APPOINTMENT_CATEGORY,
+        )
+        .commands(tauri_specta::collect_commands![
+            integrations::local_store::load_local_store,
+            integrations::local_store::save_display_settings,
+            integrations::calendar::commands::load_week_events,
+            integrations::holidays::get_holidays_for_week,
+            integrations::daylite::auth::daylite_connect_refresh_token,
+            integrations::daylite::projects::daylite_search_projects,
+            integrations::daylite::projects::daylite_query_overdue_projects,
+            integrations::daylite::projects::resolve_week_projects,
+            integrations::daylite::categories::daylite_project_category_colors,
+            integrations::daylite::deep_link::daylite_open_project,
+            integrations::daylite::contacts::commands::daylite_list_contacts,
+            integrations::daylite::contacts::commands::daylite_list_cached_contacts,
+            integrations::calendar::commands::create_assignment,
+            integrations::calendar::commands::update_assignment,
+            integrations::calendar::commands::move_assignment,
+            integrations::calendar::commands::reorder_assignment,
+            integrations::calendar::commands::delete_assignment,
+            integrations::calendar::commands::retry_daylite_appointment_sync,
+            integrations::zep::commands::zep_save_credentials,
+            integrations::zep::commands::zep_load_credentials,
+            integrations::zep::commands::zep_test_credentials,
+            integrations::zep::commands::zep_discover_calendars,
+            integrations::zep::commands::zep_save_and_test_calendar,
+            integrations::telemetry::commands::telemetry_get_settings,
+            integrations::telemetry::commands::telemetry_set_enabled,
+            integrations::telemetry::commands::telemetry_capture_frontend_error,
+        ])
 }
 
 fn export_bindings(specta_builder: &tauri_specta::Builder<tauri::Wry>) {
