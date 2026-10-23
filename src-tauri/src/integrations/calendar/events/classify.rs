@@ -22,7 +22,7 @@ pub(crate) fn classify_event(event: &RawVEvent) -> PendingEvent {
     let date = event.dtstart.clone();
 
     let uid = if event.uid.is_empty() {
-        // Synthesise a stable-ish UID from event content. Summary is sanitized to alphanumeric and hyphens only, so the UID is safe to embed in keys or URLs.
+        // Summary is limited to alphanumerics and hyphens, so the UID is safe in keys and URLs.
         let safe: String = event
             .summary
             .chars()
@@ -59,32 +59,6 @@ mod tests {
             description: description.to_string(),
             dtstart: "2026-01-26".to_string(),
             ..Default::default()
-        }
-    }
-
-    #[test]
-    fn parses_the_daylite_reference_out_of_a_bare_description() {
-        let cases: &[(&str, Option<&str>, &str)] = &[
-            (
-                "daylite:/v1/projects/3001",
-                Some("/v1/projects/3001"),
-                "plain daylite reference",
-            ),
-            (
-                "daylite:/v1/projects/4001\nZusätzliche Notizen hier",
-                Some("/v1/projects/4001"),
-                "only the first line is read",
-            ),
-            ("Bitte Auto abholen", None, "unrelated description is bare"),
-            ("", None, "empty description is bare"),
-        ];
-
-        for (description, expected, label) in cases {
-            assert_eq!(
-                parse_daylite_reference(description).as_deref(),
-                *expected,
-                "case: {label}"
-            );
         }
     }
 

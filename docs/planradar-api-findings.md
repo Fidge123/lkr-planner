@@ -32,8 +32,7 @@ Known attributes include name, street, zipcode, city, country, description, star
 
 Copying a source project uses `POST /api/v1/{customer_id}/projects/{project_id}/copy_project`.
 This is the same copy feature offered in the Planradar UI.
-It takes a new `name` plus boolean toggles that select which aspects to copy:
-details, groups, ticket_types (forms), users, and components (layers).
+It takes a new `name` plus boolean toggles that select which aspects to copy: details, groups, ticket_types (forms), users, and components (layers).
 The copy is performed server-side, so field-level edits happen afterward via project update.
 
 ## Project read and list

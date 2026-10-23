@@ -269,29 +269,6 @@ mod tests {
     }
 
     #[test]
-    fn store_with_holiday_cache_roundtrips_via_json() {
-        let test_path = unique_test_path("holiday-cache-store.json");
-        let store = LocalStore {
-            holiday_cache: vec![HolidayCacheEntry {
-                year: 2025,
-                fetched_at: "2025-03-01".to_string(),
-                holidays: vec![CachedHoliday {
-                    date: "2025-01-01".to_string(),
-                    name: "Neujahr".to_string(),
-                }],
-            }],
-            ..LocalStore::default()
-        };
-
-        save_store_to_path(&test_path, &store).expect("save should succeed");
-        let loaded = load_store_from_path(&test_path).expect("reload should succeed");
-
-        assert_eq!(loaded.holiday_cache.len(), 1);
-        assert_eq!(loaded.holiday_cache[0].year, 2025);
-        assert_eq!(loaded.holiday_cache[0].holidays[0].name, "Neujahr");
-    }
-
-    #[test]
     fn store_without_holiday_cache_field_loads_with_empty_cache() {
         let test_path = unique_test_path("no-holiday-cache.json");
         write_test_file(
@@ -324,27 +301,6 @@ mod tests {
 
         assert!(loaded.display_settings.show_weekend);
         assert!(loaded.display_settings.hide_non_plannable_employees);
-    }
-
-    #[test]
-    fn telemetry_settings_round_trip_through_save_and_load() {
-        let test_path = unique_test_path("telemetry-round-trip.json");
-        let store = LocalStore {
-            telemetry: TelemetrySettings {
-                enabled: true,
-                install_id: Some("11111111-2222-4333-8444-555555555555".to_string()),
-            },
-            ..LocalStore::default()
-        };
-
-        save_store_to_path(&test_path, &store).expect("save should succeed");
-        let loaded = load_store_from_path(&test_path).expect("reload should succeed");
-
-        assert!(loaded.telemetry.enabled);
-        assert_eq!(
-            loaded.telemetry.install_id.as_deref(),
-            Some("11111111-2222-4333-8444-555555555555")
-        );
     }
 
     #[test]

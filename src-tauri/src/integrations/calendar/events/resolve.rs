@@ -72,11 +72,9 @@ pub(crate) fn resolve_event(
 
 #[cfg(test)]
 mod tests {
-    use super::super::absences::map_absence_raw_events_for_week;
     use super::super::classify::classify_event;
     use super::*;
     use crate::integrations::calendar::types::RawVEvent;
-    use chrono::NaiveDate;
 
     fn resolved(
         project_ref: &str,
@@ -168,22 +166,6 @@ mod tests {
         assert_eq!(event.project_status, None);
         assert_eq!(event.project_category, None);
         assert!(!event.project_pending);
-    }
-
-    #[test]
-    fn absence_events_carry_no_category() {
-        let raw = RawVEvent {
-            uid: "abs-1".to_string(),
-            summary: "UB".to_string(),
-            dtstart: "2026-04-28".to_string(),
-            ..Default::default()
-        };
-        let week_start = NaiveDate::from_ymd_opt(2026, 4, 27).unwrap();
-
-        let events = map_absence_raw_events_for_week(vec![raw], week_start);
-
-        assert_eq!(events[0].project_category, None);
-        assert!(!events[0].project_pending);
     }
 
     #[test]

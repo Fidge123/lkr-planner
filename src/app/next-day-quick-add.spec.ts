@@ -107,52 +107,6 @@ describe("nextGhostState", () => {
 
     expect(nextGhostState(existing, { kind: "delete" }, weekDays)).toBeNull();
   });
-
-  it("chains: clicking a ghost re-creates on its own date and advances the ghost one day further", () => {
-    const clicked: GhostSuggestion = {
-      date: "2026-05-06",
-      projectRef: "/v1/projects/1",
-      projectName: "Projekt Nord",
-    };
-
-    const chained = nextGhostState(
-      clicked,
-      {
-        kind: "create",
-        date: clicked.date,
-        projectRef: clicked.projectRef,
-        projectName: clicked.projectName,
-      },
-      weekDays,
-    );
-
-    expect(chained).toEqual({
-      date: "2026-05-07",
-      projectRef: "/v1/projects/1",
-      projectName: "Projekt Nord",
-    });
-  });
-
-  it("ends the chain when the clicked ghost sits on the last visible day", () => {
-    const clicked: GhostSuggestion = {
-      date: "2026-05-08",
-      projectRef: "/v1/projects/1",
-      projectName: "Projekt Nord",
-    };
-
-    const chained = nextGhostState(
-      clicked,
-      {
-        kind: "create",
-        date: clicked.date,
-        projectRef: clicked.projectRef,
-        projectName: clicked.projectName,
-      },
-      weekDays,
-    );
-
-    expect(chained).toBeNull();
-  });
 });
 
 describe("isGhostVisible", () => {

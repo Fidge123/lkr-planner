@@ -1,6 +1,7 @@
 ## Why
 
-With CalDAV as the source of truth for assignments (BL-015), this change implements the write side: creating, updating, and deleting VEVENT entries in employee primary CalDAV calendars. Writes happen inline with user actions — no background sync queue is needed because the calendar is the store, not a downstream copy.
+With CalDAV as the source of truth for assignments (BL-015), this change implements the write side: creating, updating, and deleting VEVENT entries in employee primary CalDAV calendars.
+Writes happen inline with user actions — no background sync queue is needed because the calendar is the store, not a downstream copy.
 
 ## What Changes
 

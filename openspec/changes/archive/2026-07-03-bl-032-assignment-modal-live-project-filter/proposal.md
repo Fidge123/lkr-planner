@@ -1,6 +1,7 @@
 ## Why
 
-The assignment modal needs live filtering as the user types. This allows quick project finding without navigating away from the modal.
+The assignment modal needs live filtering as the user types.
+This allows quick project finding without navigating away from the modal.
 
 ## What Changes
 

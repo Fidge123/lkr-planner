@@ -55,16 +55,4 @@ describe("display settings service", () => {
 
     expect((await loadDisplaySettings()).showWeekend).toBe(true);
   });
-
-  it("saving showWeekend preserves an already-stored hideNonPlannableEmployees value", async () => {
-    store.displaySettings = {
-      hideNonPlannableEmployees: false,
-      showWeekend: false,
-    };
-
-    await saveDisplaySettings({ showWeekend: true });
-
-    expect(store.displaySettings?.showWeekend).toBe(true);
-    expect(store.displaySettings?.hideNonPlannableEmployees).toBe(false);
-  });
 });

@@ -1,6 +1,8 @@
 ## Why
 
-Linked Planradar projects may become archived/closed over time. When assigning employees to these projects, they need to be reactivated first. This ensures assignments work correctly in Planradar.
+Linked Planradar projects may become archived/closed over time.
+When assigning employees to these projects, they need to be reactivated first.
+This ensures assignments work correctly in Planradar.
 
 ## What Changes
 

@@ -1,6 +1,7 @@
 ## Context
 
-The assignment modal needs default suggestions to help users quickly select projects. Suggestions are shown when the modal first opens before any user filtering.
+The assignment modal needs default suggestions to help users quickly select projects.
+Suggestions are shown when the modal first opens before any user filtering.
 
 ## Goals / Non-Goals
 

@@ -162,8 +162,8 @@ export function TimetableRow({
         )}
       </tr>
 
-      {/* The grid's scroll container is isolated, so a modal rendered inside it cannot paint over the header.
-          The document guard is for the bun specs, which render this row through react-dom/server. */}
+      {/* The grid's scroll container is isolated, so a modal inside it could not paint over the header. */}
+      {/* The document guard is for bun specs, which render this row with react-dom/server. */}
       {modalState === null || typeof document === "undefined"
         ? null
         : createPortal(

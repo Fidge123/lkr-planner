@@ -1,6 +1,7 @@
 ## Context
 
-The week view needs German public holidays to provide planning context. The Nager API provides public holiday data for Germany with state-specific filtering.
+The week view needs German public holidays to provide planning context.
+The Nager API provides public holiday data for Germany with state-specific filtering.
 
 ## Goals / Non-Goals
 

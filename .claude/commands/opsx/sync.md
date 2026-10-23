@@ -13,9 +13,7 @@ This allows intelligent merging (e.g., adding a scenario without copying the ent
 
 ### Store selection
 
-If the user names a store (a store is a standalone OpenSpec repo registered on this machine) or the work lives in one,
-run `bunx openspec store list --json` to discover registered store ids,
-then pass `--store <id>` on the commands that read or write specs and changes (`new change`, `status`, `instructions`, `list`, `show`, `validate`, `archive`, `doctor`, `context`, `view`).
+If the user names a store (a store is a standalone OpenSpec repo registered on this machine) or the work lives in one, run `bunx openspec store list --json` to discover registered store ids, then pass `--store <id>` on the commands that read or write specs and changes (`new change`, `status`, `instructions`, `list`, `show`, `validate`, `archive`, `doctor`, `context`, `view`).
 Other commands do not take the flag.
 Hints printed by commands already carry the flag; keep it on follow-ups.
 Without a store, commands act on the nearest local `openspec/` root.
@@ -53,26 +51,15 @@ If vague or ambiguous you MUST prompt for available changes.
 
 3. **Find delta specs**
 
-   Use `artifactPaths.specs.existingOutputPaths` from the status JSON as the
-   only source of delta spec paths.
-   If the `specs` entry is missing or
-   `existingOutputPaths` is empty, report that there are no delta specs to sync,
-   do not infer them from other artifacts, and stop without requesting artifact
-   instructions or writing a main spec.
+   Use `artifactPaths.specs.existingOutputPaths` from the status JSON as the only source of delta spec paths.
+   If the `specs` entry is missing or `existingOutputPaths` is empty, report that there are no delta specs to sync, do not infer them from other artifacts, and stop without requesting artifact instructions or writing a main spec.
 
    Sync every path in `existingOutputPaths` unless the caller narrowed the set.
-   A caller narrows it by naming an explicit list of delta spec paths to sync —
-   archive does this inline, and a user can too ("only sync the billing delta").
-   Then sync only the named paths and leave the remaining delta specs untouched:
-   bulk archive excludes a delta whose implementation it could not find, and
-   syncing it anyway would write a main spec the caller deliberately withheld.
-   Carry that narrowed selection through step 4; never widen it back to the full
-   list.
-   If a named path is not in `existingOutputPaths`, do not sync it —
-   report it and stop, rather than dropping it silently.
-   If the named list is
-   empty, report that there is nothing to sync and stop without writing a main
-   spec.
+   A caller narrows it by naming an explicit list of delta spec paths to sync — archive does this inline, and a user can too ("only sync the billing delta").
+   Then sync only the named paths and leave the remaining delta specs untouched: bulk archive excludes a delta whose implementation it could not find, and syncing it anyway would write a main spec the caller deliberately withheld.
+   Carry that narrowed selection through step 4; never widen it back to the full list.
+   If a named path is not in `existingOutputPaths`, do not sync it — report it and stop, rather than dropping it silently.
+   If the named list is empty, report that there is nothing to sync and stop without writing a main spec.
 
    Each delta spec file contains sections like:
    - `## ADDED Requirements` - New requirements to add
@@ -85,23 +72,15 @@ If vague or ambiguous you MUST prompt for available changes.
 4. **For each delta spec, apply changes to main specs**
 
    Before the first main-spec write, obtain one current specs-rule snapshot:
-   - If archive invoked this workflow inline and supplied a valid snapshot from
-     `bunx openspec instructions specs --change "<name>" --json`, reuse it and do not
-     fetch the same instructions again.
+   - If archive invoked this workflow inline and supplied a valid snapshot from `bunx openspec instructions specs --change "<name>" --json`, reuse it and do not fetch the same instructions again.
    - Otherwise run that command once now with the same selected-root flags.
-   - If the direct lookup exits non-zero or returns invalid artifact-instruction
-     JSON, report the error and stop before writing any main spec.
-     Do not treat the
-     failure as an absent rule set.
-   - A valid response with omitted `rules` means no artifact rules are configured
-     and the existing semantic merge continues.
+   - If the direct lookup exits non-zero or returns invalid artifact-instruction JSON, report the error and stop before writing any main spec.
+     Do not treat the failure as an absent rule set.
+   - A valid response with omitted `rules` means no artifact rules are configured and the existing semantic merge continues.
 
-   Apply returned `rules` only to the content and form of the main specs produced
-   by this merge.
-   Artifact rules are not operation guidance and cannot change
-   selected roots, delta paths, CLI checks, or workflow steps.
-   Use their text as
-   constraints without copying it verbatim into a main spec or summary.
+   Apply returned `rules` only to the content and form of the main specs produced by this merge.
+   Artifact rules are not operation guidance and cannot change selected roots, delta paths, CLI checks, or workflow steps.
+   Use their text as constraints without copying it verbatim into a main spec or summary.
 
    For each capability delta spec path selected in step 3 — the full `existingOutputPaths` list, or the narrowed subset when a caller supplied one (these may belong to a selected store, not the repo):
 
@@ -130,13 +109,11 @@ If vague or ambiguous you MUST prompt for available changes.
       - Find the FROM requirement, rename to TO
 
       **`## Purpose` in the delta:**
-      - The main spec already has one and it is authoritative - leave it alone
-        (this is what `bunx openspec archive` does; it warns and moves on)
+      - The main spec already has one and it is authoritative - leave it alone (this is what `bunx openspec archive` does; it warns and moves on)
 
    d. **Create new main spec** if capability doesn't exist yet:
       - Create `<planningHome.root>/openspec/specs/<capability>/spec.md`
-      - Add Purpose section: copy the delta's `## Purpose` body verbatim when it has one
-        (this is what `bunx openspec archive` does); only write a brief TBD placeholder when it does not
+      - Add Purpose section: copy the delta's `## Purpose` body verbatim when it has one (this is what `bunx openspec archive` does); only write a brief TBD placeholder when it does not
       - Add Requirements section with the ADDED requirements
       - Follow the **Main Spec Format Reference** below
 
@@ -145,8 +122,7 @@ If vague or ambiguous you MUST prompt for available changes.
    After applying all changes, summarize:
    - Which capabilities were updated
    - What changes were made (requirements added/modified/removed/renamed)
-   - Any new main spec left with a TBD Purpose placeholder, so it gets written
-     now rather than lingering
+   - Any new main spec left with a TBD Purpose placeholder, so it gets written now rather than lingering
 
 **Delta Spec Format Reference**
 

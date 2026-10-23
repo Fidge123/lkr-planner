@@ -140,8 +140,8 @@ async fn record_daylite_cassettes_from_live_api() {
     .await
     .expect("project search cassette should be recorded");
 
-    // Captures Daylite's real "no matches" response shape (a bare `{}` body), which the empty-search-result fix relies on.
-    // Mirrors the assignment picker's actual request shape (candidate pool + name sort + status filter).
+    // Real Daylite "no matches" response is a bare `{}` body.
+    // Same request shape as the assignment picker.
     search_projects_core(
         &DayliteApiClient::with_env_cassette(&config.base_url, "daylite-search-projects.json")
             .expect("project search cassette client should be created"),

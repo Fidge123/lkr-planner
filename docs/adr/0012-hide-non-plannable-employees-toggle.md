@@ -26,7 +26,8 @@ An employee's calendar configuration lives on the Daylite contact `urls` and is 
 
 - Broaden the Daylite contact search to fetch both planning categories, "Monteur" and "Test", via a top-level OR clause array; rename the contact predicate to `is_planning_contact` / `filter_planning_contacts` to reflect this.
 - Add a persisted `DisplaySettings.hideNonPlannableEmployees` flag to the local store, defaulting to `true` (hide), surfaced as a toggle in the settings dialog under a new "Anzeige" section.
-- When the toggle is on, the planning view shows only plannable employees: category not "Test" and a configured primary calendar. When off, every fetched employee is shown.
+- When the toggle is on, the planning view shows only plannable employees: category not "Test" and a configured primary calendar.
+  When off, every fetched employee is shown.
   Filtering happens in the frontend (`filterVisibleEmployees`).
 
 ## Consequences

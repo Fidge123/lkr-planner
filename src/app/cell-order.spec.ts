@@ -56,8 +56,7 @@ describe("sortCellEvents", () => {
   });
 
   it("breaks a shared order index by the earlier start time", () => {
-    // An assignment excluded from re-slotting keeps a stale index, so two cards in one cell
-    // can carry the same one; this must match the backend's `ordering_key`.
+    // Excluded assignments keep a stale index, so ties must match the backend's `ordering_key`.
     const sorted = sortCellEvents([
       assignment("uid-late", 0, ["13:00", "16:00"]),
       assignment("uid-early", 0, ["09:00", "12:00"]),
@@ -135,8 +134,7 @@ describe("sortCellEvents", () => {
   });
 
   it("places an assignment excluded from re-slotting by its index, stale times and all", () => {
-    // The excluded card keeps whatever times it had, so they can disagree with its
-    // position; the order index alone decides where it renders.
+    // Excluded cards keep stale times; only the order index decides their position.
     const sorted = sortCellEvents([
       assignment("uid-late", 1, ["08:00", "16:00"]),
       assignment("uid-early", 0, ["08:00", "12:00"]),

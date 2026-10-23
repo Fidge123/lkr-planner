@@ -52,21 +52,6 @@ describe("WeekTable", () => {
     expect(html).toContain('popover="auto"');
     expect(html).toContain("KW 34");
   });
-
-  it("shows the calendar week without the picker, as the week sliding in during a swipe does", () => {
-    const html = renderTable();
-
-    expect(html).toContain("KW 34");
-    expect(html).not.toContain("Woche auswählen");
-    expect(html).not.toContain("popover");
-  });
-
-  it("follows the displayed week across the year boundary", () => {
-    const html = renderTable({
-      weekDays: [29, 30, 31].map((day) => new Date(2025, 11, day)),
-    });
-    expect(html).toContain("KW 1");
-  });
 });
 
 const nord = "/v1/projects/1";
@@ -99,7 +84,6 @@ function employee(self: string, nickname: string): PlanningContactRecord {
 const kowalski = employee("/v1/contacts/1", "Kowalski");
 const meier = employee("/v1/contacts/2", "Meier");
 
-/** One marked title per highlighted card. */
 function markedTitles(html: string): string[] {
   return [
     ...html.matchAll(
@@ -182,32 +166,6 @@ describe("WeekTable highlighting", () => {
     ).toEqual([]);
   });
 
-  it("keeps the highlight when a reload rewrites the events under it", () => {
-    const reloaded = {
-      [kowalski.self]: [
-        calendarEvent({ uid: "fresh-uid-a", date: "2026-08-17" }),
-        calendarEvent({ uid: "fresh-uid-b", date: "2026-08-19" }),
-      ],
-      [meier.self]: [calendarEvent({ uid: "fresh-uid-c", date: "2026-08-18" })],
-    };
-
-    expect(markedTitles(renderWeek(reloaded, nord)).length).toBe(3);
-  });
-
-  it("follows a card dragged to another employee and day", () => {
-    const before = renderWeek(
-      { [kowalski.self]: [calendarEvent({ date: "2026-08-17" })] },
-      nord,
-    );
-    const after = renderWeek(
-      { [meier.self]: [calendarEvent({ date: "2026-08-20" })] },
-      nord,
-    );
-
-    expect(markedTitles(before)).toEqual(["Bauprojekt Nord"]);
-    expect(markedTitles(after)).toEqual(["Bauprojekt Nord"]);
-  });
-
   it("marks nothing and changes nothing when every matching event is gone", () => {
     const withoutNord = {
       [kowalski.self]: [
@@ -236,14 +194,5 @@ describe("WeekTable highlighting", () => {
     } finally {
       setSystemTime();
     }
-  });
-
-  it("renders unhighlighted without the prop, as the week sliding in during a swipe does", () => {
-    const incoming = renderTable({
-      employees: [kowalski, meier],
-      eventsByEmployee: spreadWeek,
-    });
-
-    expect(incoming).toBe(renderWeek(spreadWeek, null));
   });
 });

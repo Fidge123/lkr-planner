@@ -26,8 +26,7 @@ pub struct DayliteTokenSyncStatus {
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct DayliteSearchResult<T> {
-    // Daylite omits `results` entirely (returning a bare `{}`) when a search has
-    // no matches, so default to an empty list instead of failing to deserialize.
+    // Daylite returns a bare `{}` without `results` when nothing matches.
     #[serde(default = "Vec::new")]
     pub results: Vec<T>,
     #[serde(default)]
@@ -248,7 +247,7 @@ where
     operation(lease.tokens).await
 }
 
-/// For read-only command bodies only: commands that mutate the local store manage the store themselves.
+/// Only for read-only bodies; mutating commands manage the local store themselves.
 pub(super) async fn run_daylite_command<T>(
     app: tauri::AppHandle,
     operation: impl AsyncFn(&DayliteApiClient, DayliteTokenState) -> Result<T, DayliteApiError>,
@@ -379,8 +378,7 @@ pub(super) fn current_epoch_ms() -> Result<u64, DayliteApiError> {
     })
 }
 
-/// Daylite returns padded strings and uses "" where it means "absent", so every
-/// mapped field is trimmed and an empty result collapses to None.
+/// Daylite pads strings and encodes absent values as "".
 pub(super) fn trimmed_or_none(value: Option<String>) -> Option<String> {
     let trimmed = value?.trim().to_string();
     if trimmed.is_empty() {

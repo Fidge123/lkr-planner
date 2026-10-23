@@ -101,8 +101,7 @@ pub(in crate::integrations::daylite) async fn list_contacts_core(
         &token_state.access_token,
         DayliteHttpRequest {
             query: vec![("full-records".to_string(), "true".to_string())],
-            // A top-level array of clauses is matched with OR semantics; both
-            // planning categories are fetched in one call.
+            // A top-level clause array is OR-matched, so both planning categories are fetched in one call.
             body: Some(json!([
                 { "category": { "equal": "Monteur" } },
                 { "category": { "equal": "Test" } },

@@ -18,6 +18,7 @@ Don't break sentences across multiple lines.
 
 ## Reviewer checklist
 <!-- mandatory, checklist of steps the reviewer should execute -->
+<!-- if this PR is based on a spec, include a checkbox to archive the spec -->
 
 - [ ]
 - [ ]

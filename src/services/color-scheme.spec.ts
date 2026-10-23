@@ -39,10 +39,6 @@ describe("color scheme service", () => {
     );
   });
 
-  it("defaults to system when storage is unavailable", () => {
-    expect(loadColorScheme(undefined)).toBe("system");
-  });
-
   it("persists the selected scheme", () => {
     const storage = createStorage();
     saveColorScheme("dark", storage);

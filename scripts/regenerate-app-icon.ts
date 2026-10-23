@@ -36,7 +36,7 @@ const iconSvgPath = join(iconsDir, "icon.svg");
 const iconPngPath = join(iconsDir, "icon.png");
 const iconIcnsPath = join(iconsDir, "icon.icns");
 
-export const validationRasterSizes = [16, 32, 64, 128, 256, 512, 1024];
+const validationRasterSizes = [16, 32, 64, 128, 256, 512, 1024];
 
 function formatNumber(value: number): string {
   const rounded = Math.round(value * 1000) / 1000;

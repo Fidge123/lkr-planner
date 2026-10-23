@@ -23,16 +23,19 @@ ADR 0007 already established the pattern for this kind of cache (TTL-based, in-m
 ### Backend cache location and shape
 Add a `CaldavEventCache` in `src-tauri/src/integrations/calendar/`, keyed by `(employee_id, calendar_url, week_start)`, storing the resolved event list and a `fetched_at` timestamp.
 Default TTL: 30 seconds, matching ADR 0007's Daylite cache, since CalDAV data changes at a similar human-editing cadence.
-Alternative considered: caching at the raw CalDAV response (XML) level instead of resolved events. Rejected because resolved events already include Daylite project references, which are the expensive part to recompute, and caching post-resolution avoids re-running that resolution on every cache hit.
+Alternative considered: caching at the raw CalDAV response (XML) level instead of resolved events.
+Rejected because resolved events already include Daylite project references, which are the expensive part to recompute, and caching post-resolution avoids re-running that resolution on every cache hit.
 
 ### Shared HTTP client
 Move `reqwest::Client` construction into a single `once_cell`/`OnceLock`-backed singleton (or pass a shared client held in Tauri managed state), replacing the per-call `reqwest::Client::new()` in `commands.rs`.
-Alternative considered: leaving per-call clients but tuning connection pool settings. Rejected because it does not remove the per-call TCP/TLS handshake overhead that a shared client's connection pool avoids.
+Alternative considered: leaving per-call clients but tuning connection pool settings.
+Rejected because it does not remove the per-call TCP/TLS handshake overhead that a shared client's connection pool avoids.
 
 ### Invalidation strategy
 On `create_assignment` / `update_assignment` / `delete_assignment`, invalidate only the cache entry for `(employee_id, calendar_url, week_start)` derived from the affected event's date, then let the next read repopulate it.
 The frontend's `reloadAssignments()` full-wipe call is replaced with a targeted call that clears only the affected week from its own cache, mirroring the backend's targeted invalidation so both layers stay consistent.
-Alternative considered: TTL-only invalidation (no explicit invalidation on write). Rejected because a 30s stale window after a user's own edit would be a visible regression versus current behavior, where writes are followed by an immediate full reload.
+Alternative considered: TTL-only invalidation (no explicit invalidation on write).
+Rejected because a 30s stale window after a user's own edit would be a visible regression versus current behavior, where writes are followed by an immediate full reload.
 
 ### Request coalescing
 Use an in-flight request map (`(employee_id, calendar_url, week_start) -> shared future`) so concurrent identical fetches await the same CalDAV request rather than issuing duplicates, following the same coalescing approach as ADR 0007.

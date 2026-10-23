@@ -20,7 +20,8 @@ That lookup has since been replaced by the `project_category` field the backend 
 - Keep the override per write and per modal session, so it cannot linger.
 
 **Non-Goals:**
-- No override for drag-and-drop. A drag is a fast gesture with no room for a deliberate confirmation, so a protected event stays undraggable across days.
+- No override for drag-and-drop.
+  A drag is a fast gesture with no room for a deliberate confirmation, so a protected event stays undraggable across days.
 - No persisted or per-project unlock, and no "unlock for the rest of the session".
 - No audit trail of overridden writes (add later if the user wants to see who unlocked what).
 
@@ -46,7 +47,8 @@ This keeps "unlocked" tied to one visible, deliberate interaction.
 
 ## Risks / Trade-offs
 
-- [An override makes the guard bypassable by construction] → Accepted: the guard's purpose is to prevent accidents, and a user who ticks an unlock control in a warning block is not having one. Every unattended path (drag, re-slotting, stale UI) still goes through the check.
+- [An override makes the guard bypassable by construction] → Accepted: the guard's purpose is to prevent accidents, and a user who ticks an unlock control in a warning block is not having one.
+  Every unattended path (drag, re-slotting, stale UI) still goes through the check.
 - [Users may learn to tick the unlock reflexively] → Mitigate by resetting it on every open, so the cost is paid each time rather than once.
 - [The modal's protection detection may not fire in the real app] → Confirm the notice appears for a real fixed appointment before building the unlock on top of it; if it does not, the `project_category` the backend resolves has to be fixed first or the unlock control will never be reachable.
 

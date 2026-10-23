@@ -1,6 +1,7 @@
 ## Context
 
-This change enables linking Daylite projects to existing Planradar projects. It builds on the Planradar API client from BL-009 and uses Daylite's custom fields to store the link reference.
+This change enables linking Daylite projects to existing Planradar projects.
+It builds on the Planradar API client from BL-009 and uses Daylite's custom fields to store the link reference.
 
 ## Goals / Non-Goals
 

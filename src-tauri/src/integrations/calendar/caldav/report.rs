@@ -140,77 +140,6 @@ fn parse_caldav_report(session: &CaldavSession, xml_text: &str) -> Result<Vec<Ra
     Ok(events)
 }
 
-/// A REPORT or PUT against the configured home-set root, rather than a specific calendar
-/// collection beneath it, is rejected with HTTP 405, so the collection has to be discovered
-/// first. Production reads the calendar URL straight from the local store instead.
-#[cfg(test)]
-pub(super) async fn discover_calendar_by_name(
-    session: &CaldavSession,
-    home_set_url: &str,
-    display_name: &str,
-) -> Result<String, String> {
-    let body = concat!(
-        "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n",
-        "<d:propfind xmlns:d=\"DAV:\">\n",
-        "  <d:prop><d:displayname/><d:resourcetype/></d:prop>\n",
-        "</d:propfind>"
-    );
-
-    let response = session
-        .client
-        .request(
-            Method::from_bytes(b"PROPFIND").expect("PROPFIND is a valid HTTP method"),
-            home_set_url,
-        )
-        .basic_auth(&session.username, Some(&session.password))
-        .header("Depth", "1")
-        .header("Content-Type", "application/xml; charset=utf-8")
-        .body(body)
-        .send()
-        .await
-        .map_err(|e| format!("Kalenderliste konnte nicht abgerufen werden: {e}"))?;
-
-    let status = response.status().as_u16();
-    if !(200..300).contains(&status) {
-        return Err(format!("CalDAV-Server antwortete mit HTTP {status}"));
-    }
-
-    let xml_text = response
-        .text()
-        .await
-        .map_err(|e| format!("Kalenderliste konnte nicht gelesen werden: {e}"))?;
-
-    let href = parse_calendar_href_by_name(&xml_text, display_name)
-        .ok_or_else(|| format!("Kein Kalender mit dem Namen '{display_name}' gefunden."))?;
-    super::write::resolve_href(&href, &session.base_url)
-}
-
-#[cfg(test)]
-fn parse_calendar_href_by_name(xml_text: &str, display_name: &str) -> Option<String> {
-    let doc = roxmltree::Document::parse(xml_text).ok()?;
-    for response in doc
-        .descendants()
-        .filter(|n| n.has_tag_name(("DAV:", "response")))
-    {
-        let is_calendar = response
-            .descendants()
-            .any(|n| n.has_tag_name(("urn:ietf:params:xml:ns:caldav", "calendar")));
-        let name_matches = response
-            .descendants()
-            .any(|n| n.has_tag_name(("DAV:", "displayname")) && n.text() == Some(display_name));
-        if is_calendar && name_matches {
-            if let Some(href) = response
-                .children()
-                .find(|c| c.has_tag_name(("DAV:", "href")))
-                .and_then(|h| h.text())
-            {
-                return Some(href.to_string());
-            }
-        }
-    }
-    None
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -228,34 +157,6 @@ mod tests {
             absence_urls: Vec::new(),
             telemetry,
         }
-    }
-
-    #[test]
-    fn parse_caldav_report_returns_href_with_each_event() {
-        let xml = r#"<?xml version="1.0" encoding="utf-8"?>
-<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
-  <d:response>
-    <d:href>/calendars/user/calendar/event1.ics</d:href>
-    <d:propstat>
-      <d:prop>
-        <c:calendar-data>BEGIN:VCALENDAR
-BEGIN:VEVENT
-UID:test-uid-1
-SUMMARY:Projekt Nord
-DTSTART;VALUE=DATE:20260505
-END:VEVENT
-END:VCALENDAR
-</c:calendar-data>
-      </d:prop>
-    </d:propstat>
-  </d:response>
-</d:multistatus>"#;
-
-        let events = parse_caldav_report(&session(None), xml).unwrap();
-
-        assert_eq!(events.len(), 1);
-        assert_eq!(events[0].uid, "test-uid-1");
-        assert_eq!(events[0].href, "/calendars/user/calendar/event1.ics");
     }
 
     #[test]

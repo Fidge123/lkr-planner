@@ -5,8 +5,6 @@ description = "A Tauri App"
 authors = ["Florian Richter"]
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [lib]
 name = "lkr_planner_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
@@ -38,8 +36,7 @@ tokio = { version = "1", features = ["test-util"] }
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-updater = { version = "2", default-features = false, features = ["rustls-tls", "system-proxy"] }
 
-# Platform-native credential stores for keyring-core. Each desktop target
-# registers its own store at startup via secret_manager::init.
+# Each desktop target registers its keyring-core store at startup in secret_manager::init.
 [target.'cfg(target_os = "macos")'.dependencies]
 apple-native-keyring-store = { version = "1", features = ["keychain"] }
 

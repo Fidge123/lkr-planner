@@ -5,18 +5,17 @@ export type SwipeState =
   | {
       phase: "dragging";
       direction: SwipeDirection;
-      /** How far the incoming week has been pulled in, in pixels, never negative. */
+      /** Pixels the incoming week has been pulled in; never negative. */
       offset: number;
       width: number;
     }
   | { phase: "settling"; direction: SwipeDirection; isCommitted: boolean }
-  // The wheel keeps firing after the fingers leave the trackpad, so the tail of a
-  // finished gesture must not start the next one.
+  // Wheel events trail after the fingers lift; their tail must not start a new gesture.
   | { phase: "cooldown" };
 
 export const swipeCommitRatio = 0.2;
 export const swipeSettleMs = 250;
-/** How long the wheel must stay quiet for the gesture to count as finished. */
+/** Wheel quiet time after which a gesture counts as finished. */
 export const swipeQuietMs = 120;
 
 const activationDelta = 2;
@@ -32,7 +31,7 @@ export interface WheelSample {
 
 export interface SwipePreview {
   direction: SwipeDirection;
-  /** Position of the incoming week relative to its own width: 100 is fully off screen, 0 fully over the current week. */
+  /** Incoming week offset in percent of its width: 100 off screen, 0 fully over. */
   translatePercent: number;
   isAnimating: boolean;
 }

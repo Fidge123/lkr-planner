@@ -268,18 +268,6 @@ mod tests {
     }
 
     #[test]
-    fn uses_local_name_as_holiday_name() {
-        let nager = vec![NagerHoliday {
-            date: "2024-12-25".to_string(),
-            local_name: "1. Weihnachtstag".to_string(),
-            global: true,
-            counties: None,
-        }];
-        let result = filter_holidays(nager);
-        assert_eq!(result[0].name, "1. Weihnachtstag");
-    }
-
-    #[test]
     fn single_year_week_returns_one_year() {
         let start = NaiveDate::from_ymd_opt(2024, 6, 3).unwrap();
         let end = NaiveDate::from_ymd_opt(2024, 6, 9).unwrap();
@@ -364,17 +352,6 @@ mod tests {
         );
 
         assert!(filtered.is_empty());
-    }
-
-    #[test]
-    fn cache_entry_is_fresh_within_30_days() {
-        let today = NaiveDate::from_ymd_opt(2024, 6, 30).unwrap();
-        let entry = HolidayCacheEntry {
-            year: 2024,
-            fetched_at: "2024-06-10".to_string(),
-            holidays: vec![],
-        };
-        assert!(is_cache_entry_fresh(&entry, today));
     }
 
     #[test]

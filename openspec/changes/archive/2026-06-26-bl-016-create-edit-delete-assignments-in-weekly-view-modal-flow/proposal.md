@@ -1,6 +1,7 @@
 ## Why
 
-Users need a modal interface to create, edit, and delete assignments in the weekly planning view. The current workflow lacks a proper UI for assignment management - users can only see assignments but cannot modify them through the application.
+Users need a modal interface to create, edit, and delete assignments in the weekly planning view.
+The current workflow lacks a proper UI for assignment management - users can only see assignments but cannot modify them through the application.
 
 ## What Changes
 

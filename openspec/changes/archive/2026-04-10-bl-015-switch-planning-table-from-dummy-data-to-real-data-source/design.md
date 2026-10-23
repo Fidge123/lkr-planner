@@ -1,8 +1,11 @@
 ## Context
 
-The weekly planning view uses hardcoded assignment fixtures. Users cannot persist their planning across app restarts. This change connects the planning table to real data: employee primary CalDAV calendars (hosted in ZEP), which serve as the source of truth for assignments.
+The weekly planning view uses hardcoded assignment fixtures.
+Users cannot persist their planning across app restarts.
+This change connects the planning table to real data: employee primary CalDAV calendars (hosted in ZEP), which serve as the source of truth for assignments.
 
-During rollout, employees' primary calendars already contain manually-created legacy plan entries and personal blockers (e.g. car service appointments). These appear automatically as bare events with no Daylite project link, with no migration required.
+During rollout, employees' primary calendars already contain manually-created legacy plan entries and personal blockers (e.g. car service appointments).
+These appear automatically as bare events with no Daylite project link, with no migration required.
 
 ## Goals / Non-Goals
 

@@ -27,5 +27,6 @@ Direct drag-and-drop of appointment cards across days and employees makes weekly
 
 - Frontend: `timetable-cell.tsx`, `timetable-row.tsx`, `page.tsx` (drag context and week navigation wiring), `app.tsx` (week navigation callback), a new drag-state hook, and a reconciliation dialog component.
 - Backend: new `move_assignment` Tauri command and `move_assignment_core` in `caldav.rs` returning a structured move result, regenerated `generated/tauri.ts` bindings.
-- New dependency: `@dnd-kit/core` (and `@dnd-kit/utilities`) for pointer-based dragging whose drag state survives the grid re-rendering during mid-drag week navigation. Native HTML5 drag-and-drop cancels a drag when the source element unmounts, which the edge-hover week jump requires; see design.md.
+- New dependency: `@dnd-kit/core` (and `@dnd-kit/utilities`) for pointer-based dragging whose drag state survives the grid re-rendering during mid-drag week navigation.
+  Native HTML5 drag-and-drop cancels a drag when the source element unmounts, which the edge-hover week jump requires; see design.md.
 - Reuses existing `update_assignment`, `create_assignment`, and `delete_assignment` CalDAV paths and the assignment reload flow.

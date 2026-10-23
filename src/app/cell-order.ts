@@ -6,9 +6,8 @@ type OrderedEvent = Pick<
 >;
 
 /**
- * Orders a cell's assignment cards the way the backend's `ordering_key` orders the day, so
- * the visual order and the allocated time slots agree. Absences and bare events keep the
- * positions the backend gave them.
+ * Orders assignment cards like the backend's `ordering_key`, so visuals match allocated slots.
+ * Absences and bare events keep the positions the backend gave them.
  */
 export function sortCellEvents<T extends OrderedEvent>(events: T[]): T[] {
   const assignments = events
@@ -20,7 +19,6 @@ export function sortCellEvents<T extends OrderedEvent>(events: T[]): T[] {
   );
 }
 
-/** Position of each assignment among the cell's assignments, keyed by UID. */
 export function assignmentPositions(events: CellEvent[]): Map<string, number> {
   const positions = new Map<string, number>();
   for (const event of events) {
@@ -32,10 +30,8 @@ export function assignmentPositions(events: CellEvent[]): Map<string, number> {
 }
 
 /**
- * Assignments are ordered by their persisted index. Two that share one, which happens while
- * an assignment excluded from re-slotting keeps a stale index, are read the way a planner
- * reads the cell: the earlier start comes first, a longer assignment wins an identical
- * start, and the UID keeps the ordering total. Unindexed and untimed assignments sort last.
+ * Ties on the persisted index fall back to earlier start, longer duration, then UID.
+ * Unindexed and untimed assignments sort last.
  */
 function byCellOrder(a: OrderedEvent, b: OrderedEvent): number {
   return (
