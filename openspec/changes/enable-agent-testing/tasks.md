@@ -1,6 +1,7 @@
 ## 0. Prerequisites
 
-- One-time setup (not a repeatable implementation step): run `bunx playwright install chromium` to download the browser binaries. `scripts/check-dev-env.sh` (task 4) warns when this is missing.
+- One-time setup (not a repeatable implementation step): run `bunx playwright install chromium` to download the browser binaries.
+  `scripts/check-dev-env.sh` (task 4) warns when this is missing.
 
 ## 1. Playwright Dependencies & Configuration
 
@@ -35,6 +36,7 @@
 ## 4. SessionStart Hook
 
 - [ ] 4.1 (RED) Write a unit test (Bun) that runs `scripts/check-dev-env.sh` with a controlled `PATH` and asserts it warns for each missing tool (`bun`, `cargo`, Playwright chromium) and always exits 0; it fails because the script does not exist yet
-- [ ] 4.2 (GREEN) Create the POSIX shell script `scripts/check-dev-env.sh` that checks for `bun`, `cargo`, and the Playwright chromium binary on `PATH`, prints a non-blocking warning for each missing tool, and always exits 0. A shell script is used (not a `bun`-run TS file) so it can still report a missing `bun`
+- [ ] 4.2 (GREEN) Create the POSIX shell script `scripts/check-dev-env.sh` that checks for `bun`, `cargo`, and the Playwright chromium binary on `PATH`, prints a non-blocking warning for each missing tool, and always exits 0.
+      A shell script is used (not a `bun`-run TS file) so it can still report a missing `bun`
 - [ ] 4.3 Add a `SessionStart` hook entry to `.claude/settings.json` that runs `sh scripts/check-dev-env.sh` directly (not through `bun`)
 - [ ] 4.4 Verify the hook runs cleanly in a new Claude Code session and reports correctly when all tools are present
