@@ -221,11 +221,11 @@ pub(super) fn load_store_or_error(app: tauri::AppHandle) -> Result<LocalStore, A
     local_store::load_local_store(app).map_err(map_store_error)
 }
 
-pub(super) fn save_store_or_error(
-    app: tauri::AppHandle,
-    store: LocalStore,
+pub(super) fn update_store_or_error(
+    app: &tauri::AppHandle,
+    change: impl FnOnce(&mut LocalStore),
 ) -> Result<(), AppError> {
-    local_store::save_local_store(app, store).map_err(map_store_error)
+    local_store::update_local_store(app, change).map_err(map_store_error)
 }
 
 pub(super) fn normalize_http_error(status: u16, body: &str, path: &str) -> AppError {

@@ -65,7 +65,7 @@ async fn get_holidays_for_week_inner(
     let today = chrono::Utc::now().date_naive();
     let current_year = today.year();
 
-    let mut fetched_any = false;
+    let mut fetched = Vec::new();
     for &year in &years {
         let needs_fetch = match store.holiday_cache.iter().find(|e| e.year == year) {
             None => true,
@@ -73,31 +73,35 @@ async fn get_holidays_for_week_inner(
         };
 
         if needs_fetch {
-            fetched_any = true;
-            let fetched = fetch_holidays_from_api(&app, year).await?;
-            let cached = fetched
+            let cached = fetch_holidays_from_api(&app, year)
+                .await?
                 .iter()
                 .map(|h| crate::integrations::local_store::CachedHoliday {
                     date: h.date.clone(),
                     name: h.name.clone(),
                 })
                 .collect();
-            let today_str = today.format("%Y-%m-%d").to_string();
+            let entry = crate::integrations::local_store::HolidayCacheEntry {
+                year,
+                fetched_at: today.format("%Y-%m-%d").to_string(),
+                holidays: cached,
+            };
             store.holiday_cache.retain(|e| e.year != year);
-            store
-                .holiday_cache
-                .push(crate::integrations::local_store::HolidayCacheEntry {
-                    year,
-                    fetched_at: today_str,
-                    holidays: cached,
-                });
+            store.holiday_cache.push(entry.clone());
+            fetched.push(entry);
         }
     }
 
     let holidays = holidays_in_range(&store.holiday_cache, week_start_date, week_end_date);
 
-    if fetched_any {
-        crate::integrations::local_store::save_store_internal(&app, store).map_err(|e| {
+    if !fetched.is_empty() {
+        crate::integrations::local_store::update_local_store(&app, |latest| {
+            for entry in fetched {
+                latest.holiday_cache.retain(|e| e.year != entry.year);
+                latest.holiday_cache.push(entry);
+            }
+        })
+        .map_err(|e| {
             eprintln!("holidays: store save failed: {}", e.technical_message);
             "Feiertage konnten nicht geladen werden".to_string()
         })?;

@@ -1,8 +1,8 @@
 use super::auth_flow::refresh_tokens;
 use super::client::DayliteApiClient;
 use super::shared::{
-    adopt_daylite_tokens, load_store_or_error, normalize_base_url, save_store_or_error,
-    DayliteRefreshTokenRequest, DayliteTokenState, DayliteTokenSyncStatus,
+    adopt_daylite_tokens, normalize_base_url, update_store_or_error, DayliteRefreshTokenRequest,
+    DayliteTokenState, DayliteTokenSyncStatus,
 };
 use crate::error::AppError;
 use crate::integrations::telemetry::events::{Integration, Operation};
@@ -33,9 +33,9 @@ async fn daylite_connect_refresh_token_inner(
 
     let token_state = adopt_daylite_tokens(|| {
         mint_and_save_base_url(&client, request.refresh_token, || {
-            let mut store = load_store_or_error(app.clone())?;
-            store.api_endpoints.daylite_base_url = base_url;
-            save_store_or_error(app, store)
+            update_store_or_error(&app, |store| {
+                store.api_endpoints.daylite_base_url = base_url
+            })
         })
     })
     .await?;

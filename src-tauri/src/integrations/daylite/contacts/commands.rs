@@ -8,7 +8,7 @@ use super::types::PlanningContactRecord;
 use crate::error::AppError;
 use crate::integrations::daylite::client::DayliteApiClient;
 use crate::integrations::daylite::shared::{
-    load_store_or_error, save_store_or_error, with_daylite_tokens,
+    load_store_or_error, update_store_or_error, with_daylite_tokens,
 };
 use crate::integrations::telemetry::events::{Integration, Operation};
 use crate::integrations::telemetry::observe::observe;
@@ -46,20 +46,25 @@ pub async fn daylite_list_cached_contacts(
 async fn daylite_list_contacts_inner(
     app: tauri::AppHandle,
 ) -> Result<Vec<PlanningContactRecord>, AppError> {
-    let mut store = load_store_or_error(app.clone())?;
-    let client = DayliteApiClient::new(&store.api_endpoints.daylite_base_url)?.with_telemetry(&app);
+    let base_url = load_store_or_error(app.clone())?
+        .api_endpoints
+        .daylite_base_url;
+    let client = DayliteApiClient::new(&base_url)?.with_telemetry(&app);
     let contacts =
         with_daylite_tokens(&client, |tokens| list_contacts_core(&client, tokens)).await?;
 
-    store.daylite_cache.last_synced_at = Some(current_timestamp_iso8601());
-    store.daylite_cache.contacts = contacts
-        .iter()
-        .cloned()
-        .map(map_planning_contact_to_cache_entry)
-        .collect();
-    reconcile_employee_calendars_from_contacts(&mut store.employee_settings, &contacts);
-    crate::integrations::zep::test_untested_calendar_urls(&mut store.employee_settings).await;
-    save_store_or_error(app, store)?;
+    let mut settings = load_store_or_error(app.clone())?.employee_settings;
+    reconcile_employee_calendars_from_contacts(&mut settings, &contacts);
+    crate::integrations::zep::test_untested_calendar_urls(&mut settings).await;
+    update_store_or_error(&app, |store| {
+        store.daylite_cache.last_synced_at = Some(current_timestamp_iso8601());
+        store.daylite_cache.contacts = contacts
+            .iter()
+            .cloned()
+            .map(map_planning_contact_to_cache_entry)
+            .collect();
+        store.employee_settings = settings;
+    })?;
 
     Ok(contacts)
 }

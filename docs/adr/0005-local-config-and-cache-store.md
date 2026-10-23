@@ -2,6 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-02-13
+- Amended: 2026-10-23 (the store is held in memory and changed through atomic updates)
 
 ## Context
 
@@ -27,6 +28,16 @@ The app already routes frontend state changes through Tauri commands, and no add
   - technical debug detail (`technicalMessage`)
   - machine-readable code (`code`)
 - If no store file exists, load defaults instead of failing.
+
+## Amendment 2026-10-23
+
+Every command read and parsed `local-store.json` again, and every writer saved a whole copy it had loaded earlier.
+A writer that awaited the network in between, such as the holiday import or the calendar test, overwrote whatever another command saved meanwhile.
+
+- The file is read once per process, and later reads come from memory.
+- Writers change the store only through `update_local_store`, which applies the change to the latest copy, writes the file and only then replaces the copy in memory.
+- Writers that need the network compute their result first and apply it in one update afterwards.
+- Edits made to the file while the app runs are not picked up until the next start.
 
 ## Consequences
 

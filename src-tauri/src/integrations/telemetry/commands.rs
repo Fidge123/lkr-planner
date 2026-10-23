@@ -2,7 +2,7 @@ use super::events::{ErrorCode, Integration, Operation, TelemetryEvent};
 use super::state::TelemetryState;
 use crate::error::AppError;
 use crate::integrations::local_store::types::TelemetrySettings;
-use crate::integrations::local_store::{load_local_store, save_local_store};
+use crate::integrations::local_store::update_local_store;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use tauri::Manager;
@@ -51,9 +51,7 @@ pub fn telemetry_set_enabled(
         .recorder()
         .set_enabled(enabled);
 
-    let mut store = load_local_store(app.clone())?;
-    store.telemetry = settings.clone();
-    save_local_store(app, store)?;
+    update_local_store(&app, |store| store.telemetry = settings.clone())?;
 
     Ok(settings)
 }

@@ -109,9 +109,9 @@ fn zep_save_credentials_inner(
     }
 
     // Write the store first so a keychain failure leaves no orphaned credential entry.
-    let mut store = crate::integrations::local_store::load_local_store(app.clone())?;
-    store.api_endpoints.zep_caldav_root_url = root_url;
-    crate::integrations::local_store::save_local_store(app, store)?;
+    crate::integrations::local_store::update_local_store(&app, |store| {
+        store.api_endpoints.zep_caldav_root_url = root_url
+    })?;
 
     save_zep_credentials_to_keychain(&username, &password)?;
 
@@ -191,23 +191,18 @@ async fn zep_save_and_test_calendar_inner(
         .filter(|s| !s.is_empty())
         .map(ToString::to_string);
 
-    // Load local store once: all in-memory mutations use this copy.
-    let mut store = crate::integrations::local_store::load_local_store(app.clone())?;
-
+    let mut synced = crate::integrations::local_store::load_local_store(app.clone())?;
     sync_calendar_to_daylite(
-        &mut store,
+        &mut synced,
         &daylite_contact_reference,
         &source,
         &calendar_url,
     )
     .await?;
-    store_calendar_url(
-        &mut store,
-        &daylite_contact_reference,
-        &source,
-        &calendar_url,
-    );
-    crate::integrations::local_store::save_local_store(app.clone(), store.clone())?;
+    crate::integrations::local_store::update_local_store(&app, |store| {
+        store.daylite_cache = synced.daylite_cache;
+        store_calendar_url(store, &daylite_contact_reference, &source, &calendar_url);
+    })?;
 
     // Clearing a calendar reports success without a connection test.
     let Some(ref cal_url) = calendar_url else {
@@ -219,8 +214,9 @@ async fn zep_save_and_test_calendar_inner(
     };
 
     let result = run_calendar_test(cal_url).await?;
-    store_test_result(&mut store, &daylite_contact_reference, &source, &result);
-    crate::integrations::local_store::save_local_store(app, store)?;
+    crate::integrations::local_store::update_local_store(&app, |store| {
+        store_test_result(store, &daylite_contact_reference, &source, &result)
+    })?;
 
     Ok(result)
 }

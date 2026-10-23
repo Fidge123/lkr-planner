@@ -4,65 +4,99 @@ use crate::integrations::telemetry::events::{Integration, Operation};
 use crate::integrations::telemetry::observe::record_failure;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::{Mutex, MutexGuard, PoisonError};
 use tauri::Manager;
 
 const STORE_FILE_NAME: &str = "local-store.json";
 
+static STORE: StoreCell = StoreCell::new();
+
 #[tauri::command]
 #[specta::specta]
 pub fn load_local_store(app: tauri::AppHandle) -> Result<LocalStore, AppError> {
-    let store_path = app
-        .path()
+    store_path(&app)
+        .and_then(|path| STORE.read(&path))
+        .inspect_err(|error| {
+            record_failure(
+                &app,
+                Operation::LoadLocalStore,
+                Integration::LocalStore,
+                error,
+            )
+        })
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn save_local_store(app: tauri::AppHandle, store: LocalStore) -> Result<(), AppError> {
+    update_local_store(&app, |current| *current = store)
+}
+
+/// Writers must change the store only through this, so concurrent commands cannot drop each other's changes.
+pub(crate) fn update_local_store<R>(
+    app: &tauri::AppHandle,
+    change: impl FnOnce(&mut LocalStore) -> R,
+) -> Result<R, AppError> {
+    store_path(app)
+        .and_then(|path| STORE.update(&path, change))
+        .inspect_err(|error| {
+            record_failure(
+                app,
+                Operation::SaveLocalStore,
+                Integration::LocalStore,
+                error,
+            )
+        })
+}
+
+/// The file is read once; afterwards memory is the source and every update is written through.
+struct StoreCell(Mutex<Option<LocalStore>>);
+
+impl StoreCell {
+    const fn new() -> Self {
+        Self(Mutex::new(None))
+    }
+
+    fn read(&self, path: &Path) -> Result<LocalStore, AppError> {
+        let mut cached = self.lock();
+        if let Some(store) = cached.as_ref() {
+            return Ok(store.clone());
+        }
+        let store = load_store_from_path(path)?;
+        *cached = Some(store.clone());
+        Ok(store)
+    }
+
+    fn update<R>(
+        &self,
+        path: &Path,
+        change: impl FnOnce(&mut LocalStore) -> R,
+    ) -> Result<R, AppError> {
+        let mut cached = self.lock();
+        let mut store = match cached.as_ref() {
+            Some(store) => store.clone(),
+            None => load_store_from_path(path)?,
+        };
+        let result = change(&mut store);
+        store.cleanup_holiday_cache(chrono::Utc::now().date_naive());
+        save_store_to_path(path, &store)?;
+        *cached = Some(store);
+        Ok(result)
+    }
+
+    fn lock(&self) -> MutexGuard<'_, Option<LocalStore>> {
+        self.0.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+}
+
+fn store_path(app: &tauri::AppHandle) -> Result<PathBuf, AppError> {
+    app.path()
         .app_config_dir()
         .map(|path| path.join(STORE_FILE_NAME))
         .map_err(|error| {
             AppError::new(
                 AppErrorCode::ReadFailed,
                 "Die lokale Konfiguration konnte nicht geladen werden.",
-                format!("Pfad konnte nicht aufgelöst werden: {error}"),
-            )
-        })?;
-
-    load_store_from_path(&store_path).inspect_err(|error| {
-        record_failure(
-            &app,
-            Operation::LoadLocalStore,
-            Integration::LocalStore,
-            error,
-        )
-    })
-}
-
-#[tauri::command]
-#[specta::specta]
-pub fn save_local_store(app: tauri::AppHandle, store: LocalStore) -> Result<(), AppError> {
-    save_store_internal(&app, store).inspect_err(|error| {
-        record_failure(
-            &app,
-            Operation::SaveLocalStore,
-            Integration::LocalStore,
-            error,
-        )
-    })
-}
-
-pub(crate) fn save_store_internal(
-    app: &tauri::AppHandle,
-    mut store: LocalStore,
-) -> Result<(), AppError> {
-    let store_path = get_store_path(app)?;
-    store.cleanup_holiday_cache(chrono::Utc::now().date_naive());
-    save_store_to_path(&store_path, &store)
-}
-
-fn get_store_path(app: &tauri::AppHandle) -> Result<PathBuf, AppError> {
-    app.path()
-        .app_config_dir()
-        .map(|path| path.join(STORE_FILE_NAME))
-        .map_err(|error| {
-            AppError::new(
-                AppErrorCode::WriteFailed,
-                "Die lokale Konfiguration konnte nicht gespeichert werden.",
                 format!("Pfad konnte nicht aufgelöst werden: {error}"),
             )
         })
@@ -147,6 +181,64 @@ mod tests {
     use std::fs;
     use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn an_update_keeps_the_changes_of_earlier_updates() {
+        let cell = StoreCell::new();
+        let path = unique_test_path("updated-store.json");
+
+        cell.update(&path, |store| store.display_settings.show_weekend = true)
+            .expect("first update should succeed");
+        cell.update(&path, |store| {
+            store.api_endpoints.zep_caldav_root_url = "https://zep.example/caldav".to_string()
+        })
+        .expect("second update should succeed");
+
+        let saved = load_store_from_path(&path).expect("saved store should load");
+        assert!(saved.display_settings.show_weekend);
+        assert_eq!(
+            saved.api_endpoints.zep_caldav_root_url,
+            "https://zep.example/caldav"
+        );
+    }
+
+    #[test]
+    fn reads_after_the_first_come_from_memory() {
+        let cell = StoreCell::new();
+        let path = unique_test_path("cached-store.json");
+        cell.read(&path).expect("first read should succeed");
+
+        let mut changed = LocalStore::default();
+        changed.display_settings.show_weekend = true;
+        save_store_to_path(&path, &changed).expect("save should succeed");
+
+        assert_eq!(
+            cell.read(&path).expect("cached read"),
+            LocalStore::default()
+        );
+    }
+
+    #[test]
+    fn a_failed_write_keeps_the_previous_store() {
+        let cell = StoreCell::new();
+        let path = unique_test_path("kept-store.json");
+        cell.update(&path, |store| store.display_settings.show_weekend = true)
+            .expect("update should succeed");
+        let blocker = unique_test_path("blocker");
+        write_test_file(&blocker, "");
+
+        let failed = cell.update(&blocker.join("store.json"), |store| {
+            store.display_settings.show_weekend = false
+        });
+
+        assert!(failed.is_err());
+        assert!(
+            cell.read(&path)
+                .expect("cached read")
+                .display_settings
+                .show_weekend
+        );
+    }
 
     #[test]
     fn loads_defaults_for_missing_store_file() {
