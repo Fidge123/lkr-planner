@@ -2,7 +2,7 @@
 
 ## Context
 
-`usePlanningAssignments` keeps a per-session, in-memory cache of loaded weeks and only calls `load_week_events` on navigation, on `reloadAssignments()` (menu reload, "Erneut laden", writes) and for the idle prefetch of the adjacent weeks.
+`usePlanningAssignments` keeps a per-session, in-memory cache of loaded weeks and only calls `load_week_events` on navigation, on `reloadAssignments()` (menu reload, "Erneut laden"), for the idle prefetch of the adjacent weeks and, after a write, for the rows of the affected employees (ADR 0016).
 `reloadAssignments()` drops only the active week from the cache and, on failure, clears `eventsByEmployee` so the grid empties behind the error alert.
 `useFrozenDuringDrag` in `src/app/page.tsx` already pins the displayed assignments while a drag is active, so any data update that lands mid-drag is deferred until the drop.
 CalDAV offers no push channel the app could subscribe to, and ADR 0014 limits the platforms to macOS and Linux, where the webview throttles or suspends timers of hidden windows and of a sleeping machine.
@@ -11,7 +11,7 @@ CalDAV offers no push channel the app could subscribe to, and ADR 0014 limits th
 
 **Goals:**
 
-- A single timestamp of the last completed load of the displayed week drives both the interval and the on-return check, so a manual reload, navigation or write automatically postpones the next automatic refresh.
+- A single timestamp of the last completed load of the displayed week drives both the interval and the on-return check, so a manual reload or navigation automatically postpones the next automatic refresh.
 - An automatic refresh never empties a grid that already shows data.
 
 **Non-Goals:**
@@ -38,6 +38,7 @@ The value is a named constant in the hook, not a setting (YAGNI).
 ### Timestamp-based scheduling instead of a fixed `setInterval`
 
 Each cached week records when it was fetched, and `usePlanningAssignments` exposes `lastLoadedAt` for the displayed week: the fetch time of the shown data, or the completion time of a failed load.
+A row refresh after a write fetches only the affected employees, so it leaves the fetch time of the week unchanged.
 Showing a week from the cache therefore keeps the age of that cached data instead of resetting the countdown.
 The hook schedules a `setTimeout` for `lastLoadedAt + interval` and re-arms whenever `lastLoadedAt` changes, so any load restarts the countdown without extra wiring.
 On `visibilitychange` to visible, on window `focus` and on the window `online` event, the hook schedules a due check 5 seconds later that compares `Date.now()` with `lastLoadedAt` and refreshes when it is due, which covers timers that were throttled while hidden or frozen during sleep.
@@ -52,26 +53,31 @@ The due check after a return event waits 5 seconds instead of running at once.
 Right after wake, Wi-Fi and VPN are often still connecting, and the first Daylite call of the morning also rotates the expired access token.
 Daylite retires the old refresh token as it issues the new one (ADR 0006), so a rotation response lost on a flapping network signs the user out on the next start.
 Waiting for `navigator.onLine` plus the settle delay moves that rotation out of the most fragile seconds.
+The silent retry below is skipped as well when it falls due while offline, and the `online` event brings the refresh back.
 `navigator.onLine` only knows whether an interface is up, not whether a VPN or the servers are reachable, which the retry below covers.
 
 ### One silent retry after a failed automatic refresh
 
 A failed automatic refresh schedules one retry 30 seconds later and keeps its error out of `errorMessage`.
 Only a failed retry sets `errorMessage` and `lastLoadedAt`, so the next regular attempt follows 5 minutes later.
-Any other completed load of the displayed week clears the pending retry, since its result supersedes the retry's.
+Any other load of the displayed week, by navigation or reload, clears the pending retry when it starts, since its result supersedes the retry's.
 Showing the error on the first failure was rejected because a network that is still connecting after wake would greet the planner with an error every morning.
 Retrying more than once was rejected because the regular interval already acts as the next retry.
 
 ### Separate automatic refresh entry point in `usePlanningAssignments`
 
-A new `refreshAssignments()` clears the whole week cache, not only the active week, and loads the active week with a flag that preserves the displayed data on failure.
-On failure it sets `errorMessage` but leaves `eventsByEmployee`, `errorsByEmployee` and `loadedWeekStart` untouched; on success it clears `errorMessage` as every successful load does.
+A new `refreshAssignments()` clears every other cached week and fetches the active week bypassing the cache, with a flag that preserves the displayed data on failure.
+The active week stays cached until the fetch succeeds, so optimistic edits and row refreshes still have a week to patch after a failed refresh.
+On failure it leaves `eventsByEmployee`, `errorsByEmployee` and `loadedWeekStart` untouched; on success it clears `errorMessage` as every successful load does.
+It loads with the `refresh` purpose, which telemetry records apart from loads a user waits for.
+The hook's cache and load logic moves into a framework-free `createWeekLoader`, so these rules are testable with `bun test` without a DOM.
 Adjacent weeks are not prefetched again immediately; the existing prefetch runs on the next navigation as it does today.
 Changing `reloadAssignments()` itself to keep data on failure was rejected because its "empty grid on error" behavior is covered by existing tests and specs for the manual reload and is out of scope.
 
-### No special handling for drags and in-flight writes
+### Edits made while a refresh runs win over its result
 
-The existing request id gating in `loadActiveWeek` lets the newest load win, so a refresh that started before a write is superseded by the write's own `reloadAssignments()`.
+Writes refresh only the affected rows (ADR 0016) and do not bump the request id of `loadActiveWeek`, so a refresh that started before a drop could land after the drop's row refresh and put the card back in its old cell.
+An automatic refresh therefore keeps the cached week when an optimistic edit happened after it was requested, using the existing edit sequence, and the edit's own row refresh brings the confirmed rows.
 `useFrozenDuringDrag` already defers a refresh result until the drop, so the hook does not need to know about drags.
 
 ## Risks / Trade-offs

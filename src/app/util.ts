@@ -125,3 +125,8 @@ function thursdayOfWeek(date: Date): Date {
     date.getDate() + 3 - daysSinceMonday,
   );
 }
+
+export function scheduleTimeout(callback: () => void, ms: number): () => void {
+  const timer = setTimeout(callback, ms);
+  return () => clearTimeout(timer);
+}

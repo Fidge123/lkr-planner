@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight, Settings } from "lucide-react";
 import { DataLoadingIndicator } from "./app/components/data-loading-indicator";
 import { EmployeeIcalDialog } from "./app/components/employee-ical-dialog";
 import { SettingsDialog } from "./app/components/settings/settings-dialog";
+import { useCalendarAutoRefresh } from "./app/hooks/use-calendar-auto-refresh";
 import { usePlanningAssignments } from "./app/hooks/use-planning-assignments";
 import { usePlanningEmployees } from "./app/hooks/use-planning-employees";
 import { useProjectCategoryColors } from "./app/hooks/use-project-category-colors";
@@ -27,6 +28,10 @@ function App() {
   const weekStart = getWeekStart(weekOffset, showWeekend);
   const planningAssignmentsState = usePlanningAssignments(
     settingsLoaded ? weekStart : null,
+  );
+  useCalendarAutoRefresh(
+    planningAssignmentsState.lastLoadedAt,
+    planningAssignmentsState.refreshAssignments,
   );
   const planningEmployeesState = usePlanningEmployees();
   const categoryColors = useProjectCategoryColors();

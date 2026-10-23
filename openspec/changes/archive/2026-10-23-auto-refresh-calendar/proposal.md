@@ -13,7 +13,7 @@ A planner who leaves the app open in the background for hours or days returns to
 - Discard all cached weeks on an automatic refresh, so navigating to a previously visited week fetches it again instead of showing data from before the refresh.
 - Keep the displayed week on screen while an automatic refresh runs and when it fails, instead of emptying the grid.
 - Retry a failed automatic refresh once after 30 seconds without an error, and show the German error with its "Erneut laden" action only when the retry fails too.
-- Manual reloads, week navigation and writes count as refreshes and restart the interval.
+- Manual reloads and week navigation count as refreshes and restart the interval; the row refresh after a write does not, since it fetches only the affected employees.
 
 ## Capabilities
 
