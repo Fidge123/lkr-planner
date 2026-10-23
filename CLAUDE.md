@@ -22,7 +22,7 @@ This is a desktop application which provides a planning view and integrates with
 - Naming:
   - **Files**: kebab-case
   - **Components**: PascalCase function components
-  - **Constants**: camelCase
+  - **Constants**: camelCase, which Biome enforces for module-level constants
 
 ### Documentation
 

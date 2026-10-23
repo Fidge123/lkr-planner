@@ -17,12 +17,12 @@ function calendarState(
   };
 }
 
-const CALENDARS: ZepCalendar[] = [
+const zepCalendars: ZepCalendar[] = [
   { displayName: "Team-Kalender", url: "https://zep.example.com/calendars/1" },
   { displayName: "Urlaub", url: "https://zep.example.com/calendars/2" },
 ];
 
-const EMPLOYEE: PlanningContactRecord = {
+const ownEmployee: PlanningContactRecord = {
   self: "/contacts/42",
   full_name: "Max Mustermann",
   nickname: null,
@@ -37,9 +37,9 @@ function renderSection(
     <CalendarSection
       title="Einsatz"
       source="primary"
-      calendars={CALENDARS}
-      selectedUrl={CALENDARS[0].url}
-      storedUrl={CALENDARS[0].url}
+      calendars={zepCalendars}
+      selectedUrl={zepCalendars[0].url}
+      storedUrl={zepCalendars[0].url}
       onUrlChange={() => {}}
       status={null}
       isSubmitting={false}
@@ -55,7 +55,7 @@ function renderDialog(
 ): string {
   return renderToStaticMarkup(
     <EmployeeIcalDialog
-      employee={EMPLOYEE}
+      employee={ownEmployee}
       employeeSetting={null}
       onClose={() => {}}
       onSettingsSaved={() => {}}

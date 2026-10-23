@@ -36,6 +36,27 @@
               }
             ]
           }
+        },
+        "useNamingConvention": {
+          "level": "error",
+          "options": {
+            "strictCase": false,
+            "conventions": [
+              {
+                "selector": {
+                  "kind": "const",
+                  "scope": "global"
+                },
+                "formats": ["camelCase", "PascalCase"]
+              },
+              {
+                "selector": {
+                  "kind": "any"
+                },
+                "match": ".*"
+              }
+            ]
+          }
         }
       }
     }

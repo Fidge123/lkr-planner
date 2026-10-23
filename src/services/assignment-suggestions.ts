@@ -1,7 +1,7 @@
 import { commands, type DayliteProjectSummary } from "../generated/tauri";
 import { callCommand } from "./command-result";
 
-const SUGGESTION_LIMIT = 5;
+const suggestionLimit = 5;
 
 let lastAssignedProject: DayliteProjectSummary | null = null;
 
@@ -26,7 +26,7 @@ export function combineSuggestions(
   const suggestions = recent
     ? [recent, ...overdue.filter((project) => project.self !== recent.self)]
     : overdue;
-  return suggestions.slice(0, SUGGESTION_LIMIT);
+  return suggestions.slice(0, suggestionLimit);
 }
 
 export function loadOverdueProjects(): Promise<DayliteProjectSummary[]> {

@@ -3,9 +3,9 @@ import { callCommand } from "./command-result";
 import { normalizeOptionalString } from "./daylite-service-helpers";
 import { loadLocalStore } from "./local-store";
 
-export const DAYLITE_PERSONAL_TOKEN_URL =
+export const daylitePersonalTokenUrl =
   "https://www.marketcircle.com/account/oauth/authorize?client_id=com.marketcircle.sample&redirect_uri=https://api.marketcircle.net/v1/personal_token/auth_code&response_type=code";
-export const DEFAULT_DAYLITE_BASE_URL = "https://api.marketcircle.net/v1";
+export const defaultDayliteBaseUrl = "https://api.marketcircle.net/v1";
 
 export async function resolveDayliteBaseUrl(): Promise<string> {
   const store = await loadLocalStore().catch(() => null);
@@ -40,7 +40,7 @@ export async function updateDayliteRefreshToken(
 function normalizeBaseUrl(baseUrl: string | null | undefined): string {
   const normalizedBaseUrl = normalizeOptionalString(baseUrl);
   if (!normalizedBaseUrl) {
-    return DEFAULT_DAYLITE_BASE_URL;
+    return defaultDayliteBaseUrl;
   }
 
   return normalizedBaseUrl.replace(/\/+$/, "");
