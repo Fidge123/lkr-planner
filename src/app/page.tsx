@@ -89,7 +89,6 @@ export function PlanningGrid({
   assignmentState,
   employeeSettings = [],
   hideNonPlannableEmployees = true,
-  holidaysState,
   categoryColors = {},
   onOpenIcalDialog = () => {},
   onNavigateWeek,
@@ -99,7 +98,7 @@ export function PlanningGrid({
   const weekStart = toLocalISODate(weekDays[0]);
 
   const fallbackEmployeesState = usePlanningEmployees();
-  const fallbackHolidaysState = useHolidays(weekStart);
+  const holidaysState = useHolidays(weekStart);
 
   return (
     <PlanningGridTable
@@ -108,7 +107,7 @@ export function PlanningGrid({
       assignmentState={assignmentState}
       employeeSettings={employeeSettings}
       hideNonPlannableEmployees={hideNonPlannableEmployees}
-      holidaysState={holidaysState ?? fallbackHolidaysState}
+      holidaysState={holidaysState}
       categoryColors={categoryColors}
       onOpenIcalDialog={onOpenIcalDialog}
       onNavigateWeek={onNavigateWeek}
@@ -384,7 +383,6 @@ interface Props {
   assignmentState: PlanningGridAssignmentState;
   employeeSettings?: EmployeeSetting[];
   hideNonPlannableEmployees?: boolean;
-  holidaysState?: HolidaysState;
   categoryColors?: ProjectCategoryColors;
   onOpenIcalDialog?: (employee: PlanningContactRecord) => void;
   onNavigateWeek?: (direction: -1 | 1) => void;

@@ -6,10 +6,10 @@ import type {
 } from "../generated/tauri";
 import type { HolidaysState } from "./hooks/use-holidays";
 import {
-  PlanningGrid,
   type PlanningGridAssignmentState,
   type PlanningGridEmployeesState,
   PlanningGridTable,
+  type PlanningGridTableProps,
 } from "./page";
 import { getWeekDays } from "./util";
 
@@ -36,22 +36,27 @@ const defaultAssignmentState: PlanningGridAssignmentState = {
 
 const defaultHolidaysState: HolidaysState = {
   holidays: [],
-  isLoading: false,
   errorMessage: null,
   reloadHolidays: () => {},
 };
 
-function renderGrid(
-  overrides: Partial<Parameters<typeof PlanningGrid>[0]> = {},
-): string {
+function renderGrid({
+  weekOffset = 0,
+  showWeekend = false,
+  ...overrides
+}: Partial<PlanningGridTableProps> & {
+  weekOffset?: number;
+  showWeekend?: boolean;
+} = {}): string {
   return renderToStaticMarkup(
-    <PlanningGrid
-      weekOffset={0}
+    <PlanningGridTable
+      weekDays={getWeekDays(weekOffset, showWeekend)}
       employeeState={defaultEmployeeState}
       assignmentState={defaultAssignmentState}
       employeeSettings={[]}
       hideNonPlannableEmployees={false}
       holidaysState={defaultHolidaysState}
+      categoryColors={{}}
       onOpenIcalDialog={() => {}}
       {...overrides}
     />,
@@ -243,24 +248,13 @@ describe("planning grid drag-and-drop wiring", () => {
     setSystemTime(new Date(2026, 0, 28, 9, 0, 0));
   });
 
-  const renderGridTable = () =>
-    renderToStaticMarkup(
-      <PlanningGridTable
-        weekDays={getWeekDays(0)}
-        employeeSettings={[]}
-        hideNonPlannableEmployees={false}
-        holidaysState={defaultHolidaysState}
-        categoryColors={{}}
-        onOpenIcalDialog={() => {}}
-        onNavigateWeek={() => {}}
-        {...withEvents([
-          cellEvent({ startTime: "08:00", endTime: "16:00", href: "/cal.ics" }),
-        ])}
-      />,
-    );
-
   it("renders assignment cards as draggable inside the drag context", () => {
-    const html = renderGridTable();
+    const html = renderGrid({
+      onNavigateWeek: () => {},
+      ...withEvents([
+        cellEvent({ startTime: "08:00", endTime: "16:00", href: "/cal.ics" }),
+      ]),
+    });
 
     expect(html).toContain("Projekt Nord");
     expect(html).toContain('aria-roledescription="draggable"');
