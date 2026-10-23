@@ -15,13 +15,13 @@ use super::events::{
     classify_event, map_absence_raw_events_for_week, resolve_event, sort_week_events,
 };
 use super::protection::{refuse_protected_day_change, refuse_protected_event};
+use super::session::{build_caldav_session, load_caldav_session, resolve_employee_calendar_url};
 use super::types::{CalendarCellEvent, EmployeeWeekEvents, MoveAssignmentResult, PendingEvent};
 use crate::error::AppError;
 use crate::integrations::daylite::projects::ResolvedProject;
 use crate::integrations::local_store::{EmployeeSetting, LocalStore};
 use crate::integrations::telemetry::events::{Integration, Operation};
 use crate::integrations::telemetry::observe::{observe, record_failure};
-use tauri::Manager;
 
 /// Background loads are recorded apart so they do not count as time a user waited.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Type, PartialEq, Eq)]
@@ -459,50 +459,6 @@ fn move_worker_days(
     let mut touched = worker_days(Some(target), [Some(target_date)]);
     touched.extend(worker_days(source, [source_date]));
     touched
-}
-
-pub(super) fn resolve_employee_calendar_url(
-    store: &crate::integrations::local_store::LocalStore,
-    employee_reference: &str,
-) -> Result<String, String> {
-    store
-        .employee_settings
-        .iter()
-        .find(|s| s.daylite_contact_reference == employee_reference)
-        .and_then(|s| s.zep_primary_calendar.as_deref())
-        .filter(|u| !u.is_empty())
-        .map(|u| u.to_string())
-        .ok_or_else(|| "Kein Kalender für diesen Mitarbeiter konfiguriert.".to_string())
-}
-
-pub(super) fn load_caldav_session(
-    app: &tauri::AppHandle,
-    store: &crate::integrations::local_store::LocalStore,
-) -> Result<CaldavSession, AppError> {
-    let credentials = crate::integrations::zep::load_zep_credentials()?;
-    build_caldav_session(app, store, credentials)
-}
-
-fn build_caldav_session(
-    app: &tauri::AppHandle,
-    store: &crate::integrations::local_store::LocalStore,
-    credentials: crate::integrations::zep::ZepStoredCredentials,
-) -> Result<CaldavSession, AppError> {
-    Ok(CaldavSession {
-        client: crate::http::shared_client()?,
-        username: credentials.username,
-        password: credentials.password,
-        base_url: store.api_endpoints.zep_caldav_root_url.clone(),
-        telemetry: app
-            .try_state::<crate::integrations::telemetry::state::TelemetryState>()
-            .map(|state| std::sync::Arc::clone(state.recorder())),
-        absence_urls: store
-            .employee_settings
-            .iter()
-            .filter_map(|s| s.zep_absence_calendar.clone())
-            .filter(|u| !u.is_empty())
-            .collect(),
-    })
 }
 
 #[cfg(test)]
