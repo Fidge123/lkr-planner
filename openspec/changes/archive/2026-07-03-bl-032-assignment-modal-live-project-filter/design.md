@@ -1,6 +1,7 @@
 ## Context
 
-The assignment modal needs live filtering as the user types. This provides instant feedback and quick project selection without page navigation.
+The assignment modal needs live filtering as the user types.
+This provides instant feedback and quick project selection without page navigation.
 
 ## Goals / Non-Goals
 

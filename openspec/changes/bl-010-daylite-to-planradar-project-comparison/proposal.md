@@ -1,6 +1,7 @@
 ## Why
 
-The application needs to link Daylite projects with existing Planradar projects. This enables tracking which Planradar project corresponds to each Daylite project, which is essential for synchronization and data consistency across both systems.
+The application needs to link Daylite projects with existing Planradar projects.
+This enables tracking which Planradar project corresponds to each Daylite project, which is essential for synchronization and data consistency across both systems.
 
 ## What Changes
 

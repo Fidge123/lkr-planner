@@ -1,6 +1,7 @@
 ## Context
 
-Users need to create Planradar projects for Daylite projects that don't have links. The flow should be seamless and idempotent to avoid creating duplicates.
+Users need to create Planradar projects for Daylite projects that don't have links.
+The flow should be seamless and idempotent to avoid creating duplicates.
 
 ## Goals / Non-Goals
 
