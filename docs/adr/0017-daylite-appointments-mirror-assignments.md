@@ -60,6 +60,7 @@ On a Daylite update, a list sent as an array replaces the whole list, while `{"a
 - App-managed appointments carry the keyword `lkr-planner`; only appointments with that keyword are searched, updated or removed, and updates never send `keywords`.
 - Contacts are only ever added or removed one worker at a time, so contacts linked in Daylite or by another device stay linked.
 - A process-wide lock per date serializes synchronizations of the same day, so two quick writes cannot both create an appointment.
+- The synchronization's Daylite requests time out after 10 seconds instead of the default 7, because a create that times out may still create the appointment, and a retry would then create a second one.
 - A worker day whose calendar cannot be read is not written to Daylite; a failure for one appointment does not stop the others but fails the worker day; every failure is recorded under the telemetry operation `daylite_appointment_sync`.
 - The backend keeps the failed worker days in memory and, while holding the set's lock, emits `daylite-appointment-sync-failures` with their sorted ISO dates whenever the set changes.
 - The planning grid shows one German error alert naming the failed days and an `Erneut versuchen` button that calls `retry_daylite_appointment_sync`, which synchronizes every failed worker day through the same per-date locks, one at a time.

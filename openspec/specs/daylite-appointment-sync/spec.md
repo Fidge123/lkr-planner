@@ -213,6 +213,13 @@ The system SHALL treat Daylite synchronization as a follow-up to the calendar wr
 - **AND** the failure is recorded as a telemetry error
 - **AND** the day counts as failed
 
+### Requirement: Synchronization waits longer for Daylite
+The system SHALL give each Daylite request of a synchronization 10 seconds to answer instead of the 7 seconds of other Daylite requests, because a create that times out may still create the appointment and a retry would then create a second one.
+
+#### Scenario: Slow Daylite answer during synchronization
+- **WHEN** Daylite answers a synchronization request after 8 seconds
+- **THEN** the synchronization uses the answer and does not fail
+
 ### Requirement: Synchronization failures are shown to the user
 The system SHALL show one German error alert above the planning grid while the synchronization of at least one worker day has failed and has not succeeded since, naming every such day once and offering an `Erneut versuchen` button.
 

@@ -13,9 +13,12 @@ use crate::integrations::telemetry::state::TelemetryState;
 use serde_json::Value;
 use std::future::Future;
 use std::pin::Pin;
+use std::time::Duration;
 use tauri::Manager;
 use tauri_plugin_http::reqwest;
 use tauri_plugin_http::reqwest::header::AUTHORIZATION;
+
+const DEFAULT_TIMEOUT: Duration = Duration::from_secs(7);
 
 pub(super) struct DayliteApiClient {
     transport: Box<dyn DayliteHttpTransport>,
@@ -24,7 +27,11 @@ pub(super) struct DayliteApiClient {
 
 impl DayliteApiClient {
     pub(super) fn new(base_url: &str) -> Result<Self, DayliteApiError> {
-        let transport = ReqwestTransport::new(base_url)?;
+        Self::with_timeout(base_url, DEFAULT_TIMEOUT)
+    }
+
+    pub(super) fn with_timeout(base_url: &str, timeout: Duration) -> Result<Self, DayliteApiError> {
+        let transport = ReqwestTransport::new(base_url, timeout)?;
         Ok(Self {
             transport: Box::new(transport),
             telemetry: None,
@@ -195,7 +202,6 @@ fn shared_http_client() -> Result<reqwest::Client, DayliteApiError> {
     CLIENT
         .get_or_init(|| {
             reqwest::Client::builder()
-                .timeout(std::time::Duration::from_secs(5))
                 .build()
                 .map_err(|error| format!("HTTP-Client konnte nicht erstellt werden: {error}"))
         })
@@ -214,15 +220,17 @@ fn shared_http_client() -> Result<reqwest::Client, DayliteApiError> {
 struct ReqwestTransport {
     base_url: String,
     http_client: reqwest::Client,
+    timeout: Duration,
     #[cfg(test)]
     record_replay: Option<RecordReplayConfig>,
 }
 
 impl ReqwestTransport {
-    fn new(base_url: &str) -> Result<Self, DayliteApiError> {
+    fn new(base_url: &str, timeout: Duration) -> Result<Self, DayliteApiError> {
         Ok(Self {
             base_url: normalize_base_url(base_url)?,
             http_client: shared_http_client()?,
+            timeout,
             #[cfg(test)]
             record_replay: None,
         })
@@ -233,7 +241,7 @@ impl ReqwestTransport {
         base_url: &str,
         record_replay: RecordReplayConfig,
     ) -> Result<Self, DayliteApiError> {
-        let mut transport = Self::new(base_url)?;
+        let mut transport = Self::new(base_url, DEFAULT_TIMEOUT)?;
         transport.record_replay = Some(record_replay);
         Ok(transport)
     }
@@ -312,7 +320,8 @@ impl DayliteHttpTransport for ReqwestTransport {
                 DayliteHttpMethod::Post => self.http_client.post(url),
                 DayliteHttpMethod::Patch => self.http_client.patch(url),
                 DayliteHttpMethod::Delete => self.http_client.delete(url),
-            };
+            }
+            .timeout(self.timeout);
 
             if let Some(access_token) = request.access_token {
                 if !access_token.trim().is_empty() {
@@ -451,6 +460,37 @@ mod tests {
         unsafe {
             std::env::remove_var("VCR_MODE");
         }
+    }
+
+    #[tokio::test]
+    async fn a_client_with_its_own_timeout_gives_up_after_it() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind silent server");
+        let base_url = format!(
+            "http://{}",
+            listener.local_addr().expect("silent server addr")
+        );
+        tokio::spawn(async move {
+            let mut unanswered = Vec::new();
+            while let Ok((stream, _)) = listener.accept().await {
+                unanswered.push(stream);
+            }
+        });
+        let client = DayliteApiClient::with_timeout(&base_url, Duration::from_millis(100))
+            .expect("client should be created");
+
+        let result = tokio::time::timeout(
+            Duration::from_secs(2),
+            client.send_request(DayliteHttpRequest::new(DayliteHttpMethod::Get, "/projects")),
+        )
+        .await
+        .expect("the client's timeout should end the request first");
+
+        assert_eq!(
+            result.expect_err("the server never answers").code,
+            DayliteApiErrorCode::Timeout
+        );
     }
 
     #[tokio::test]

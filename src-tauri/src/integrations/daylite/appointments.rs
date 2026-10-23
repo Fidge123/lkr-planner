@@ -2,6 +2,7 @@ use chrono::{NaiveDate, NaiveDateTime};
 use serde::{Deserialize, Deserializer};
 use serde_json::{json, Map, Value};
 use std::future::Future;
+use std::time::Duration;
 
 use super::auth_flow::{send_authenticated_json, send_authenticated_request};
 use super::client::{DayliteApiClient, DayliteHttpMethod, DayliteHttpRequest};
@@ -19,6 +20,8 @@ const FLOATING_TIMEZONE: &str = "floating";
 /// Full records otherwise default to a page of ten.
 const SEARCH_LIMIT: u16 = 250;
 const LOCAL_TIME_FORMAT: &str = "%Y-%m-%dT%H:%M:%S";
+/// Longer than the default, because a create that times out may still land in Daylite and a retry then creates it twice.
+const SYNC_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct AppointmentFields {
@@ -116,7 +119,7 @@ pub(crate) struct DayliteAppointments {
 impl DayliteAppointments {
     pub(crate) fn new(base_url: &str, app: &tauri::AppHandle) -> Result<Self, DayliteApiError> {
         Ok(Self {
-            client: DayliteApiClient::new(base_url)?.with_telemetry(app),
+            client: DayliteApiClient::with_timeout(base_url, SYNC_TIMEOUT)?.with_telemetry(app),
         })
     }
 }
