@@ -2,6 +2,8 @@ use super::types::{DisplaySettings, LocalStore};
 use crate::error::{AppError, AppErrorCode};
 use crate::integrations::telemetry::events::{Integration, Operation};
 use crate::integrations::telemetry::observe::record_failure;
+use crate::integrations::telemetry::recorder::TelemetrySettings;
+use crate::integrations::telemetry::state::TelemetryState;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard, PoisonError};
@@ -33,6 +35,28 @@ pub fn save_display_settings(
     settings: DisplaySettings,
 ) -> Result<(), AppError> {
     update_local_store(&app, |store| store.display_settings = settings)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn telemetry_get_settings(app: tauri::AppHandle) -> TelemetrySettings {
+    app.state::<TelemetryState>().recorder().settings()
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn telemetry_set_enabled(
+    app: tauri::AppHandle,
+    enabled: bool,
+) -> Result<TelemetrySettings, AppError> {
+    let settings = app
+        .state::<TelemetryState>()
+        .recorder()
+        .set_enabled(enabled);
+
+    update_local_store(&app, |store| store.telemetry = settings.clone())?;
+
+    Ok(settings)
 }
 
 /// Writers must change the store only through this, so concurrent commands cannot drop each other's changes.
@@ -179,7 +203,7 @@ mod tests {
     use super::*;
     use crate::integrations::local_store::types::{
         ApiEndpoints, CachedHoliday, DayliteCache, DayliteContactCacheEntry, DayliteContactUrl,
-        DisplaySettings, EmployeeSetting, HolidayCacheEntry, TelemetrySettings,
+        DisplaySettings, EmployeeSetting, HolidayCacheEntry,
     };
     use std::fs;
     use std::path::PathBuf;

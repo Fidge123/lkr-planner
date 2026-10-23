@@ -41,8 +41,8 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             integrations::zep::commands::zep_test_credentials,
             integrations::zep::commands::zep_discover_calendars,
             integrations::zep::commands::zep_save_and_test_calendar,
-            integrations::telemetry::commands::telemetry_get_settings,
-            integrations::telemetry::commands::telemetry_set_enabled,
+            integrations::local_store::telemetry_get_settings,
+            integrations::local_store::telemetry_set_enabled,
             integrations::telemetry::commands::telemetry_capture_frontend_error,
         ])
 }
