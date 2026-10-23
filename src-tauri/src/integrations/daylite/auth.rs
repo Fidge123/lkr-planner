@@ -2,8 +2,9 @@ use super::auth_flow::refresh_tokens;
 use super::client::DayliteApiClient;
 use super::shared::{
     adopt_daylite_tokens, load_store_or_error, normalize_base_url, save_store_or_error,
-    DayliteApiError, DayliteRefreshTokenRequest, DayliteTokenState, DayliteTokenSyncStatus,
+    DayliteRefreshTokenRequest, DayliteTokenState, DayliteTokenSyncStatus,
 };
+use crate::error::AppError;
 use crate::integrations::telemetry::events::{Integration, Operation};
 use crate::integrations::telemetry::observe::observe;
 
@@ -12,7 +13,7 @@ use crate::integrations::telemetry::observe::observe;
 pub async fn daylite_connect_refresh_token(
     app: tauri::AppHandle,
     request: DayliteRefreshTokenRequest,
-) -> Result<DayliteTokenSyncStatus, DayliteApiError> {
+) -> Result<DayliteTokenSyncStatus, AppError> {
     let handle = app.clone();
     observe(
         &handle,
@@ -26,7 +27,7 @@ pub async fn daylite_connect_refresh_token(
 async fn daylite_connect_refresh_token_inner(
     app: tauri::AppHandle,
     request: DayliteRefreshTokenRequest,
-) -> Result<DayliteTokenSyncStatus, DayliteApiError> {
+) -> Result<DayliteTokenSyncStatus, AppError> {
     let base_url = normalize_base_url(&request.base_url)?;
     let client = DayliteApiClient::new(&base_url)?.with_telemetry(&app);
 
@@ -49,8 +50,8 @@ async fn daylite_connect_refresh_token_inner(
 async fn mint_and_save_base_url(
     client: &DayliteApiClient,
     refresh_token: String,
-    save_base_url: impl FnOnce() -> Result<(), DayliteApiError>,
-) -> Result<DayliteTokenState, DayliteApiError> {
+    save_base_url: impl FnOnce() -> Result<(), AppError>,
+) -> Result<DayliteTokenState, AppError> {
     let minted = refresh_tokens(client, refresh_token).await?;
     save_base_url()?;
     Ok(minted)
@@ -59,7 +60,7 @@ async fn mint_and_save_base_url(
 #[cfg(test)]
 mod tests {
     use super::mint_and_save_base_url;
-    use crate::integrations::daylite::shared::{DayliteApiError, DayliteApiErrorCode};
+    use crate::error::{AppError, AppErrorCode};
     use crate::integrations::daylite::test_support::{mock_client, mock_response};
     use std::cell::Cell;
 
@@ -91,7 +92,7 @@ mod tests {
         .await
         .expect_err("a rejected refresh token should fail");
 
-        assert_eq!(error.code, DayliteApiErrorCode::TokenRefreshFailed);
+        assert_eq!(error.code, AppErrorCode::TokenRefreshFailed);
     }
 
     #[tokio::test]
@@ -99,8 +100,8 @@ mod tests {
         let (client, _) = mock_client(vec![Ok(mock_response(200, REFRESHED))]);
 
         let error = mint_and_save_base_url(&client, "rt".to_string(), || {
-            Err(DayliteApiError::new(
-                DayliteApiErrorCode::InvalidConfiguration,
+            Err(AppError::new(
+                AppErrorCode::InvalidConfiguration,
                 "Speichern fehlgeschlagen",
                 "store",
             ))
@@ -108,6 +109,6 @@ mod tests {
         .await
         .expect_err("a failed save should surface");
 
-        assert_eq!(error.code, DayliteApiErrorCode::InvalidConfiguration);
+        assert_eq!(error.code, AppErrorCode::InvalidConfiguration);
     }
 }

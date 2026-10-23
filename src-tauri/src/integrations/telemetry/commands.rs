@@ -1,6 +1,7 @@
 use super::events::{ErrorCode, Integration, Operation, TelemetryEvent};
 use super::state::TelemetryState;
-use crate::integrations::local_store::types::{StoreError, TelemetrySettings};
+use crate::error::AppError;
+use crate::integrations::local_store::types::TelemetrySettings;
 use crate::integrations::local_store::{load_local_store, save_local_store};
 use serde::{Deserialize, Serialize};
 use specta::Type;
@@ -44,7 +45,7 @@ pub fn telemetry_get_settings(app: tauri::AppHandle) -> TelemetrySettings {
 pub fn telemetry_set_enabled(
     app: tauri::AppHandle,
     enabled: bool,
-) -> Result<TelemetrySettings, StoreError> {
+) -> Result<TelemetrySettings, AppError> {
     let settings = app
         .state::<TelemetryState>()
         .recorder()

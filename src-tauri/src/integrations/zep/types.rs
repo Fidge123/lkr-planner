@@ -1,4 +1,3 @@
-pub use crate::error::{AppError as ZepError, AppErrorCode as ZepErrorCode};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 

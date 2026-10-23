@@ -9,10 +9,10 @@ use super::commands::{load_caldav_session, resolve_employee_calendar_url};
 use super::events::classify_event;
 use super::slots::full_window;
 use super::types::RawVEvent;
+use crate::error::AppError;
 use crate::integrations::daylite::appointments::{
     AppointmentFields, AppointmentStore, DayliteAppointment, DayliteAppointments,
 };
-use crate::integrations::daylite::shared::DayliteApiError;
 use crate::integrations::local_store::LocalStore;
 use crate::integrations::telemetry::events::{Integration, Operation};
 use crate::integrations::telemetry::observe::{
@@ -75,7 +75,7 @@ async fn reconcile_worker_day(
     }
 
     let mut synced = true;
-    let mut succeeded = |result: Result<(), DayliteApiError>| match result {
+    let mut succeeded = |result: Result<(), AppError>| match result {
         Ok(()) => true,
         Err(error) => {
             synced = sync_failed(telemetry, Integration::Daylite, &error);
@@ -312,8 +312,8 @@ fn worker_of_href(store: &LocalStore, base_url: &str, href: &str) -> Option<Stri
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::error::AppErrorCode;
     use crate::integrations::daylite::appointments::{DayliteContactLink, DayliteProjectLink};
-    use crate::integrations::daylite::shared::DayliteApiErrorCode;
     use crate::integrations::local_store::EmployeeSetting;
     use crate::integrations::telemetry::recorder::TelemetryCommand;
     use crate::integrations::telemetry::test_support::{enabled_recorder, recorded};
@@ -419,11 +419,11 @@ mod tests {
     }
 
     impl StubAppointments {
-        fn respond<T>(&self, request: String, fails: bool, value: T) -> Result<T, DayliteApiError> {
+        fn respond<T>(&self, request: String, fails: bool, value: T) -> Result<T, AppError> {
             self.requests.lock().unwrap().push(request);
             if fails {
-                return Err(DayliteApiError {
-                    code: DayliteApiErrorCode::ServerError,
+                return Err(AppError {
+                    code: AppErrorCode::ServerError,
                     http_status: Some(503),
                     user_message: "Daylite ist aktuell nicht erreichbar.".to_string(),
                     technical_message: "status=503".to_string(),
@@ -442,10 +442,7 @@ mod tests {
     }
 
     impl AppointmentStore for StubAppointments {
-        async fn search_day(
-            &self,
-            date: NaiveDate,
-        ) -> Result<Vec<DayliteAppointment>, DayliteApiError> {
+        async fn search_day(&self, date: NaiveDate) -> Result<Vec<DayliteAppointment>, AppError> {
             self.respond(
                 format!("search {date}"),
                 self.search_fails,
@@ -453,11 +450,7 @@ mod tests {
             )
         }
 
-        async fn create(
-            &self,
-            fields: &AppointmentFields,
-            contact: &str,
-        ) -> Result<(), DayliteApiError> {
+        async fn create(&self, fields: &AppointmentFields, contact: &str) -> Result<(), AppError> {
             self.respond(
                 format!("create {} {contact}", fields.project_ref),
                 self.fails(&fields.project_ref),
@@ -470,12 +463,12 @@ mod tests {
             reference: &str,
             _: &AppointmentFields,
             link: Option<&str>,
-        ) -> Result<(), DayliteApiError> {
+        ) -> Result<(), AppError> {
             let request = format!("update {reference} {}", link.unwrap_or_default());
             self.respond(request.trim_end().to_string(), self.fails(reference), ())
         }
 
-        async fn unlink(&self, reference: &str, contact: &str) -> Result<(), DayliteApiError> {
+        async fn unlink(&self, reference: &str, contact: &str) -> Result<(), AppError> {
             self.respond(
                 format!("unlink {reference} {contact}"),
                 self.fails(reference),
@@ -483,7 +476,7 @@ mod tests {
             )
         }
 
-        async fn delete(&self, reference: &str) -> Result<(), DayliteApiError> {
+        async fn delete(&self, reference: &str) -> Result<(), AppError> {
             self.respond(format!("delete {reference}"), self.fails(reference), ())
         }
     }

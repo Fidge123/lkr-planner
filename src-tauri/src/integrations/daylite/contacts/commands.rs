@@ -5,9 +5,10 @@ use super::mapping::{
     sort_contacts,
 };
 use super::types::PlanningContactRecord;
+use crate::error::AppError;
 use crate::integrations::daylite::client::DayliteApiClient;
 use crate::integrations::daylite::shared::{
-    load_store_or_error, save_store_or_error, with_daylite_tokens, DayliteApiError,
+    load_store_or_error, save_store_or_error, with_daylite_tokens,
 };
 use crate::integrations::telemetry::events::{Integration, Operation};
 use crate::integrations::telemetry::observe::observe;
@@ -16,7 +17,7 @@ use crate::integrations::telemetry::observe::observe;
 #[specta::specta]
 pub async fn daylite_list_contacts(
     app: tauri::AppHandle,
-) -> Result<Vec<PlanningContactRecord>, DayliteApiError> {
+) -> Result<Vec<PlanningContactRecord>, AppError> {
     let handle = app.clone();
     observe(
         &handle,
@@ -31,7 +32,7 @@ pub async fn daylite_list_contacts(
 #[specta::specta]
 pub async fn daylite_list_cached_contacts(
     app: tauri::AppHandle,
-) -> Result<Vec<PlanningContactRecord>, DayliteApiError> {
+) -> Result<Vec<PlanningContactRecord>, AppError> {
     let handle = app.clone();
     observe(
         &handle,
@@ -44,7 +45,7 @@ pub async fn daylite_list_cached_contacts(
 
 async fn daylite_list_contacts_inner(
     app: tauri::AppHandle,
-) -> Result<Vec<PlanningContactRecord>, DayliteApiError> {
+) -> Result<Vec<PlanningContactRecord>, AppError> {
     let mut store = load_store_or_error(app.clone())?;
     let client = DayliteApiClient::new(&store.api_endpoints.daylite_base_url)?.with_telemetry(&app);
     let contacts =
@@ -65,7 +66,7 @@ async fn daylite_list_contacts_inner(
 
 fn daylite_list_cached_contacts_inner(
     app: tauri::AppHandle,
-) -> Result<Vec<PlanningContactRecord>, DayliteApiError> {
+) -> Result<Vec<PlanningContactRecord>, AppError> {
     let store = load_store_or_error(app)?;
     Ok(sort_contacts(filter_planning_contacts(
         store

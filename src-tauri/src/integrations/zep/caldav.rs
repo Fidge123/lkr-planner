@@ -1,4 +1,5 @@
-use super::types::{ZepCalendar, ZepError, ZepErrorCode};
+use super::types::ZepCalendar;
+use crate::error::{AppError, AppErrorCode};
 use std::time::Duration;
 use tauri_plugin_http::reqwest;
 use tauri_plugin_http::reqwest::Method;
@@ -29,10 +30,10 @@ pub(super) async fn propfind(
     url: &str,
     username: &str,
     password: &str,
-) -> Result<String, ZepError> {
+) -> Result<String, AppError> {
     let client = shared_caldav_client().map_err(|e| {
-        ZepError::new(
-            ZepErrorCode::NetworkError,
+        AppError::new(
+            AppErrorCode::NetworkError,
             "HTTP-Client konnte nicht initialisiert werden.",
             e,
         )
@@ -49,8 +50,8 @@ pub(super) async fn propfind(
         .send()
         .await
         .map_err(|e| {
-            ZepError::new(
-                ZepErrorCode::NetworkError,
+            AppError::new(
+                AppErrorCode::NetworkError,
                 "ZEP CalDAV-Server ist nicht erreichbar.",
                 format!("PROPFIND fehlgeschlagen für {url}: {e}"),
             )
@@ -59,23 +60,23 @@ pub(super) async fn propfind(
     let status = response.status().as_u16();
     match status {
         401 => {
-            return Err(ZepError::new(
-                ZepErrorCode::Unauthorized,
+            return Err(AppError::new(
+                AppErrorCode::Unauthorized,
                 "Authentifizierung fehlgeschlagen. ZEP-Zugangsdaten prüfen.",
                 format!("PROPFIND returned HTTP 401 for {url}"),
             ));
         }
         404 => {
-            return Err(ZepError::new(
-                ZepErrorCode::NotFound,
+            return Err(AppError::new(
+                AppErrorCode::NotFound,
                 "ZEP CalDAV-URL nicht gefunden. Root-URL prüfen.",
                 format!("PROPFIND returned HTTP 404 for {url}"),
             ));
         }
         200..=299 => {}
         _ => {
-            return Err(ZepError::new(
-                ZepErrorCode::NetworkError,
+            return Err(AppError::new(
+                AppErrorCode::NetworkError,
                 "ZEP CalDAV-Server hat einen Fehler zurückgegeben.",
                 format!("PROPFIND returned HTTP {status} for {url}"),
             ));
@@ -83,8 +84,8 @@ pub(super) async fn propfind(
     }
 
     response.text().await.map_err(|e| {
-        ZepError::new(
-            ZepErrorCode::InvalidResponse,
+        AppError::new(
+            AppErrorCode::InvalidResponse,
             "Die Antwort des ZEP CalDAV-Servers konnte nicht gelesen werden.",
             format!("Response body read fehlgeschlagen: {e}"),
         )
@@ -95,10 +96,10 @@ pub(super) async fn probe_calendar(
     url: &str,
     username: &str,
     password: &str,
-) -> Result<(), ZepError> {
+) -> Result<(), AppError> {
     let client = shared_caldav_client().map_err(|e| {
-        ZepError::new(
-            ZepErrorCode::NetworkError,
+        AppError::new(
+            AppErrorCode::NetworkError,
             "HTTP-Client konnte nicht initialisiert werden.",
             e,
         )
@@ -115,8 +116,8 @@ pub(super) async fn probe_calendar(
         .send()
         .await
         .map_err(|e| {
-            ZepError::new(
-                ZepErrorCode::NetworkError,
+            AppError::new(
+                AppErrorCode::NetworkError,
                 "ZEP CalDAV-Server ist nicht erreichbar.",
                 format!("PROPFIND Depth:0 fehlgeschlagen für {url}: {e}"),
             )
@@ -124,19 +125,19 @@ pub(super) async fn probe_calendar(
 
     let status = response.status().as_u16();
     match status {
-        401 => Err(ZepError::new(
-            ZepErrorCode::Unauthorized,
+        401 => Err(AppError::new(
+            AppErrorCode::Unauthorized,
             "Authentifizierung fehlgeschlagen. ZEP-Zugangsdaten prüfen.",
             format!("PROPFIND Depth:0 returned HTTP 401 for {url}"),
         )),
-        404 => Err(ZepError::new(
-            ZepErrorCode::NotFound,
+        404 => Err(AppError::new(
+            AppErrorCode::NotFound,
             "Kalender nicht gefunden. Kalender-Zuweisung prüfen.",
             format!("PROPFIND Depth:0 returned HTTP 404 for {url}"),
         )),
         200..=299 => Ok(()),
-        _ => Err(ZepError::new(
-            ZepErrorCode::NetworkError,
+        _ => Err(AppError::new(
+            AppErrorCode::NetworkError,
             "ZEP CalDAV-Server hat einen Fehler zurückgegeben.",
             format!("PROPFIND Depth:0 returned HTTP {status} for {url}"),
         )),

@@ -5,7 +5,7 @@ use crate::integrations::telemetry::observe::observe;
 #[specta::specta]
 pub async fn daylite_query_overdue_projects(
     app: tauri::AppHandle,
-) -> Result<Vec<DayliteProjectSummary>, DayliteApiError> {
+) -> Result<Vec<DayliteProjectSummary>, AppError> {
     let handle = app.clone();
     observe(
         &handle,
@@ -21,7 +21,7 @@ pub async fn daylite_query_overdue_projects(
 pub async fn daylite_search_projects(
     app: tauri::AppHandle,
     input: DayliteSearchInput,
-) -> Result<DayliteSearchResult<DayliteProjectSummary>, DayliteApiError> {
+) -> Result<DayliteSearchResult<DayliteProjectSummary>, AppError> {
     let handle = app.clone();
     observe(
         &handle,
@@ -39,9 +39,10 @@ use super::client::DayliteHttpRequest;
 use super::project_cache::{cache_now_ms, persist_project_cache, project_cache};
 use super::shared::{
     build_limit_query, load_store_or_error, run_daylite_command, trimmed, trimmed_or_none,
-    with_daylite_tokens, DayliteApiError, DayliteSearchInput, DayliteSearchResult,
-    DayliteSearchSort, DayliteTokenState,
+    with_daylite_tokens, DayliteSearchInput, DayliteSearchResult, DayliteSearchSort,
+    DayliteTokenState,
 };
+use crate::error::AppError;
 use chrono::{DateTime, NaiveDate, SecondsFormat, Utc};
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
@@ -107,7 +108,7 @@ const OVERDUE_CANDIDATE_LIMIT: u16 = 50;
 
 async fn daylite_query_overdue_projects_inner(
     app: tauri::AppHandle,
-) -> Result<Vec<DayliteProjectSummary>, DayliteApiError> {
+) -> Result<Vec<DayliteProjectSummary>, AppError> {
     run_daylite_command(app, async |client, tokens| {
         query_overdue_projects_core(client, tokens).await
     })
@@ -117,7 +118,7 @@ async fn daylite_query_overdue_projects_inner(
 async fn daylite_search_projects_inner(
     app: tauri::AppHandle,
     input: DayliteSearchInput,
-) -> Result<DayliteSearchResult<DayliteProjectSummary>, DayliteApiError> {
+) -> Result<DayliteSearchResult<DayliteProjectSummary>, AppError> {
     run_daylite_command(app, async move |client, tokens| {
         search_projects_core(client, tokens, &input).await
     })
@@ -127,7 +128,7 @@ async fn daylite_search_projects_inner(
 pub(super) async fn query_overdue_projects_core(
     client: &DayliteApiClient,
     token_state: DayliteTokenState,
-) -> Result<Vec<DayliteProjectSummary>, DayliteApiError> {
+) -> Result<Vec<DayliteProjectSummary>, AppError> {
     let clauses: Vec<serde_json::Value> = OVERDUE_STATUSES
         .iter()
         .map(|status| {
@@ -169,7 +170,7 @@ pub(super) async fn search_projects_core(
     client: &DayliteApiClient,
     token_state: DayliteTokenState,
     input: &DayliteSearchInput,
-) -> Result<DayliteSearchResult<DayliteProjectSummary>, DayliteApiError> {
+) -> Result<DayliteSearchResult<DayliteProjectSummary>, AppError> {
     let body = match &input.statuses {
         Some(statuses) if !statuses.is_empty() => {
             let clauses: Vec<serde_json::Value> = statuses
@@ -308,7 +309,7 @@ pub async fn resolve_week_projects(
     app: tauri::AppHandle,
     project_refs: Vec<String>,
     force_refresh: bool,
-) -> Result<HashMap<String, Option<ResolvedProject>>, DayliteApiError> {
+) -> Result<HashMap<String, Option<ResolvedProject>>, AppError> {
     let handle = app.clone();
     observe(
         &handle,
@@ -323,7 +324,7 @@ async fn resolve_week_projects_inner(
     app: tauri::AppHandle,
     project_refs: Vec<String>,
     force_refresh: bool,
-) -> Result<HashMap<String, Option<ResolvedProject>>, DayliteApiError> {
+) -> Result<HashMap<String, Option<ResolvedProject>>, AppError> {
     let references: HashSet<String> = project_refs.into_iter().collect();
     let cache = project_cache();
     let now_ms = cache_now_ms();
@@ -435,11 +436,11 @@ mod tests {
         resolve_project, search_projects_core, DayliteProjectSummaryDto, ResolvedProject,
         FIXED_APPOINTMENT_CATEGORY,
     };
+    use crate::error::{AppError, AppErrorCode};
     use crate::integrations::daylite::client::DayliteApiClient;
     use crate::integrations::daylite::client::DayliteHttpMethod;
     use crate::integrations::daylite::shared::{
-        DayliteApiError, DayliteApiErrorCode, DayliteSearchInput, DayliteSearchResult,
-        DayliteSearchSort,
+        DayliteSearchInput, DayliteSearchResult, DayliteSearchSort,
     };
     use crate::integrations::daylite::test_support::{
         mock_client, mock_response, token_state, valid_token_state,
@@ -1081,7 +1082,7 @@ mod tests {
         .await;
 
         let err = result.expect_err("malformed response should return error");
-        assert_eq!(err.code, DayliteApiErrorCode::InvalidResponse);
+        assert_eq!(err.code, AppErrorCode::InvalidResponse);
         assert!(
             err.user_message.contains("Daylite"),
             "error message should mention Daylite: {}",
@@ -1091,8 +1092,8 @@ mod tests {
 
     #[tokio::test]
     async fn timeout_error_propagates_from_transport() {
-        let (client, _) = mock_client(vec![Err(DayliteApiError {
-            code: DayliteApiErrorCode::Timeout,
+        let (client, _) = mock_client(vec![Err(AppError {
+            code: AppErrorCode::Timeout,
             http_status: None,
             user_message: "Zeitüberschreitung bei der Daylite-Anfrage.".to_string(),
             technical_message: "request timed out".to_string(),
@@ -1109,7 +1110,7 @@ mod tests {
         .await;
 
         let err = result.expect_err("timeout from transport should propagate as error");
-        assert_eq!(err.code, DayliteApiErrorCode::Timeout);
+        assert_eq!(err.code, AppErrorCode::Timeout);
         assert_eq!(
             err.user_message,
             "Zeitüberschreitung bei der Daylite-Anfrage."

@@ -1,4 +1,5 @@
-use super::types::{LocalStore, StoreError, StoreErrorCode};
+use super::types::LocalStore;
+use crate::error::{AppError, AppErrorCode};
 use crate::integrations::telemetry::events::{Integration, Operation};
 use crate::integrations::telemetry::observe::record_failure;
 use std::fs;
@@ -9,14 +10,14 @@ const STORE_FILE_NAME: &str = "local-store.json";
 
 #[tauri::command]
 #[specta::specta]
-pub fn load_local_store(app: tauri::AppHandle) -> Result<LocalStore, StoreError> {
+pub fn load_local_store(app: tauri::AppHandle) -> Result<LocalStore, AppError> {
     let store_path = app
         .path()
         .app_config_dir()
         .map(|path| path.join(STORE_FILE_NAME))
         .map_err(|error| {
-            StoreError::new(
-                StoreErrorCode::ReadFailed,
+            AppError::new(
+                AppErrorCode::ReadFailed,
                 "Die lokale Konfiguration konnte nicht geladen werden.",
                 format!("Pfad konnte nicht aufgelöst werden: {error}"),
             )
@@ -34,7 +35,7 @@ pub fn load_local_store(app: tauri::AppHandle) -> Result<LocalStore, StoreError>
 
 #[tauri::command]
 #[specta::specta]
-pub fn save_local_store(app: tauri::AppHandle, store: LocalStore) -> Result<(), StoreError> {
+pub fn save_local_store(app: tauri::AppHandle, store: LocalStore) -> Result<(), AppError> {
     save_store_internal(&app, store).inspect_err(|error| {
         record_failure(
             &app,
@@ -48,33 +49,33 @@ pub fn save_local_store(app: tauri::AppHandle, store: LocalStore) -> Result<(), 
 pub(crate) fn save_store_internal(
     app: &tauri::AppHandle,
     mut store: LocalStore,
-) -> Result<(), StoreError> {
+) -> Result<(), AppError> {
     let store_path = get_store_path(app)?;
     store.cleanup_holiday_cache(chrono::Utc::now().date_naive());
     save_store_to_path(&store_path, &store)
 }
 
-fn get_store_path(app: &tauri::AppHandle) -> Result<PathBuf, StoreError> {
+fn get_store_path(app: &tauri::AppHandle) -> Result<PathBuf, AppError> {
     app.path()
         .app_config_dir()
         .map(|path| path.join(STORE_FILE_NAME))
         .map_err(|error| {
-            StoreError::new(
-                StoreErrorCode::WriteFailed,
+            AppError::new(
+                AppErrorCode::WriteFailed,
                 "Die lokale Konfiguration konnte nicht gespeichert werden.",
                 format!("Pfad konnte nicht aufgelöst werden: {error}"),
             )
         })
 }
 
-fn load_store_from_path(path: &Path) -> Result<LocalStore, StoreError> {
+fn load_store_from_path(path: &Path) -> Result<LocalStore, AppError> {
     if !path.exists() {
         return Ok(LocalStore::default());
     }
 
     let content = fs::read_to_string(path).map_err(|error| {
-        StoreError::new(
-            StoreErrorCode::ReadFailed,
+        AppError::new(
+            AppErrorCode::ReadFailed,
             "Die lokale Konfiguration konnte nicht geladen werden.",
             format!(
                 "Datei konnte nicht gelesen werden ({}): {error}",
@@ -85,26 +86,26 @@ fn load_store_from_path(path: &Path) -> Result<LocalStore, StoreError> {
 
     serde_json::from_str::<LocalStore>(&content).map_err(|error| {
         if error.to_string().contains("missing field") {
-            return StoreError::new(
-                StoreErrorCode::MissingFields,
+            return AppError::new(
+                AppErrorCode::MissingFields,
                 "Die lokale Konfiguration ist unvollständig und muss geprüft werden.",
                 format!("Fehlende Felder in {}: {error}", path.display()),
             );
         }
 
-        StoreError::new(
-            StoreErrorCode::CorruptFile,
+        AppError::new(
+            AppErrorCode::CorruptFile,
             "Die lokale Konfiguration ist beschädigt und konnte nicht gelesen werden.",
             format!("Ungültiges JSON in {}: {error}", path.display()),
         )
     })
 }
 
-fn save_store_to_path(path: &Path, store: &LocalStore) -> Result<(), StoreError> {
+fn save_store_to_path(path: &Path, store: &LocalStore) -> Result<(), AppError> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|error| {
-            StoreError::new(
-                StoreErrorCode::WriteFailed,
+            AppError::new(
+                AppErrorCode::WriteFailed,
                 "Die lokale Konfiguration konnte nicht gespeichert werden.",
                 format!(
                     "Verzeichnis konnte nicht erstellt werden ({}): {error}",
@@ -115,16 +116,16 @@ fn save_store_to_path(path: &Path, store: &LocalStore) -> Result<(), StoreError>
     }
 
     let serialized_store = serde_json::to_string_pretty(store).map_err(|error| {
-        StoreError::new(
-            StoreErrorCode::WriteFailed,
+        AppError::new(
+            AppErrorCode::WriteFailed,
             "Die lokale Konfiguration konnte nicht gespeichert werden.",
             format!("Serialisierung fehlgeschlagen: {error}"),
         )
     })?;
 
     fs::write(path, serialized_store).map_err(|error| {
-        StoreError::new(
-            StoreErrorCode::WriteFailed,
+        AppError::new(
+            AppErrorCode::WriteFailed,
             "Die lokale Konfiguration konnte nicht gespeichert werden.",
             format!(
                 "Datei konnte nicht geschrieben werden ({}): {error}",
@@ -219,7 +220,7 @@ mod tests {
 
         let error = load_store_from_path(&test_path).expect_err("load should fail");
 
-        assert_eq!(error.code, StoreErrorCode::CorruptFile);
+        assert_eq!(error.code, AppErrorCode::CorruptFile);
         assert_eq!(
             error.user_message,
             "Die lokale Konfiguration ist beschädigt und konnte nicht gelesen werden."
@@ -241,7 +242,7 @@ mod tests {
 
         let error = load_store_from_path(&test_path).expect_err("load should fail");
 
-        assert_eq!(error.code, StoreErrorCode::MissingFields);
+        assert_eq!(error.code, AppErrorCode::MissingFields);
         assert_eq!(
             error.user_message,
             "Die lokale Konfiguration ist unvollständig und muss geprüft werden."

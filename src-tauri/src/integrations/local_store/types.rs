@@ -1,4 +1,3 @@
-pub use crate::error::{AppError as StoreError, AppErrorCode as StoreErrorCode};
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 use specta::Type;

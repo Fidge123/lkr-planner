@@ -2,6 +2,7 @@ use super::super::local_store::{self, LocalStore};
 use super::auth_flow::refresh_tokens;
 use super::client::DayliteApiClient;
 use super::token_session::{token_session, TokenLease};
+use crate::error::{AppError, AppErrorCode};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use specta::Type;
@@ -32,8 +33,6 @@ pub struct DayliteSearchResult<T> {
     #[serde(default)]
     pub next: Option<String>,
 }
-
-pub use crate::error::{AppError as DayliteApiError, AppErrorCode as DayliteApiErrorCode};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -74,11 +73,11 @@ pub(super) fn build_limit_query(limit: Option<u16>) -> Vec<(String, String)> {
     query
 }
 
-pub(super) fn normalize_base_url(base_url: &str) -> Result<String, DayliteApiError> {
+pub(super) fn normalize_base_url(base_url: &str) -> Result<String, AppError> {
     let trimmed = base_url.trim().trim_end_matches('/');
     if trimmed.is_empty() {
-        return Err(DayliteApiError::new(
-            DayliteApiErrorCode::InvalidConfiguration,
+        return Err(AppError::new(
+            AppErrorCode::InvalidConfiguration,
             "Die Daylite-URL ist nicht konfiguriert.",
             "Leere dayliteBaseUrl-Konfiguration",
         ));
@@ -87,20 +86,20 @@ pub(super) fn normalize_base_url(base_url: &str) -> Result<String, DayliteApiErr
     Ok(trimmed.to_string())
 }
 
-pub(super) fn load_daylite_tokens() -> Result<DayliteTokenState, DayliteApiError> {
+pub(super) fn load_daylite_tokens() -> Result<DayliteTokenState, AppError> {
     match crate::secret_manager::get_token("lkr-planner-daylite", "LKR Planner Daylite Token") {
         Ok(json_str) => serde_json::from_str(&json_str).map_err(|e| {
-            DayliteApiError::new(DayliteApiErrorCode::InvalidConfiguration, "Die gespeicherten Daylite-Zugangsdaten sind beschädigt. Bitte verbinde dich erneut.", format!("Token-JSON konnte nicht deserialisiert werden: {e}"))
+            AppError::new(AppErrorCode::InvalidConfiguration, "Die gespeicherten Daylite-Zugangsdaten sind beschädigt. Bitte verbinde dich erneut.", format!("Token-JSON konnte nicht deserialisiert werden: {e}"))
         }),
         Err(crate::secret_manager::SecretError::NotFound) => Ok(DayliteTokenState::default()),
-        Err(e) => Err(DayliteApiError::new(DayliteApiErrorCode::InvalidConfiguration, "Auf die Daylite-Zugangsdaten im Keychain konnte nicht zugegriffen werden. Bitte prüfe die Keychain-Berechtigungen.", format!("Keychain-Fehler beim Lesen des Daylite-Tokens: {e}"))),
+        Err(e) => Err(AppError::new(AppErrorCode::InvalidConfiguration, "Auf die Daylite-Zugangsdaten im Keychain konnte nicht zugegriffen werden. Bitte prüfe die Keychain-Berechtigungen.", format!("Keychain-Fehler beim Lesen des Daylite-Tokens: {e}"))),
     }
 }
 
-pub(super) fn store_daylite_tokens(token_state: &DayliteTokenState) -> Result<(), DayliteApiError> {
+pub(super) fn store_daylite_tokens(token_state: &DayliteTokenState) -> Result<(), AppError> {
     let json_str = serde_json::to_string(token_state).map_err(|e| {
-        DayliteApiError::new(
-            DayliteApiErrorCode::ServerError,
+        AppError::new(
+            AppErrorCode::ServerError,
             "Token konnten nicht sicher gespeichert werden.",
             format!("Token serialization failed: {e}"),
         )
@@ -112,15 +111,15 @@ pub(super) fn store_daylite_tokens(token_state: &DayliteTokenState) -> Result<()
         &json_str,
     )
     .map_err(|e| {
-        DayliteApiError::new(
-            DayliteApiErrorCode::ServerError,
+        AppError::new(
+            AppErrorCode::ServerError,
             "Auf den sicheren Speicher konnte nicht zugegriffen werden (Keychain verweigert?).",
             e.to_string(),
         )
     })
 }
 
-async fn lease_tokens(client: &DayliteApiClient) -> Result<TokenLease, DayliteApiError> {
+async fn lease_tokens(client: &DayliteApiClient) -> Result<TokenLease, AppError> {
     let session = token_session();
     if session.is_empty() {
         session.seed(load_daylite_tokens()?);
@@ -136,7 +135,7 @@ async fn lease_tokens(client: &DayliteApiClient) -> Result<TokenLease, DayliteAp
 async fn rotate_tokens(
     client: &DayliteApiClient,
     current: DayliteTokenState,
-) -> Result<DayliteTokenState, DayliteApiError> {
+) -> Result<DayliteTokenState, AppError> {
     if current.access_token.trim().is_empty() && current.refresh_token.trim().is_empty() {
         return Err(missing_token_error(
             "Es sind keine Daylite-Zugangsdaten hinterlegt. Bitte ein Refresh-Token hinterlegen.",
@@ -151,10 +150,10 @@ async fn rotate_tokens(
 pub(super) async fn with_daylite_tokens<T, F, Fut>(
     client: &DayliteApiClient,
     operation: F,
-) -> Result<T, DayliteApiError>
+) -> Result<T, AppError>
 where
     F: Fn(DayliteTokenState) -> Fut,
-    Fut: std::future::Future<Output = Result<T, DayliteApiError>>,
+    Fut: std::future::Future<Output = Result<T, AppError>>,
 {
     let lease = lease_tokens(client).await?;
     retry_once_on_unauthorized(lease.tokens.clone(), operation, || async {
@@ -170,17 +169,15 @@ async fn retry_once_on_unauthorized<T, F, Fut, R, RFut>(
     tokens: DayliteTokenState,
     operation: F,
     renew: R,
-) -> Result<T, DayliteApiError>
+) -> Result<T, AppError>
 where
     F: Fn(DayliteTokenState) -> Fut,
-    Fut: std::future::Future<Output = Result<T, DayliteApiError>>,
+    Fut: std::future::Future<Output = Result<T, AppError>>,
     R: FnOnce() -> RFut,
-    RFut: std::future::Future<Output = Result<DayliteTokenState, DayliteApiError>>,
+    RFut: std::future::Future<Output = Result<DayliteTokenState, AppError>>,
 {
     match operation(tokens).await {
-        Err(error) if error.code == DayliteApiErrorCode::Unauthorized => {
-            operation(renew().await?).await
-        }
+        Err(error) if error.code == AppErrorCode::Unauthorized => operation(renew().await?).await,
         result => result,
     }
 }
@@ -189,9 +186,9 @@ where
 pub(super) async fn with_daylite_tokens_once<Fut>(
     client: &DayliteApiClient,
     operation: impl FnOnce(DayliteTokenState) -> Fut,
-) -> Result<(), DayliteApiError>
+) -> Result<(), AppError>
 where
-    Fut: std::future::Future<Output = Result<(), DayliteApiError>>,
+    Fut: std::future::Future<Output = Result<(), AppError>>,
 {
     let lease = lease_tokens(client).await?;
     operation(lease.tokens).await
@@ -200,63 +197,61 @@ where
 /// Only for read-only bodies; mutating commands manage the local store themselves.
 pub(super) async fn run_daylite_command<T>(
     app: tauri::AppHandle,
-    operation: impl AsyncFn(&DayliteApiClient, DayliteTokenState) -> Result<T, DayliteApiError>,
-) -> Result<T, DayliteApiError> {
+    operation: impl AsyncFn(&DayliteApiClient, DayliteTokenState) -> Result<T, AppError>,
+) -> Result<T, AppError> {
     let store = load_store_or_error(app.clone())?;
     let client = DayliteApiClient::new(&store.api_endpoints.daylite_base_url)?.with_telemetry(&app);
     with_daylite_tokens(&client, |tokens| operation(&client, tokens)).await
 }
 
-pub(super) async fn adopt_daylite_tokens<F, Fut>(
-    mint: F,
-) -> Result<DayliteTokenState, DayliteApiError>
+pub(super) async fn adopt_daylite_tokens<F, Fut>(mint: F) -> Result<DayliteTokenState, AppError>
 where
     F: FnOnce() -> Fut,
-    Fut: std::future::Future<Output = Result<DayliteTokenState, DayliteApiError>>,
+    Fut: std::future::Future<Output = Result<DayliteTokenState, AppError>>,
 {
     token_session().adopt(mint).await
 }
 
 /// Must run before the process exits, including the restart that installs an update.
-pub async fn close_daylite_token_session() -> Result<(), DayliteApiError> {
+pub async fn close_daylite_token_session() -> Result<(), AppError> {
     token_session().close().await
 }
 
-pub(super) fn load_store_or_error(app: tauri::AppHandle) -> Result<LocalStore, DayliteApiError> {
+pub(super) fn load_store_or_error(app: tauri::AppHandle) -> Result<LocalStore, AppError> {
     local_store::load_local_store(app).map_err(map_store_error)
 }
 
 pub(super) fn save_store_or_error(
     app: tauri::AppHandle,
     store: LocalStore,
-) -> Result<(), DayliteApiError> {
+) -> Result<(), AppError> {
     local_store::save_local_store(app, store).map_err(map_store_error)
 }
 
-pub(super) fn normalize_http_error(status: u16, body: &str, path: &str) -> DayliteApiError {
+pub(super) fn normalize_http_error(status: u16, body: &str, path: &str) -> AppError {
     let (code, user_message) = if status == 401 {
         (
-            DayliteApiErrorCode::Unauthorized,
+            AppErrorCode::Unauthorized,
             "Die Daylite-Anmeldung ist abgelaufen oder ungültig.",
         )
     } else if status == 429 {
         (
-            DayliteApiErrorCode::RateLimited,
+            AppErrorCode::RateLimited,
             "Daylite hat zu viele Anfragen erhalten. Bitte kurz warten und erneut versuchen.",
         )
     } else if (500..=599).contains(&status) {
         (
-            DayliteApiErrorCode::ServerError,
+            AppErrorCode::ServerError,
             "Daylite ist aktuell nicht erreichbar.",
         )
     } else {
         (
-            DayliteApiErrorCode::RequestFailed,
+            AppErrorCode::RequestFailed,
             "Die Daten konnten nicht von Daylite geladen werden.",
         )
     };
 
-    DayliteApiError::new(
+    AppError::new(
         code,
         user_message,
         format!(
@@ -271,7 +266,7 @@ pub(super) fn parse_success_json_body<T: DeserializeOwned>(
     status: u16,
     body: &str,
     path: &str,
-) -> Result<T, DayliteApiError> {
+) -> Result<T, AppError> {
     if !(200..300).contains(&status) {
         return Err(normalize_http_error(status, body, path));
     }
@@ -283,10 +278,10 @@ pub(super) fn parse_json_body<T: DeserializeOwned>(
     status: u16,
     body: &str,
     path: &str,
-) -> Result<T, DayliteApiError> {
+) -> Result<T, AppError> {
     serde_json::from_str::<T>(body).map_err(|error| {
-        DayliteApiError::new(
-            DayliteApiErrorCode::InvalidResponse,
+        AppError::new(
+            AppErrorCode::InvalidResponse,
             "Die Antwort von Daylite konnte nicht verarbeitet werden.",
             format!(
                 "JSON-Verarbeitung für {path} fehlgeschlagen: {error}; body={}",
@@ -297,28 +292,24 @@ pub(super) fn parse_json_body<T: DeserializeOwned>(
     })
 }
 
-pub(super) fn missing_token_error(user_message: &str, technical_message: &str) -> DayliteApiError {
-    DayliteApiError::new(
-        DayliteApiErrorCode::MissingToken,
-        user_message,
-        technical_message,
-    )
+pub(super) fn missing_token_error(user_message: &str, technical_message: &str) -> AppError {
+    AppError::new(AppErrorCode::MissingToken, user_message, technical_message)
 }
 
-pub(super) fn current_epoch_ms() -> Result<u64, DayliteApiError> {
+pub(super) fn current_epoch_ms() -> Result<u64, AppError> {
     let duration = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_err(|error| {
-            DayliteApiError::new(
-                DayliteApiErrorCode::RequestFailed,
+            AppError::new(
+                AppErrorCode::RequestFailed,
                 "Die aktuelle Systemzeit konnte nicht gelesen werden.",
                 format!("Systemzeitfehler: {error}"),
             )
         })?;
 
     u64::try_from(duration.as_millis()).map_err(|error| {
-        DayliteApiError::new(
-            DayliteApiErrorCode::RequestFailed,
+        AppError::new(
+            AppErrorCode::RequestFailed,
             "Die aktuelle Systemzeit konnte nicht gelesen werden.",
             format!("Zeitstempel-Konvertierung fehlgeschlagen: {error}"),
         )
@@ -350,9 +341,9 @@ pub(super) fn truncate_for_log(value: &str) -> String {
     truncated
 }
 
-fn map_store_error(error: local_store::StoreError) -> DayliteApiError {
-    DayliteApiError::new(
-        DayliteApiErrorCode::InvalidConfiguration,
+fn map_store_error(error: AppError) -> AppError {
+    AppError::new(
+        AppErrorCode::InvalidConfiguration,
         error.user_message,
         error.technical_message,
     )
@@ -371,9 +362,8 @@ mod tests {
         }
     }
 
-    fn unauthorized() -> DayliteApiError {
-        DayliteApiError::new(DayliteApiErrorCode::Unauthorized, "abgelaufen", "401")
-            .with_http_status(Some(401))
+    fn unauthorized() -> AppError {
+        AppError::new(AppErrorCode::Unauthorized, "abgelaufen", "401").with_http_status(Some(401))
     }
 
     #[tokio::test]
@@ -437,7 +427,7 @@ mod tests {
         .await
         .expect_err("a second rejection should surface");
 
-        assert_eq!(error.code, DayliteApiErrorCode::Unauthorized);
+        assert_eq!(error.code, AppErrorCode::Unauthorized);
         assert_eq!(attempts.load(Ordering::SeqCst), 2);
     }
 
@@ -449,7 +439,7 @@ mod tests {
             tokens("at"),
             |_| async {
                 Err::<&str, _>(
-                    DayliteApiError::new(DayliteApiErrorCode::RateLimited, "zu viele", "429")
+                    AppError::new(AppErrorCode::RateLimited, "zu viele", "429")
                         .with_http_status(Some(429)),
                 )
             },
@@ -461,7 +451,7 @@ mod tests {
         .await
         .expect_err("the error should surface");
 
-        assert_eq!(error.code, DayliteApiErrorCode::RateLimited);
+        assert_eq!(error.code, AppErrorCode::RateLimited);
         assert_eq!(renewals.load(Ordering::SeqCst), 0);
     }
 }

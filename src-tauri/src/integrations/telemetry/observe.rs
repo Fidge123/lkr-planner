@@ -172,7 +172,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::integrations::local_store::types::{StoreError, StoreErrorCode};
+    use crate::error::{AppError, AppErrorCode};
     use crate::integrations::telemetry::recorder::TelemetryRecorder;
     use crate::integrations::telemetry::test_support::{enabled, recorded};
 
@@ -181,7 +181,7 @@ mod tests {
         let (recorder, mut receiver) = TelemetryRecorder::channel();
         recorder.apply_settings(&enabled());
 
-        let result: Result<u8, StoreError> = observe_with(
+        let result: Result<u8, AppError> = observe_with(
             Some(&recorder),
             Operation::LoadLocalStore,
             Integration::LocalStore,
@@ -202,13 +202,13 @@ mod tests {
         let (recorder, mut receiver) = TelemetryRecorder::channel();
         recorder.apply_settings(&enabled());
 
-        let result: Result<u8, StoreError> = observe_with(
+        let result: Result<u8, AppError> = observe_with(
             Some(&recorder),
             Operation::SaveLocalStore,
             Integration::LocalStore,
             async {
-                Err(StoreError::new(
-                    StoreErrorCode::WriteFailed,
+                Err(AppError::new(
+                    AppErrorCode::WriteFailed,
                     "Die lokale Konfiguration konnte nicht gespeichert werden.",
                     "Datei konnte nicht geschrieben werden (/Users/flori/store.json)",
                 ))
@@ -256,7 +256,7 @@ mod tests {
 
     #[tokio::test]
     async fn without_a_recorder_the_result_passes_through_untouched() {
-        let result: Result<u8, StoreError> = observe_with(
+        let result: Result<u8, AppError> = observe_with(
             None,
             Operation::LoadLocalStore,
             Integration::LocalStore,

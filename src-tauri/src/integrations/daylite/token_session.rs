@@ -2,14 +2,13 @@ use std::future::Future;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{OnceLock, RwLock};
 
-use super::shared::{
-    store_daylite_tokens, DayliteApiError, DayliteApiErrorCode, DayliteTokenState,
-};
+use super::shared::{store_daylite_tokens, DayliteTokenState};
+use crate::error::{AppError, AppErrorCode};
 
 /// A leased token has to outlive the whole operation: nothing refreshes mid-request.
 const LEASE_MIN_REMAINING_MS: u64 = 60_000;
 
-type Persist = Box<dyn Fn(&DayliteTokenState) -> Result<(), DayliteApiError> + Send + Sync>;
+type Persist = Box<dyn Fn(&DayliteTokenState) -> Result<(), AppError> + Send + Sync>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct TokenLease {
@@ -59,14 +58,10 @@ impl TokenSession {
         self.state.read().expect("token session poisoned").is_none()
     }
 
-    pub(super) async fn lease<F, Fut>(
-        &self,
-        now_ms: u64,
-        rotate: F,
-    ) -> Result<TokenLease, DayliteApiError>
+    pub(super) async fn lease<F, Fut>(&self, now_ms: u64, rotate: F) -> Result<TokenLease, AppError>
     where
         F: Fn(DayliteTokenState) -> Fut,
-        Fut: Future<Output = Result<DayliteTokenState, DayliteApiError>>,
+        Fut: Future<Output = Result<DayliteTokenState, AppError>>,
     {
         if let Some(lease) = self.fresh_lease(now_ms) {
             return Ok(lease);
@@ -87,10 +82,10 @@ impl TokenSession {
         &self,
         stale: &TokenLease,
         rotate: F,
-    ) -> Result<TokenLease, DayliteApiError>
+    ) -> Result<TokenLease, AppError>
     where
         F: Fn(DayliteTokenState) -> Fut,
-        Fut: Future<Output = Result<DayliteTokenState, DayliteApiError>>,
+        Fut: Future<Output = Result<DayliteTokenState, AppError>>,
     {
         let _guard = self.rotation.lock().await;
         self.persist_pending()?;
@@ -102,10 +97,10 @@ impl TokenSession {
     }
 
     /// Takes the rotation lock so a connect cannot interleave with one.
-    pub(super) async fn adopt<F, Fut>(&self, mint: F) -> Result<DayliteTokenState, DayliteApiError>
+    pub(super) async fn adopt<F, Fut>(&self, mint: F) -> Result<DayliteTokenState, AppError>
     where
         F: FnOnce() -> Fut,
-        Fut: Future<Output = Result<DayliteTokenState, DayliteApiError>>,
+        Fut: Future<Output = Result<DayliteTokenState, AppError>>,
     {
         let _guard = self.rotation.lock().await;
         self.ensure_open()?;
@@ -115,28 +110,28 @@ impl TokenSession {
 
     /// Exiting mid-rotation would strand the keychain on a refresh token Daylite already retired.
     /// Flag before locking so queued waiters cannot start a rotation.
-    pub(super) async fn close(&self) -> Result<(), DayliteApiError> {
+    pub(super) async fn close(&self) -> Result<(), AppError> {
         self.closing.store(true, Ordering::SeqCst);
         let _guard = self.rotation.lock().await;
         self.persist_pending()
     }
 
-    fn ensure_open(&self) -> Result<(), DayliteApiError> {
+    fn ensure_open(&self) -> Result<(), AppError> {
         if !self.closing.load(Ordering::SeqCst) {
             return Ok(());
         }
 
-        Err(DayliteApiError::new(
-            DayliteApiErrorCode::RequestFailed,
+        Err(AppError::new(
+            AppErrorCode::RequestFailed,
             "Die Anwendung wird beendet.",
             "Daylite-Token-Rotation nach Beginn des Beendens abgelehnt.",
         ))
     }
 
-    async fn rotate_locked<F, Fut>(&self, rotate: F) -> Result<TokenLease, DayliteApiError>
+    async fn rotate_locked<F, Fut>(&self, rotate: F) -> Result<TokenLease, AppError>
     where
         F: Fn(DayliteTokenState) -> Fut,
-        Fut: Future<Output = Result<DayliteTokenState, DayliteApiError>>,
+        Fut: Future<Output = Result<DayliteTokenState, AppError>>,
     {
         self.ensure_open()?;
         let current = self.current_tokens().unwrap_or_default();
@@ -145,7 +140,7 @@ impl TokenSession {
     }
 
     /// Held in memory before persisting: once rotated, the previous refresh token is dead server-side.
-    fn publish(&self, tokens: DayliteTokenState) -> Result<TokenLease, DayliteApiError> {
+    fn publish(&self, tokens: DayliteTokenState) -> Result<TokenLease, AppError> {
         let lease = {
             let mut state = self.state.write().expect("token session poisoned");
             let generation = state.as_ref().map(|s| s.generation + 1).unwrap_or(1);
@@ -162,7 +157,7 @@ impl TokenSession {
     }
 
     /// Callers hold the rotation lock, so writes cannot land out of order.
-    fn persist_pending(&self) -> Result<(), DayliteApiError> {
+    fn persist_pending(&self) -> Result<(), AppError> {
         let Some(pending) = self.lease_if(|state| !state.persisted) else {
             return Ok(());
         };
@@ -256,8 +251,8 @@ mod tests {
             60_000,
             Box::new(move |tokens: &DayliteTokenState| {
                 if keychain.refuses.load(Ordering::SeqCst) {
-                    return Err(DayliteApiError::new(
-                        DayliteApiErrorCode::ServerError,
+                    return Err(AppError::new(
+                        AppErrorCode::ServerError,
                         "Keychain verweigert",
                         "denied",
                     ));
@@ -558,8 +553,8 @@ mod tests {
                         let response = response.lock().unwrap().take();
                         async move {
                             response.expect("rotates once").await.unwrap();
-                            Err(DayliteApiError::new(
-                                DayliteApiErrorCode::Timeout,
+                            Err(AppError::new(
+                                AppErrorCode::Timeout,
                                 "Zeitüberschreitung",
                                 "timeout",
                             ))
