@@ -1,21 +1,16 @@
 import { commands, type DisplaySettings } from "../generated/tauri";
 import { unwrapCommandResult } from "./command-result";
+import { loadLocalStore } from "./local-store";
 
 const defaultDisplaySettings: Required<DisplaySettings> = {
   hideNonPlannableEmployees: true,
   showWeekend: false,
 };
 
-const loadErrorMessage =
-  "Die lokale Konfiguration konnte nicht geladen werden.";
-
 export async function loadDisplaySettings(): Promise<
   Required<DisplaySettings>
 > {
-  const store = unwrapCommandResult(
-    await commands.loadLocalStore(),
-    loadErrorMessage,
-  );
+  const store = await loadLocalStore();
   return {
     hideNonPlannableEmployees:
       store.displaySettings?.hideNonPlannableEmployees ??
@@ -28,10 +23,7 @@ export async function loadDisplaySettings(): Promise<
 export async function saveDisplaySettings(
   patch: Partial<DisplaySettings>,
 ): Promise<void> {
-  const store = unwrapCommandResult(
-    await commands.loadLocalStore(),
-    loadErrorMessage,
-  );
+  const store = await loadLocalStore();
   unwrapCommandResult(
     await commands.saveLocalStore({
       ...store,

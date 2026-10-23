@@ -13,8 +13,19 @@ export function unwrapCommandResult<T, E>(
   throw new Error(readErrorMessage(result.error, fallbackMessage));
 }
 
+/** A rejection is an IPC failure with a technical message, so it reads as the fallback. */
+export async function callCommand<T, E>(
+  command: Promise<CommandResult<T, E>>,
+  fallbackMessage: string,
+): Promise<T> {
+  const result = await command.catch(() => {
+    throw new Error(fallbackMessage);
+  });
+  return unwrapCommandResult(result, fallbackMessage);
+}
+
 function readErrorMessage(error: unknown, fallbackMessage: string): string {
-  if (typeof error === "string") {
+  if (typeof error === "string" && error.length > 0) {
     return error;
   }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { unwrapCommandResult } from "./command-result";
+import { callCommand, unwrapCommandResult } from "./command-result";
 
 describe("unwrapCommandResult", () => {
   it("returns the data on ok results", () => {
@@ -37,6 +37,12 @@ describe("unwrapCommandResult", () => {
     ).toThrow("user error");
   });
 
+  it("throws the fallback message for an empty error string", () => {
+    expect(() =>
+      unwrapCommandResult({ status: "error", error: "" }, "fallback"),
+    ).toThrow("fallback");
+  });
+
   it("throws the fallback message when the error has no userMessage", () => {
     expect(() =>
       unwrapCommandResult(
@@ -44,5 +50,31 @@ describe("unwrapCommandResult", () => {
         "fallback",
       ),
     ).toThrow("fallback");
+  });
+});
+
+describe("callCommand", () => {
+  it("resolves the data of an ok result", async () => {
+    expect(
+      await callCommand(
+        Promise.resolve({ status: "ok", data: "wert" }),
+        "fallback",
+      ),
+    ).toBe("wert");
+  });
+
+  it("throws the error of an error result", async () => {
+    await expect(
+      callCommand(
+        Promise.resolve({ status: "error", error: "actual error" }),
+        "fallback",
+      ),
+    ).rejects.toThrow("actual error");
+  });
+
+  it("throws the fallback message when the command rejects", async () => {
+    await expect(
+      callCommand(Promise.reject(new Error("IPC failure")), "fallback"),
+    ).rejects.toThrow("fallback");
   });
 });

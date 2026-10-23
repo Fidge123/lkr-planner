@@ -15,9 +15,9 @@ import { PlanningGrid } from "./app/page";
 import { runStartupSync } from "./app/startup-sync";
 import { getWeekStart, weekOffsetFor } from "./app/util";
 import type { EmployeeSetting, PlanningContactRecord } from "./generated/tauri";
-import { commands } from "./generated/tauri";
 import { resetProjectCategoryColors } from "./services/daylite-categories";
 import { loadDayliteContacts } from "./services/daylite-contacts";
+import { loadLocalStore } from "./services/local-store";
 
 function App() {
   const [weekOffset, setWeekOffset] = useState(0);
@@ -50,19 +50,21 @@ function App() {
   const zepCalendarsState = useZepCalendars();
 
   const loadEmployeeSettings = useCallback(async () => {
-    const result = await commands.loadLocalStore();
-    setSettingsLoaded(true);
-    if (result.status === "ok") {
-      setEmployeeSettings(result.data.employeeSettings);
+    try {
+      const store = await loadLocalStore();
+      setEmployeeSettings(store.employeeSettings);
       setHideNonPlannableEmployees(
-        result.data.displaySettings?.hideNonPlannableEmployees ?? true,
+        store.displaySettings?.hideNonPlannableEmployees ?? true,
       );
-      setShowWeekend(result.data.displaySettings?.showWeekend ?? false);
+      setShowWeekend(store.displaySettings?.showWeekend ?? false);
       setEmployeeSettingsError(null);
-      return result.data.employeeSettings;
+      return store.employeeSettings;
+    } catch (error) {
+      setEmployeeSettingsError((error as Error).message);
+      return null;
+    } finally {
+      setSettingsLoaded(true);
     }
-    setEmployeeSettingsError(result.error.userMessage);
-    return null;
   }, []);
 
   const reloadAssignmentsRef = useRef(

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { commands, type Holiday } from "../../generated/tauri";
+import type { Holiday } from "../../generated/tauri";
+import { loadHolidaysForWeek } from "../../services/holidays";
 
 export interface HolidaysState {
   holidays: Holiday[];
@@ -17,17 +18,20 @@ export function useHolidays(weekStart: string): HolidaysState {
   const reloadHolidays = useCallback(() => {
     const id = ++requestIdRef.current;
     setIsLoading(true);
-    void commands.getHolidaysForWeek(weekStart).then((result) => {
-      if (id !== requestIdRef.current) return;
-      setIsLoading(false);
-      if (result.status === "error") {
-        setErrorMessage(result.error);
+    void loadHolidaysForWeek(weekStart).then(
+      (loaded) => {
+        if (id !== requestIdRef.current) return;
+        setIsLoading(false);
+        setHolidays(loaded);
+        setErrorMessage(null);
+      },
+      (error: Error) => {
+        if (id !== requestIdRef.current) return;
+        setIsLoading(false);
+        setErrorMessage(error.message);
         setHolidays([]);
-        return;
-      }
-      setHolidays(result.data);
-      setErrorMessage(null);
-    });
+      },
+    );
   }, [weekStart]);
 
   useEffect(() => {
