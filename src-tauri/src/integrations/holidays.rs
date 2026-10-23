@@ -1,3 +1,4 @@
+use crate::error::AppError;
 use crate::integrations::telemetry::events::{Integration, Operation};
 use crate::integrations::telemetry::observe::{observe, record_failure, RequestFailure};
 
@@ -6,15 +7,15 @@ use crate::integrations::telemetry::observe::{observe, record_failure, RequestFa
 pub async fn get_holidays_for_week(
     app: tauri::AppHandle,
     week_start: String,
-) -> Result<Vec<Holiday>, String> {
+) -> Result<Vec<Holiday>, AppError> {
     let handle = app.clone();
-    observe(
+    Ok(observe(
         &handle,
         Operation::GetHolidaysForWeek,
         Integration::Holidays,
         get_holidays_for_week_inner(app, week_start),
     )
-    .await
+    .await?)
 }
 
 use chrono::{Datelike, NaiveDate};

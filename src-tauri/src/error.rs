@@ -31,9 +31,17 @@ impl AppError {
     }
 }
 
+/// For failures that only ever had a German message and no code.
+impl From<String> for AppError {
+    fn from(message: String) -> Self {
+        Self::new(AppErrorCode::CommandFailed, message.clone(), message)
+    }
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Type, PartialEq, Eq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum AppErrorCode {
+    CommandFailed,
     CorruptFile,
     DayliteSyncFailed,
     InvalidConfiguration,

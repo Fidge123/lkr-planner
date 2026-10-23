@@ -16,6 +16,7 @@ use super::events::{
 };
 use super::protection::{refuse_protected_day_change, refuse_protected_event};
 use super::types::{CalendarCellEvent, EmployeeWeekEvents, MoveAssignmentResult, PendingEvent};
+use crate::error::AppError;
 use crate::integrations::daylite::projects::ResolvedProject;
 use crate::integrations::local_store::{EmployeeSetting, LocalStore};
 use crate::integrations::telemetry::events::{Integration, Operation};
@@ -49,7 +50,7 @@ pub async fn load_week_events(
     week_start: String,
     employee_references: Option<Vec<String>>,
     purpose: WeekLoadPurpose,
-) -> Result<Vec<EmployeeWeekEvents>, String> {
+) -> Result<Vec<EmployeeWeekEvents>, AppError> {
     let handle = app.clone();
     observe(
         &handle,
@@ -65,7 +66,7 @@ pub async fn load_week_events(
 pub async fn create_assignment(
     app: tauri::AppHandle,
     input: CreateAssignmentInput,
-) -> Result<String, String> {
+) -> Result<String, AppError> {
     let handle = app.clone();
     observe(
         &handle,
@@ -81,7 +82,7 @@ pub async fn create_assignment(
 pub async fn update_assignment(
     app: tauri::AppHandle,
     input: UpdateAssignmentInput,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     let handle = app.clone();
     observe(
         &handle,
@@ -102,7 +103,7 @@ pub async fn move_assignment(
     project_ref: String,
     project_name: String,
     order_index: Option<u32>,
-) -> Result<MoveAssignmentResult, String> {
+) -> Result<MoveAssignmentResult, AppError> {
     let handle = app.clone();
     observe(
         &handle,
@@ -129,7 +130,7 @@ pub async fn reorder_assignment(
     uid: String,
     date: String,
     order_index: u32,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     let handle = app.clone();
     observe(
         &handle,
@@ -146,7 +147,7 @@ pub async fn delete_assignment(
     app: tauri::AppHandle,
     href: String,
     override_protection: bool,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     let handle = app.clone();
     observe(
         &handle,
@@ -168,9 +169,8 @@ async fn load_week_events_inner(
     app: tauri::AppHandle,
     week_start: String,
     employee_references: Option<Vec<String>>,
-) -> Result<Vec<EmployeeWeekEvents>, String> {
-    let store = crate::integrations::local_store::load_local_store(app.clone())
-        .map_err(|e| e.user_message)?;
+) -> Result<Vec<EmployeeWeekEvents>, AppError> {
+    let store = crate::integrations::local_store::load_local_store(app.clone())?;
     let only = employee_references.as_deref();
 
     let week_start_date = NaiveDate::parse_from_str(&week_start, "%Y-%m-%d")
@@ -370,9 +370,8 @@ pub struct UpdateAssignmentInput {
 async fn create_assignment_inner(
     app: tauri::AppHandle,
     input: CreateAssignmentInput,
-) -> Result<String, String> {
-    let store = crate::integrations::local_store::load_local_store(app.clone())
-        .map_err(|e| e.user_message)?;
+) -> Result<String, AppError> {
+    let store = crate::integrations::local_store::load_local_store(app.clone())?;
 
     let calendar_url = resolve_employee_calendar_url(&store, &input.employee_reference)?;
 
@@ -439,9 +438,8 @@ pub(super) fn resolve_employee_calendar_url(
 pub(super) fn load_caldav_session(
     app: &tauri::AppHandle,
     store: &crate::integrations::local_store::LocalStore,
-) -> Result<CaldavSession, String> {
-    let credentials =
-        crate::integrations::zep::load_zep_credentials().map_err(|e| e.user_message)?;
+) -> Result<CaldavSession, AppError> {
+    let credentials = crate::integrations::zep::load_zep_credentials()?;
     build_caldav_session(app, store, credentials)
 }
 
@@ -449,7 +447,7 @@ fn build_caldav_session(
     app: &tauri::AppHandle,
     store: &crate::integrations::local_store::LocalStore,
     credentials: crate::integrations::zep::ZepStoredCredentials,
-) -> Result<CaldavSession, String> {
+) -> Result<CaldavSession, AppError> {
     Ok(CaldavSession {
         client: crate::integrations::zep::shared_caldav_client()?,
         username: credentials.username,
@@ -470,9 +468,8 @@ fn build_caldav_session(
 async fn update_assignment_inner(
     app: tauri::AppHandle,
     input: UpdateAssignmentInput,
-) -> Result<(), String> {
-    let store = crate::integrations::local_store::load_local_store(app.clone())
-        .map_err(|e| e.user_message)?;
+) -> Result<(), AppError> {
+    let store = crate::integrations::local_store::load_local_store(app.clone())?;
     let session = load_caldav_session(&app, &store)?;
 
     let handle = app.clone();
@@ -508,9 +505,8 @@ async fn move_assignment_inner(
     project_ref: String,
     project_name: String,
     order_index: Option<u32>,
-) -> Result<MoveAssignmentResult, String> {
-    let store = crate::integrations::local_store::load_local_store(app.clone())
-        .map_err(|e| e.user_message)?;
+) -> Result<MoveAssignmentResult, AppError> {
+    let store = crate::integrations::local_store::load_local_store(app.clone())?;
 
     let target_calendar_url = resolve_employee_calendar_url(&store, &target_employee_reference)?;
 
@@ -547,21 +543,19 @@ async fn reorder_assignment_inner(
     uid: String,
     date: String,
     order_index: u32,
-) -> Result<(), String> {
-    let store = crate::integrations::local_store::load_local_store(app.clone())
-        .map_err(|e| e.user_message)?;
+) -> Result<(), AppError> {
+    let store = crate::integrations::local_store::load_local_store(app.clone())?;
     let session = load_caldav_session(&app, &store)?;
 
-    reorder_assignment_core(&session, &href, &uid, &date, order_index).await
+    Ok(reorder_assignment_core(&session, &href, &uid, &date, order_index).await?)
 }
 
 async fn delete_assignment_inner(
     app: tauri::AppHandle,
     href: String,
     override_protection: bool,
-) -> Result<(), String> {
-    let store = crate::integrations::local_store::load_local_store(app.clone())
-        .map_err(|e| e.user_message)?;
+) -> Result<(), AppError> {
+    let store = crate::integrations::local_store::load_local_store(app.clone())?;
     let session = load_caldav_session(&app, &store)?;
 
     let handle = app.clone();

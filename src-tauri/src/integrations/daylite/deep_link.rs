@@ -1,3 +1,4 @@
+use crate::error::AppError;
 use crate::integrations::telemetry::events::{Integration, Operation};
 use crate::integrations::telemetry::observe::observe;
 use tauri_plugin_opener::OpenerExt;
@@ -7,15 +8,15 @@ use tauri_plugin_opener::OpenerExt;
 pub async fn daylite_open_project(
     app: tauri::AppHandle,
     project_ref: String,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     let handle = app.clone();
-    observe(
+    Ok(observe(
         &handle,
         Operation::DayliteOpenProject,
         Integration::Daylite,
         async { daylite_open_project_inner(app, project_ref) },
     )
-    .await
+    .await?)
 }
 
 fn daylite_open_project_inner(app: tauri::AppHandle, project_ref: String) -> Result<(), String> {

@@ -1,9 +1,11 @@
 import { describe, expect, it, mock } from "bun:test";
+import type { AppError } from "../generated/tauri";
+import { appError } from "../test/app-error";
 import { mockCommands } from "../test/mock-commands";
 
 type OpenProjectResult =
   | { status: "ok"; data: null }
-  | { status: "error"; error: string };
+  | { status: "error"; error: AppError };
 
 const mockOpenProject = mock(
   (_projectRef: string): Promise<OpenProjectResult> =>
@@ -27,7 +29,7 @@ describe("openProjectInDaylite", () => {
     mockOpenProject.mockImplementationOnce(() =>
       Promise.resolve({
         status: "error",
-        error: "Das Projekt konnte in Daylite nicht geöffnet werden.",
+        error: appError("Das Projekt konnte in Daylite nicht geöffnet werden."),
       }),
     );
 

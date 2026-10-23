@@ -8,22 +8,22 @@ export const commands = {
 	loadLocalStore: () => typedError<LocalStore, AppError>(__TAURI_INVOKE("load_local_store")),
 	saveLocalStore: (store: LocalStore) => typedError<null, AppError>(__TAURI_INVOKE("save_local_store", { store })),
 	/**  Without employee references, every employee with a calendar is loaded. */
-	loadWeekEvents: (weekStart: string, employeeReferences: string[] | null, purpose: WeekLoadPurpose) => typedError<EmployeeWeekEvents[], string>(__TAURI_INVOKE("load_week_events", { weekStart, employeeReferences, purpose })),
-	getHolidaysForWeek: (weekStart: string) => typedError<Holiday[], string>(__TAURI_INVOKE("get_holidays_for_week", { weekStart })),
+	loadWeekEvents: (weekStart: string, employeeReferences: string[] | null, purpose: WeekLoadPurpose) => typedError<EmployeeWeekEvents[], AppError>(__TAURI_INVOKE("load_week_events", { weekStart, employeeReferences, purpose })),
+	getHolidaysForWeek: (weekStart: string) => typedError<Holiday[], AppError>(__TAURI_INVOKE("get_holidays_for_week", { weekStart })),
 	dayliteConnectRefreshToken: (request: DayliteRefreshTokenRequest) => typedError<DayliteTokenSyncStatus, AppError>(__TAURI_INVOKE("daylite_connect_refresh_token", { request })),
 	dayliteSearchProjects: (input: DayliteSearchInput) => typedError<DayliteSearchResult<DayliteProjectSummary>, AppError>(__TAURI_INVOKE("daylite_search_projects", { input })),
 	dayliteQueryOverdueProjects: () => typedError<DayliteProjectSummary[], AppError>(__TAURI_INVOKE("daylite_query_overdue_projects")),
 	/**  A reference that neither Daylite nor the cache could resolve maps to no project. */
 	resolveWeekProjects: (projectRefs: string[], forceRefresh: boolean) => typedError<{ [key in string]: ResolvedProject | null }, AppError>(__TAURI_INVOKE("resolve_week_projects", { projectRefs, forceRefresh })),
 	dayliteProjectCategoryColors: () => typedError<{ [key in string]: string }, AppError>(__TAURI_INVOKE("daylite_project_category_colors")),
-	dayliteOpenProject: (projectRef: string) => typedError<null, string>(__TAURI_INVOKE("daylite_open_project", { projectRef })),
+	dayliteOpenProject: (projectRef: string) => typedError<null, AppError>(__TAURI_INVOKE("daylite_open_project", { projectRef })),
 	dayliteListContacts: () => typedError<PlanningContactRecord[], AppError>(__TAURI_INVOKE("daylite_list_contacts")),
 	dayliteListCachedContacts: () => typedError<PlanningContactRecord[], AppError>(__TAURI_INVOKE("daylite_list_cached_contacts")),
-	createAssignment: (input: CreateAssignmentInput) => typedError<string, string>(__TAURI_INVOKE("create_assignment", { input })),
-	updateAssignment: (input: UpdateAssignmentInput) => typedError<null, string>(__TAURI_INVOKE("update_assignment", { input })),
-	moveAssignment: (href: string, targetEmployeeReference: string, date: string, projectRef: string, projectName: string, orderIndex: number | null) => typedError<MoveAssignmentResult, string>(__TAURI_INVOKE("move_assignment", { href, targetEmployeeReference, date, projectRef, projectName, orderIndex })),
-	reorderAssignment: (href: string, uid: string, date: string, orderIndex: number) => typedError<null, string>(__TAURI_INVOKE("reorder_assignment", { href, uid, date, orderIndex })),
-	deleteAssignment: (href: string, overrideProtection: boolean) => typedError<null, string>(__TAURI_INVOKE("delete_assignment", { href, overrideProtection })),
+	createAssignment: (input: CreateAssignmentInput) => typedError<string, AppError>(__TAURI_INVOKE("create_assignment", { input })),
+	updateAssignment: (input: UpdateAssignmentInput) => typedError<null, AppError>(__TAURI_INVOKE("update_assignment", { input })),
+	moveAssignment: (href: string, targetEmployeeReference: string, date: string, projectRef: string, projectName: string, orderIndex: number | null) => typedError<MoveAssignmentResult, AppError>(__TAURI_INVOKE("move_assignment", { href, targetEmployeeReference, date, projectRef, projectName, orderIndex })),
+	reorderAssignment: (href: string, uid: string, date: string, orderIndex: number) => typedError<null, AppError>(__TAURI_INVOKE("reorder_assignment", { href, uid, date, orderIndex })),
+	deleteAssignment: (href: string, overrideProtection: boolean) => typedError<null, AppError>(__TAURI_INVOKE("delete_assignment", { href, overrideProtection })),
 	/**  Returns nothing; the failures event reports the worker days still failing. */
 	retryDayliteAppointmentSync: () => __TAURI_INVOKE<void>("retry_daylite_appointment_sync"),
 	zepSaveCredentials: (rootUrl: string, username: string, password: string) => typedError<null, AppError>(__TAURI_INVOKE("zep_save_credentials", { rootUrl, username, password })),
@@ -54,7 +54,7 @@ export type AppError = {
 	technicalMessage: string,
 };
 
-export type AppErrorCode = "CORRUPT_FILE" | "DAYLITE_SYNC_FAILED" | "INVALID_CONFIGURATION" | "INVALID_RESPONSE" | "KEYCHAIN_ERROR" | "MISSING_CREDENTIALS" | "MISSING_FIELDS" | "MISSING_TOKEN" | "NETWORK_ERROR" | "NOT_FOUND" | "RATE_LIMITED" | "READ_FAILED" | "REQUEST_FAILED" | "SERVER_ERROR" | "TIMEOUT" | "TOKEN_REFRESH_FAILED" | "UNAUTHORIZED" | "WRITE_FAILED";
+export type AppErrorCode = "COMMAND_FAILED" | "CORRUPT_FILE" | "DAYLITE_SYNC_FAILED" | "INVALID_CONFIGURATION" | "INVALID_RESPONSE" | "KEYCHAIN_ERROR" | "MISSING_CREDENTIALS" | "MISSING_FIELDS" | "MISSING_TOKEN" | "NETWORK_ERROR" | "NOT_FOUND" | "RATE_LIMITED" | "READ_FAILED" | "REQUEST_FAILED" | "SERVER_ERROR" | "TIMEOUT" | "TOKEN_REFRESH_FAILED" | "UNAUTHORIZED" | "WRITE_FAILED";
 
 export type CachedHoliday = {
 	date: string,

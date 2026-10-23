@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import { appError } from "../test/app-error";
 import { callCommand, unwrapCommandResult } from "./command-result";
 
 describe("unwrapCommandResult", () => {
@@ -11,44 +12,18 @@ describe("unwrapCommandResult", () => {
     expect(value).toBe("wert");
   });
 
-  it("throws plain string errors unchanged", () => {
+  it("throws the user message of the error", () => {
     expect(() =>
       unwrapCommandResult(
-        { status: "error", error: "actual error" },
-        "fallback",
-      ),
-    ).toThrow("actual error");
-  });
-
-  it("throws the userMessage from api error objects when available", () => {
-    expect(() =>
-      unwrapCommandResult(
-        {
-          status: "error",
-          error: {
-            userMessage: "user error",
-            code: "UNAUTHORIZED",
-            httpStatus: 401,
-            technicalMessage: "tech msg",
-          },
-        },
+        { status: "error", error: appError("user error") },
         "fallback",
       ),
     ).toThrow("user error");
   });
 
-  it("throws the fallback message for an empty error string", () => {
+  it("throws the fallback message for an empty user message", () => {
     expect(() =>
-      unwrapCommandResult({ status: "error", error: "" }, "fallback"),
-    ).toThrow("fallback");
-  });
-
-  it("throws the fallback message when the error has no userMessage", () => {
-    expect(() =>
-      unwrapCommandResult(
-        { status: "error", error: { code: "UNAUTHORIZED" } },
-        "fallback",
-      ),
+      unwrapCommandResult({ status: "error", error: appError("") }, "fallback"),
     ).toThrow("fallback");
   });
 });
@@ -63,10 +38,10 @@ describe("callCommand", () => {
     ).toBe("wert");
   });
 
-  it("throws the error of an error result", async () => {
+  it("throws the user message of an error result", async () => {
     await expect(
       callCommand(
-        Promise.resolve({ status: "error", error: "actual error" }),
+        Promise.resolve({ status: "error", error: appError("actual error") }),
         "fallback",
       ),
     ).rejects.toThrow("actual error");
