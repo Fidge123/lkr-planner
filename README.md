@@ -3,41 +3,10 @@
 LKR Planner is a macOS desktop application for weekly project planning with Daylite as the system of record.
 It is built with Tauri, React, TypeScript, and Bun.
 
-## Current Scope
+## Scope
 
-The current implementation covers the weekly planning view with full assignment CRUD, CalDAV synchronization, Daylite project/employee data, Daylite appointments for planned project days, and German holiday display.
-The backlog is now centered on Planradar project linking and assignment modal quality-of-life features.
-
-### Implemented
-
-- Daylite authentication with refresh-token rotation and documented token flow in [docs/daylite-authentication-flow.md](docs/daylite-authentication-flow.md)
-- Typed Daylite API foundation for project and contact read/search operations
-- Local application store for persisted configuration and cached integration data
-- Secure OS-level token and credential storage via the system keychain (`keyring-core`)
-- Employee source switched to Daylite contacts (`Monteur` and `Test` categories)
-- Employee ZEP CalDAV calendar URLs are read from and written back to Daylite contact `urls`, with connection validation and diagnostics
-- Daylite project overview rendered below the planning table
-- Weekly planning table backed by real, persisted assignment data instead of dummy data
-- Assignment modal CRUD flow (create, edit, delete) for weekly planning
-- Live Daylite project search/filter in the assignment modal
-- Default suggestions in the assignment modal: the most recently assigned project followed by overdue projects
-- Next-day quick-add suggestion for consecutive daily assignments
-- Deterministic daily time-slot allocation for same-day assignments
-- Drag-and-drop of assignment cards across days and employees, including in-day reordering
-- Calendar cell composition and rendering for assignments, holidays, absences, and appointments
-- Employee absence display from the ZEP absence calendar
-- German holiday import for the week view (Nager.Date API)
-- Weekend visibility toggle for the planning table
-- CalDAV synchronization for assignment create/update/delete operations
-- Daylite appointments that mirror each planned project day, linked to the project and the assigned workers, with a German alert and retry when the synchronization fails
-- Record/replay HTTP (VCR) testing infrastructure for integration tests
-- Opt-in error and performance telemetry to PostHog, configurable under settings "Diagnose"
-- ADR-based architecture documentation in [docs/adr](docs/adr)
-
-### Planned / In Backlog
-
-- Planradar API client, existing-project linking, project creation, and archived-project reactivation
-- Daylite-to-Planradar project comparison
+The app plans assignments in a weekly grid, stores them in the employees' ZEP CalDAV calendars and mirrors planned project days as Daylite appointments.
+Implemented behavior is specified in [openspec/specs](openspec/specs), planned work lives in [openspec/changes](openspec/changes), and architecture decisions are recorded in [docs/adr](docs/adr).
 
 ## Product Direction
 
@@ -48,7 +17,7 @@ The app supports a planner workflow where assignments are managed in a weekly vi
 
 The application integrates with the [Daylite API](https://developer.daylite.app/reference/getting-started).
 Daylite is the source of truth for project and employee master data.
-Current work covers authentication, token refresh handling, project reads, employee contact/iCal configuration, and project day appointments.
+The refresh-token rotation is documented in [docs/daylite-authentication-flow.md](docs/daylite-authentication-flow.md).
 After every assignment create, update, move and delete, a background task links the edited worker to the project's `Einsatz <date>` appointment for that day and unlinks the worker from projects it left, as recorded in [ADR 0017](docs/adr/0017-daylite-appointments-mirror-assignments.md).
 
 ### Planradar
@@ -66,26 +35,23 @@ Current implementation covers storing employee primary and absence calendar URLs
 
 ### Local Quality Workflow
 
-Before committing changes, ensure all quality checks pass:
+CI runs these checks, so run them before pushing:
 
 ```bash
-# Run tests
+# Frontend and script tests, once and in six timezones
 bun test
+bun run test:timezones
 
-# Run tests in watch mode during development
-bun test:watch
-
-# Check code quality (lint)
+# Biome lint and format, applying safe fixes
 bun lint
 
-# Auto-fix linting issues
-bun lint:fix
+# Rust format, lint and tests
+cargo fmt --manifest-path src-tauri/Cargo.toml
+cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+cargo test --manifest-path src-tauri/Cargo.toml
 
-# Check code formatting
-bun format:check
-
-# Auto-format code
-bun format
+# OpenSpec specs and changes
+bunx openspec validate --all --strict
 ```
 
 ### HTTP Cassette Tests
@@ -258,5 +224,3 @@ bun tauri dev
 # Build for macOS
 bun build:macos
 ```
-
-**Note:** The same quality checks (`bun test`, `bun lint`, `bun format:check`) are run in CI/CD, so running them locally ensures your changes will pass automated checks.
