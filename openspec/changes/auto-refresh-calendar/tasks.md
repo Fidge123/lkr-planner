@@ -22,4 +22,4 @@
 ## 4. Verification
 
 - [x] 4.1 Run `bun test` and `bun run lint` and confirm both pass without changes left by the linter
-- [ ] 4.2 Verify in the running app with the interval temporarily shortened: an appointment changed directly in CalDAV appears without user action, a cached week is fetched again after a refresh, disconnecting the network skips refreshes without an error, reconnecting refreshes 5 seconds later, and a failing server keeps the grid filled and shows the German error with "Erneut laden" only after the silent retry also failed
+- [x] 4.2 Verify in the running app with the interval temporarily shortened: an appointment changed directly in CalDAV appears without user action, a cached week is fetched again after a refresh, disconnecting the network skips refreshes without an error, reconnecting refreshes 5 seconds later, and a failing server keeps the grid filled and shows the German error with "Erneut laden" only after the silent retry also failed
