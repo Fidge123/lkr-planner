@@ -8,14 +8,75 @@ pub async fn get_holidays_for_week(
     app: tauri::AppHandle,
     week_start: String,
 ) -> Result<Vec<Holiday>, AppError> {
-    let handle = app.clone();
-    Ok(observe(
-        &handle,
+    observe(
+        &app,
         Operation::GetHolidaysForWeek,
         Integration::Holidays,
-        get_holidays_for_week_inner(app, week_start),
+        async {
+            let week_start_date =
+                NaiveDate::parse_from_str(&week_start, "%Y-%m-%d").map_err(|e| {
+                    eprintln!("holidays: invalid week_start '{week_start}': {e}");
+                    "Feiertage konnten nicht geladen werden".to_string()
+                })?;
+            let week_end_date = week_start_date + chrono::Duration::days(6);
+
+            let years = years_for_week(week_start_date, week_end_date);
+
+            let mut store = crate::integrations::local_store::load_local_store(app.clone())
+                .map_err(|e| {
+                    eprintln!("holidays: store load failed: {}", e.technical_message);
+                    "Feiertage konnten nicht geladen werden".to_string()
+                })?;
+
+            let today = chrono::Utc::now().date_naive();
+            let current_year = today.year();
+
+            let mut fetched = Vec::new();
+            for &year in &years {
+                let needs_fetch = match store.holiday_cache.iter().find(|e| e.year == year) {
+                    None => true,
+                    Some(entry) => year == current_year && !is_cache_entry_fresh(entry, today),
+                };
+
+                if needs_fetch {
+                    let cached = fetch_holidays_from_api(&app, year)
+                        .await?
+                        .iter()
+                        .map(|h| crate::integrations::local_store::CachedHoliday {
+                            date: h.date.clone(),
+                            name: h.name.clone(),
+                        })
+                        .collect();
+                    let entry = crate::integrations::local_store::HolidayCacheEntry {
+                        year,
+                        fetched_at: today.format("%Y-%m-%d").to_string(),
+                        holidays: cached,
+                    };
+                    store.holiday_cache.retain(|e| e.year != year);
+                    store.holiday_cache.push(entry.clone());
+                    fetched.push(entry);
+                }
+            }
+
+            let holidays = holidays_in_range(&store.holiday_cache, week_start_date, week_end_date);
+
+            if !fetched.is_empty() {
+                crate::integrations::local_store::update_local_store(&app, |latest| {
+                    for entry in fetched {
+                        latest.holiday_cache.retain(|e| e.year != entry.year);
+                        latest.holiday_cache.push(entry);
+                    }
+                })
+                .map_err(|e| {
+                    eprintln!("holidays: store save failed: {}", e.technical_message);
+                    "Feiertage konnten nicht geladen werden".to_string()
+                })?;
+            }
+
+            Ok(holidays)
+        },
     )
-    .await?)
+    .await
 }
 
 use chrono::{Datelike, NaiveDate};
@@ -42,72 +103,6 @@ struct NagerHoliday {
     local_name: String,
     global: bool,
     counties: Option<Vec<String>>,
-}
-
-async fn get_holidays_for_week_inner(
-    app: tauri::AppHandle,
-    week_start: String,
-) -> Result<Vec<Holiday>, String> {
-    let week_start_date = NaiveDate::parse_from_str(&week_start, "%Y-%m-%d").map_err(|e| {
-        eprintln!("holidays: invalid week_start '{week_start}': {e}");
-        "Feiertage konnten nicht geladen werden".to_string()
-    })?;
-    let week_end_date = week_start_date + chrono::Duration::days(6);
-
-    let years = years_for_week(week_start_date, week_end_date);
-
-    let mut store =
-        crate::integrations::local_store::load_local_store(app.clone()).map_err(|e| {
-            eprintln!("holidays: store load failed: {}", e.technical_message);
-            "Feiertage konnten nicht geladen werden".to_string()
-        })?;
-
-    let today = chrono::Utc::now().date_naive();
-    let current_year = today.year();
-
-    let mut fetched = Vec::new();
-    for &year in &years {
-        let needs_fetch = match store.holiday_cache.iter().find(|e| e.year == year) {
-            None => true,
-            Some(entry) => year == current_year && !is_cache_entry_fresh(entry, today),
-        };
-
-        if needs_fetch {
-            let cached = fetch_holidays_from_api(&app, year)
-                .await?
-                .iter()
-                .map(|h| crate::integrations::local_store::CachedHoliday {
-                    date: h.date.clone(),
-                    name: h.name.clone(),
-                })
-                .collect();
-            let entry = crate::integrations::local_store::HolidayCacheEntry {
-                year,
-                fetched_at: today.format("%Y-%m-%d").to_string(),
-                holidays: cached,
-            };
-            store.holiday_cache.retain(|e| e.year != year);
-            store.holiday_cache.push(entry.clone());
-            fetched.push(entry);
-        }
-    }
-
-    let holidays = holidays_in_range(&store.holiday_cache, week_start_date, week_end_date);
-
-    if !fetched.is_empty() {
-        crate::integrations::local_store::update_local_store(&app, |latest| {
-            for entry in fetched {
-                latest.holiday_cache.retain(|e| e.year != entry.year);
-                latest.holiday_cache.push(entry);
-            }
-        })
-        .map_err(|e| {
-            eprintln!("holidays: store save failed: {}", e.technical_message);
-            "Feiertage konnten nicht geladen werden".to_string()
-        })?;
-    }
-
-    Ok(holidays)
 }
 
 /// Both bounds are inclusive, so a holiday on the last displayed day still counts.

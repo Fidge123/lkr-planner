@@ -18,12 +18,33 @@ use crate::integrations::telemetry::observe::observe;
 pub async fn daylite_list_contacts(
     app: tauri::AppHandle,
 ) -> Result<Vec<PlanningContactRecord>, AppError> {
-    let handle = app.clone();
     observe(
-        &handle,
+        &app,
         Operation::DayliteListContacts,
         Integration::Daylite,
-        daylite_list_contacts_inner(app),
+        async {
+            let base_url = load_store_or_error(app.clone())?
+                .api_endpoints
+                .daylite_base_url;
+            let client = DayliteApiClient::new(&base_url)?.with_telemetry(&app);
+            let contacts =
+                with_daylite_tokens(&client, |tokens| list_contacts_core(&client, tokens)).await?;
+
+            let mut settings = load_store_or_error(app.clone())?.employee_settings;
+            reconcile_employee_calendars_from_contacts(&mut settings, &contacts);
+            crate::integrations::zep::test_untested_calendar_urls(&mut settings).await;
+            update_store_or_error(&app, |store| {
+                store.daylite_cache.last_synced_at = Some(current_timestamp_iso8601());
+                store.daylite_cache.contacts = contacts
+                    .iter()
+                    .cloned()
+                    .map(map_planning_contact_to_cache_entry)
+                    .collect();
+                store.employee_settings = settings;
+            })?;
+
+            Ok(contacts)
+        },
     )
     .await
 }
@@ -33,52 +54,21 @@ pub async fn daylite_list_contacts(
 pub async fn daylite_list_cached_contacts(
     app: tauri::AppHandle,
 ) -> Result<Vec<PlanningContactRecord>, AppError> {
-    let handle = app.clone();
     observe(
-        &handle,
+        &app,
         Operation::DayliteListCachedContacts,
         Integration::Daylite,
-        async { daylite_list_cached_contacts_inner(app) },
+        async {
+            let store = load_store_or_error(app.clone())?;
+            Ok(sort_contacts(filter_planning_contacts(
+                store
+                    .daylite_cache
+                    .contacts
+                    .into_iter()
+                    .map(map_cached_contact)
+                    .collect(),
+            )))
+        },
     )
     .await
-}
-
-async fn daylite_list_contacts_inner(
-    app: tauri::AppHandle,
-) -> Result<Vec<PlanningContactRecord>, AppError> {
-    let base_url = load_store_or_error(app.clone())?
-        .api_endpoints
-        .daylite_base_url;
-    let client = DayliteApiClient::new(&base_url)?.with_telemetry(&app);
-    let contacts =
-        with_daylite_tokens(&client, |tokens| list_contacts_core(&client, tokens)).await?;
-
-    let mut settings = load_store_or_error(app.clone())?.employee_settings;
-    reconcile_employee_calendars_from_contacts(&mut settings, &contacts);
-    crate::integrations::zep::test_untested_calendar_urls(&mut settings).await;
-    update_store_or_error(&app, |store| {
-        store.daylite_cache.last_synced_at = Some(current_timestamp_iso8601());
-        store.daylite_cache.contacts = contacts
-            .iter()
-            .cloned()
-            .map(map_planning_contact_to_cache_entry)
-            .collect();
-        store.employee_settings = settings;
-    })?;
-
-    Ok(contacts)
-}
-
-fn daylite_list_cached_contacts_inner(
-    app: tauri::AppHandle,
-) -> Result<Vec<PlanningContactRecord>, AppError> {
-    let store = load_store_or_error(app)?;
-    Ok(sort_contacts(filter_planning_contacts(
-        store
-            .daylite_cache
-            .contacts
-            .into_iter()
-            .map(map_cached_contact)
-            .collect(),
-    )))
 }

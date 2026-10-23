@@ -42,22 +42,17 @@ impl DayliteCategoryListDto {
 pub async fn daylite_project_category_colors(
     app: tauri::AppHandle,
 ) -> Result<HashMap<String, String>, AppError> {
-    let handle = app.clone();
     observe(
-        &handle,
+        &app,
         Operation::DayliteProjectCategoryColors,
         Integration::Daylite,
-        daylite_project_category_colors_inner(app),
+        async {
+            run_daylite_command(app.clone(), async |client, tokens| {
+                fetch_project_category_colors_core(client, tokens).await
+            })
+            .await
+        },
     )
-    .await
-}
-
-async fn daylite_project_category_colors_inner(
-    app: tauri::AppHandle,
-) -> Result<HashMap<String, String>, AppError> {
-    run_daylite_command(app, async |client, tokens| {
-        fetch_project_category_colors_core(client, tokens).await
-    })
     .await
 }
 

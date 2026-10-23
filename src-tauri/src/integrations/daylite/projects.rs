@@ -6,12 +6,16 @@ use crate::integrations::telemetry::observe::observe;
 pub async fn daylite_query_overdue_projects(
     app: tauri::AppHandle,
 ) -> Result<Vec<DayliteProjectSummary>, AppError> {
-    let handle = app.clone();
     observe(
-        &handle,
+        &app,
         Operation::DayliteQueryOverdueProjects,
         Integration::Daylite,
-        daylite_query_overdue_projects_inner(app),
+        async {
+            run_daylite_command(app.clone(), async |client, tokens| {
+                query_overdue_projects_core(client, tokens).await
+            })
+            .await
+        },
     )
     .await
 }
@@ -22,12 +26,16 @@ pub async fn daylite_search_projects(
     app: tauri::AppHandle,
     input: DayliteSearchInput,
 ) -> Result<DayliteSearchResult<DayliteProjectSummary>, AppError> {
-    let handle = app.clone();
     observe(
-        &handle,
+        &app,
         Operation::DayliteSearchProjects,
         Integration::Daylite,
-        daylite_search_projects_inner(app, input),
+        async {
+            run_daylite_command(app.clone(), async move |client, tokens| {
+                search_projects_core(client, tokens, &input).await
+            })
+            .await
+        },
     )
     .await
 }
@@ -105,25 +113,6 @@ const OVERDUE_STATUSES: [&str; 2] = ["new_status", "in_progress"];
 const OVERDUE_DISPLAY_LIMIT: usize = 5;
 // Daylite truncates in its own order; a wide pool keeps the lowest IDs deterministic.
 const OVERDUE_CANDIDATE_LIMIT: u16 = 50;
-
-async fn daylite_query_overdue_projects_inner(
-    app: tauri::AppHandle,
-) -> Result<Vec<DayliteProjectSummary>, AppError> {
-    run_daylite_command(app, async |client, tokens| {
-        query_overdue_projects_core(client, tokens).await
-    })
-    .await
-}
-
-async fn daylite_search_projects_inner(
-    app: tauri::AppHandle,
-    input: DayliteSearchInput,
-) -> Result<DayliteSearchResult<DayliteProjectSummary>, AppError> {
-    run_daylite_command(app, async move |client, tokens| {
-        search_projects_core(client, tokens, &input).await
-    })
-    .await
-}
 
 pub(super) async fn query_overdue_projects_core(
     client: &DayliteApiClient,
@@ -310,51 +299,45 @@ pub async fn resolve_week_projects(
     project_refs: Vec<String>,
     force_refresh: bool,
 ) -> Result<HashMap<String, Option<ResolvedProject>>, AppError> {
-    let handle = app.clone();
     observe(
-        &handle,
+        &app,
         Operation::ResolveWeekProjects,
         Integration::Daylite,
-        resolve_week_projects_inner(app, project_refs, force_refresh),
+        async {
+            let references: HashSet<String> = project_refs.into_iter().collect();
+            let cache = project_cache();
+            let now_ms = cache_now_ms();
+            if !force_refresh && references.iter().all(|r| cache.is_fresh(r, now_ms)) {
+                return Ok(references
+                    .into_iter()
+                    .map(|reference| {
+                        let project = cache.peek(&reference);
+                        (reference, project)
+                    })
+                    .collect());
+            }
+
+            let store = load_store_or_error(app.clone())?;
+            let client =
+                DayliteApiClient::new(&store.api_endpoints.daylite_base_url)?.with_telemetry(&app);
+            let resolved = resolve_all(references, PROJECT_RESOLUTION_CONCURRENCY, |reference| {
+                let client = &client;
+                async move {
+                    let load = || fetch_project(client, &reference);
+                    if force_refresh {
+                        cache.reload(&reference, now_ms, load).await
+                    } else {
+                        cache.get_or_load(&reference, now_ms, load).await
+                    }
+                }
+            })
+            .await;
+            persist_project_cache(&app);
+
+            Ok(resolved)
+        },
     )
     .await
-}
-
-async fn resolve_week_projects_inner(
-    app: tauri::AppHandle,
-    project_refs: Vec<String>,
-    force_refresh: bool,
-) -> Result<HashMap<String, Option<ResolvedProject>>, AppError> {
-    let references: HashSet<String> = project_refs.into_iter().collect();
-    let cache = project_cache();
-    let now_ms = cache_now_ms();
-    if !force_refresh && references.iter().all(|r| cache.is_fresh(r, now_ms)) {
-        return Ok(references
-            .into_iter()
-            .map(|reference| {
-                let project = cache.peek(&reference);
-                (reference, project)
-            })
-            .collect());
-    }
-
-    let store = load_store_or_error(app.clone())?;
-    let client = DayliteApiClient::new(&store.api_endpoints.daylite_base_url)?.with_telemetry(&app);
-    let resolved = resolve_all(references, PROJECT_RESOLUTION_CONCURRENCY, |reference| {
-        let client = &client;
-        async move {
-            let load = || fetch_project(client, &reference);
-            if force_refresh {
-                cache.reload(&reference, now_ms, load).await
-            } else {
-                cache.get_or_load(&reference, now_ms, load).await
-            }
-        }
-    })
-    .await;
-    persist_project_cache(&app);
-
-    Ok(resolved)
 }
 
 /// Never calls Daylite, so a week can be shown before its projects are refreshed.

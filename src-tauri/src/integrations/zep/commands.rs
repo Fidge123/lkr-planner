@@ -13,7 +13,16 @@ pub async fn zep_test_credentials(
         &app,
         Operation::ZepTestCredentials,
         Integration::Zep,
-        zep_test_credentials_inner(root_url, username, password),
+        async {
+            let root_url = normalized_root_url(&root_url)?;
+
+            let body = propfind(&root_url, &username, &password).await?;
+            let calendars = parse_propfind_calendars(&body, &root_url);
+
+            Ok(ZepCredentialTestResult {
+                calendar_count: calendars.len() as u32,
+            })
+        },
     )
     .await
 }
@@ -26,12 +35,22 @@ pub async fn zep_save_credentials(
     username: String,
     password: String,
 ) -> Result<(), AppError> {
-    let handle = app.clone();
     observe(
-        &handle,
+        &app,
         Operation::ZepSaveCredentials,
         Integration::Zep,
-        async { zep_save_credentials_inner(app, root_url, username, password) },
+        async {
+            let root_url = normalized_root_url(&root_url)?;
+
+            // Write the store first so a keychain failure leaves no orphaned credential entry.
+            crate::integrations::local_store::update_local_store(&app, |store| {
+                store.api_endpoints.zep_caldav_root_url = root_url
+            })?;
+
+            save_zep_credentials_to_keychain(&username, &password)?;
+
+            Ok(())
+        },
     )
     .await
 }
@@ -41,12 +60,27 @@ pub async fn zep_save_credentials(
 pub async fn zep_load_credentials(
     app: tauri::AppHandle,
 ) -> Result<Option<ZepCredentialsInfo>, AppError> {
-    let handle = app.clone();
     observe(
-        &handle,
+        &app,
         Operation::ZepLoadCredentials,
         Integration::Zep,
-        async { zep_load_credentials_inner(app) },
+        async {
+            let store = crate::integrations::local_store::load_local_store(app.clone())?;
+
+            let root_url = store.api_endpoints.zep_caldav_root_url.trim().to_string();
+            if root_url.is_empty() {
+                return Ok(None);
+            }
+
+            match load_zep_credentials() {
+                Ok(creds) => Ok(Some(ZepCredentialsInfo {
+                    root_url,
+                    username: creds.username,
+                })),
+                Err(e) if e.code == AppErrorCode::MissingCredentials => Ok(None),
+                Err(e) => Err(e),
+            }
+        },
     )
     .await
 }
@@ -54,12 +88,28 @@ pub async fn zep_load_credentials(
 #[tauri::command]
 #[specta::specta]
 pub async fn zep_discover_calendars(app: tauri::AppHandle) -> Result<Vec<ZepCalendar>, AppError> {
-    let handle = app.clone();
     observe(
-        &handle,
+        &app,
         Operation::ZepDiscoverCalendars,
         Integration::Zep,
-        zep_discover_calendars_inner(app),
+        async {
+            let store = crate::integrations::local_store::load_local_store(app.clone())?;
+
+            let root_url = store.api_endpoints.zep_caldav_root_url.trim().to_string();
+            if root_url.is_empty() {
+                return Err(AppError::new(
+                    AppErrorCode::MissingCredentials,
+                    "ZEP CalDAV-URL nicht konfiguriert. Bitte ZEP-Verbindung einrichten.",
+                    "zep_caldav_root_url is empty in local store",
+                ));
+            }
+
+            let creds = load_zep_credentials()?;
+            let body = propfind(&root_url, &creds.username, &creds.password).await?;
+            let calendars = parse_propfind_calendars(&body, &root_url);
+
+            Ok(calendars)
+        },
     )
     .await
 }
@@ -72,12 +122,46 @@ pub async fn zep_save_and_test_calendar(
     source: IcalSource,
     calendar_url: Option<String>,
 ) -> Result<ZepCalendarTestResult, AppError> {
-    let handle = app.clone();
     observe(
-        &handle,
+        &app,
         Operation::ZepSaveAndTestCalendar,
         Integration::Zep,
-        zep_save_and_test_calendar_inner(app, daylite_contact_reference, source, calendar_url),
+        async {
+            let calendar_url = calendar_url
+                .as_deref()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(ToString::to_string);
+
+            let mut synced = crate::integrations::local_store::load_local_store(app.clone())?;
+            sync_calendar_to_daylite(
+                &mut synced,
+                &daylite_contact_reference,
+                &source,
+                &calendar_url,
+            )
+            .await?;
+            crate::integrations::local_store::update_local_store(&app, |store| {
+                store.daylite_cache = synced.daylite_cache;
+                store_calendar_url(store, &daylite_contact_reference, &source, &calendar_url);
+            })?;
+
+            // Clearing a calendar reports success without a connection test.
+            let Some(ref cal_url) = calendar_url else {
+                return Ok(ZepCalendarTestResult {
+                    success: true,
+                    timestamp: current_timestamp(),
+                    error_message: None,
+                });
+            };
+
+            let result = run_calendar_test(cal_url).await?;
+            crate::integrations::local_store::update_local_store(&app, |store| {
+                store_test_result(store, &daylite_contact_reference, &source, &result)
+            })?;
+
+            Ok(result)
+        },
     )
     .await
 }
@@ -93,13 +177,8 @@ use crate::integrations::daylite::contacts::{
     sync_contact_ical_urls, DayliteUpdateContactIcalUrlsInput,
 };
 
-fn zep_save_credentials_inner(
-    app: tauri::AppHandle,
-    root_url: String,
-    username: String,
-    password: String,
-) -> Result<(), AppError> {
-    let root_url = root_url.trim().trim_end_matches('/').to_string();
+fn normalized_root_url(root_url: &str) -> Result<String, AppError> {
+    let root_url = root_url.trim().trim_end_matches('/');
     if root_url.is_empty() {
         return Err(AppError::new(
             AppErrorCode::InvalidConfiguration,
@@ -107,118 +186,7 @@ fn zep_save_credentials_inner(
             "root_url is empty",
         ));
     }
-
-    // Write the store first so a keychain failure leaves no orphaned credential entry.
-    crate::integrations::local_store::update_local_store(&app, |store| {
-        store.api_endpoints.zep_caldav_root_url = root_url
-    })?;
-
-    save_zep_credentials_to_keychain(&username, &password)?;
-
-    Ok(())
-}
-
-fn zep_load_credentials_inner(
-    app: tauri::AppHandle,
-) -> Result<Option<ZepCredentialsInfo>, AppError> {
-    let store = crate::integrations::local_store::load_local_store(app)?;
-
-    let root_url = store.api_endpoints.zep_caldav_root_url.trim().to_string();
-    if root_url.is_empty() {
-        return Ok(None);
-    }
-
-    match load_zep_credentials() {
-        Ok(creds) => Ok(Some(ZepCredentialsInfo {
-            root_url,
-            username: creds.username,
-        })),
-        Err(e) if e.code == AppErrorCode::MissingCredentials => Ok(None),
-        Err(e) => Err(e),
-    }
-}
-
-async fn zep_test_credentials_inner(
-    root_url: String,
-    username: String,
-    password: String,
-) -> Result<ZepCredentialTestResult, AppError> {
-    let root_url = root_url.trim().trim_end_matches('/').to_string();
-    if root_url.is_empty() {
-        return Err(AppError::new(
-            AppErrorCode::InvalidConfiguration,
-            "Die ZEP CalDAV-URL darf nicht leer sein.",
-            "root_url is empty",
-        ));
-    }
-
-    let body = propfind(&root_url, &username, &password).await?;
-    let calendars = parse_propfind_calendars(&body, &root_url);
-
-    Ok(ZepCredentialTestResult {
-        calendar_count: calendars.len() as u32,
-    })
-}
-
-async fn zep_discover_calendars_inner(app: tauri::AppHandle) -> Result<Vec<ZepCalendar>, AppError> {
-    let store = crate::integrations::local_store::load_local_store(app)?;
-
-    let root_url = store.api_endpoints.zep_caldav_root_url.trim().to_string();
-    if root_url.is_empty() {
-        return Err(AppError::new(
-            AppErrorCode::MissingCredentials,
-            "ZEP CalDAV-URL nicht konfiguriert. Bitte ZEP-Verbindung einrichten.",
-            "zep_caldav_root_url is empty in local store",
-        ));
-    }
-
-    let creds = load_zep_credentials()?;
-    let body = propfind(&root_url, &creds.username, &creds.password).await?;
-    let calendars = parse_propfind_calendars(&body, &root_url);
-
-    Ok(calendars)
-}
-
-async fn zep_save_and_test_calendar_inner(
-    app: tauri::AppHandle,
-    daylite_contact_reference: String,
-    source: IcalSource,
-    calendar_url: Option<String>,
-) -> Result<ZepCalendarTestResult, AppError> {
-    let calendar_url = calendar_url
-        .as_deref()
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .map(ToString::to_string);
-
-    let mut synced = crate::integrations::local_store::load_local_store(app.clone())?;
-    sync_calendar_to_daylite(
-        &mut synced,
-        &daylite_contact_reference,
-        &source,
-        &calendar_url,
-    )
-    .await?;
-    crate::integrations::local_store::update_local_store(&app, |store| {
-        store.daylite_cache = synced.daylite_cache;
-        store_calendar_url(store, &daylite_contact_reference, &source, &calendar_url);
-    })?;
-
-    // Clearing a calendar reports success without a connection test.
-    let Some(ref cal_url) = calendar_url else {
-        return Ok(ZepCalendarTestResult {
-            success: true,
-            timestamp: current_timestamp(),
-            error_message: None,
-        });
-    };
-
-    let result = run_calendar_test(cal_url).await?;
-    crate::integrations::local_store::update_local_store(&app, |store| {
-        store_test_result(store, &daylite_contact_reference, &source, &result)
-    })?;
-
-    Ok(result)
+    Ok(root_url.to_string())
 }
 
 /// An empty URL string removes the entry in Daylite via `normalize_non_empty`.
