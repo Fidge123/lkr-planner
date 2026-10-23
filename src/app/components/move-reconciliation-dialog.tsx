@@ -23,7 +23,12 @@ export function MoveReconciliationDialog({
     setErrorMessage(null);
     try {
       // A half-finished move must always be able to drop its duplicate, even for a fixed appointment.
-      await deleteAssignment(hrefToDelete(choice, reconciliation), true);
+      await deleteAssignment(
+        choice === "retryDeleteSource"
+          ? reconciliation.sourceHref
+          : reconciliation.newHref,
+        true,
+      );
       onResolved();
     } catch (error) {
       setErrorMessage((error as Error).message);
@@ -93,16 +98,7 @@ export interface MoveReconciliation {
   sourceHref: string;
 }
 
-export type ReconciliationChoice =
+type ReconciliationChoice =
   | "retryDeleteSource"
   | "keepOldDeleteNew"
   | "keepBoth";
-
-export function hrefToDelete(
-  choice: Exclude<ReconciliationChoice, "keepBoth">,
-  reconciliation: MoveReconciliation,
-): string {
-  return choice === "retryDeleteSource"
-    ? reconciliation.sourceHref
-    : reconciliation.newHref;
-}
