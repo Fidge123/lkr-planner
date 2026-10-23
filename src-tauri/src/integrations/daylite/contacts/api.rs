@@ -132,7 +132,6 @@ fn parse_contact_id(contact_reference: &str) -> Result<u64, DayliteApiError> {
     contact_id_raw.parse::<u64>().map_err(|error| {
         DayliteApiError::new(
             DayliteApiErrorCode::InvalidResponse,
-            None,
             "Die Daylite-Kontaktreferenz ist ungültig.",
             format!("Ungültige Kontaktreferenz `{trimmed_reference}`: {error}"),
         )

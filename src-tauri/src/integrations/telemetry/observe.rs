@@ -1,9 +1,7 @@
 use super::events::{ErrorCode, Integration, Operation, TelemetryEvent};
 use super::recorder::TelemetryRecorder;
 use super::state::TelemetryState;
-use crate::integrations::daylite::shared::DayliteApiError;
-use crate::integrations::local_store::types::StoreError;
-use crate::integrations::zep::types::ZepError;
+use crate::error::AppError;
 use std::future::Future;
 use std::sync::Arc;
 use std::time::Instant;
@@ -17,27 +15,7 @@ pub trait TelemetryError {
     }
 }
 
-impl TelemetryError for StoreError {
-    fn error_code(&self) -> ErrorCode {
-        ErrorCode::from_enum(&self.code)
-    }
-
-    fn technical_message(&self) -> Option<&str> {
-        Some(&self.technical_message)
-    }
-}
-
-impl TelemetryError for ZepError {
-    fn error_code(&self) -> ErrorCode {
-        ErrorCode::from_enum(&self.code)
-    }
-
-    fn technical_message(&self) -> Option<&str> {
-        Some(&self.technical_message)
-    }
-}
-
-impl TelemetryError for DayliteApiError {
+impl TelemetryError for AppError {
     fn error_code(&self) -> ErrorCode {
         ErrorCode::from_enum(&self.code)
     }
@@ -229,14 +207,11 @@ mod tests {
             Operation::SaveLocalStore,
             Integration::LocalStore,
             async {
-                Err(StoreError {
-                    code: StoreErrorCode::WriteFailed,
-                    user_message: "Die lokale Konfiguration konnte nicht gespeichert werden."
-                        .to_string(),
-                    technical_message:
-                        "Datei konnte nicht geschrieben werden (/Users/flori/store.json)"
-                            .to_string(),
-                })
+                Err(StoreError::new(
+                    StoreErrorCode::WriteFailed,
+                    "Die lokale Konfiguration konnte nicht gespeichert werden.",
+                    "Datei konnte nicht geschrieben werden (/Users/flori/store.json)",
+                ))
             },
         )
         .await;

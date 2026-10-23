@@ -44,37 +44,37 @@ pub(super) async fn refresh_tokens(
     if access_token.is_empty() {
         return Err(DayliteApiError::new(
             DayliteApiErrorCode::TokenRefreshFailed,
-            Some(response.status),
             "Das Daylite-Access-Token konnte nicht erneuert werden.",
             format!(
                 "Refresh-Antwort enthält ein leeres access_token Feld. body={}",
                 truncate_for_log(&response.body)
             ),
-        ));
+        )
+        .with_http_status(Some(response.status)));
     }
 
     if refreshed_refresh_token.is_empty() {
         return Err(DayliteApiError::new(
             DayliteApiErrorCode::TokenRefreshFailed,
-            Some(response.status),
             "Das Daylite-Refresh-Token konnte nicht erneuert werden.",
             format!(
                 "Refresh-Antwort enthält ein leeres refresh_token Feld. body={}",
                 truncate_for_log(&response.body)
             ),
-        ));
+        )
+        .with_http_status(Some(response.status)));
     }
 
     if parsed_refresh.expires_in == 0 {
         return Err(DayliteApiError::new(
             DayliteApiErrorCode::TokenRefreshFailed,
-            Some(response.status),
             "Die Ablaufzeit des Daylite-Access-Tokens ist ungültig.",
             format!(
                 "Refresh-Antwort enthält expires_in=0. body={}",
                 truncate_for_log(&response.body)
             ),
-        ));
+        )
+        .with_http_status(Some(response.status)));
     }
 
     let now_ms = current_epoch_ms()?;
@@ -129,10 +129,10 @@ fn parse_refresh_response_body(
         .map_err(|error| {
             DayliteApiError::new(
                 DayliteApiErrorCode::TokenRefreshFailed,
-                error.http_status,
                 "Die Daylite-Token-Antwort konnte nicht verarbeitet werden.",
                 error.technical_message,
             )
+            .with_http_status(error.http_status)
         })
 }
 

@@ -2,6 +2,7 @@ use tauri::menu::{Menu, MenuItem, Submenu};
 use tauri::{Emitter, Manager};
 use tauri_plugin_updater::UpdaterExt;
 
+pub mod error;
 mod integrations;
 pub mod secret_manager;
 

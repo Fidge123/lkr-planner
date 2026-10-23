@@ -5,20 +5,20 @@ import { invoke as __TAURI_INVOKE } from "@tauri-apps/api/core";
 
 /** Commands */
 export const commands = {
-	loadLocalStore: () => typedError<LocalStore, StoreError>(__TAURI_INVOKE("load_local_store")),
-	saveLocalStore: (store: LocalStore) => typedError<null, StoreError>(__TAURI_INVOKE("save_local_store", { store })),
+	loadLocalStore: () => typedError<LocalStore, AppError>(__TAURI_INVOKE("load_local_store")),
+	saveLocalStore: (store: LocalStore) => typedError<null, AppError>(__TAURI_INVOKE("save_local_store", { store })),
 	/**  Without employee references, every employee with a calendar is loaded. */
 	loadWeekEvents: (weekStart: string, employeeReferences: string[] | null, purpose: WeekLoadPurpose) => typedError<EmployeeWeekEvents[], string>(__TAURI_INVOKE("load_week_events", { weekStart, employeeReferences, purpose })),
 	getHolidaysForWeek: (weekStart: string) => typedError<Holiday[], string>(__TAURI_INVOKE("get_holidays_for_week", { weekStart })),
-	dayliteConnectRefreshToken: (request: DayliteRefreshTokenRequest) => typedError<DayliteTokenSyncStatus, DayliteApiError>(__TAURI_INVOKE("daylite_connect_refresh_token", { request })),
-	dayliteSearchProjects: (input: DayliteSearchInput) => typedError<DayliteSearchResult<DayliteProjectSummary>, DayliteApiError>(__TAURI_INVOKE("daylite_search_projects", { input })),
-	dayliteQueryOverdueProjects: () => typedError<DayliteProjectSummary[], DayliteApiError>(__TAURI_INVOKE("daylite_query_overdue_projects")),
+	dayliteConnectRefreshToken: (request: DayliteRefreshTokenRequest) => typedError<DayliteTokenSyncStatus, AppError>(__TAURI_INVOKE("daylite_connect_refresh_token", { request })),
+	dayliteSearchProjects: (input: DayliteSearchInput) => typedError<DayliteSearchResult<DayliteProjectSummary>, AppError>(__TAURI_INVOKE("daylite_search_projects", { input })),
+	dayliteQueryOverdueProjects: () => typedError<DayliteProjectSummary[], AppError>(__TAURI_INVOKE("daylite_query_overdue_projects")),
 	/**  A reference that neither Daylite nor the cache could resolve maps to no project. */
-	resolveWeekProjects: (projectRefs: string[], forceRefresh: boolean) => typedError<{ [key in string]: ResolvedProject | null }, DayliteApiError>(__TAURI_INVOKE("resolve_week_projects", { projectRefs, forceRefresh })),
-	dayliteProjectCategoryColors: () => typedError<{ [key in string]: string }, DayliteApiError>(__TAURI_INVOKE("daylite_project_category_colors")),
+	resolveWeekProjects: (projectRefs: string[], forceRefresh: boolean) => typedError<{ [key in string]: ResolvedProject | null }, AppError>(__TAURI_INVOKE("resolve_week_projects", { projectRefs, forceRefresh })),
+	dayliteProjectCategoryColors: () => typedError<{ [key in string]: string }, AppError>(__TAURI_INVOKE("daylite_project_category_colors")),
 	dayliteOpenProject: (projectRef: string) => typedError<null, string>(__TAURI_INVOKE("daylite_open_project", { projectRef })),
-	dayliteListContacts: () => typedError<PlanningContactRecord[], DayliteApiError>(__TAURI_INVOKE("daylite_list_contacts")),
-	dayliteListCachedContacts: () => typedError<PlanningContactRecord[], DayliteApiError>(__TAURI_INVOKE("daylite_list_cached_contacts")),
+	dayliteListContacts: () => typedError<PlanningContactRecord[], AppError>(__TAURI_INVOKE("daylite_list_contacts")),
+	dayliteListCachedContacts: () => typedError<PlanningContactRecord[], AppError>(__TAURI_INVOKE("daylite_list_cached_contacts")),
 	createAssignment: (input: CreateAssignmentInput) => typedError<string, string>(__TAURI_INVOKE("create_assignment", { input })),
 	updateAssignment: (input: UpdateAssignmentInput) => typedError<null, string>(__TAURI_INVOKE("update_assignment", { input })),
 	moveAssignment: (href: string, targetEmployeeReference: string, date: string, projectRef: string, projectName: string, orderIndex: number | null) => typedError<MoveAssignmentResult, string>(__TAURI_INVOKE("move_assignment", { href, targetEmployeeReference, date, projectRef, projectName, orderIndex })),
@@ -26,16 +26,16 @@ export const commands = {
 	deleteAssignment: (href: string, overrideProtection: boolean) => typedError<null, string>(__TAURI_INVOKE("delete_assignment", { href, overrideProtection })),
 	/**  Returns nothing; the failures event reports the worker days still failing. */
 	retryDayliteAppointmentSync: () => __TAURI_INVOKE<void>("retry_daylite_appointment_sync"),
-	zepSaveCredentials: (rootUrl: string, username: string, password: string) => typedError<null, ZepError>(__TAURI_INVOKE("zep_save_credentials", { rootUrl, username, password })),
+	zepSaveCredentials: (rootUrl: string, username: string, password: string) => typedError<null, AppError>(__TAURI_INVOKE("zep_save_credentials", { rootUrl, username, password })),
 	zepLoadCredentials: () => typedError<{
 	rootUrl: string,
 	username: string,
-} | null, ZepError>(__TAURI_INVOKE("zep_load_credentials")),
-	zepTestCredentials: (rootUrl: string, username: string, password: string) => typedError<ZepCredentialTestResult, ZepError>(__TAURI_INVOKE("zep_test_credentials", { rootUrl, username, password })),
-	zepDiscoverCalendars: () => typedError<ZepCalendar[], ZepError>(__TAURI_INVOKE("zep_discover_calendars")),
-	zepSaveAndTestCalendar: (dayliteContactReference: string, source: IcalSource, calendarUrl: string | null) => typedError<ZepCalendarTestResult, ZepError>(__TAURI_INVOKE("zep_save_and_test_calendar", { dayliteContactReference, source, calendarUrl })),
+} | null, AppError>(__TAURI_INVOKE("zep_load_credentials")),
+	zepTestCredentials: (rootUrl: string, username: string, password: string) => typedError<ZepCredentialTestResult, AppError>(__TAURI_INVOKE("zep_test_credentials", { rootUrl, username, password })),
+	zepDiscoverCalendars: () => typedError<ZepCalendar[], AppError>(__TAURI_INVOKE("zep_discover_calendars")),
+	zepSaveAndTestCalendar: (dayliteContactReference: string, source: IcalSource, calendarUrl: string | null) => typedError<ZepCalendarTestResult, AppError>(__TAURI_INVOKE("zep_save_and_test_calendar", { dayliteContactReference, source, calendarUrl })),
 	telemetryGetSettings: () => __TAURI_INVOKE<TelemetrySettings>("telemetry_get_settings"),
-	telemetrySetEnabled: (enabled: boolean) => typedError<TelemetrySettings, StoreError>(__TAURI_INVOKE("telemetry_set_enabled", { enabled })),
+	telemetrySetEnabled: (enabled: boolean) => typedError<TelemetrySettings, AppError>(__TAURI_INVOKE("telemetry_set_enabled", { enabled })),
 	telemetryCaptureFrontendError: (error: FrontendErrorInput) => __TAURI_INVOKE<void>("telemetry_capture_frontend_error", { error }),
 };
 
@@ -45,6 +45,16 @@ export type ApiEndpoints = {
 	planradarBaseUrl: string,
 	zepCaldavRootUrl?: string,
 };
+
+/**  Only `user_message` is meant for the user. */
+export type AppError = {
+	code: AppErrorCode,
+	httpStatus: number | null,
+	userMessage: string,
+	technicalMessage: string,
+};
+
+export type AppErrorCode = "CORRUPT_FILE" | "DAYLITE_SYNC_FAILED" | "INVALID_CONFIGURATION" | "INVALID_RESPONSE" | "KEYCHAIN_ERROR" | "MISSING_CREDENTIALS" | "MISSING_FIELDS" | "MISSING_TOKEN" | "NETWORK_ERROR" | "NOT_FOUND" | "RATE_LIMITED" | "READ_FAILED" | "REQUEST_FAILED" | "SERVER_ERROR" | "TIMEOUT" | "TOKEN_REFRESH_FAILED" | "UNAUTHORIZED" | "WRITE_FAILED";
 
 export type CachedHoliday = {
 	date: string,
@@ -74,15 +84,6 @@ export type CreateAssignmentInput = {
 	projectRef: string,
 	projectName: string,
 };
-
-export type DayliteApiError = {
-	code: DayliteApiErrorCode,
-	httpStatus: number | null,
-	userMessage: string,
-	technicalMessage: string,
-};
-
-export type DayliteApiErrorCode = "UNAUTHORIZED" | "RATE_LIMITED" | "SERVER_ERROR" | "MISSING_TOKEN" | "INVALID_CONFIGURATION" | "REQUEST_FAILED" | "INVALID_RESPONSE" | "TOKEN_REFRESH_FAILED" | "TIMEOUT";
 
 export type DayliteCache = {
 	lastSyncedAt: string | null,
@@ -214,14 +215,6 @@ export type ResolvedProject = {
 	category: string | null,
 };
 
-export type StoreError = {
-	code: StoreErrorCode,
-	userMessage: string,
-	technicalMessage: string,
-};
-
-export type StoreErrorCode = "READ_FAILED" | "WRITE_FAILED" | "CORRUPT_FILE" | "MISSING_FIELDS";
-
 export type TelemetrySettings = {
 	enabled?: boolean,
 	installId?: string | null,
@@ -261,14 +254,6 @@ export type ZepCredentialsInfo = {
 	rootUrl: string,
 	username: string,
 };
-
-export type ZepError = {
-	code: ZepErrorCode,
-	userMessage: string,
-	technicalMessage: string,
-};
-
-export type ZepErrorCode = "KEYCHAIN_ERROR" | "MISSING_CREDENTIALS" | "UNAUTHORIZED" | "NOT_FOUND" | "NETWORK_ERROR" | "INVALID_RESPONSE" | "INVALID_CONFIGURATION" | "DAYLITE_SYNC_FAILED";
 
 /* Tauri Specta runtime */
 async function typedError<T, E>(result: Promise<T>): Promise<{ status: "ok"; data: T } | { status: "error"; error: E }> {

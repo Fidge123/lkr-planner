@@ -208,7 +208,6 @@ fn shared_http_client() -> Result<reqwest::Client, DayliteApiError> {
         .map_err(|technical_message| {
             DayliteApiError::new(
                 DayliteApiErrorCode::RequestFailed,
-                None,
                 "Die Verbindung zu Daylite konnte nicht aufgebaut werden.",
                 technical_message,
             )
@@ -301,7 +300,6 @@ impl DayliteHttpTransport for ReqwestTransport {
                 .map_err(|error| {
                     DayliteApiError::new(
                         DayliteApiErrorCode::InvalidConfiguration,
-                        None,
                         "Die Daylite-URL ist ungültig konfiguriert.",
                         format!("URL konnte nicht geparst werden: {error}"),
                     )
@@ -338,14 +336,12 @@ impl DayliteHttpTransport for ReqwestTransport {
                 if error.is_timeout() {
                     DayliteApiError::new(
                         DayliteApiErrorCode::Timeout,
-                        None,
                         "Zeitüberschreitung bei der Daylite-Anfrage.",
                         format!("Zeitüberschreitung bei {}: {error}", request.path),
                     )
                 } else {
                     DayliteApiError::new(
                         DayliteApiErrorCode::RequestFailed,
-                        None,
                         "Die Anfrage an Daylite ist fehlgeschlagen.",
                         format!("Netzwerkfehler bei {}: {error}", request.path),
                     )
@@ -356,10 +352,10 @@ impl DayliteHttpTransport for ReqwestTransport {
             let body = response.text().await.map_err(|error| {
                 DayliteApiError::new(
                     DayliteApiErrorCode::RequestFailed,
-                    Some(status),
                     "Die Antwort von Daylite konnte nicht gelesen werden.",
                     format!("Antworttext konnte nicht gelesen werden: {error}"),
                 )
+                .with_http_status(Some(status))
             })?;
 
             #[cfg(test)]

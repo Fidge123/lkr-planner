@@ -1,3 +1,4 @@
+pub use crate::error::{AppError as StoreError, AppErrorCode as StoreErrorCode};
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 use specta::Type;
@@ -125,37 +126,6 @@ pub struct HolidayCacheEntry {
 pub struct CachedHoliday {
     pub date: String,
     pub name: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct StoreError {
-    pub code: StoreErrorCode,
-    pub user_message: String,
-    pub technical_message: String,
-}
-
-impl StoreError {
-    pub(super) fn new(
-        code: StoreErrorCode,
-        user_message: impl Into<String>,
-        technical_message: impl Into<String>,
-    ) -> Self {
-        Self {
-            code,
-            user_message: user_message.into(),
-            technical_message: technical_message.into(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum StoreErrorCode {
-    ReadFailed,
-    WriteFailed,
-    CorruptFile,
-    MissingFields,
 }
 
 #[cfg(test)]

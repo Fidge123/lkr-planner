@@ -128,7 +128,6 @@ impl TokenSession {
 
         Err(DayliteApiError::new(
             DayliteApiErrorCode::RequestFailed,
-            None,
             "Die Anwendung wird beendet.",
             "Daylite-Token-Rotation nach Beginn des Beendens abgelehnt.",
         ))
@@ -259,7 +258,6 @@ mod tests {
                 if keychain.refuses.load(Ordering::SeqCst) {
                     return Err(DayliteApiError::new(
                         DayliteApiErrorCode::ServerError,
-                        None,
                         "Keychain verweigert",
                         "denied",
                     ));
@@ -562,7 +560,6 @@ mod tests {
                             response.expect("rotates once").await.unwrap();
                             Err(DayliteApiError::new(
                                 DayliteApiErrorCode::Timeout,
-                                None,
                                 "Zeitüberschreitung",
                                 "timeout",
                             ))

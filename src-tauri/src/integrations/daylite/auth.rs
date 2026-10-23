@@ -101,7 +101,6 @@ mod tests {
         let error = mint_and_save_base_url(&client, "rt".to_string(), || {
             Err(DayliteApiError::new(
                 DayliteApiErrorCode::InvalidConfiguration,
-                None,
                 "Speichern fehlgeschlagen",
                 "store",
             ))
