@@ -155,10 +155,14 @@ export function PlanningGridTable({
   const activeHighlight = activeHighlightForWeek(highlight, weekStart);
   // Deriving keeps the highlight out of other weeks; dropping it keeps navigating back from restoring it.
   if (highlight && activeHighlight === null) setHighlight(null);
-  const toggleHighlight = (event: CellEvent) => {
-    const key = nextHighlight(activeHighlight, highlightKey(event));
-    setHighlight(key === null ? null : { key, weekStart });
-  };
+  const toggleHighlight = (event: CellEvent) =>
+    setHighlight((current) => {
+      const key = nextHighlight(
+        activeHighlightForWeek(current, weekStart),
+        highlightKey(event),
+      );
+      return key === null ? null : { key, weekStart };
+    });
   const {
     eventsByEmployee,
     errorsByEmployee,

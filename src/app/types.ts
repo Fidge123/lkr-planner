@@ -100,6 +100,21 @@ export function hasAbsenceConflict(events: CellEvent[]): boolean {
   );
 }
 
+/** Keeps each day's events in the backend's order. */
+export function cellEventsByDay(
+  events: CalendarCellEvent[],
+  categoryColors: ProjectCategoryColors,
+): Map<string, CellEvent[]> {
+  const byDay = new Map<string, CellEvent[]>();
+  for (const event of events) {
+    const cellEvent = toCellEvent(event, categoryColors);
+    const day = byDay.get(event.date);
+    if (day) day.push(cellEvent);
+    else byDay.set(event.date, [cellEvent]);
+  }
+  return byDay;
+}
+
 export function toCellEvent(
   event: CalendarCellEvent,
   categoryColors: ProjectCategoryColors,

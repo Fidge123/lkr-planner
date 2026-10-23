@@ -13,8 +13,7 @@ import { useWeekCache } from "../hooks/use-planning-assignments";
 import { useProjectCategoryColors } from "../hooks/use-project-category-colors";
 import type { GhostSuggestion, ModalSaveAction } from "../next-day-quick-add";
 import { isGhostVisible, nextGhostState } from "../next-day-quick-add";
-import type { CellEvent } from "../types";
-import { toCellEvent } from "../types";
+import { type CellEvent, cellEventsByDay } from "../types";
 import { toLocalISODate } from "../util";
 import { AssignmentModal } from "./assignment-modal";
 import { TimetableCell } from "./timetable-cell";
@@ -45,6 +44,7 @@ export function TimetableRow({
 
   const cache = useWeekCache();
   const categoryColors = useProjectCategoryColors();
+  const eventsByDay = cellEventsByDay(calendarEvents, categoryColors);
   const handleWritten = (removedUid: string | null) => {
     if (removedUid !== null) cache.removeEvent(removedUid);
     void cache.refreshEmployees(weekStart, [employee.self]);
@@ -133,21 +133,15 @@ export function TimetableRow({
             </div>
           </td>
         ) : (
-          week.days.map((day) => {
-            const isoDay = toLocalISODate(day);
-            const rawDayEvents = calendarEvents.filter(
-              (e) => e.date === isoDay,
-            );
-            const dayEvents = rawDayEvents.map((event) =>
-              toCellEvent(event, categoryColors),
-            );
+          isoWeekDays.map((isoDay) => {
+            const dayEvents = eventsByDay.get(isoDay) ?? noEvents;
             const suggestion =
-              ghost && isGhostVisible(ghost, isoDay, rawDayEvents)
+              ghost && isGhostVisible(ghost, isoDay, dayEvents)
                 ? ghost
                 : undefined;
             return (
               <TimetableCell
-                key={day.toISOString()}
+                key={isoDay}
                 isToday={isoDay === week.today}
                 isHoliday={week.holidayDates.has(isoDay)}
                 employeeRef={employee.self}
@@ -157,8 +151,8 @@ export function TimetableRow({
                 dropPreview={dropPreview}
                 draggedUid={draggedUid}
                 activeHighlight={activeHighlight}
-                onAddClick={() => openCreateModal(isoDay)}
-                onEventClick={(event) => openEditModal(isoDay, event)}
+                onAddClick={openCreateModal}
+                onEventClick={openEditModal}
                 onSuggestionClick={handleSuggestionClick}
                 onToggleHighlight={onToggleHighlight}
               />
@@ -199,6 +193,8 @@ function needsAttention(setting: EmployeeSetting | null | undefined): boolean {
   }
   return false;
 }
+
+const noEvents: CellEvent[] = [];
 
 interface ModalState {
   date: string;

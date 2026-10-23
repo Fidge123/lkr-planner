@@ -32,6 +32,7 @@ export function WeekTable({
   const today = useToday();
   const holidayByDate = new Map(holidays.map((h) => [h.date, h.name]));
   const holidayDates = new Set(holidays.map((h) => h.date));
+  const week = { days: weekDays, holidayDates, today };
 
   // WKWebView keeps a re-slotted card's stale pixels after a cell reload.
   // Promoting the grid to a compositing layer for one frame forces a full repaint.
@@ -93,9 +94,9 @@ export function WeekTable({
           <TimetableRow
             key={employee.self || `employee-${index}`}
             employee={employee}
-            calendarEvents={eventsByEmployee[employee.self] ?? []}
+            calendarEvents={eventsByEmployee[employee.self] ?? noEvents}
             calendarError={errorsByEmployee[employee.self] ?? null}
-            week={{ days: weekDays, holidayDates, today }}
+            week={week}
             employeeSetting={
               employeeSettings.find(
                 (s) => s.dayliteContactReference === employee.self,
@@ -122,6 +123,8 @@ export function WeekTable({
     </table>
   );
 }
+
+const noEvents: CalendarCellEvent[] = [];
 
 export interface WeekTableProps {
   weekDays: Date[];

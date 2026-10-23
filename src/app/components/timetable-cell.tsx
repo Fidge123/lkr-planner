@@ -35,6 +35,7 @@ export function TimetableCell({
 }: Props) {
   const positions = assignmentPositions(events);
   const conflict = hasAbsenceConflict(events);
+  const editEvent = (event: CellEvent) => onEventClick(date, event);
 
   // Measured on demand rather than tracked in state: the drop position is only ever read
   // mid-drag, and rects go stale as soon as a row above this one changes height.
@@ -121,7 +122,7 @@ export function TimetableCell({
                 position={positions.get(event.uid) ?? 0}
                 lifted={event.uid === draggedUid}
                 highlighted={isHighlighted(event, activeHighlight)}
-                onEventClick={onEventClick}
+                onEventClick={editEvent}
                 onToggleHighlight={onToggleHighlight}
               />
             </li>
@@ -147,7 +148,7 @@ export function TimetableCell({
               type="button"
               className="btn btn-dash btn-block rounded-lg opacity-20 hover:opacity-80 transition-opacity"
               aria-label="Aufgabe hinzufügen"
-              onClick={onAddClick}
+              onClick={() => onAddClick(date)}
             >
               +
             </button>
@@ -216,8 +217,8 @@ interface Props {
   draggedUid?: string | null;
   /** Highlight key the planner picked; cards matching it are marked. */
   activeHighlight?: string | null;
-  onAddClick: () => void;
-  onEventClick: (event: CellEvent) => void;
+  onAddClick: (date: string) => void;
+  onEventClick: (date: string, event: CellEvent) => void;
   onSuggestionClick?: (suggestion: GhostSuggestion) => void;
   onToggleHighlight?: (event: CellEvent) => void;
 }
