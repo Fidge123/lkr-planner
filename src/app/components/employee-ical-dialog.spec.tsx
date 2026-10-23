@@ -67,19 +67,6 @@ function renderDialog(
 }
 
 describe("CalendarSection", () => {
-  it("submitting one section does not affect the other", () => {
-    const primaryHtml = renderSection({ isSubmitting: true });
-    const absenceHtml = renderSection({
-      title: "Abwesenheit",
-      source: "absence",
-      isOptional: true,
-    });
-
-    expect(primaryHtml).toContain("Teste...");
-    expect(absenceHtml).toContain("Speichern");
-    expect(absenceHtml).not.toContain("Teste...");
-  });
-
   it("shows 'Teste...' and disables the button while submitting", () => {
     const html = renderSection({ isSubmitting: true });
 

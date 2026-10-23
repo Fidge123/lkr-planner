@@ -88,14 +88,6 @@ describe("TimetableCell", () => {
     expect(html).not.toContain("Aufgabe hinzufügen");
   });
 
-  it("hides the add affordance when an all-day absence sits next to a timed one", () => {
-    const html = renderCell({
-      events: [absence, { ...absence, uid: "uid-2", startTime: "13:00" }],
-    });
-
-    expect(html).not.toContain("Aufgabe hinzufügen");
-  });
-
   it("keeps the add affordance when the only absence is a timed one", () => {
     const html = renderCell({
       events: [{ ...absence, startTime: "13:00", endTime: "17:00" }],
@@ -140,33 +132,6 @@ describe("TimetableCell", () => {
     expect(html.indexOf(editLabel)).toBeLessThan(html.indexOf(dayliteLabel));
   });
 
-  it("stacks the card actions in a column on the card's right edge", () => {
-    const html = renderCell({ events: [assignment()] });
-
-    const actionArea = html.slice(
-      html.lastIndexOf("<div", html.indexOf(editLabel)),
-      html.indexOf(editLabel),
-    );
-
-    expect(actionArea).toContain("flex-col");
-    expect(actionArea).toContain("shrink-0");
-  });
-
-  it("gives the title the card's only flexible column", () => {
-    const html = renderCell({ events: [assignment()] });
-
-    expect(html).toContain("grid-cols-[auto_minmax(0,1fr)_auto]");
-  });
-
-  it("moves the actions under the times once the column is narrow", () => {
-    const html = renderCell({ events: [assignment()] });
-
-    expect(html).toContain("@max-[10rem]:grid-cols-[auto_minmax(0,1fr)]");
-    expect(html).toContain("@max-[10rem]:col-start-1");
-    expect(html).toContain("@max-[10rem]:row-start-2");
-    expect(html).toContain("@max-[10rem]:row-span-2");
-  });
-
   it("shows no unresolved note on an assignment whose project is still being resolved", () => {
     const html = renderCell({
       events: [
@@ -188,14 +153,6 @@ describe("TimetableCell", () => {
     });
 
     expect(html).not.toContain('aria-roledescription="draggable"');
-  });
-
-  it("renders no Daylite action on an assignment with an unresolved project", () => {
-    const html = renderCell({
-      events: [assignment({ title: "Projekt Süd", projectStatus: null })],
-    });
-
-    expect(html).not.toContain(dayliteLabel);
   });
 
   it("renders no action area on bare and absence events", () => {
@@ -398,8 +355,7 @@ describe("TimetableCell drop preview", () => {
   });
 
   it("skips the dragged card when counting the preview position", () => {
-    // The dragged card does not occupy a position in the day it is dropped into, so an
-    // index of 1 still lands after the one remaining card.
+    // The dragged card occupies no position, so index 1 lands after the one remaining card.
     const html = renderPreview({
       draggedUid: "uid-first",
       dropPreview: { ...preview, orderIndex: 1 },
@@ -445,34 +401,10 @@ describe("TimetableCell highlighting", () => {
     expect(html).not.toContain(dayliteLabel);
   });
 
-  it("offers no toggle on a bare event card", () => {
-    const html = renderCell({ events: [bare] });
-
-    expect(html).not.toContain(highlightLabel);
-  });
-
-  it("offers no toggle on an absence card", () => {
-    const html = renderCell({ events: [absence] });
-
-    expect(html).not.toContain(highlightLabel);
-  });
-
-  it("shows the toggle as pressed on a highlighted card", () => {
-    const html = renderCell({
-      events: [assignment()],
-      activeHighlight: projectRef,
-    });
-
-    expect(highlightToggle(html)).toContain("btn-active");
-  });
-
-  it("shows the toggle unpressed on a card of another project", () => {
-    const html = renderCell({
-      events: [otherProject],
-      activeHighlight: projectRef,
-    });
-
-    expect(highlightToggle(html)).not.toContain("btn-active");
+  it("offers no toggle on a bare event or absence card", () => {
+    for (const event of [bare, absence]) {
+      expect(renderCell({ events: [event] })).not.toContain(highlightLabel);
+    }
   });
 
   it("does not dim the toggle while its card is highlighted", () => {

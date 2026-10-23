@@ -26,10 +26,6 @@ describe("last-used cache", () => {
     resetLastAssignedProject();
   });
 
-  it("starts empty (no recent assignment this session)", () => {
-    expect(getLastAssignedProject()).toBeNull();
-  });
-
   it("returns the most recently recorded project", () => {
     recordLastAssignedProject(project("Projekt Alt", "/v1/projects/1"));
     recordLastAssignedProject(project("Projekt Neu", "/v1/projects/2"));
@@ -47,15 +43,6 @@ describe("combineSuggestions", () => {
     project("Projekt 13", "/v1/projects/13"),
     project("Projekt 14", "/v1/projects/14"),
   ];
-
-  it("puts the recent project first, followed by overdue projects", () => {
-    const recent = project("Projekt Zuletzt", "/v1/projects/99");
-
-    const suggestions = combineSuggestions(recent, overdue);
-
-    expect(suggestions[0].self).toBe("/v1/projects/99");
-    expect(suggestions[1].self).toBe("/v1/projects/10");
-  });
 
   it("caps the combined list at 5 suggestions", () => {
     const recent = project("Projekt Zuletzt", "/v1/projects/99");

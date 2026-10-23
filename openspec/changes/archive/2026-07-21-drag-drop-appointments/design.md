@@ -68,7 +68,8 @@ When `move_assignment` returns `SourceDeleteFailed`, the UI opens a reconciliati
 - Retry deleting the source (`delete_assignment(source_href)`).
 - Keep the old one and delete the new copy (`delete_assignment(new_href)`).
 - Keep both (dismiss; the planner resolves it manually).
-After any choice the grid reloads. The dialog is modal and blocks until the planner decides.
+After any choice the grid reloads.
+The dialog is modal and blocks until the planner decides.
 
 ### Edge-hover navigation via dwell timer, lifting `weekOffset` callbacks
 `App` already owns `weekOffset`; expose `onNavigateWeek(direction)` down to the grid.
@@ -87,7 +88,8 @@ Because adjacent weeks are prefetched and the DragOverlay is portal-mounted, the
 
 ## Migration Plan
 
-No data migration. Ship behind no flag; the feature is additive UI plus one new backend command.
+No data migration.
+Ship behind no flag; the feature is additive UI plus one new backend command.
 Add `@dnd-kit/core` (and `@dnd-kit/utilities` if needed) via Bun, and regenerate `generated/tauri.ts` after adding `move_assignment`.
 Rollback is removing the drag handlers, the dnd-kit dependency, and the `move_assignment` command; existing modal-based editing is unaffected.
 

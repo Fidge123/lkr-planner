@@ -26,9 +26,7 @@ describe("util", () => {
   });
 
   describe("getWeekDays", () => {
-    // Asserted as local calendar dates, not UTC instants: getWeekDays builds
-    // local-midnight dates, so toISOString would shift them a day east of UTC
-    // and pin these tests to a UTC-only test runner.
+    // Compare local dates: toISOString shifts local midnight a day east of UTC.
     it("should return the correct week days", () => {
       const weekDays = getWeekDays(0);
       expect(weekDays).toHaveLength(5);
@@ -59,16 +57,16 @@ describe("util", () => {
     it("returns 5 days from Monday to Friday when showWeekend is false", () => {
       const weekDays = getWeekDays(0, false);
       expect(weekDays).toHaveLength(5);
-      expect(weekDays[0].getDay()).toBe(1); // Monday
-      expect(weekDays[4].getDay()).toBe(5); // Friday
+      expect(weekDays[0].getDay()).toBe(1);
+      expect(weekDays[4].getDay()).toBe(5);
     });
 
     it("returns 7 days from Monday to Sunday when showWeekend is true", () => {
       const weekDays = getWeekDays(0, true);
       expect(weekDays).toHaveLength(7);
-      expect(weekDays[0].getDay()).toBe(1); // Monday
-      expect(weekDays[5].getDay()).toBe(6); // Saturday
-      expect(weekDays[6].getDay()).toBe(0); // Sunday
+      expect(weekDays[0].getDay()).toBe(1);
+      expect(weekDays[5].getDay()).toBe(6);
+      expect(weekDays[6].getDay()).toBe(0);
     });
   });
 
@@ -84,9 +82,9 @@ describe("util", () => {
       it("anchors to the current week so today stays visible when showWeekend is on", () => {
         const weekDays = getWeekDays(0, true);
         expect(weekDays).toHaveLength(7);
-        expect(weekDays[0].getDay()).toBe(1); // Monday
+        expect(weekDays[0].getDay()).toBe(1);
         expect(weekDays.map(toLocalISODate)).toContain("2026-01-03");
-        expect(toLocalISODate(weekDays[5])).toBe("2026-01-03"); // Saturday is today
+        expect(toLocalISODate(weekDays[5])).toBe("2026-01-03");
       });
 
       it("anchors to the upcoming Monday when showWeekend is off", () => {
@@ -108,9 +106,9 @@ describe("util", () => {
       it("anchors to the current week so today stays visible when showWeekend is on", () => {
         const weekDays = getWeekDays(0, true);
         expect(weekDays).toHaveLength(7);
-        expect(weekDays[0].getDay()).toBe(1); // Monday
+        expect(weekDays[0].getDay()).toBe(1);
         expect(weekDays.map(toLocalISODate)).toContain("2026-01-04");
-        expect(toLocalISODate(weekDays[6])).toBe("2026-01-04"); // Sunday is today
+        expect(toLocalISODate(weekDays[6])).toBe("2026-01-04");
       });
 
       it("anchors to the upcoming Monday when showWeekend is off", () => {

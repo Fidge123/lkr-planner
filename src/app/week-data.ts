@@ -126,10 +126,8 @@ export function removeEvent(week: WeekData, uid: string): WeekData {
 }
 
 /**
- * Places the event where a drop put it, before the backend has written it. Its times are
- * cleared because the backend re-slots the day, and the target cell is renumbered so the
- * cards keep the dropped order until the refreshed row replaces them.
- * A fixed appointment dropped on another day stays put, since the backend refuses that move.
+ * Optimistic placement; times are cleared because the backend re-slots the day.
+ * A fixed appointment dropped on another day stays put, as the backend refuses that move.
  */
 export function relocateEvent(
   week: WeekData,

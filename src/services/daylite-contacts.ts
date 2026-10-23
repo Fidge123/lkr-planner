@@ -26,9 +26,8 @@ export function loadDayliteContacts(
 }
 
 /**
- * Publishes the on-disk contacts into the cache so the grid can paint before the
- * network answers, and so a failing load is served from memory instead of reading
- * the same store a second time.
+ * Seeds the cache from disk, so the grid paints before the network answers.
+ * A failing load is then served from memory instead of rereading the store.
  */
 export async function preloadDayliteContactsFromDisk(): Promise<
   PlanningContactRecord[]

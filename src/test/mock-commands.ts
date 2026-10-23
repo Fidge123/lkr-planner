@@ -7,9 +7,7 @@ const realCommands = commands;
 type CommandOverrides = { [K in keyof typeof commands]?: unknown };
 
 /**
- * `mock.module` patches the registry for the whole test process, not just the
- * declaring file, so a partial replacement leaves later specs with a `commands`
- * object missing everything the declaring spec did not need.
+ * `mock.module` is process-wide, so a partial replacement breaks later specs.
  * Overrides land on top of the real commands, which fail loudly when invoked.
  */
 export function mockCommands(overrides: CommandOverrides): void {

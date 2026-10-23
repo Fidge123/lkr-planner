@@ -7,8 +7,7 @@ pub(super) fn current_timestamp() -> String {
     Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true)
 }
 
-/// Silently does nothing if ZEP credentials are not configured: this runs on
-/// startup paths that must not error.
+/// Skips silently without ZEP credentials; runs on startup paths that must not error.
 pub(crate) async fn test_untested_calendar_urls(settings: &mut [EmployeeSetting]) {
     let to_test: Vec<(String, String, bool)> = settings
         .iter()
@@ -123,9 +122,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_untested_skips_gracefully_when_zep_credentials_missing() {
-        // In the test environment there are no ZEP credentials in the keychain,
-        // so test_untested_calendar_urls must return without panicking or mutating
-        // the test timestamps (credentials check happens before any network call).
+        // No ZEP credentials in the test keychain; must return before any network call or timestamp update.
         let mut settings = vec![EmployeeSetting {
             daylite_contact_reference: "/v1/contacts/2".to_string(),
             zep_primary_calendar: Some("https://app.zep.de/caldav/admin/emp2/".to_string()),

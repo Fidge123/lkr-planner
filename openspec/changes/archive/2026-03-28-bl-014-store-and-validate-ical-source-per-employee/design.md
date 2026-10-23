@@ -1,10 +1,16 @@
 ## Context
 
-Employee calendar sources are managed through a single ZEP admin CalDAV account. The ZEP admin user has access to all employee calendars under one set of credentials. Each Daylite employee is mapped to their ZEP calendar(s) by name (calendar names in ZEP do not match Daylite employee names uniformly). The admin credentials are stored once in macOS keychain and reused for all employees.
+Employee calendar sources are managed through a single ZEP admin CalDAV account.
+The ZEP admin user has access to all employee calendars under one set of credentials.
+Each Daylite employee is mapped to their ZEP calendar(s) by name (calendar names in ZEP do not match Daylite employee names uniformly).
+The admin credentials are stored once in macOS keychain and reused for all employees.
 
-Daylite contacts hold the derived full calendar URL (for interoperability). The local store holds the ZEP calendar name (the identifier used to select and construct the URL). Daylite remains the master record.
+Daylite contacts hold the derived full calendar URL (for interoperability).
+The local store holds the ZEP calendar name (the identifier used to select and construct the URL).
+Daylite remains the master record.
 
-Non-ZEP employees (those without a ZEP calendar) have no calendar integration in this change. Custom/external iCal URL support is deferred to a future change.
+Non-ZEP employees (those without a ZEP calendar) have no calendar integration in this change.
+Custom/external iCal URL support is deferred to a future change.
 
 ## Goals / Non-Goals
 
@@ -47,7 +53,8 @@ Non-ZEP employees (those without a ZEP calendar) have no calendar integration in
 - Add `primary_ical_last_tested_at: Option<String>` (ISO 8601 timestamp)
 - Add `absence_ical_last_tested_at: Option<String>` (ISO 8601 timestamp)
 - `Option<String>` fields: `None` = not configured; deserialization of missing fields yields `None`
-- **Migration**: existing store files with `primary_ical_url`/`absence_ical_url` values cannot be automatically migrated (old values are URLs, new fields expect calendar names). On first load, old URL fields are ignored; employees must be remapped via CalDAV discovery.
+- **Migration**: existing store files with `primary_ical_url`/`absence_ical_url` values cannot be automatically migrated (old values are URLs, new fields expect calendar names).
+  On first load, old URL fields are ignored; employees must be remapped via CalDAV discovery.
 
 ### Absence Calendar is Optional
 **Decision**: Primary calendar is the standard case; absence calendar is optional per employee
@@ -78,7 +85,8 @@ Non-ZEP employees (those without a ZEP calendar) have no calendar integration in
 4. Run CalDAV connection test (GET with admin Basic Auth)
 5. Store result timestamp (success or failure)
 
-Splitting save and test into separate actions is not supported. Users who only want to change the mapping without testing must re-trigger "Speichern & Testen" afterward.
+Splitting save and test into separate actions is not supported.
+Users who only want to change the mapping without testing must re-trigger "Speichern & Testen" afterward.
 
 ### Daylite as Master Record
 **Decision**: Calendar assignments in-app are always synced to Daylite immediately on save
@@ -121,7 +129,9 @@ Splitting save and test into separate actions is not supported. Users who only w
   - **Mitigation**: Validate URL construction logic against real ZEP instance before finalizing; treat URL format as an implementation detail to confirm
 
 - **Risk**: Field rename breaks existing local store files (migration gap)
-  - **Mitigation**: Old `primary_ical_url`/`absence_ical_url` values are URLs — not calendar names — and cannot be migrated automatically. Employees must be remapped once. Document this in release notes.
+  - **Mitigation**: Old `primary_ical_url`/`absence_ical_url` values are URLs — not calendar names — and cannot be migrated automatically.
+    Employees must be remapped once.
+    Document this in release notes.
 
 - **Risk**: Network failures in connection testing
   - **Mitigation**: Show clear German error, do not block planning

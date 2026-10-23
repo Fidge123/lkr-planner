@@ -1,6 +1,8 @@
 ## Context
 
-The application needs to integrate with Planradar for project management. The Planradar API provides project CRUD operations. This change implements the foundational API client that other Planradar features will depend on.
+The application needs to integrate with Planradar for project management.
+The Planradar API provides project CRUD operations.
+This change implements the foundational API client that other Planradar features will depend on.
 
 ## Goals / Non-Goals
 

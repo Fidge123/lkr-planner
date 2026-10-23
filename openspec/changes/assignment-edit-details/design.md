@@ -194,7 +194,8 @@ Times entered by hand do not, and are not meant to.
 
 ## Risks / Trade-offs
 
-[A planner sets a time, a colleague adds an assignment to that day, and the time is silently gone] → The behavior is deliberate, so the mitigation is telling the truth in the UI: the German hint next to the time fields says the times hold until the day is next rearranged. If planners still find it surprising in use, the pinned design is the escalation, not a patch on this one.
+[A planner sets a time, a colleague adds an assignment to that day, and the time is silently gone] → The behavior is deliberate, so the mitigation is telling the truth in the UI: the German hint next to the time fields says the times hold until the day is next rearranged.
+If planners still find it surprising in use, the pinned design is the escalation, not a patch on this one.
 
 [Entering a time leaves the day with a gap and an overlap] → The checkbox closes it and is ticked by default, and the day's cards are ordered by order index rather than by time, so an overlap does not reorder the grid.
 
@@ -206,9 +207,11 @@ Times entered by hand do not, and are not meant to.
 
 [A planner reads the category picker as recoloring one appointment and repaints a project used across the whole grid] → The German hint under the picker says the category is the project's, and the reload after the save shows the project's other cards in the new color, which is the correction if the hint was missed.
 
-[Picking `"Termin FIX geplant"` locks the assignment the planner is editing] → That is what the category means, and the lock is undone the way every other one is: unlock the appointment and pick another category. The modal is the only new way in, not a new kind of lock.
+[Picking `"Termin FIX geplant"` locks the assignment the planner is editing] → That is what the category means, and the lock is undone the way every other one is: unlock the appointment and pick another category.
+The modal is the only new way in, not a new kind of lock.
 
-[Daylite may reject the category name, or expect a reference rather than a name] → The name written is one Daylite itself returned from `/categories`, and a rejection surfaces as the normalized German error rather than being swallowed. The request shape is pinned by a cassette test before the modal is built on it.
+[Daylite may reject the category name, or expect a reference rather than a name] → The name written is one Daylite itself returned from `/categories`, and a rejection surfaces as the normalized German error rather than being swallowed.
+The request shape is pinned by a cassette test before the modal is built on it.
 
 [Skipping the even split for one write leaves a day overlapping until something re-allocates it] → That is the feature working; the state is legal iCal and the next ordinary write on that day tidies it.
 

@@ -69,7 +69,8 @@ pub(super) struct RawVEvent {
     pub(super) href: String,
     // ETag from d:getetag in the REPORT response; sent as If-Match on re-slot PUTs. Empty if absent.
     pub(super) etag: String,
-    // Full calendar-data text of the resource, used to patch slot times without dropping user-added properties.Empty when the event was not parsed from a REPORT.
+    // Full calendar-data text of the resource, so slot patches keep user-added properties.
+    // Empty when the event was not parsed from a REPORT.
     pub(super) raw_ical: String,
     // Value of the order property; None when the event carries none.
     pub(super) order_index: Option<u32>,

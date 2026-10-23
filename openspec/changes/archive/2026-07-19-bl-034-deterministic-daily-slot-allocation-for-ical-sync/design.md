@@ -39,7 +39,8 @@ UIDs are immutable, so repeated runs produce identical output.
 - The pure `allocate_slots` function is unit-tested in isolation; the orchestration is covered by the BL-017 write-path tests.
 
 ### Identifying lkr-planner Assignments
-**Decision**: Only events whose DESCRIPTION first line is a `daylite:/<path>` reference are re-slotted (same classification used on the read side). Bare, absence, and holiday events are never modified.
+**Decision**: Only events whose DESCRIPTION first line is a `daylite:/<path>` reference are re-slotted (same classification used on the read side).
+Bare, absence, and holiday events are never modified.
 
 ## Risks / Trade-offs
 

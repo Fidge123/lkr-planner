@@ -1,6 +1,7 @@
 ## Why
 
-The assignment modal needs to query Daylite projects for user selection. This requires enhancing the existing project search with status filtering, deterministic ordering, timeout handling, and German error messages.
+The assignment modal needs to query Daylite projects for user selection.
+This requires enhancing the existing project search with status filtering, deterministic ordering, timeout handling, and German error messages.
 
 ## What Changes
 

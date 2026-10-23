@@ -41,8 +41,10 @@ Anyone who sees the line in ZEP or a calendar client can tell which tool wrote i
 An exact match rather than a prefix keeps `lkr-planner:` free for later markers without old events being misread.
 
 Alternatives considered:
-- A German string such as `lkr-planner:eigener-termin`, since employees can see it. Rejected because the marker is a machine token, not display text, and the code-is-English convention applies to it.
-- An `X-LKR-KIND` property, invisible in clients. Rejected in favor of keeping both planner link types in the one field the classification already reads, and DESCRIPTION is known to survive ZEP round trips.
+- A German string such as `lkr-planner:eigener-termin`, since employees can see it.
+  Rejected because the marker is a machine token, not display text, and the code-is-English convention applies to it.
+- An `X-LKR-KIND` property, invisible in clients.
+  Rejected in favor of keeping both planner link types in the one field the classification already reads, and DESCRIPTION is known to survive ZEP round trips.
 
 Since only the first line is read, ZEP or employees can add notes on later lines without breaking the marker.
 If a client rewrites the first line, the event degrades to bare, which is read-only and protected, so the failure is safe.
@@ -59,8 +61,7 @@ Alternative considered: keep `project_ref` and add a separate `is_custom` flag.
 Rejected because every call site would need to check two fields, and forgetting the second one is exactly the bug class that would make custom appointments silently non-re-slotted or protected.
 
 ### One content value on the write commands
-`AssignmentWrite`, `CreateAssignmentInput`, `UpdateAssignmentInput` and `move_assignment` replace `project_ref` and `project_name` with `content: AssignmentContent`, a serde-tagged enum:
-`{ kind: "project", projectRef, projectName }` or `{ kind: "custom", title }`.
+`AssignmentWrite`, `CreateAssignmentInput`, `UpdateAssignmentInput` and `move_assignment` replace `project_ref` and `project_name` with `content: AssignmentContent`, a serde-tagged enum: `{ kind: "project", projectRef, projectName }` or `{ kind: "custom", title }`.
 `build_ical_payload` takes the content and writes either the `daylite:` or the `lkr-planner:custom` DESCRIPTION, with the project name or the title as SUMMARY.
 The backend trims the custom title and rejects a blank one with a German error, so the modal's disabled save is not the only guard.
 
@@ -85,7 +86,8 @@ The modal state holds the selected type and the title alongside the selected pro
 
 ## Risks / Trade-offs
 
-- [Someone types `lkr-planner:custom` into an event's DESCRIPTION by hand in another client] → The event becomes editable in the planner. Accepted: that requires deliberate intent and the planner only edits the employee's own primary calendar.
+- [Someone types `lkr-planner:custom` into an event's DESCRIPTION by hand in another client] → The event becomes editable in the planner.
+  Accepted: that requires deliberate intent and the planner only edits the employee's own primary calendar.
 - [An employee replaces the DESCRIPTION in their calendar client] → The event becomes bare and read-only, which is the safe direction.
 - [Changing the write command signatures breaks every frontend caller at once] → The regenerated bindings make the TypeScript compiler list every call site; there are no external consumers.
 - [A long title folds the SUMMARY line] → Folding only excludes events from re-slotting when it affects DTSTART or DTEND, so a long title is harmless; cover it with a test.

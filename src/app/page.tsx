@@ -46,8 +46,8 @@ const collisionDetection: CollisionDetection = (args) => {
     : rectIntersection(args);
 };
 
-// dnd-kit refreshes droppable's rect from per-cell ResizeObserver (fires only when that cell resizes) and by timer (while the pointer moves).
-// Neither catches a cell shifting because an earlier row grew under a still pointer, which leaves the drop landing where the cell used to be.
+// dnd-kit refreshes droppable rects only on per-cell resize and on a timer.
+// Neither catches a cell shifting under a still pointer when an earlier row grows.
 function DropzoneMeasurementTicker() {
   const { active, measureDroppableContainers } = useDndContext();
   useEffect(() => {
@@ -58,9 +58,8 @@ function DropzoneMeasurementTicker() {
   return null;
 }
 
-// A reload landing mid-drag would resize rows and shift every cell under the pointer, so the drop lands on whatever moved into place.
-// Freezing waits for `loadedKey` to reach `key`, because edge-hover navigation changes `key` mid-drag
-// and freezing before the new week arrives pins the empty grid there for the rest of the drag.
+// A reload mid-drag shifts the cells under the pointer.
+// Edge-hover navigation changes `key` mid-drag, so freezing waits for `loadedKey` or pins an empty grid.
 function useFrozenDuringDrag<T>(
   value: T,
   isDragActive: boolean,
@@ -70,8 +69,7 @@ function useFrozenDuringDrag<T>(
   const tracked = useRef({ key, frozen: value, isFrozen: false });
   const shouldFreeze = isDragActive && loadedKey === key;
 
-  // The render that starts freezing must still pass its own value through and keep it:
-  // it is the render the week's data arrived on, and freezing one render earlier would pin the grid to the empty state that preceded it.
+  // The render that starts freezing must return its own value, not the pre-arrival one.
   if (
     !shouldFreeze ||
     !tracked.current.isFrozen ||
@@ -207,8 +205,8 @@ export function PlanningGridTable({
     ? assignmentState.getCachedWeek(toLocalISODate(incomingDays[0]))
     : null;
 
-  // A gesture can only start at a horizontal scroll edge, so a grid too wide for the window is parked to one side.
-  // The incoming week has to arrive at both offsets or the columns and rows jump on handover.
+  // Gestures start only at a horizontal scroll edge, so a too-wide grid is parked on one side.
+  // The incoming week must match both scroll offsets, or columns and rows jump on handover.
   const incomingRef = useRef<HTMLElement>(null);
   const hasIncoming = incomingDays !== null;
   // biome-ignore lint/correctness/useExhaustiveDependencies: hasIncoming marks the mount of the incoming week, not a value the effect body reads.
@@ -282,8 +280,7 @@ export function PlanningGridTable({
             onToggleHighlight={toggleHighlight}
             onJumpToWeek={onJumpToWeek}
           />
-          {/* The document guard is not about Tauri: bun tests render this grid
-              through react-dom/server, where portals and `document` do not exist. */}
+          {/* Not for Tauri: bun tests render through react-dom/server, which has no `document`. */}
           {typeof document === "undefined"
             ? null
             : createPortal(
@@ -337,7 +334,7 @@ export function PlanningGridTable({
   );
 }
 
-// Spelled out rather than interpolated so the class names survive Tailwind's static scan of the source.
+// Spelled out so Tailwind's static scan finds the class names.
 const alertVariantClass = {
   error: "alert-error",
   warning: "alert-warning",

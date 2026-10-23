@@ -172,7 +172,7 @@ fn is_fresh(entry: Option<&CacheEntry>, now_ms: u64, ttl_ms: u64) -> bool {
 }
 
 /// Evicting a slot a caller holds orphans its load, so only the map's own reference may remain.
-/// `slot_for` hands out the reference before the caller locks it, which a lock check alone would miss.
+/// `slot_for` hands out the reference before locking, so a lock check alone misses it.
 fn sweep_stale(slots: &mut HashMap<String, Arc<Slot>>, now_ms: u64, ttl_ms: u64) {
     slots.retain(|_, slot| {
         if Arc::strong_count(slot) > 1 {

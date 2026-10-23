@@ -16,9 +16,7 @@ struct DayliteCategoryDto {
     hex_colour: Option<String>,
 }
 
-/// `/categories` is a plain collection endpoint rather than a `_search`, and the
-/// Daylite reference does not pin down whether it wraps the collection in
-/// `results`, so both shapes are accepted.
+/// `/categories` may return a bare array or a `results` wrapper, so both are accepted.
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
 enum DayliteCategoryListDto {

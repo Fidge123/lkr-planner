@@ -36,7 +36,7 @@ export function WeekPicker({ weekDays, onJumpToWeek, children }: Props) {
   useEffect(() => {
     const picker = pickerRef.current;
     if (!isOpen || !picker) return;
-    // The picker is placed once on opening, so a scroll moving the trigger closes it rather than leaving it behind.
+    // Placed once on opening, so a scroll that moves the trigger must close it.
     const hide = () => picker.hidePopover();
     // The picker sits inside the grid's DOM, whose wheel listener would otherwise swipe the week under it.
     const keepWheel = (event: WheelEvent) => event.stopPropagation();

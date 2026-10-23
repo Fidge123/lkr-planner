@@ -1,6 +1,7 @@
 ## Context
 
-The assignment modal requires Daylite project search with status filtering, deterministic ordering, and timeout handling. This change enhances the existing `daylite_search_projects` command rather than introducing a new module, keeping it reusable for future consumers.
+The assignment modal requires Daylite project search with status filtering, deterministic ordering, and timeout handling.
+This change enhances the existing `daylite_search_projects` command rather than introducing a new module, keeping it reusable for future consumers.
 
 ## Goals / Non-Goals
 

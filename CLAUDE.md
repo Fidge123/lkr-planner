@@ -9,10 +9,9 @@ This is a desktop application which provides a planning view and integrates with
 ### Conventions
 
 - All display text in the application must be German, Code and development documentation must be English
-- Use Lucide icons
-- Use [DaisyUI](https://daisyui.com/llms.txt) components
+- Use Lucide icons and [DaisyUI](https://daisyui.com/llms.txt) components
 - Display user-friendly error messages in German
-- Use red/green TDD
+- Use red/green TDD, but be sensible what tests are actually needed
 - YAGNI (You Ain't Gonna Need It): Avoid code that is not required for the current scope
 - Comments are a code smell
   - Only write a comment when it prevents future errors a skilled developer would be surprised by

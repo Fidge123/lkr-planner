@@ -35,8 +35,8 @@ export function WeekTable({
   const holidayByDate = new Map(holidays.map((h) => [h.date, h.name]));
   const holidayDates = new Set(holidays.map((h) => h.date));
 
-  // WKWebView can leave a card's previous pixels when a reload rewrites the cells, so a re-slotted card renders torn until a repaint clears it.
-  // Promoting the grid to its own compositing layer and releasing it on the next frame re-rasterizes every cell without affecting layout.
+  // WKWebView keeps a re-slotted card's stale pixels after a cell reload.
+  // Promoting the grid to a compositing layer for one frame forces a full repaint.
   const gridRef = useRef<HTMLTableElement>(null);
   // biome-ignore lint/correctness/useExhaustiveDependencies: eventsByEmployee is the repaint trigger, not a value the effect body reads.
   useEffect(() => {

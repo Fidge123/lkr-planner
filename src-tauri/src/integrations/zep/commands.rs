@@ -108,7 +108,7 @@ fn zep_save_credentials_inner(
         ));
     }
 
-    // Write the store first so that a keychain failure leaves no orphaned credential entry.
+    // Write the store first so a keychain failure leaves no orphaned credential entry.
     let mut store = crate::integrations::local_store::load_local_store(app.clone())?;
     store.api_endpoints.zep_caldav_root_url = root_url;
     crate::integrations::local_store::save_local_store(app, store)?;

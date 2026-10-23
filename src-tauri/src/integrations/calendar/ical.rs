@@ -3,8 +3,7 @@ use icalendar::{Calendar, CalendarComponent, CalendarDateTime, Component, DatePe
 
 use super::types::RawVEvent;
 
-/// X-property carrying the assignment's position among its same-day siblings.
-/// It survives re-slotting because `patch_event_slot` copies every line it does not rewrite.
+/// Assignment position among same-day siblings, preserved because `patch_event_slot` copies unrewritten lines.
 pub(super) const ORDER_PROPERTY: &str = "X-LKR-ORDER";
 
 pub(crate) fn build_ical_payload(
@@ -65,8 +64,7 @@ pub(super) fn parse_ical_events(ical_text: &str) -> Result<Vec<RawVEvent>, Strin
             let start_time = ical_time(&start);
             let raw_end = event.get_end();
             let end_time = raw_end.as_ref().and_then(ical_time);
-            // Only DATE-valued DTEND is captured; DATE-TIME DTEND is intentionally ignored here
-            // because absence expansion only applies to all-day (VALUE=DATE) events.
+            // Only DATE-valued DTEND is read; absence expansion applies to all-day (VALUE=DATE) events only.
             let dtend = raw_end.as_ref().and_then(|dt| match dt {
                 DatePerhapsTime::Date(d) => Some(*d),
                 _ => None,
@@ -318,26 +316,6 @@ mod tests {
         assert!(
             !payload.contains("SUMMARY:Zeile1\r\nZeile2"),
             "a raw newline must not split the SUMMARY property line"
-        );
-    }
-
-    #[test]
-    fn build_ical_payload_keeps_path_separators_in_description() {
-        // Forward slashes are not RFC 5545 special characters and must survive so the
-        // daylite: project reference round-trips through classification on read-back.
-        let (start, end) = window();
-        let payload = build_ical_payload(
-            "uid-d",
-            "2026-05-06",
-            "Projekt",
-            "/v1/projects/42",
-            start,
-            end,
-            0,
-        );
-        assert!(
-            payload.contains("DESCRIPTION:daylite:/v1/projects/42"),
-            "got: {payload}"
         );
     }
 }

@@ -236,48 +236,36 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn refresh_tokens_returns_error_on_empty_access_token() {
-        let (client, _) = mock_client(vec![Ok(mock_response(
-            200,
-            r#"{"access_token":" ","refresh_token":"rt","expires_in":3600}"#,
-        ))]);
+    async fn refresh_tokens_rejects_an_incomplete_token_response() {
+        let cases = [
+            (
+                r#"{"access_token":" ","refresh_token":"rt","expires_in":3600}"#,
+                "access_token",
+            ),
+            (
+                r#"{"access_token":"at","refresh_token":"","expires_in":3600}"#,
+                "refresh_token",
+            ),
+            (
+                r#"{"access_token":"at","refresh_token":"rt","expires_in":0}"#,
+                "expires_in=0",
+            ),
+        ];
 
-        let error = refresh_tokens(&client, "valid-refresh-token".to_string())
-            .await
-            .expect_err("empty access_token should fail");
+        for (body, field) in cases {
+            let (client, _) = mock_client(vec![Ok(mock_response(200, body))]);
 
-        assert_eq!(error.code, DayliteApiErrorCode::TokenRefreshFailed);
-        assert!(error.technical_message.contains("access_token"));
-    }
+            let error = refresh_tokens(&client, "valid-refresh-token".to_string())
+                .await
+                .expect_err("incomplete token response should fail");
 
-    #[tokio::test]
-    async fn refresh_tokens_returns_error_on_empty_refresh_token_in_response() {
-        let (client, _) = mock_client(vec![Ok(mock_response(
-            200,
-            r#"{"access_token":"at","refresh_token":"","expires_in":3600}"#,
-        ))]);
-
-        let error = refresh_tokens(&client, "valid-refresh-token".to_string())
-            .await
-            .expect_err("empty refresh_token in response should fail");
-
-        assert_eq!(error.code, DayliteApiErrorCode::TokenRefreshFailed);
-        assert!(error.technical_message.contains("refresh_token"));
-    }
-
-    #[tokio::test]
-    async fn refresh_tokens_returns_error_on_zero_expires_in() {
-        let (client, _) = mock_client(vec![Ok(mock_response(
-            200,
-            r#"{"access_token":"at","refresh_token":"rt","expires_in":0}"#,
-        ))]);
-
-        let error = refresh_tokens(&client, "valid-refresh-token".to_string())
-            .await
-            .expect_err("expires_in=0 should fail");
-
-        assert_eq!(error.code, DayliteApiErrorCode::TokenRefreshFailed);
-        assert!(error.technical_message.contains("expires_in=0"));
+            assert_eq!(
+                error.code,
+                DayliteApiErrorCode::TokenRefreshFailed,
+                "case: {field}"
+            );
+            assert!(error.technical_message.contains(field), "case: {field}");
+        }
     }
 
     #[tokio::test]

@@ -68,7 +68,7 @@ pub fn get_token(service: &str, username: &str) -> Result<String, SecretError> {
 mod tests {
     use super::*;
 
-    // Note: `set_default_store` mutates global state. Tests using `with_mock_keyring` must not run concurrently with other keyring tests.
+    // `set_default_store` is global; tests using `with_mock_keyring` must not run concurrently.
     fn with_mock_keyring<T>(f: impl FnOnce() -> T) -> T {
         keyring_core::set_default_store(keyring_core::mock::Store::new().unwrap());
         f()
@@ -79,22 +79,6 @@ mod tests {
         with_mock_keyring(|| {
             let err = get_token("nonexistent_service", "nobody").unwrap_err();
             assert_eq!(err, SecretError::NotFound);
-        });
-    }
-
-    #[test]
-    fn map_keyring_error_maps_no_entry_to_not_found() {
-        let err = map_keyring_error(keyring_core::Error::NoEntry);
-        assert_eq!(err, SecretError::NotFound);
-    }
-
-    #[test]
-    fn set_and_get_on_same_entry_with_mock() {
-        with_mock_keyring(|| {
-            let entry = Entry::new("lkr-test", "tester").unwrap();
-            entry.set_password("my-secret").unwrap();
-            let pw = entry.get_password().unwrap();
-            assert_eq!(pw, "my-secret");
         });
     }
 

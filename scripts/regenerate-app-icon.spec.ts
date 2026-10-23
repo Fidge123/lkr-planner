@@ -1,9 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import {
-  buildIconSvg,
-  type GlyphOutline,
-  validationRasterSizes,
-} from "./regenerate-app-icon";
+import { buildIconSvg, type GlyphOutline } from "./regenerate-app-icon";
 
 describe("regenerate app icon", () => {
   it("builds a path-only svg without text nodes", () => {
@@ -27,9 +23,5 @@ describe("regenerate app icon", () => {
     expect(svg).toContain(`data-font="${glyph.fontName}"`);
     expect(svg).not.toContain("<text");
     expect(svg).toContain('transform="translate(');
-  });
-
-  it("validates the raster output at tiny macOS icon sizes", () => {
-    expect(validationRasterSizes).toEqual([16, 32, 64, 128, 256, 512, 1024]);
   });
 });

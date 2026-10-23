@@ -1,6 +1,7 @@
 ## Why
 
-When planning a project that exists in Daylite but not in Planradar, users need a way to create the Planradar project and link it to the Daylite project. This enables unified planning across both systems.
+When planning a project that exists in Daylite but not in Planradar, users need a way to create the Planradar project and link it to the Daylite project.
+This enables unified planning across both systems.
 
 ## What Changes
 

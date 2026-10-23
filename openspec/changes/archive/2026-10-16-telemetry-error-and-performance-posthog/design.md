@@ -108,7 +108,8 @@ The error boundary renders a German fallback message, so an uncaught render erro
 - [Opt-in default means most installs report nothing, so the data may be too sparse to spot a regression] → Accept for now; the settings copy explains the benefit, and the default can be revisited once the legal basis for opt-out is settled.
 - [Error reports contain personal and business data such as project names, e-mail addresses, and the IP address that PostHog records] → Collected only after opt-in under a German text that names these categories.
 - [A new call site embeds a credential under a key name outside the list] → Constructors sanitize on entry, unit tests cover credentials in plain text, URL query strings, JSON, URL authorities, and truncated bodies, and a new credential needs its key name added.
-- [The PostHog key is extractable from the shipped binary] → Accepted; the key is write-only ingestion and cannot read captured data. A leaked key permits event spam into the project, which is recoverable by rotating it.
+- [The PostHog key is extractable from the shipped binary] → Accepted; the key is write-only ingestion and cannot read captured data.
+  A leaked key permits event spam into the project, which is recoverable by rotating it.
 - [Instrumentation noise in command bodies obscures the domain logic] → One wrapping call per command, with the enum and helper in the telemetry module, keeps the diff at the boundary rather than inside the logic.
 - [Duration measurements include cache hits and therefore mix two populations] → The performance event carries the operation name only; distinguishing a cached from an uncached load is left to a later change if the data proves ambiguous.
 - [A misconfigured build could point telemetry at the wrong project] → The key is absent by default and telemetry is inert without it, so the failure mode is silence rather than misdirected data.

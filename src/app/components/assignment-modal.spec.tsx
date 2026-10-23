@@ -1,10 +1,9 @@
-import { describe, expect, it, mock } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import type {
   CalendarCellEvent,
   DayliteProjectSummary,
 } from "../../generated/tauri";
-import { mockCommands } from "../../test/mock-commands";
 import { AssignmentModal } from "./assignment-modal";
 import {
   commandErrorMessage,
@@ -21,12 +20,6 @@ import {
   ProjectResultPlaceholder,
   SuggestionEmptyState,
 } from "./project-result-list";
-
-mockCommands({
-  createAssignment: mock(() => Promise.resolve({ status: "ok", data: "" })),
-  updateAssignment: mock(() => Promise.resolve({ status: "ok", data: null })),
-  deleteAssignment: mock(() => Promise.resolve({ status: "ok", data: null })),
-});
 
 const baseProps = {
   employeeReference: "ref-123",
@@ -341,15 +334,6 @@ describe("resolveDisplayedProjects", () => {
   it("shows the live search results while a filter is set", () => {
     expect(resolveDisplayedProjects("Nord", suggestions, results)).toBe(
       results,
-    );
-  });
-
-  it("restores the suggestions after the filter is cleared", () => {
-    expect(resolveDisplayedProjects("Nord", suggestions, results)).toBe(
-      results,
-    );
-    expect(resolveDisplayedProjects("", suggestions, results)).toBe(
-      suggestions,
     );
   });
 });

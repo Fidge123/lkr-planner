@@ -1,6 +1,7 @@
 ## Context
 
-This change implements the assignment modal for creating, editing, and deleting assignments. It builds on the persistent assignment storage from BL-015 and provides the UI interaction layer.
+This change implements the assignment modal for creating, editing, and deleting assignments.
+It builds on the persistent assignment storage from BL-015 and provides the UI interaction layer.
 
 ## Goals / Non-Goals
 

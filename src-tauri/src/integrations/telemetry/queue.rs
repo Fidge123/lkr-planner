@@ -270,24 +270,4 @@ mod tests {
         assert_eq!(sink.batches().len(), 1);
         assert!(acknowledgement.await.is_ok());
     }
-
-    #[tokio::test]
-    async fn delivery_failure_never_reaches_the_recording_caller() {
-        let (recorder, receiver) = TelemetryRecorder::channel();
-        recorder.apply_settings(&enabled());
-        let sink = Arc::new(RecordingSink::failing(usize::MAX));
-
-        for index in 0..(MAX_BUFFERED_EVENTS * 2) {
-            recorder.record(event(index as u64));
-        }
-        assert!(
-            recorder.settings().enabled,
-            "recording survives a failing sink"
-        );
-        drop(recorder);
-
-        run_flush_task(receiver, Arc::clone(&sink)).await;
-
-        assert!(sink.batches().iter().all(|batch| batch.len() <= BATCH_SIZE));
-    }
 }

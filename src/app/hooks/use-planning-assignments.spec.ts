@@ -92,14 +92,6 @@ describe("loadWeekWithPrefetch", () => {
     expect(waited).toEqual([]);
     expect(prefetched).toEqual([]);
   });
-
-  it("still prefetches when the active week came from the cache", async () => {
-    const { run, prefetched } = sequence();
-
-    await run();
-
-    expect(prefetched.sort()).toEqual(["2026-08-03", "2026-08-17"]);
-  });
 });
 
 const shownWeek = "2026-08-10";

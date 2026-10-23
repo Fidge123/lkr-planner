@@ -14,8 +14,7 @@ export function useZepCalendars(): ZepCalendarsState {
   const [calendars, setCalendars] = useState<ZepCalendar[] | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  // Guards ensureLoaded against double-fetching: the isLoading state only
-  // updates on the next render, the ref flips immediately.
+  // The ref guards double fetches; `isLoading` state only updates on the next render.
   const isFetching = useRef(false);
 
   const reload = useCallback(() => {

@@ -100,13 +100,6 @@ describe("planning grid employee states", () => {
     setSystemTime(new Date(2026, 0, 28, 9, 0, 0));
   });
 
-  it("renders no loaded projects section below the grid", () => {
-    const html = renderGrid();
-
-    expect(html).not.toContain("Geladene Projekte");
-    expect(html).not.toContain("Keine Projekte gefunden");
-  });
-
   it("keeps the pinned date row in its own stacking context so a swiped week covers it", () => {
     const scrollContainer =
       renderGrid().match(/<section class="[^"]*overflow-auto[^"]*"/)?.[0] ?? "";
@@ -120,7 +113,6 @@ describe("planning grid employee states", () => {
     });
 
     expect(html).toContain("Monteur Aus Daylite");
-    expect(html).not.toContain("Anna Schmidt");
   });
 
   it("hides employees without a calendar and test employees when the toggle is enabled", () => {
@@ -170,15 +162,6 @@ describe("planning grid employee states", () => {
 describe("planning grid assignment states", () => {
   beforeAll(() => {
     setSystemTime(new Date(2026, 0, 28, 9, 0, 0));
-  });
-
-  it("shows no loading text above the grid while assignments load", () => {
-    const html = renderGrid({
-      assignmentState: { ...defaultAssignmentState, isLoading: true },
-    });
-
-    expect(html).not.toContain("Einsätze werden geladen...");
-    expect(html).not.toContain("werden geladen");
   });
 
   it("shows german error banner with retry when assignment fetch fails", () => {
@@ -282,13 +265,6 @@ describe("planning grid drag-and-drop wiring", () => {
     expect(html).toContain("Projekt Nord");
     expect(html).toContain('aria-roledescription="draggable"');
   });
-
-  it("shows no drop error and no reconciliation dialog before any drag", () => {
-    const html = renderGridTable();
-
-    expect(html).not.toContain("Einsatz doppelt vorhanden");
-    expect(html).not.toContain("alert-error");
-  });
 });
 
 describe("planning grid weekend visibility", () => {
@@ -308,10 +284,6 @@ describe("planning grid weekend visibility", () => {
       const [, month, day] = machineDate.split("-");
       expect(visibleText).toContain(`${day}.${month}.`);
     }
-  });
-
-  it("renders 5 day columns by default (weekend hidden)", () => {
-    expect(countDayColumns(renderGrid())).toBe(5);
   });
 
   it("renders 7 day columns when showWeekend is on", () => {

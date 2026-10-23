@@ -49,8 +49,7 @@ export function TimetableCell({
       cardRects: () =>
         [...positions.keys()].flatMap((uid) => {
           const rect = cardNodes.current.get(uid)?.getBoundingClientRect();
-          // A card lifted out of the flow measures as a zero rect, which would otherwise
-          // sort ahead of every real card.
+          // A lifted card measures as a zero rect and would otherwise sort ahead of every real card.
           if (!rect || rect.height === 0) return [];
           return [{ uid, top: rect.top, height: rect.height }];
         }) satisfies CardRect[],
@@ -104,9 +103,8 @@ export function TimetableCell({
           ) : (
             <li
               key={event.uid}
-              // Collapsed while in flight so the drop preview replaces the card instead of adding to the cell's height:
-              // a cell that grows mid-drag pushes the rows under it away from the pointer.
-              // The card itself stays laid out, because dnd-kit measures it to position the drag overlay.
+              // Collapsed in flight so the drop preview replaces the card: a growing cell pushes rows away from the pointer.
+              // The card stays laid out because dnd-kit measures it for the drag overlay.
               className={
                 event.uid === draggedUid
                   ? "relative h-0 overflow-visible"
@@ -161,10 +159,7 @@ export function TimetableCell({
   );
 }
 
-/**
- * Splices the drop preview into the cell's rendered items, before the first assignment that already has `orderIndex` other assignments ahead of it.
- * The dragged card is skipped in that count because it does not occupy a position in the day it is being dropped into.
- */
+/** The dragged card is skipped in the `orderIndex` count, since it occupies no position in the target day. */
 function withDropPreview(
   events: CellEvent[],
   preview: DropPreview | null,
@@ -227,7 +222,7 @@ interface Props {
 export const assignmentCardClass =
   "flex items-center w-full gap-4 p-2 rounded-lg";
 
-/** Width and default color of the strip live in `assignmentStripClass`; the Daylite color is passed through verbatim so any CSS color notation it uses still works. */
+/** Daylite colors pass through verbatim, so any CSS color notation works. */
 export const assignmentStripClass = "border-l-4 border-base-content/30";
 
 export function categoryStrip(

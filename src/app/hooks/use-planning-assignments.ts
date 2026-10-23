@@ -396,8 +396,8 @@ export interface WeekLoadSequence {
 const prefetchIdleMs = 400;
 
 /**
- * A prefetch competes with the active week for CalDAV connections and Daylite requests.
- * A started week load cannot be called off, so it waits for the user to settle first.
+ * A prefetch competes with the active week for CalDAV and Daylite requests.
+ * A started week load cannot be cancelled, so it waits for the user to settle first.
  */
 export async function loadWeekWithPrefetch({
   weekStart,

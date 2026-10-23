@@ -1,6 +1,7 @@
 ## Context
 
-Planradar projects can be archived/closed. Linked projects that are archived need to be reopened before they can be used for assignments.
+Planradar projects can be archived/closed.
+Linked projects that are archived need to be reopened before they can be used for assignments.
 
 ## Goals / Non-Goals
 

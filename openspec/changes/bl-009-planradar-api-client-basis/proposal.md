@@ -1,6 +1,8 @@
 ## Why
 
-The application needs to integrate with Planradar for project management. A typed API client is required to enable project search, creation, and status management. This provides the foundation for all Planradar integration features.
+The application needs to integrate with Planradar for project management.
+A typed API client is required to enable project search, creation, and status management.
+This provides the foundation for all Planradar integration features.
 
 ## What Changes
 
