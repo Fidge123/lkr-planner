@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { renderToStaticMarkup } from "react-dom/server";
+import { renderComponent } from "../../test/render-component";
 import type { CellEvent } from "../types";
 import { assignmentStripClass, TimetableCell } from "./timetable-cell";
 
@@ -24,16 +24,22 @@ function assignment(overrides: Partial<CellEvent> = {}): CellEvent {
 function renderCell(
   overrides: Partial<Parameters<typeof TimetableCell>[0]> = {},
 ): string {
-  return renderToStaticMarkup(
-    <TimetableCell
-      isToday={false}
-      events={[]}
-      onAddClick={() => {}}
-      onEventClick={() => {}}
-      onSuggestionClick={() => {}}
-      {...overrides}
-    />,
-  );
+  return renderComponent(
+    <table>
+      <tbody>
+        <tr>
+          <TimetableCell
+            isToday={false}
+            events={[]}
+            onAddClick={() => {}}
+            onEventClick={() => {}}
+            onSuggestionClick={() => {}}
+            {...overrides}
+          />
+        </tr>
+      </tbody>
+    </table>,
+  ).container.innerHTML;
 }
 
 const absence = assignment({
@@ -271,15 +277,15 @@ describe("TimetableCell", () => {
       events: [assignment({ categoryColor: "#8bc34a" })],
     });
 
-    expect(html).toContain("border-left-color:#8bc34a");
-    expect(html).not.toContain("background-color:#8bc34a");
+    expect(html).toContain("border-left-color: #8bc34a");
+    expect(html).not.toContain("background-color: #8bc34a");
     expect(html).toContain("bg-base-200");
   });
 
   it("passes an unusual but valid CSS color through to the strip untouched", () => {
     expect(
       renderCell({ events: [assignment({ categoryColor: "#8bc34aff" })] }),
-    ).toContain("border-left-color:#8bc34aff");
+    ).toContain("border-left-color: #8bc34aff");
   });
 
   it("leaves the strip in its default color when there is no category", () => {
@@ -294,17 +300,6 @@ describe("TimetableCell", () => {
 
     expect(html).not.toContain("border-l-4");
     expect(html).toContain("bg-base-200");
-  });
-
-  it("renders assignment cards sorted by their order index", () => {
-    const html = renderCell({
-      events: [
-        assignment({ uid: "uid-later", title: "Zweiter", orderIndex: 1 }),
-        assignment({ uid: "uid-earlier", title: "Erster", orderIndex: 0 }),
-      ],
-    });
-
-    expect(html.indexOf("Erster")).toBeLessThan(html.indexOf("Zweiter"));
   });
 });
 
@@ -477,7 +472,7 @@ describe("TimetableCell highlighting", () => {
     });
 
     expect(html).toContain("bg-base-200");
-    expect(html).toContain("border-left-color:#8bc34a");
+    expect(html).toContain("border-left-color: #8bc34a");
     expect(html).toContain(assignmentStripClass);
   });
 

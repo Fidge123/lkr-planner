@@ -1,6 +1,6 @@
 # ADR 0003: Planning Domain Model and Daylite Mappers
 
-- Status: Accepted
+- Status: Superseded by ADR 0009
 - Date: 2026-02-13
 
 ## Context

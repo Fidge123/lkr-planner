@@ -2,8 +2,8 @@ use chrono::NaiveDate;
 use tauri_plugin_http::reqwest::Method;
 
 use super::super::ical::parse_ical_events;
+use super::super::session::CaldavSession;
 use super::super::types::RawVEvent;
-use super::write::CaldavSession;
 use crate::integrations::telemetry::events::Operation;
 use crate::integrations::telemetry::observe::RequestFailure;
 
@@ -148,6 +148,10 @@ mod tests {
     use std::sync::Arc;
     use tauri_plugin_http::reqwest;
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "tests need their own client settings"
+    )]
     fn session(telemetry: Option<Arc<TelemetryRecorder>>) -> CaldavSession {
         CaldavSession {
             client: reqwest::Client::new(),

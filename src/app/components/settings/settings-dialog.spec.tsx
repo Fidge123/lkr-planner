@@ -1,25 +1,28 @@
 import { describe, expect, it } from "bun:test";
-import { renderToStaticMarkup } from "react-dom/server";
+import { screen } from "@testing-library/react";
+import { renderComponent } from "../../../test/render-component";
 import { SettingsDialog } from "./settings-dialog";
 
 describe("SettingsDialog", () => {
   it("lists a Diagnose section alongside the existing sections", () => {
-    const html = renderToStaticMarkup(
-      <SettingsDialog isOpen onClose={() => {}} />,
-    );
+    renderComponent(<SettingsDialog isOpen onClose={() => {}} />);
 
-    expect(html).toContain("Daylite");
-    expect(html).toContain("ZEP");
-    expect(html).toContain("Anzeige");
-    expect(html).toContain("Darstellung");
-    expect(html).toContain("Diagnose");
+    for (const section of [
+      "Daylite",
+      "ZEP",
+      "Anzeige",
+      "Darstellung",
+      "Diagnose",
+    ]) {
+      expect(screen.getByRole("button", { name: section })).toBeDefined();
+    }
   });
 
   it("renders nothing while closed", () => {
-    const html = renderToStaticMarkup(
+    const { container } = renderComponent(
       <SettingsDialog isOpen={false} onClose={() => {}} />,
     );
 
-    expect(html).toBe("");
+    expect(container.innerHTML).toBe("");
   });
 });

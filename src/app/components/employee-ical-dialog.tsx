@@ -196,11 +196,7 @@ function CalendarDiscoveryState({
   isLoading,
   error,
   onReload,
-}: {
-  isLoading: boolean;
-  error: string | null;
-  onReload: () => void;
-}) {
+}: CalendarDiscoveryStateProps) {
   if (isLoading) {
     return (
       <p className="text-sm text-base-content/60 mt-2">
@@ -223,6 +219,12 @@ function CalendarDiscoveryState({
     );
   }
   return null;
+}
+
+interface CalendarDiscoveryStateProps {
+  isLoading: boolean;
+  error: string | null;
+  onReload: () => void;
 }
 
 function buildStoredStatus(

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
 import { mockCommands } from "../test/mock-commands";
 import {
-  DEFAULT_DAYLITE_BASE_URL,
+  defaultDayliteBaseUrl,
   resolveDayliteBaseUrl,
   updateDayliteRefreshToken,
 } from "./daylite-auth";
@@ -45,7 +45,7 @@ describe("daylite auth service", () => {
 
     const baseUrl = await resolveDayliteBaseUrl();
 
-    expect(baseUrl).toBe(DEFAULT_DAYLITE_BASE_URL);
+    expect(baseUrl).toBe(defaultDayliteBaseUrl);
   });
 
   it("updates refresh token with resolved base url", async () => {

@@ -1,1 +1,25 @@
 schema: spec-driven
+
+context: |
+  LKR Planner is a Tauri desktop app (React, TypeScript, Bun, Rust) for weekly assignment planning.
+  Daylite is the source of truth for projects and employees, and ZEP CalDAV calendars hold the assignments.
+  Display text is German; code and documentation are English with one sentence per line.
+  Each artifact states a fact once: the proposal says why, the specs say what users observe, the design says how; refer to the other artifact instead of restating it.
+  Prefer one user-facing outcome per change and split a proposal that bundles independent outcomes.
+
+rules:
+  proposal:
+    - Keep the proposal under 30 lines.
+    - Write at most three sentences under Why and at most seven bullets under What Changes.
+    - Name affected areas under Impact, not individual files or functions.
+  specs:
+    - Specify only what a user or a command caller can observe; leave caches, request counts and component or function names to the code.
+    - Give each requirement at most three scenarios, one per distinct outcome.
+    - Reference another capability's requirement instead of restating it.
+  design:
+    - Write design.md only when the schema's criteria apply and at least two approaches are viable; otherwise skip it.
+    - Keep design.md under 60 lines and give each rejected alternative one sentence.
+    - Record a decision that spans capabilities or sets a convention as an ADR in docs/adr and link to it instead of repeating it here.
+  tasks:
+    - Keep at most ten tasks, each a reviewable step that ends with passing checks.
+    - Add test tasks only for new behavior, and no tasks for formatting or linting.

@@ -3,16 +3,16 @@ use super::client::DayliteHttpMethod;
 use super::client::DayliteHttpRequest;
 use super::shared::{
     current_epoch_ms, missing_token_error, normalize_http_error, parse_json_body,
-    parse_success_json_body, truncate_for_log, DayliteApiError, DayliteApiErrorCode,
-    DayliteTokenState,
+    parse_success_json_body, truncate_for_log, DayliteTokenState,
 };
+use crate::error::{AppError, AppErrorCode};
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 
 pub(super) async fn refresh_tokens(
     client: &DayliteApiClient,
     refresh_token: String,
-) -> Result<DayliteTokenState, DayliteApiError> {
+) -> Result<DayliteTokenState, AppError> {
     if refresh_token.trim().is_empty() {
         return Err(missing_token_error(
             "Das Daylite-Refresh-Token fehlt. Bitte Refresh-Token hinterlegen.",
@@ -33,7 +33,7 @@ pub(super) async fn refresh_tokens(
             &response.body,
             "/personal_token/refresh_token",
         );
-        error.code = DayliteApiErrorCode::TokenRefreshFailed;
+        error.code = AppErrorCode::TokenRefreshFailed;
         return Err(error);
     }
 
@@ -42,39 +42,39 @@ pub(super) async fn refresh_tokens(
     let refreshed_refresh_token = parsed_refresh.refresh_token.trim().to_string();
 
     if access_token.is_empty() {
-        return Err(DayliteApiError::new(
-            DayliteApiErrorCode::TokenRefreshFailed,
-            Some(response.status),
+        return Err(AppError::new(
+            AppErrorCode::TokenRefreshFailed,
             "Das Daylite-Access-Token konnte nicht erneuert werden.",
             format!(
                 "Refresh-Antwort enthält ein leeres access_token Feld. body={}",
                 truncate_for_log(&response.body)
             ),
-        ));
+        )
+        .with_http_status(Some(response.status)));
     }
 
     if refreshed_refresh_token.is_empty() {
-        return Err(DayliteApiError::new(
-            DayliteApiErrorCode::TokenRefreshFailed,
-            Some(response.status),
+        return Err(AppError::new(
+            AppErrorCode::TokenRefreshFailed,
             "Das Daylite-Refresh-Token konnte nicht erneuert werden.",
             format!(
                 "Refresh-Antwort enthält ein leeres refresh_token Feld. body={}",
                 truncate_for_log(&response.body)
             ),
-        ));
+        )
+        .with_http_status(Some(response.status)));
     }
 
     if parsed_refresh.expires_in == 0 {
-        return Err(DayliteApiError::new(
-            DayliteApiErrorCode::TokenRefreshFailed,
-            Some(response.status),
+        return Err(AppError::new(
+            AppErrorCode::TokenRefreshFailed,
             "Die Ablaufzeit des Daylite-Access-Tokens ist ungültig.",
             format!(
                 "Refresh-Antwort enthält expires_in=0. body={}",
                 truncate_for_log(&response.body)
             ),
-        ));
+        )
+        .with_http_status(Some(response.status)));
     }
 
     let now_ms = current_epoch_ms()?;
@@ -92,7 +92,7 @@ pub(super) async fn send_authenticated_request(
     client: &DayliteApiClient,
     access_token: &str,
     mut request: DayliteHttpRequest,
-) -> Result<(), DayliteApiError> {
+) -> Result<(), AppError> {
     let path = request.path.clone();
     request.access_token = Some(access_token.to_string());
     let response = client.send_request(request).await?;
@@ -106,7 +106,7 @@ pub(super) async fn send_authenticated_json<T: DeserializeOwned>(
     client: &DayliteApiClient,
     access_token: &str,
     mut request: DayliteHttpRequest,
-) -> Result<T, DayliteApiError> {
+) -> Result<T, AppError> {
     let path = request.path.clone();
     request.access_token = Some(access_token.to_string());
     let response = client.send_request(request).await?;
@@ -124,25 +124,25 @@ struct DayliteRefreshTokenResponse {
 fn parse_refresh_response_body(
     status: u16,
     body: &str,
-) -> Result<DayliteRefreshTokenResponse, DayliteApiError> {
+) -> Result<DayliteRefreshTokenResponse, AppError> {
     parse_json_body::<DayliteRefreshTokenResponse>(status, body, "/personal_token/refresh_token")
         .map_err(|error| {
-            DayliteApiError::new(
-                DayliteApiErrorCode::TokenRefreshFailed,
-                error.http_status,
+            AppError::new(
+                AppErrorCode::TokenRefreshFailed,
                 "Die Daylite-Token-Antwort konnte nicht verarbeitet werden.",
                 error.technical_message,
             )
+            .with_http_status(error.http_status)
         })
 }
 
 #[cfg(test)]
 mod tests {
     use super::{refresh_tokens, send_authenticated_json};
+    use crate::error::AppErrorCode;
     use crate::integrations::daylite::client::{
         DayliteApiClient, DayliteHttpMethod, DayliteHttpRequest,
     };
-    use crate::integrations::daylite::shared::DayliteApiErrorCode;
     use crate::integrations::daylite::test_support::{mock_client, mock_response};
     use serde::Deserialize;
 
@@ -155,7 +155,7 @@ mod tests {
             .await
             .expect_err("blank refresh token should fail");
 
-        assert_eq!(error.code, DayliteApiErrorCode::MissingToken);
+        assert_eq!(error.code, AppErrorCode::MissingToken);
     }
 
     #[derive(Debug, Deserialize, PartialEq, Eq)]
@@ -205,7 +205,7 @@ mod tests {
         .await
         .expect_err("a rejection belongs to the caller that can rotate");
 
-        assert_eq!(error.code, DayliteApiErrorCode::Unauthorized);
+        assert_eq!(error.code, AppErrorCode::Unauthorized);
 
         let requests = transport.requests();
         assert_eq!(requests.len(), 1);
@@ -220,7 +220,7 @@ mod tests {
             .await
             .expect_err("non-2xx refresh should fail");
 
-        assert_eq!(error.code, DayliteApiErrorCode::TokenRefreshFailed);
+        assert_eq!(error.code, AppErrorCode::TokenRefreshFailed);
         assert_eq!(error.http_status, Some(401));
     }
 
@@ -232,7 +232,7 @@ mod tests {
             .await
             .expect_err("malformed JSON refresh should fail");
 
-        assert_eq!(error.code, DayliteApiErrorCode::TokenRefreshFailed);
+        assert_eq!(error.code, AppErrorCode::TokenRefreshFailed);
     }
 
     #[tokio::test]
@@ -261,7 +261,7 @@ mod tests {
 
             assert_eq!(
                 error.code,
-                DayliteApiErrorCode::TokenRefreshFailed,
+                AppErrorCode::TokenRefreshFailed,
                 "case: {field}"
             );
             assert!(error.technical_message.contains(field), "case: {field}");
@@ -283,7 +283,7 @@ mod tests {
         .await
         .expect_err("non-2xx response should fail");
 
-        assert_eq!(error.code, DayliteApiErrorCode::ServerError);
+        assert_eq!(error.code, AppErrorCode::ServerError);
         assert_eq!(error.http_status, Some(500));
     }
 
@@ -299,7 +299,7 @@ mod tests {
         .await
         .expect_err("invalid JSON response should fail");
 
-        assert_eq!(error.code, DayliteApiErrorCode::InvalidResponse);
+        assert_eq!(error.code, AppErrorCode::InvalidResponse);
     }
 
     #[tokio::test]

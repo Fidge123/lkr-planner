@@ -1,21 +1,27 @@
+import { queryOptions, useQuery } from "@tanstack/react-query";
 import {
+  loadCachedDayliteContacts,
   loadDayliteContacts,
-  preloadDayliteContactsFromDisk,
 } from "../../services/daylite-contacts";
 import type { PlanningGridEmployeesState } from "../page";
-import { useCachedResource } from "./use-cached-resource";
 
+export const contactsQuery = queryOptions({
+  queryKey: ["contacts"],
+  queryFn: loadDayliteContacts,
+});
+
+/** Shows the last known employees until Daylite answers, and keeps them when it fails. */
 export function usePlanningEmployees(): PlanningGridEmployeesState {
-  const { data, isLoading, errorMessage, reload } = useCachedResource({
-    load: loadDayliteContacts,
-    errorMessage: "Die Mitarbeiter konnten nicht von Daylite geladen werden.",
-    preload: preloadDayliteContactsFromDisk,
+  const cached = useQuery({
+    queryKey: ["cached-contacts"],
+    queryFn: loadCachedDayliteContacts,
   });
+  const contacts = useQuery(contactsQuery);
 
   return {
-    employees: data,
-    isLoading,
-    errorMessage,
-    reloadEmployees: reload,
+    employees: contacts.data ?? cached.data ?? [],
+    isLoading: contacts.isFetching,
+    errorMessage: contacts.error?.message ?? null,
+    reloadEmployees: () => void contacts.refetch(),
   };
 }

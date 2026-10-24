@@ -1,28 +1,17 @@
-import { useEffect, useState } from "react";
+import { queryOptions, useQuery } from "@tanstack/react-query";
 import {
   loadProjectCategoryColors,
   type ProjectCategoryColors,
-  subscribeProjectCategoryColors,
 } from "../../services/daylite-categories";
 
+export const categoryColorsQuery = queryOptions({
+  queryKey: ["category-colors"],
+  queryFn: loadProjectCategoryColors,
+});
+
+const noColors: ProjectCategoryColors = {};
+
+/** A missing color is cosmetic, so a failed load shows no colors and the next mount tries again. */
 export function useProjectCategoryColors(): ProjectCategoryColors {
-  const [colors, setColors] = useState<ProjectCategoryColors>({});
-
-  useEffect(() => {
-    let cancelled = false;
-    const load = () => {
-      loadProjectCategoryColors().then((next) => {
-        if (!cancelled) setColors(next);
-      });
-    };
-
-    load();
-    const unsubscribe = subscribeProjectCategoryColors(load);
-    return () => {
-      cancelled = true;
-      unsubscribe();
-    };
-  }, []);
-
-  return colors;
+  return useQuery(categoryColorsQuery).data ?? noColors;
 }

@@ -17,17 +17,13 @@ export function AssignmentModal({
   date,
   onSave,
   onClose,
-  showDeleteConfirm: initialShowDeleteConfirm = false,
-  showUnsavedConfirm: initialShowUnsavedConfirm = false,
 }: Props) {
-  const modal = useAssignmentModal({
+  const { filterInputRef, ...modal } = useAssignmentModal({
     assignment,
     employeeReference,
     date,
     onSave,
     onClose,
-    initialShowDeleteConfirm,
-    initialShowUnsavedConfirm,
   });
 
   if (modal.showUnsavedConfirm) {
@@ -53,7 +49,7 @@ export function AssignmentModal({
 
   return (
     <dialog
-      ref={modal.dialogRef}
+      onCancel={modal.cancelDialog}
       className="modal modal-open"
       open
       aria-labelledby="assignment-modal-title"
@@ -93,7 +89,7 @@ export function AssignmentModal({
           <label className="form-control w-full">
             <span className="label-text mb-1">Projekt</span>
             <input
-              ref={modal.filterInputRef}
+              ref={filterInputRef}
               type="text"
               className="input input-bordered w-full"
               value={modal.filter}
@@ -182,6 +178,4 @@ interface Props {
   date: string;
   onSave: (action: ModalSaveAction) => void;
   onClose: () => void;
-  showDeleteConfirm?: boolean;
-  showUnsavedConfirm?: boolean;
 }

@@ -1,6 +1,5 @@
-use super::shared::{
-    normalize_base_url, normalize_http_error, DayliteApiError, DayliteApiErrorCode,
-};
+use super::shared::{normalize_base_url, normalize_http_error};
+use crate::error::{AppError, AppErrorCode};
 #[cfg(test)]
 use crate::integrations::http_record_replay::{
     cassette_path_for_test, RecordReplayConfig, RecordedInteraction, RecordedRequest,
@@ -26,11 +25,11 @@ pub(super) struct DayliteApiClient {
 }
 
 impl DayliteApiClient {
-    pub(super) fn new(base_url: &str) -> Result<Self, DayliteApiError> {
+    pub(super) fn new(base_url: &str) -> Result<Self, AppError> {
         Self::with_timeout(base_url, DEFAULT_TIMEOUT)
     }
 
-    pub(super) fn with_timeout(base_url: &str, timeout: Duration) -> Result<Self, DayliteApiError> {
+    pub(super) fn with_timeout(base_url: &str, timeout: Duration) -> Result<Self, AppError> {
         let transport = ReqwestTransport::new(base_url, timeout)?;
         Ok(Self {
             transport: Box::new(transport),
@@ -56,7 +55,7 @@ impl DayliteApiClient {
 
     /// Unreachable port, so a cassette miss fails fast instead of reaching the live API.
     #[cfg(test)]
-    pub(super) fn with_replay_cassette(cassette_file_name: &str) -> Result<Self, DayliteApiError> {
+    pub(super) fn with_replay_cassette(cassette_file_name: &str) -> Result<Self, AppError> {
         Self::with_record_replay(
             "http://127.0.0.1:9",
             RecordReplayConfig::new(cassette_path_for_test(cassette_file_name), VcrMode::Replay),
@@ -67,7 +66,7 @@ impl DayliteApiClient {
     pub(super) fn with_env_cassette(
         base_url: &str,
         cassette_file_name: &str,
-    ) -> Result<Self, DayliteApiError> {
+    ) -> Result<Self, AppError> {
         Self::with_record_replay(
             base_url,
             RecordReplayConfig::from_env(cassette_path_for_test(cassette_file_name)),
@@ -77,7 +76,7 @@ impl DayliteApiClient {
     pub(super) async fn send_request(
         &self,
         request: DayliteHttpRequest,
-    ) -> Result<DayliteHttpResponse, DayliteApiError> {
+    ) -> Result<DayliteHttpResponse, AppError> {
         let path = request.path.clone();
         let result = observe_with(
             self.telemetry.as_deref(),
@@ -108,10 +107,7 @@ impl DayliteApiClient {
     }
 
     #[cfg(test)]
-    fn with_record_replay(
-        base_url: &str,
-        config: RecordReplayConfig,
-    ) -> Result<Self, DayliteApiError> {
+    fn with_record_replay(base_url: &str, config: RecordReplayConfig) -> Result<Self, AppError> {
         Ok(Self {
             transport: Box::new(ReqwestTransport::new_with_record_replay(base_url, config)?),
             telemetry: None,
@@ -121,15 +117,15 @@ impl DayliteApiClient {
 
 /// Callers map unsuccessful statuses themselves, so `Status` is only a failure for telemetry.
 enum RequestFailure {
-    Transport(DayliteApiError),
+    Transport(AppError),
     Status {
-        error: DayliteApiError,
+        error: AppError,
         response: DayliteHttpResponse,
     },
 }
 
 impl RequestFailure {
-    fn error(&self) -> &DayliteApiError {
+    fn error(&self) -> &AppError {
         match self {
             Self::Transport(error) | Self::Status { error, .. } => error,
         }
@@ -156,7 +152,7 @@ pub(super) trait DayliteHttpTransport: Send + Sync {
     fn send<'a>(
         &'a self,
         request: DayliteHttpRequest,
-    ) -> BoxFuture<'a, Result<DayliteHttpResponse, DayliteApiError>>;
+    ) -> BoxFuture<'a, Result<DayliteHttpResponse, AppError>>;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -194,25 +190,14 @@ pub(super) struct DayliteHttpResponse {
     pub body: String,
 }
 
-/// Cloning a reqwest client shares its connection pool rather than copying it.
-fn shared_http_client() -> Result<reqwest::Client, DayliteApiError> {
-    static CLIENT: std::sync::OnceLock<Result<reqwest::Client, String>> =
-        std::sync::OnceLock::new();
-    CLIENT
-        .get_or_init(|| {
-            reqwest::Client::builder()
-                .build()
-                .map_err(|error| format!("HTTP-Client konnte nicht erstellt werden: {error}"))
-        })
-        .clone()
-        .map_err(|technical_message| {
-            DayliteApiError::new(
-                DayliteApiErrorCode::RequestFailed,
-                None,
-                "Die Verbindung zu Daylite konnte nicht aufgebaut werden.",
-                technical_message,
-            )
-        })
+fn shared_http_client() -> Result<reqwest::Client, AppError> {
+    crate::http::shared_client().map_err(|technical_message| {
+        AppError::new(
+            AppErrorCode::RequestFailed,
+            "Die Verbindung zu Daylite konnte nicht aufgebaut werden.",
+            technical_message,
+        )
+    })
 }
 
 #[derive(Debug, Clone)]
@@ -225,7 +210,7 @@ struct ReqwestTransport {
 }
 
 impl ReqwestTransport {
-    fn new(base_url: &str, timeout: Duration) -> Result<Self, DayliteApiError> {
+    fn new(base_url: &str, timeout: Duration) -> Result<Self, AppError> {
         Ok(Self {
             base_url: normalize_base_url(base_url)?,
             http_client: shared_http_client()?,
@@ -239,7 +224,7 @@ impl ReqwestTransport {
     fn new_with_record_replay(
         base_url: &str,
         record_replay: RecordReplayConfig,
-    ) -> Result<Self, DayliteApiError> {
+    ) -> Result<Self, AppError> {
         let mut transport = Self::new(base_url, DEFAULT_TIMEOUT)?;
         transport.record_replay = Some(record_replay);
         Ok(transport)
@@ -250,7 +235,7 @@ impl DayliteHttpTransport for ReqwestTransport {
     fn send<'a>(
         &'a self,
         request: DayliteHttpRequest,
-    ) -> BoxFuture<'a, Result<DayliteHttpResponse, DayliteApiError>> {
+    ) -> BoxFuture<'a, Result<DayliteHttpResponse, AppError>> {
         Box::pin(async move {
             #[cfg(test)]
             let recorded_request = self
@@ -267,8 +252,8 @@ impl DayliteHttpTransport for ReqwestTransport {
                                 .as_ref()
                                 .expect("recorded request should exist"),
                         )
-                        .map_err(|error| DayliteApiError {
-                            code: DayliteApiErrorCode::RequestFailed,
+                        .map_err(|error| AppError {
+                            code: AppErrorCode::RequestFailed,
                             http_status: None,
                             user_message:
                                 "Die Testkassette fuer Daylite konnte nicht geladen werden."
@@ -278,8 +263,8 @@ impl DayliteHttpTransport for ReqwestTransport {
                                 request.path
                             ),
                         })?
-                        .ok_or_else(|| DayliteApiError {
-                            code: DayliteApiErrorCode::RequestFailed,
+                        .ok_or_else(|| AppError {
+                            code: AppErrorCode::RequestFailed,
                             http_status: None,
                             user_message: "Die passende Daylite-Testkassette wurde nicht gefunden."
                                 .to_string(),
@@ -299,9 +284,8 @@ impl DayliteHttpTransport for ReqwestTransport {
 
             let mut url = reqwest::Url::parse(&format!("{}{}", self.base_url, request.path))
                 .map_err(|error| {
-                    DayliteApiError::new(
-                        DayliteApiErrorCode::InvalidConfiguration,
-                        None,
+                    AppError::new(
+                        AppErrorCode::InvalidConfiguration,
                         "Die Daylite-URL ist ungültig konfiguriert.",
                         format!("URL konnte nicht geparst werden: {error}"),
                     )
@@ -336,16 +320,14 @@ impl DayliteHttpTransport for ReqwestTransport {
 
             let response = builder.send().await.map_err(|error| {
                 if error.is_timeout() {
-                    DayliteApiError::new(
-                        DayliteApiErrorCode::Timeout,
-                        None,
+                    AppError::new(
+                        AppErrorCode::Timeout,
                         "Zeitüberschreitung bei der Daylite-Anfrage.",
                         format!("Zeitüberschreitung bei {}: {error}", request.path),
                     )
                 } else {
-                    DayliteApiError::new(
-                        DayliteApiErrorCode::RequestFailed,
-                        None,
+                    AppError::new(
+                        AppErrorCode::RequestFailed,
                         "Die Anfrage an Daylite ist fehlgeschlagen.",
                         format!("Netzwerkfehler bei {}: {error}", request.path),
                     )
@@ -354,12 +336,12 @@ impl DayliteHttpTransport for ReqwestTransport {
 
             let status = response.status().as_u16();
             let body = response.text().await.map_err(|error| {
-                DayliteApiError::new(
-                    DayliteApiErrorCode::RequestFailed,
-                    Some(status),
+                AppError::new(
+                    AppErrorCode::RequestFailed,
                     "Die Antwort von Daylite konnte nicht gelesen werden.",
                     format!("Antworttext konnte nicht gelesen werden: {error}"),
                 )
+                .with_http_status(Some(status))
             })?;
 
             #[cfg(test)]
@@ -373,8 +355,8 @@ impl DayliteHttpTransport for ReqwestTransport {
                                 body: body.clone(),
                             },
                         })
-                        .map_err(|error| DayliteApiError {
-                            code: DayliteApiErrorCode::RequestFailed,
+                        .map_err(|error| AppError {
+                            code: AppErrorCode::RequestFailed,
                             http_status: None,
                             user_message:
                                 "Die Daylite-Testkassette konnte nicht gespeichert werden."
@@ -488,7 +470,7 @@ mod tests {
 
         assert_eq!(
             result.expect_err("the server never answers").code,
-            DayliteApiErrorCode::Timeout
+            AppErrorCode::Timeout
         );
     }
 
@@ -650,7 +632,7 @@ mod tests {
         fn send<'a>(
             &'a self,
             _request: DayliteHttpRequest,
-        ) -> BoxFuture<'a, Result<DayliteHttpResponse, DayliteApiError>> {
+        ) -> BoxFuture<'a, Result<DayliteHttpResponse, AppError>> {
             let response = self.0.clone();
             Box::pin(async move { Ok(response) })
         }

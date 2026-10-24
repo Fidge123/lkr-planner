@@ -15,11 +15,7 @@ const sections = [
 
 type SettingsSection = (typeof sections)[number]["id"];
 
-export function SettingsDialog({
-  isOpen,
-  onClose,
-  onDisplaySettingsChanged,
-}: Props) {
+export function SettingsDialog({ isOpen, onClose }: Props) {
   const [activeSection, setActiveSection] =
     useState<SettingsSection>("daylite");
 
@@ -66,10 +62,7 @@ export function SettingsDialog({
           ) : activeSection === "telemetry" ? (
             <TelemetrySettingsPanel onClose={onClose} />
           ) : (
-            <DisplaySettingsPanel
-              onClose={onClose}
-              onChanged={onDisplaySettingsChanged}
-            />
+            <DisplaySettingsPanel onClose={onClose} />
           )}
         </main>
       </section>
@@ -89,5 +82,4 @@ export function SettingsDialog({
 interface Props {
   isOpen: boolean;
   onClose: () => void;
-  onDisplaySettingsChanged?: () => void;
 }

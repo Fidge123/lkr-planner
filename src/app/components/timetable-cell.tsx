@@ -3,7 +3,7 @@ import { ExternalLink, Highlighter, Pencil, TriangleAlert } from "lucide-react";
 import type { ReactNode } from "react";
 import { useRef } from "react";
 import { openProjectInDaylite } from "../../services/daylite-deep-link";
-import { assignmentPositions, sortCellEvents } from "../cell-order";
+import { assignmentPositions } from "../cell-order";
 import type {
   AppointmentDragPayload,
   CardRect,
@@ -33,9 +33,9 @@ export function TimetableCell({
   onSuggestionClick,
   onToggleHighlight = () => {},
 }: Props) {
-  const orderedEvents = sortCellEvents(events);
-  const positions = assignmentPositions(orderedEvents);
+  const positions = assignmentPositions(events);
   const conflict = hasAbsenceConflict(events);
+  const editEvent = (event: CellEvent) => onEventClick(date, event);
 
   // Measured on demand rather than tracked in state: the drop position is only ever read
   // mid-drag, and rects go stale as soon as a row above this one changes height.
@@ -75,7 +75,7 @@ export function TimetableCell({
             Abwesenheit und Termin am selben Tag
           </li>
         ) : null}
-        {withDropPreview(orderedEvents, preview, draggedUid, (event) =>
+        {withDropPreview(events, preview, draggedUid, (event) =>
           event.kind === "absence" ? (
             <li key={event.uid}>
               <span
@@ -122,7 +122,7 @@ export function TimetableCell({
                 position={positions.get(event.uid) ?? 0}
                 lifted={event.uid === draggedUid}
                 highlighted={isHighlighted(event, activeHighlight)}
-                onEventClick={onEventClick}
+                onEventClick={editEvent}
                 onToggleHighlight={onToggleHighlight}
               />
             </li>
@@ -148,7 +148,7 @@ export function TimetableCell({
               type="button"
               className="btn btn-dash btn-block rounded-lg opacity-20 hover:opacity-80 transition-opacity"
               aria-label="Aufgabe hinzufügen"
-              onClick={onAddClick}
+              onClick={() => onAddClick(date)}
             >
               +
             </button>
@@ -187,7 +187,7 @@ function withDropPreview(
   return items;
 }
 
-function DropPreviewCard({ title }: { title: string }) {
+function DropPreviewCard({ title }: DropPreviewCardProps) {
   return (
     <li aria-hidden="true">
       <span
@@ -198,6 +198,10 @@ function DropPreviewCard({ title }: { title: string }) {
       </span>
     </li>
   );
+}
+
+interface DropPreviewCardProps {
+  title: string;
 }
 
 interface Props {
@@ -213,8 +217,8 @@ interface Props {
   draggedUid?: string | null;
   /** Highlight key the planner picked; cards matching it are marked. */
   activeHighlight?: string | null;
-  onAddClick: () => void;
-  onEventClick: (event: CellEvent) => void;
+  onAddClick: (date: string) => void;
+  onEventClick: (date: string, event: CellEvent) => void;
   onSuggestionClick?: (suggestion: GhostSuggestion) => void;
   onToggleHighlight?: (event: CellEvent) => void;
 }

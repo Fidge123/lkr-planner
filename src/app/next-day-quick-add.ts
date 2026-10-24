@@ -1,5 +1,3 @@
-import type { CalendarCellEvent } from "../generated/tauri";
-
 export interface GhostSuggestion {
   date: string;
   projectRef: string;
@@ -39,7 +37,7 @@ export function nextGhostState(
 export function isGhostVisible(
   ghost: GhostSuggestion | null,
   date: string,
-  eventsOnDate: CalendarCellEvent[],
+  eventCountOnDate: number,
 ): boolean {
-  return ghost !== null && ghost.date === date && eventsOnDate.length === 0;
+  return ghost !== null && ghost.date === date && eventCountOnDate === 0;
 }

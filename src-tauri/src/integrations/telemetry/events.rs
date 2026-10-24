@@ -166,7 +166,7 @@ fn insert_dimension<T: Serialize>(properties: &mut Map<String, Value>, key: &str
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::integrations::zep::types::{ZepError, ZepErrorCode};
+    use crate::error::{AppError, AppErrorCode};
 
     fn dimension<T: serde::Serialize>(value: &T) -> String {
         serde_json::to_value(value)
@@ -209,8 +209,8 @@ mod tests {
 
     #[test]
     fn event_built_from_zep_error_keeps_the_calendar_url() {
-        let error = ZepError::new(
-            ZepErrorCode::NotFound,
+        let error = AppError::new(
+            AppErrorCode::NotFound,
             "Der Kalender wurde nicht gefunden.",
             "PROPFIND https://app.zep.de/caldav/admin/emp-1-primary/ returned 404",
         );

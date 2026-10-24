@@ -1,35 +1,52 @@
-import { describe, expect, it, setSystemTime } from "bun:test";
-import { renderToStaticMarkup } from "react-dom/server";
+import { describe, expect, it, jest, setSystemTime } from "bun:test";
+import { act, screen } from "@testing-library/react";
 import type {
   CalendarCellEvent,
   PlanningContactRecord,
 } from "../../generated/tauri";
+import { renderComponent } from "../../test/render-component";
 import { WeekTable } from "./week-table";
 
 function renderTable(
   overrides: Partial<Parameters<typeof WeekTable>[0]> = {},
 ): string {
-  return renderToStaticMarkup(
+  return renderComponent(
     <WeekTable
       weekDays={[17, 18, 19, 20, 21].map((day) => new Date(2026, 7, day))}
       employees={[]}
       employeeSettings={[]}
       eventsByEmployee={{}}
       errorsByEmployee={{}}
-      categoryColors={{}}
       holidays={[]}
       isEmployeeLoading={false}
       onOpenIcalDialog={() => {}}
-      onReloadAssignments={() => {}}
-      onAssignmentWritten={() => {}}
       {...overrides}
     />,
-  );
+  ).container.innerHTML;
 }
 
 describe("WeekTable", () => {
   it("labels the header corner with the calendar week of the displayed days", () => {
     expect(renderTable()).toContain("KW 34");
+  });
+
+  it("moves the today highlight to the next day at midnight", () => {
+    const highlightedDays = () =>
+      screen
+        .getAllByRole("columnheader")
+        .filter((header) => header.className.includes("bg-primary"))
+        .map((header) => header.querySelector("time")?.dateTime);
+    jest.useFakeTimers({ now: new Date(2026, 7, 19, 23, 59, 30) });
+    try {
+      renderTable();
+      expect(highlightedDays()).toEqual(["2026-08-19"]);
+
+      act(() => jest.advanceTimersByTime(60_000));
+
+      expect(highlightedDays()).toEqual(["2026-08-20"]);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it("keeps the date row fixed at the top of the scrolling grid", () => {

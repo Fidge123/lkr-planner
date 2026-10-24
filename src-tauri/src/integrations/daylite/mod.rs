@@ -1,6 +1,7 @@
 pub(crate) mod appointments;
 pub mod auth;
 mod auth_flow;
+mod calls;
 pub mod categories;
 mod client;
 pub mod contacts;
@@ -14,4 +15,5 @@ pub mod shared;
 mod test_support;
 mod token_session;
 
+pub(crate) use calls::close_daylite_token_session;
 pub(crate) use project_cache::restore_project_cache;

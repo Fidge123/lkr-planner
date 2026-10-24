@@ -1,58 +1,44 @@
-import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { describe, expect, it, mock } from "bun:test";
+import type { LocalStore } from "../generated/tauri";
 import { mockCommands } from "../test/mock-commands";
-import { loadDisplaySettings, saveDisplaySettings } from "./display-settings";
+import { displaySettingsOf, saveDisplaySettings } from "./display-settings";
 
-interface DisplaySettings {
-  hideNonPlannableEmployees?: boolean;
-  showWeekend?: boolean;
-}
-
-let store: { displaySettings?: DisplaySettings } & Record<string, unknown>;
-
-const mockLoadLocalStore = mock(() =>
-  Promise.resolve({ status: "ok" as const, data: store }),
-);
-const mockSaveLocalStore = mock(
-  (next: { displaySettings?: DisplaySettings } & Record<string, unknown>) => {
-    store = next;
-    return Promise.resolve({ status: "ok" as const, data: null });
-  },
+const mockSaveDisplaySettings = mock(() =>
+  Promise.resolve({ status: "ok" as const, data: null }),
 );
 
-mockCommands({
-  loadLocalStore: mockLoadLocalStore,
-  saveLocalStore: mockSaveLocalStore,
+mockCommands({ saveDisplaySettings: mockSaveDisplaySettings });
+
+const store = (displaySettings?: LocalStore["displaySettings"]) =>
+  ({ displaySettings }) as LocalStore;
+
+describe("displaySettingsOf", () => {
+  it("uses the defaults for a store saved before the settings existed", () => {
+    expect(displaySettingsOf(store())).toEqual({
+      hideNonPlannableEmployees: true,
+      showWeekend: false,
+    });
+  });
+
+  it("keeps the stored values", () => {
+    expect(
+      displaySettingsOf(
+        store({ hideNonPlannableEmployees: false, showWeekend: true }),
+      ),
+    ).toEqual({ hideNonPlannableEmployees: false, showWeekend: true });
+  });
 });
 
-describe("display settings service", () => {
-  beforeEach(() => {
-    store = { apiEndpoints: {}, employeeSettings: [] };
-    mockLoadLocalStore.mockClear();
-    mockSaveLocalStore.mockClear();
-  });
-
-  it("saving one setting preserves the other stored settings", async () => {
-    store.displaySettings = {
-      hideNonPlannableEmployees: true,
+describe("saveDisplaySettings", () => {
+  it("hands both settings to the backend", async () => {
+    await saveDisplaySettings({
+      hideNonPlannableEmployees: false,
       showWeekend: true,
-    };
+    });
 
-    await saveDisplaySettings({ hideNonPlannableEmployees: false });
-
-    expect(store.displaySettings?.showWeekend).toBe(true);
-    expect(store.displaySettings?.hideNonPlannableEmployees).toBe(false);
-  });
-
-  it("loads the backend defaults when nothing is stored", async () => {
-    const settings = await loadDisplaySettings();
-
-    expect(settings.hideNonPlannableEmployees).toBe(true);
-    expect(settings.showWeekend).toBe(false);
-  });
-
-  it("persists a saved value", async () => {
-    await saveDisplaySettings({ showWeekend: true });
-
-    expect((await loadDisplaySettings()).showWeekend).toBe(true);
+    expect(mockSaveDisplaySettings).toHaveBeenCalledWith({
+      hideNonPlannableEmployees: false,
+      showWeekend: true,
+    });
   });
 });

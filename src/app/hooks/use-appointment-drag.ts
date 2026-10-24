@@ -4,8 +4,13 @@ import type {
   DragStartEvent,
 } from "@dnd-kit/core";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { commands, type MoveAssignmentResult } from "../../generated/tauri";
+import {
+  moveAssignment,
+  reorderAssignment,
+  updateAssignment,
+} from "../../services/assignments";
 import type { MoveReconciliation } from "../components/move-reconciliation-dialog";
+import { useWeekCache } from "./use-planning-assignments";
 
 export interface AppointmentDragPayload {
   uid: string;
@@ -112,61 +117,17 @@ export function decideDropAction(
   return "none";
 }
 
-// A drag is not a deliberate enough gesture to carry a protection override.
-export function commandDropDeps(): DropDeps {
-  return {
-    updateAssignment: (href, uid, date, projectRef, projectName, orderIndex) =>
-      commands.updateAssignment({
-        href,
-        uid,
-        date,
-        projectRef,
-        projectName,
-        orderIndex,
-        overrideProtection: false,
-      }),
-    reorderAssignment: commands.reorderAssignment,
-    moveAssignment: commands.moveAssignment,
-  };
-}
-
-interface DropDeps {
-  updateAssignment: (
-    href: string,
-    uid: string,
-    date: string,
-    projectRef: string,
-    projectName: string,
-    orderIndex: number,
-  ) => Promise<
-    { status: "ok"; data: null } | { status: "error"; error: string }
-  >;
-  reorderAssignment: (
-    href: string,
-    uid: string,
-    date: string,
-    orderIndex: number,
-  ) => Promise<
-    { status: "ok"; data: null } | { status: "error"; error: string }
-  >;
-  moveAssignment: (
-    href: string,
-    targetEmployeeReference: string,
-    date: string,
-    projectRef: string,
-    projectName: string,
-    orderIndex: number,
-  ) => Promise<
-    | { status: "ok"; data: MoveAssignmentResult }
-    | { status: "error"; error: string }
-  >;
-}
+const assignmentWrites = {
+  updateAssignment,
+  reorderAssignment,
+  moveAssignment,
+};
 
 // Both paths rebuild the VEVENT from the payload, dropping properties set by other calendar clients.
 export async function performDrop(
   source: AppointmentDragPayload,
   target: DropCellTarget,
-  deps: DropDeps,
+  deps: typeof assignmentWrites = assignmentWrites,
 ): Promise<DropOutcome> {
   const action = decideDropAction(source, target);
 
@@ -174,53 +135,49 @@ export async function performDrop(
     return { kind: "none" };
   }
 
-  if (action === "reorder") {
-    const result = await deps.reorderAssignment(
-      source.href,
-      source.uid,
-      source.date,
-      target.orderIndex,
-    );
-    if (result.status === "error") {
-      return { kind: "error", message: result.error };
+  try {
+    if (action === "reorder") {
+      await deps.reorderAssignment({
+        href: source.href,
+        uid: source.uid,
+        date: source.date,
+        orderIndex: target.orderIndex,
+      });
+      return { kind: "done" };
     }
-    return { kind: "done" };
-  }
 
-  if (action === "reschedule") {
-    const result = await deps.updateAssignment(
-      source.href,
-      source.uid,
-      target.date,
-      source.projectRef,
-      source.title,
-      target.orderIndex,
-    );
-    if (result.status === "error") {
-      return { kind: "error", message: result.error };
+    if (action === "reschedule") {
+      await deps.updateAssignment({
+        href: source.href,
+        uid: source.uid,
+        date: target.date,
+        projectRef: source.projectRef,
+        projectName: source.title,
+        orderIndex: target.orderIndex,
+        // A drag is not a deliberate enough gesture to carry a protection override.
+        overrideProtection: false,
+      });
+      return { kind: "done" };
     }
-    return { kind: "done" };
-  }
 
-  const result = await deps.moveAssignment(
-    source.href,
-    target.employeeRef,
-    target.date,
-    source.projectRef,
-    source.title,
-    target.orderIndex,
-  );
-  if (result.status === "error") {
-    return { kind: "error", message: result.error };
+    const moved = await deps.moveAssignment({
+      href: source.href,
+      targetEmployeeReference: target.employeeRef,
+      date: target.date,
+      projectRef: source.projectRef,
+      projectName: source.title,
+      orderIndex: target.orderIndex,
+    });
+    return moved.kind === "sourceDeleteFailed"
+      ? {
+          kind: "partialMove",
+          newHref: moved.newHref,
+          sourceHref: moved.sourceHref,
+        }
+      : { kind: "done" };
+  } catch (error) {
+    return { kind: "error", message: (error as Error).message };
   }
-  if (result.data.kind === "sourceDeleteFailed") {
-    return {
-      kind: "partialMove",
-      newHref: result.data.newHref,
-      sourceHref: result.data.sourceHref,
-    };
-  }
-  return { kind: "done" };
 }
 
 export function computeEdgeZone(
@@ -300,20 +257,16 @@ export interface AppointmentDragState {
 }
 
 interface UseAppointmentDragArgs {
+  /** The displayed week, which a drop edits. */
+  weekStart: string;
   onNavigateWeek: (direction: -1 | 1) => void;
-  reloadAssignments: () => void;
-  invalidateWeeksContaining: (uid: string) => void;
-  moveEvent: (uid: string, target: DropCellTarget) => string | null;
-  refreshEmployees: (weekStart: string, employeeRefs: string[]) => void;
 }
 
 export function useAppointmentDrag({
+  weekStart,
   onNavigateWeek,
-  reloadAssignments,
-  invalidateWeeksContaining,
-  moveEvent,
-  refreshEmployees,
 }: UseAppointmentDragArgs): AppointmentDragState {
+  const cache = useWeekCache();
   const [activePayload, setActivePayload] =
     useState<AppointmentDragPayload | null>(null);
   // `active.data` is a mutable ref that unmounts when the drag leaves the week, so capture it at drag start.
@@ -336,14 +289,8 @@ export function useAppointmentDrag({
 
   const onNavigateWeekRef = useRef(onNavigateWeek);
   onNavigateWeekRef.current = onNavigateWeek;
-  const reloadAssignmentsRef = useRef(reloadAssignments);
-  reloadAssignmentsRef.current = reloadAssignments;
-  const invalidateWeeksContainingRef = useRef(invalidateWeeksContaining);
-  invalidateWeeksContainingRef.current = invalidateWeeksContaining;
-  const moveEventRef = useRef(moveEvent);
-  moveEventRef.current = moveEvent;
-  const refreshEmployeesRef = useRef(refreshEmployees);
-  refreshEmployeesRef.current = refreshEmployees;
+  const weekStartRef = useRef(weekStart);
+  weekStartRef.current = weekStart;
 
   // The reconciliation path reloads after the dialog closes, long after the drop cleared activePayloadRef.
   const droppedUidRef = useRef<string | null>(null);
@@ -424,35 +371,29 @@ export function useAppointmentDrag({
       if (decideDropAction(source, target) === "none") return;
 
       // A rejected write is undone by the same refresh that confirms a successful one.
-      const editedWeek = moveEventRef.current(source.uid, target);
+      const editedWeek = weekStartRef.current;
+      cache.moveEvent(editedWeek, source.uid, target);
       const refreshAffectedRows = () => {
-        if (editedWeek === null) return;
-        refreshEmployeesRef.current(editedWeek, [
+        void cache.refreshEmployees(editedWeek, [
           ...new Set([source.employeeRef, target.employeeRef]),
         ]);
       };
 
-      void performDrop(source, target, commandDropDeps())
-        .then((outcome) => {
-          if (outcome.kind === "partialMove") {
-            droppedUidRef.current = source.uid;
-            setReconciliation({
-              newHref: outcome.newHref,
-              sourceHref: outcome.sourceHref,
-            });
-          }
-          if (outcome.kind === "error") {
-            setErrorMessage(outcome.message);
-          }
-          refreshAffectedRows();
-        })
-        // Bindings re-throw Error-typed rejections; without this catch the drop fails silently.
-        .catch(() => {
-          setErrorMessage("Der Einsatz konnte nicht verschoben werden.");
-          refreshAffectedRows();
-        });
+      void performDrop(source, target).then((outcome) => {
+        if (outcome.kind === "partialMove") {
+          droppedUidRef.current = source.uid;
+          setReconciliation({
+            newHref: outcome.newHref,
+            sourceHref: outcome.sourceHref,
+          });
+        }
+        if (outcome.kind === "error") {
+          setErrorMessage(outcome.message);
+        }
+        refreshAffectedRows();
+      });
     },
-    [targetOf],
+    [cache, targetOf],
   );
 
   const onDragCancel = useCallback(() => {
@@ -467,11 +408,11 @@ export function useAppointmentDrag({
   const resolveReconciliation = useCallback(() => {
     setReconciliation(null);
     if (droppedUidRef.current !== null) {
-      invalidateWeeksContainingRef.current(droppedUidRef.current);
+      cache.dropWeeksContaining(droppedUidRef.current);
       droppedUidRef.current = null;
     }
-    reloadAssignmentsRef.current();
-  }, []);
+    void cache.reload(weekStartRef.current);
+  }, [cache]);
 
   return {
     activePayload,

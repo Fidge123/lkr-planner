@@ -5,5 +5,5 @@ mod resolve;
 
 pub(super) use absences::map_absence_raw_events_for_week;
 pub(super) use classify::{classify_event, parse_daylite_reference};
-pub(super) use order::sort_events_absences_first;
+pub(super) use order::{ordering_key, sort_week_events};
 pub(super) use resolve::resolve_event;

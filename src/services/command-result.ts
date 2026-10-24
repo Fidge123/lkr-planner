@@ -1,32 +1,27 @@
-type CommandResult<T, E> =
-  | { status: "ok"; data: T }
-  | { status: "error"; error: E };
+import type { AppError } from "../generated/tauri";
 
-export function unwrapCommandResult<T, E>(
-  result: CommandResult<T, E>,
+type CommandResult<T> =
+  | { status: "ok"; data: T }
+  | { status: "error"; error: AppError };
+
+function unwrapCommandResult<T>(
+  result: CommandResult<T>,
   fallbackMessage: string,
 ): T {
   if (result.status === "ok") {
     return result.data;
   }
 
-  throw new Error(readErrorMessage(result.error, fallbackMessage));
+  throw new Error(result.error.userMessage || fallbackMessage);
 }
 
-function readErrorMessage(error: unknown, fallbackMessage: string): string {
-  if (typeof error === "string") {
-    return error;
-  }
-
-  if (
-    error &&
-    typeof error === "object" &&
-    "userMessage" in error &&
-    typeof (error as { userMessage: unknown }).userMessage === "string" &&
-    (error as { userMessage: string }).userMessage.length > 0
-  ) {
-    return (error as { userMessage: string }).userMessage;
-  }
-
-  return fallbackMessage;
+/** A rejection is an IPC failure with a technical message, so it reads as the fallback. */
+export async function callCommand<T>(
+  command: Promise<CommandResult<T>>,
+  fallbackMessage: string,
+): Promise<T> {
+  const result = await command.catch(() => {
+    throw new Error(fallbackMessage);
+  });
+  return unwrapCommandResult(result, fallbackMessage);
 }
