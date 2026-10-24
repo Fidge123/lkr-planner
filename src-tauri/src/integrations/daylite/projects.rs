@@ -45,6 +45,7 @@ use super::calls::{run_daylite_command, with_daylite_tokens};
 use super::client::DayliteApiClient;
 use super::client::DayliteHttpMethod;
 use super::client::DayliteHttpRequest;
+pub use super::project_cache::ResolvedProject;
 use super::project_cache::{cache_now_ms, persist_project_cache, project_cache};
 use super::shared::{
     build_limit_query, load_store_or_error, trimmed, trimmed_or_none, DayliteSearchInput,
@@ -278,14 +279,6 @@ fn map_project_status(status: Option<String>) -> &'static str {
         "deferred" => "deferred",
         _ => "new_status",
     }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
-#[serde(rename_all = "camelCase")]
-pub struct ResolvedProject {
-    pub name: String,
-    pub status: String,
-    pub category: Option<String>,
 }
 
 // An unbounded burst is what a rate limit answers with 429.
