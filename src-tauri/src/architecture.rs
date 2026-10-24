@@ -1,6 +1,6 @@
-//! An area may only use areas of lower layers, which rules out cycles between areas.
+//! An area may only use areas of lower layers, and no modules may use each other in a cycle.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use syn::visit::{self, Visit};
 
@@ -14,29 +14,17 @@ const LAYERS: &[&[&str]] = &[
 
 #[test]
 fn areas_use_only_lower_layers() {
-    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-    let files = rust_files(&src);
-    let test_modules: Vec<Vec<String>> = files
-        .iter()
-        .flat_map(|file| test_module_declarations(&module_path(&src, file), file))
-        .collect();
-    let is_test_code = |path: &[String]| test_modules.iter().any(|m| path.starts_with(m));
-
     let mut violations = BTreeSet::new();
-    for file in &files {
-        let module = module_path(&src, file);
+    for (module, used_paths) in production_modules() {
         let Some(area) = area_of(&module) else {
             continue;
         };
-        if is_test_code(&module) {
-            continue;
-        }
         let layer = layer_of(area).unwrap_or_else(|| panic!("{area} is in no layer"));
-        for used in used_paths(file, &module) {
+        for used in used_paths {
             let Some(used_area) = area_of(&used) else {
                 continue;
             };
-            if used_area == area || is_test_code(&used) {
+            if used_area == area {
                 continue;
             }
             let used_layer =
@@ -47,6 +35,88 @@ fn areas_use_only_lower_layers() {
         }
     }
     assert!(violations.is_empty(), "{violations:#?}");
+}
+
+/// A parent module re-exports its children, so uses between a module and its ancestors do not count.
+#[test]
+fn modules_form_no_cycles() {
+    let modules = production_modules();
+    let known: BTreeSet<&[String]> = modules
+        .iter()
+        .map(|(module, _)| module.as_slice())
+        .collect();
+    let graph: BTreeMap<&[String], BTreeSet<&[String]>> = modules
+        .iter()
+        .map(|(module, used_paths)| {
+            let targets = used_paths
+                .iter()
+                .filter_map(|used| {
+                    (1..=used.len())
+                        .rev()
+                        .find_map(|len| known.get(&used[..len]).copied())
+                })
+                .filter(|target| !target.starts_with(module) && !module.starts_with(target))
+                .collect();
+            (module.as_slice(), targets)
+        })
+        .collect();
+
+    let cycles: BTreeSet<String> = graph
+        .keys()
+        .filter_map(|start| cycle_through(&graph, start))
+        .collect();
+    assert!(cycles.is_empty(), "{cycles:#?}");
+}
+
+fn cycle_through(
+    graph: &BTreeMap<&[String], BTreeSet<&[String]>>,
+    start: &[String],
+) -> Option<String> {
+    let mut paths = vec![vec![start]];
+    let mut seen = BTreeSet::new();
+    while let Some(path) = paths.pop() {
+        for &next in &graph[path[path.len() - 1]] {
+            if next == start {
+                let first = (0..path.len()).min_by_key(|&i| path[i]).unwrap();
+                let names: Vec<String> = path[first..]
+                    .iter()
+                    .chain(&path[..=first])
+                    .map(|module| module.join("::"))
+                    .collect();
+                return Some(names.join(" -> "));
+            }
+            if seen.insert(next) {
+                paths.push([path.as_slice(), &[next]].concat());
+            }
+        }
+    }
+    None
+}
+
+/// Every module outside test code with the paths it uses, leaving out paths into test modules.
+fn production_modules() -> Vec<(Vec<String>, Vec<Vec<String>>)> {
+    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let files = rust_files(&src);
+    let test_modules: Vec<Vec<String>> = files
+        .iter()
+        .flat_map(|file| test_module_declarations(&module_path(&src, file), file))
+        .collect();
+    let is_test_code = |path: &[String]| test_modules.iter().any(|m| path.starts_with(m));
+
+    files
+        .iter()
+        .filter_map(|file| {
+            let module = module_path(&src, file);
+            if is_test_code(&module) {
+                return None;
+            }
+            let used = used_paths(file, &module)
+                .into_iter()
+                .filter(|used| !is_test_code(used))
+                .collect();
+            Some((module, used))
+        })
+        .collect()
 }
 
 fn layer_of(area: &str) -> Option<usize> {
