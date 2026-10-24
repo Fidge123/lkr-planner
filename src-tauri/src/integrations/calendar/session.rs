@@ -1,9 +1,40 @@
-use super::caldav::CaldavSession;
 use crate::error::AppError;
 use crate::integrations::local_store::LocalStore;
+use crate::integrations::telemetry::events::{Integration, Operation, TelemetryEvent};
+use crate::integrations::telemetry::observe::{RequestFailure, TelemetryError};
+use crate::integrations::telemetry::recorder::TelemetryRecorder;
 use crate::integrations::telemetry::state::TelemetryState;
 use crate::integrations::zep::{load_zep_credentials, ZepStoredCredentials};
+use std::sync::Arc;
 use tauri::Manager;
+use tauri_plugin_http::reqwest;
+
+pub(crate) struct CaldavSession {
+    pub(crate) client: reqwest::Client,
+    pub(crate) username: String,
+    pub(crate) password: String,
+    pub(crate) base_url: String,
+    pub(crate) absence_urls: Vec<String>,
+    pub(crate) telemetry: Option<Arc<TelemetryRecorder>>,
+}
+
+impl CaldavSession {
+    pub(crate) fn record_failure(&self, operation: Operation, failure: RequestFailure) {
+        let Some(recorder) = &self.telemetry else {
+            return;
+        };
+
+        recorder.record(
+            TelemetryEvent::error_occurred(
+                operation,
+                Integration::Zep,
+                failure.error_code(),
+                failure.technical_message(),
+            )
+            .with_http_status(failure.http_status()),
+        );
+    }
+}
 
 pub(super) fn resolve_employee_calendar_url(
     store: &LocalStore,

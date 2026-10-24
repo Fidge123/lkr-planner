@@ -9,13 +9,15 @@ use super::appointment_sync::{
 };
 use super::caldav::{
     create_assignment_core, delete_assignment_core, fetch_calendar_events, move_assignment_core,
-    reorder_assignment_core, update_assignment_core, AssignmentWrite, CaldavSession,
+    reorder_assignment_core, update_assignment_core, AssignmentWrite,
 };
 use super::events::{
     classify_event, map_absence_raw_events_for_week, resolve_event, sort_week_events,
 };
 use super::protection::{refuse_protected_day_change, refuse_protected_event};
-use super::session::{build_caldav_session, load_caldav_session, resolve_employee_calendar_url};
+use super::session::{
+    build_caldav_session, load_caldav_session, resolve_employee_calendar_url, CaldavSession,
+};
 use super::types::{CalendarCellEvent, EmployeeWeekEvents, MoveAssignmentResult, PendingEvent};
 use crate::error::AppError;
 use crate::integrations::daylite::projects::ResolvedProject;

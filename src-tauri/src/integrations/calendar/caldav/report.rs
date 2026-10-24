@@ -2,8 +2,8 @@ use chrono::NaiveDate;
 use tauri_plugin_http::reqwest::Method;
 
 use super::super::ical::parse_ical_events;
+use super::super::session::CaldavSession;
 use super::super::types::RawVEvent;
-use super::write::CaldavSession;
 use crate::integrations::telemetry::events::Operation;
 use crate::integrations::telemetry::observe::RequestFailure;
 

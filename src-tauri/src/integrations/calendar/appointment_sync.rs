@@ -4,9 +4,9 @@ use std::future::Future;
 use std::sync::{Arc, Mutex, OnceLock};
 use tauri::{Emitter, Manager};
 
-use super::caldav::{fetch_events_in_range, lies_in_calendar, resolve_href, CaldavSession};
+use super::caldav::{fetch_events_in_range, lies_in_calendar, resolve_href};
 use super::events::classify_event;
-use super::session::{load_caldav_session, resolve_employee_calendar_url};
+use super::session::{load_caldav_session, resolve_employee_calendar_url, CaldavSession};
 use super::slots::full_window;
 use super::types::RawVEvent;
 use crate::error::AppError;
