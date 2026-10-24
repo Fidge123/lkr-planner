@@ -24,9 +24,10 @@ A cycle ties two areas together so that neither can change or be tested alone, a
 - Areas form layers, from the bottom: `error`, `http` and `secret_manager`; `telemetry`; `local_store`; `daylite`, `holidays` and `zep`; `calendar`.
 - An area uses only areas of lower layers, so areas on one layer, like Daylite and ZEP, never use each other.
 - Work that combines areas of one layer lives in an area above them, like the employee calendar commands in `calendar`.
-- `src-tauri/src/architecture.rs` checks the rule on every `cargo test` and ignores test code.
+- No two modules use each other in a cycle, except a parent module and its children, since a parent re-exports them.
+- `src-tauri/src/architecture.rs` checks both rules on every `cargo test` and ignores test code.
 
 ## Consequences
 
 - A new area fails the check until it is assigned a layer.
-- Cycles between files inside one area are not checked, and two remain inside Daylite.
+- Breaking a cycle means giving the code that ties two modules together a module of its own, like the Daylite call orchestration in `calls.rs`.

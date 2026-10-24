@@ -44,7 +44,7 @@ Avoid `---` between headers and avoid em dashes.
 - Read the local store with `load_local_store` and change it only through `update_local_store`
 - Send HTTP requests through `crate::http::shared_client`, and Clippy rejects building another client
 - A process-wide singleton is a `static OnceLock` in the module that owns it; Tauri managed state is only for state that needs the app handle at startup, like telemetry
-- Areas form layers, `error`/`http`/`secret_manager` → `telemetry` → `local_store` → `daylite`/`holidays`/`zep` → `calendar`, and an area uses only lower layers, which `architecture.rs` checks
+- Areas form layers, `error`/`http`/`secret_manager` → `telemetry` → `local_store` → `daylite`/`holidays`/`zep` → `calendar`, an area uses only lower layers, and no two modules use each other in a cycle, which `architecture.rs` checks
 
 ### Frontend (`src`)
 
