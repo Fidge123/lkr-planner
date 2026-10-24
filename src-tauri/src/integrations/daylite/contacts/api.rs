@@ -100,6 +100,15 @@ pub(crate) async fn fetch_planning_contacts(
     .await
 }
 
+pub(crate) fn cache_contacts(store: &mut LocalStore, contacts: &[PlanningContactRecord]) {
+    store.daylite_cache.last_synced_at = Some(current_timestamp_iso8601());
+    store.daylite_cache.contacts = contacts
+        .iter()
+        .cloned()
+        .map(map_planning_contact_to_cache_entry)
+        .collect();
+}
+
 pub(in crate::integrations::daylite) async fn list_contacts_core(
     client: &DayliteApiClient,
     token_state: DayliteTokenState,
