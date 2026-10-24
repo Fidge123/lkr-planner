@@ -10,12 +10,11 @@ use crate::error::{AppError, AppErrorCode};
 use crate::integrations::daylite::auth_flow::{
     send_authenticated_json, send_authenticated_request,
 };
+use crate::integrations::daylite::calls::{run_daylite_command, with_daylite_tokens_once};
 use crate::integrations::daylite::client::{
     DayliteApiClient, DayliteHttpMethod, DayliteHttpRequest,
 };
-use crate::integrations::daylite::shared::{
-    run_daylite_command, with_daylite_tokens_once, DayliteSearchResult, DayliteTokenState,
-};
+use crate::integrations::daylite::shared::{DayliteSearchResult, DayliteTokenState};
 use crate::integrations::local_store::LocalStore;
 use chrono::{SecondsFormat, Utc};
 use serde_json::json;

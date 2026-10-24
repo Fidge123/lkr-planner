@@ -113,7 +113,7 @@ fn close_daylite_before_exit() {
     let closed = tauri::async_runtime::block_on(async {
         tokio::time::timeout(
             DAYLITE_EXIT_TIMEOUT,
-            integrations::daylite::shared::close_daylite_token_session(),
+            integrations::daylite::close_daylite_token_session(),
         )
         .await
     });

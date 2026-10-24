@@ -3,8 +3,9 @@ use std::collections::HashMap;
 use serde::Deserialize;
 
 use super::auth_flow::send_authenticated_json;
+use super::calls::run_daylite_command;
 use super::client::{DayliteApiClient, DayliteHttpMethod, DayliteHttpRequest};
-use super::shared::{run_daylite_command, DayliteTokenState};
+use super::shared::DayliteTokenState;
 use crate::error::AppError;
 use crate::integrations::telemetry::events::{Integration, Operation};
 use crate::integrations::telemetry::observe::observe;

@@ -1,8 +1,9 @@
 use super::auth_flow::refresh_tokens;
+use super::calls::adopt_daylite_tokens;
 use super::client::DayliteApiClient;
 use super::shared::{
-    adopt_daylite_tokens, normalize_base_url, update_store_or_error, DayliteRefreshTokenRequest,
-    DayliteTokenState, DayliteTokenSyncStatus,
+    normalize_base_url, update_store_or_error, DayliteRefreshTokenRequest, DayliteTokenState,
+    DayliteTokenSyncStatus,
 };
 use crate::error::AppError;
 use crate::integrations::telemetry::events::{Integration, Operation};

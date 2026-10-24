@@ -5,10 +5,9 @@ use std::future::Future;
 use std::time::Duration;
 
 use super::auth_flow::{send_authenticated_json, send_authenticated_request};
+use super::calls::with_daylite_tokens;
 use super::client::{DayliteApiClient, DayliteHttpMethod, DayliteHttpRequest};
-use super::shared::{
-    normalize_http_error, trimmed, with_daylite_tokens, DayliteSearchResult, DayliteTokenState,
-};
+use super::shared::{normalize_http_error, trimmed, DayliteSearchResult, DayliteTokenState};
 use crate::error::AppError;
 
 /// Appointments without this keyword are never touched.
