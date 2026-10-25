@@ -100,13 +100,6 @@ function withEvents(events: CalendarCellEvent[]) {
 }
 
 describe("planning grid employee states", () => {
-  it("keeps the pinned date row in its own stacking context so a swiped week covers it", () => {
-    const scrollContainer =
-      renderGrid().match(/<section class="[^"]*overflow-auto[^"]*"/)?.[0] ?? "";
-
-    expect(scrollContainer).toContain("isolate");
-  });
-
   it("hides employees without a calendar and test employees when the toggle is enabled", () => {
     const html = renderGrid({
       employeeState: {

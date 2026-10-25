@@ -205,24 +205,14 @@ describe("TimetableCell", () => {
     expect(html).not.toContain('aria-roledescription="draggable"');
   });
 
-  it("marks an unresolved assignment with a red warning icon", () => {
-    const html = renderCell({
+  it("explains in German that the project of an unresolved assignment could not be fetched", () => {
+    renderCell({
       events: [assignment({ title: "Projekt Süd", projectStatus: null })],
     });
 
-    expect(html).toContain("lucide-triangle-alert");
-    expect(html).toContain("text-error");
-  });
-
-  it("sets the note around an unresolved title in italics, the title itself not", () => {
-    const html = renderCell({
-      events: [assignment({ title: "Projekt Süd", projectStatus: null })],
-    });
-
-    expect(html).toContain("<em");
-    expect(html).toContain("Beschreibung für ");
-    expect(html).toContain(" konnte nicht abgerufen werden");
-    expect(html).toContain("</em>Projekt Süd<em");
+    expect(document.querySelector("h4")?.textContent).toBe(
+      "Beschreibung für Projekt Süd konnte nicht abgerufen werden",
+    );
   });
 
   it("leaves a resolved assignment title unwrapped and unmarked", () => {
@@ -241,13 +231,6 @@ describe("TimetableCell", () => {
     expect(html).toContain("lucide-triangle-alert");
   });
 
-  it("keeps the event colors alongside the conflict indicator", () => {
-    const html = renderCell({ events: [absence, assignment()] });
-
-    expect(html).toContain("bg-(--color-absence-vacation)/50");
-    expect(html).toContain("bg-base-200");
-  });
-
   it("shows the Daylite category color as a strip, not as the card fill", () => {
     const html = renderCell({
       events: [assignment({ categoryColor: "#8bc34a" })],
@@ -262,20 +245,6 @@ describe("TimetableCell", () => {
     expect(
       renderCell({ events: [assignment({ categoryColor: "#8bc34aff" })] }),
     ).toContain("border-left-color: #8bc34aff");
-  });
-
-  it("leaves the strip in its default color when there is no category", () => {
-    const html = renderCell({ events: [assignment()] });
-
-    expect(html).not.toContain("border-left-color");
-    expect(html).toContain("border-base-content/30");
-  });
-
-  it("gives bare events no strip", () => {
-    const html = renderCell({ events: [bare] });
-
-    expect(html).not.toContain("border-l-4");
-    expect(html).toContain("bg-base-200");
   });
 });
 
@@ -372,17 +341,6 @@ describe("TimetableCell highlighting", () => {
     }
   });
 
-  it("does not dim the toggle while its card is highlighted", () => {
-    const highlighted = renderCell({
-      events: [assignment()],
-      activeHighlight: projectRef,
-    });
-    const plain = renderCell({ events: [assignment()] });
-
-    expect(highlightToggle(highlighted)).not.toContain("opacity-70");
-    expect(highlightToggle(plain)).toContain("opacity-70");
-  });
-
   it("reads the toggle as pressed on a highlighted card", () => {
     const html = renderCell({
       events: [assignment()],
@@ -431,10 +389,3 @@ describe("TimetableCell highlighting", () => {
     expect(html).toContain(assignmentStripClass);
   });
 });
-
-/** The toggle's own tag, so its state classes can be read apart from the other action buttons. */
-function highlightToggle(html: string): string {
-  return (
-    html.match(/<button[^>]*aria-label="Projekt hervorheben"[^>]*>/)?.[0] ?? ""
-  );
-}

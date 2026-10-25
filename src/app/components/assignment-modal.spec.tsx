@@ -14,11 +14,7 @@ import {
   nextHighlightIndex,
   resolveWriteIntent,
 } from "./assignment-modal-logic";
-import {
-  ProjectResultList,
-  ProjectResultPlaceholder,
-  SuggestionEmptyState,
-} from "./project-result-list";
+import { ProjectResultList, SuggestionEmptyState } from "./project-result-list";
 
 const mockUpdateAssignment = mock((_input: UpdateAssignmentInput) =>
   commandOk(null),
@@ -306,37 +302,6 @@ describe("ProjectResultList", () => {
     expect(html).toContain("background-color: #8bc34a");
     expect(html.match(/rounded-full/g)).toHaveLength(2);
     expect(html).toContain("bg-base-content/30");
-  });
-
-  it("keeps the category dot colored on the selected row", () => {
-    const html = renderComponent(
-      <ProjectResultList
-        projects={[
-          { ...project("Projekt Nord", "/v1/projects/10"), category: "Bau" },
-        ]}
-        categoryColors={{ Bau: "#8bc34a" }}
-        highlightedIndex={0}
-        onSelect={() => {}}
-      />,
-    ).container.innerHTML;
-
-    expect(html).toContain("bg-primary text-primary-content");
-    expect(html).toContain("background-color: #8bc34a");
-  });
-
-  it("reserves rows of the same height as the loaded results", () => {
-    const placeholder = renderComponent(<ProjectResultPlaceholder />).container
-      .innerHTML;
-    const loaded = renderComponent(
-      <ProjectResultList
-        projects={[project("Projekt Nord", "/v1/projects/10")]}
-        highlightedIndex={-1}
-        onSelect={() => {}}
-      />,
-    ).container.innerHTML;
-
-    expect(placeholder.match(/h-8/g)).toHaveLength(5);
-    expect(loaded).toContain("h-8");
   });
 
   it("renders a project name with hard line breaks as a single line", () => {

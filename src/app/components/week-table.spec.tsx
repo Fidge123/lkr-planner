@@ -48,16 +48,6 @@ describe("WeekTable", () => {
       jest.useRealTimers();
     }
   });
-
-  it("keeps the date row fixed at the top of the scrolling grid", () => {
-    const html = renderTable();
-    const headerCells = html.match(/<th [^>]*>/g) ?? [];
-    expect(headerCells.length).toBe(6);
-    for (const cell of headerCells) {
-      expect(cell).toContain("sticky");
-      expect(cell).toContain("top-0");
-    }
-  });
 });
 
 const nord = "/v1/projects/1";

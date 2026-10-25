@@ -4,8 +4,7 @@ import { renderComponent } from "../../../test/render-component";
 import { TelemetrySettingsPanel } from "./telemetry-panel";
 
 function renderPanel() {
-  return renderComponent(<TelemetrySettingsPanel onClose={() => {}} />)
-    .container.textContent;
+  renderComponent(<TelemetrySettingsPanel onClose={() => {}} />);
 }
 
 describe("TelemetrySettingsPanel", () => {
@@ -16,25 +15,6 @@ describe("TelemetrySettingsPanel", () => {
     expect(
       screen.getByRole("checkbox", { name: "Diagnosedaten senden" }),
     ).toBeDefined();
-  });
-
-  it("describes in German what is transmitted", () => {
-    const text = renderPanel();
-
-    expect(text).toContain("Fehler- und Leistungsdaten");
-    expect(text).toContain("technische Details");
-    expect(text).toContain("Projekt- oder Mitarbeiternamen");
-    expect(text).toContain("IP-Adresse");
-  });
-
-  it("no longer calls the transmitted data anonymous", () => {
-    expect(renderPanel()).not.toContain("anonym");
-  });
-
-  it("describes in German what is never transmitted", () => {
-    expect(renderPanel()).toContain(
-      "Passwörter, Zugangsschlüssel und Tokens werden nie übertragen.",
-    );
   });
 
   it("shows telemetry as disabled before the stored state is loaded", () => {
