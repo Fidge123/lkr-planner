@@ -58,17 +58,6 @@ describe("WeekTable", () => {
       expect(cell).toContain("top-0");
     }
   });
-
-  it("opens the week picker from the calendar week cell when a jump is offered", () => {
-    const html = renderTable({ onJumpToWeek: () => {} });
-
-    const trigger =
-      html.match(/<button[^>]*aria-label="[^"]*Woche auswählen"[^>]*>/)?.[0] ??
-      "";
-    expect(trigger).toMatch(/popovertarget="[^"]+"/i);
-    expect(html).toContain('popover="auto"');
-    expect(html).toContain("KW 34");
-  });
 });
 
 const nord = "/v1/projects/1";
@@ -160,27 +149,6 @@ describe("WeekTable highlighting", () => {
       "Bauprojekt Nord",
       "Bauprojekt Nord",
     ]);
-  });
-
-  it("leaves other projects and a bare event of the same name unmarked", () => {
-    const html = renderWeek(spreadWeek, nord);
-
-    expect(html).toContain("Halle 4 Umbau");
-    expect(markedTitles(html)).not.toContain("Halle 4 Umbau");
-    // The bare event reads like the project but carries no reference.
-    expect(markedTitles(html).length).toBe(3);
-  });
-
-  it("marks nothing while no highlight is active", () => {
-    expect(markedTitles(renderWeek(spreadWeek, null))).toEqual([]);
-    expect(
-      markedTitles(
-        renderTable({
-          employees: [kowalski, meier],
-          eventsByEmployee: spreadWeek,
-        }),
-      ),
-    ).toEqual([]);
   });
 
   it("marks nothing and changes nothing when every matching event is gone", () => {

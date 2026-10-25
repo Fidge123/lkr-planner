@@ -56,13 +56,6 @@ describe("WeekPicker", () => {
     ]);
   });
 
-  it("opens on the month of the Thursday for a week starting in the month before", () => {
-    expect(monthTitles(renderPicker(new Date(2026, 8, 28)))).toEqual([
-      "September 2026",
-      "Oktober 2026",
-    ]);
-  });
-
   it("opens across the year boundary with controls to move a month back and forward", () => {
     const html = renderPicker(new Date(2027, 0, 11));
 

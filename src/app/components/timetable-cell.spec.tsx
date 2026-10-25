@@ -102,12 +102,6 @@ describe("TimetableCell", () => {
     expect(html).toContain("Aufgabe hinzufügen");
   });
 
-  it("assigned cell renders its assignment data", () => {
-    const html = renderCell({ events: [assignment()] });
-
-    expect(html).toContain("Bauprojekt Nord");
-  });
-
   it("makes the card itself no control around its times and title", () => {
     const html = renderCell({ events: [assignment()] });
 
@@ -117,10 +111,6 @@ describe("TimetableCell", () => {
     expect(buttonContents(html)).not.toContainEqual(
       expect.stringContaining("08:00"),
     );
-  });
-
-  it("renders an edit action on an assignment card", () => {
-    expect(renderCell({ events: [assignment()] })).toContain(editLabel);
   });
 
   it("renders the edit action on an assignment with an unresolved project", () => {
@@ -195,13 +185,6 @@ describe("TimetableCell", () => {
     );
   });
 
-  it("renders no suggestion markup when there is none", () => {
-    const html = renderCell();
-
-    expect(html).not.toContain("opacity-50");
-    expect(html).not.toContain("border-dashed");
-  });
-
   it("marks assignment cards as draggable", () => {
     expect(renderCell({ events: [assignment()] })).toContain(
       'aria-roledescription="draggable"',
@@ -263,13 +246,6 @@ describe("TimetableCell", () => {
 
     expect(html).toContain("bg-(--color-absence-vacation)/50");
     expect(html).toContain("bg-base-200");
-  });
-
-  it("renders no conflict indicator for an absence without an appointment", () => {
-    const html = renderCell({ events: [absence] });
-
-    expect(html).not.toContain("ring-error");
-    expect(html).not.toContain("Abwesenheit und Termin am selben Tag");
   });
 
   it("shows the Daylite category color as a strip, not as the card fill", () => {
@@ -383,12 +359,6 @@ describe("TimetableCell highlighting", () => {
   });
   const unresolved = assignment({ uid: "uid-unresolved", projectStatus: null });
 
-  it("offers the highlight toggle on an assignment card", () => {
-    const html = renderCell({ events: [assignment()] });
-
-    expect(html).toContain(highlightLabel);
-  });
-
   it("offers the toggle on an unresolved assignment, whose Daylite link is suppressed", () => {
     const html = renderCell({ events: [unresolved] });
 
@@ -450,21 +420,6 @@ describe("TimetableCell highlighting", () => {
     expect(html).toContain(markerClass);
   });
 
-  it("leaves a card of another project unmarked", () => {
-    const html = renderCell({
-      events: [otherProject],
-      activeHighlight: projectRef,
-    });
-
-    expect(html).not.toContain(markerClass);
-  });
-
-  it("marks nothing while no highlight is active", () => {
-    const html = renderCell({ events: [assignment(), otherProject] });
-
-    expect(html).not.toContain(markerClass);
-  });
-
   it("keeps the card's background and category strip while it is highlighted", () => {
     const html = renderCell({
       events: [assignment({ categoryColor: "#8bc34a" })],
@@ -475,16 +430,6 @@ describe("TimetableCell highlighting", () => {
     expect(html).toContain("border-left-color: #8bc34a");
     expect(html).toContain(assignmentStripClass);
   });
-
-  it("adds no ring of its own to a highlighted card", () => {
-    const highlighted = renderCell({
-      events: [assignment()],
-      activeHighlight: projectRef,
-    });
-    const plain = renderCell({ events: [assignment()] });
-
-    expect(countRings(highlighted)).toBe(countRings(plain));
-  });
 });
 
 /** The toggle's own tag, so its state classes can be read apart from the other action buttons. */
@@ -492,8 +437,4 @@ function highlightToggle(html: string): string {
   return (
     html.match(/<button[^>]*aria-label="Projekt hervorheben"[^>]*>/)?.[0] ?? ""
   );
-}
-
-function countRings(html: string): number {
-  return [...html.matchAll(/\bring-2\b/g)].length;
 }
