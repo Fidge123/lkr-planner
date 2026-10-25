@@ -389,55 +389,34 @@ mod tests {
     }
 
     #[test]
-    fn store_without_holiday_cache_field_loads_with_empty_cache() {
-        let test_path = unique_test_path("no-holiday-cache.json");
+    fn stores_saved_by_older_versions_load_with_defaults() {
+        let before_settings = unique_test_path("before-settings.json");
         write_test_file(
-            &test_path,
+            &before_settings,
             r#"{
               "apiEndpoints": {"dayliteBaseUrl":"","planradarBaseUrl":"","zepCaldavRootUrl":""},
               "employeeSettings": [],
               "dayliteCache": {"projects":[],"contacts":[]}
             }"#,
         );
+        let before_show_weekend = unique_test_path("before-show-weekend.json");
+        write_test_file(
+            &before_show_weekend,
+            r#"{
+              "apiEndpoints": {"dayliteBaseUrl":"","planradarBaseUrl":"","zepCaldavRootUrl":""},
+              "employeeSettings": [],
+              "displaySettings": {"hideNonPlannableEmployees": false},
+              "dayliteCache": {"projects":[],"contacts":[]}
+            }"#,
+        );
 
-        let loaded = load_store_from_path(&test_path).expect("should load without holidayCache");
+        let loaded = load_store_from_path(&before_settings).expect("should load");
         assert!(loaded.holiday_cache.is_empty());
-        assert!(loaded.display_settings.hide_non_plannable_employees);
-    }
+        assert_eq!(loaded.telemetry, TelemetrySettings::default());
+        assert_eq!(loaded.display_settings, DisplaySettings::default());
 
-    #[test]
-    fn store_without_telemetry_field_loads_with_telemetry_disabled() {
-        let test_path = unique_test_path("no-telemetry-section.json");
-        write_test_file(
-            &test_path,
-            r#"{
-              "apiEndpoints": {"dayliteBaseUrl":"","planradarBaseUrl":"","zepCaldavRootUrl":""},
-              "employeeSettings": [],
-              "dayliteCache": {"projects":[],"contacts":[]}
-            }"#,
-        );
-
-        let loaded = load_store_from_path(&test_path).expect("should load without telemetry");
-
-        assert!(!loaded.telemetry.enabled);
-        assert_eq!(loaded.telemetry.install_id, None);
-    }
-
-    #[test]
-    fn display_settings_without_show_weekend_field_defaults_to_false() {
-        let test_path = unique_test_path("no-show-weekend.json");
-        write_test_file(
-            &test_path,
-            r#"{
-              "apiEndpoints": {"dayliteBaseUrl":"","planradarBaseUrl":"","zepCaldavRootUrl":""},
-              "employeeSettings": [],
-              "displaySettings": {"hideNonPlannableEmployees": true},
-              "dayliteCache": {"projects":[],"contacts":[]}
-            }"#,
-        );
-
-        let loaded = load_store_from_path(&test_path).expect("should load without showWeekend");
+        let loaded = load_store_from_path(&before_show_weekend).expect("should load");
         assert!(!loaded.display_settings.show_weekend);
-        assert!(loaded.display_settings.hide_non_plannable_employees);
+        assert!(!loaded.display_settings.hide_non_plannable_employees);
     }
 }
