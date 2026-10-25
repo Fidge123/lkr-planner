@@ -1,0 +1,4 @@
+disallowed-methods = [
+    { path = "reqwest::Client::new", reason = "use crate::http::shared_client so every request reuses one connection pool (ADR 0015)" },
+    { path = "reqwest::Client::builder", reason = "use crate::http::shared_client so every request reuses one connection pool (ADR 0015)" },
+]

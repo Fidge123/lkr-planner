@@ -31,6 +31,7 @@ uuid = { version = "1", features = ["v4"] }
 os_info = { version = "3.15.0", default-features = false }
 
 [dev-dependencies]
+syn = { version = "2", features = ["full", "visit"] }
 tokio = { version = "1", features = ["test-util"] }
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]

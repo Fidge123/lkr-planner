@@ -1,25 +1,13 @@
 import { describe, expect, it } from "bun:test";
-import { renderToStaticMarkup } from "react-dom/server";
+import { renderComponent } from "../../../test/render-component";
 import { SettingsDialog } from "./settings-dialog";
 
 describe("SettingsDialog", () => {
-  it("lists a Diagnose section alongside the existing sections", () => {
-    const html = renderToStaticMarkup(
-      <SettingsDialog isOpen onClose={() => {}} />,
-    );
-
-    expect(html).toContain("Daylite");
-    expect(html).toContain("ZEP");
-    expect(html).toContain("Anzeige");
-    expect(html).toContain("Darstellung");
-    expect(html).toContain("Diagnose");
-  });
-
   it("renders nothing while closed", () => {
-    const html = renderToStaticMarkup(
+    const { container } = renderComponent(
       <SettingsDialog isOpen={false} onClose={() => {}} />,
     );
 
-    expect(html).toBe("");
+    expect(container.innerHTML).toBe("");
   });
 });

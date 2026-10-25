@@ -1,46 +1,31 @@
-import { type ChangeEvent, useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import type { ChangeEvent } from "react";
 import type { DisplaySettings } from "../../../generated/tauri";
-import {
-  loadDisplaySettings,
-  saveDisplaySettings,
-} from "../../../services/display-settings";
+import { saveDisplaySettings } from "../../../services/display-settings";
+import { localStoreQuery, useLocalStore } from "../../hooks/use-local-store";
 import { usePanelSubmit } from "../../hooks/use-panel-submit";
 import { StatusAlert } from "./panel-status";
 
-export function DisplaySettingsPanel({ onClose, onChanged }: Props) {
-  const [hideNonPlannable, setHideNonPlannable] = useState(true);
-  const [showWeekend, setShowWeekend] = useState(false);
+export function DisplaySettingsPanel({ onClose }: Props) {
+  const queryClient = useQueryClient();
+  const { isLoaded, displaySettings } = useLocalStore();
   const { isSaving, status, run } = usePanelSubmit();
 
-  useEffect(() => {
-    let isActive = true;
-    void loadDisplaySettings()
-      .then((settings) => {
-        if (isActive) {
-          setHideNonPlannable(settings.hideNonPlannableEmployees);
-          setShowWeekend(settings.showWeekend);
-        }
-      })
-      .catch(() => {});
-    return () => {
-      isActive = false;
-    };
-  }, []);
-
   const saveToggle =
-    (key: keyof DisplaySettings, applyValue: (value: boolean) => void) =>
-    async (event: ChangeEvent<HTMLInputElement>) => {
-      const nextValue = event.target.checked;
-      applyValue(nextValue);
-
-      await run(async () => {
+    (key: keyof DisplaySettings) => (event: ChangeEvent<HTMLInputElement>) => {
+      const next = { ...displaySettings, [key]: event.target.checked };
+      queryClient.setQueryData(
+        localStoreQuery.queryKey,
+        (store) => store && { ...store, displaySettings: next },
+      );
+      void run(async () => {
         try {
-          await saveDisplaySettings({ [key]: nextValue });
-        } catch (error) {
-          applyValue(!nextValue);
-          throw error;
+          await saveDisplaySettings(next);
+        } finally {
+          await queryClient.invalidateQueries({
+            queryKey: localStoreQuery.queryKey,
+          });
         }
-        onChanged?.();
         return null;
       }, "Die Anzeige-Einstellung konnte nicht gespeichert werden.");
     };
@@ -55,12 +40,9 @@ export function DisplaySettingsPanel({ onClose, onChanged }: Props) {
         <input
           type="checkbox"
           className="toggle toggle-primary"
-          checked={hideNonPlannable}
-          onChange={saveToggle(
-            "hideNonPlannableEmployees",
-            setHideNonPlannable,
-          )}
-          disabled={isSaving}
+          checked={displaySettings.hideNonPlannableEmployees}
+          onChange={saveToggle("hideNonPlannableEmployees")}
+          disabled={isSaving || !isLoaded}
         />
         <span className="label-text font-medium">
           Nicht planbare Mitarbeiter ausblenden
@@ -71,9 +53,9 @@ export function DisplaySettingsPanel({ onClose, onChanged }: Props) {
         <input
           type="checkbox"
           className="toggle toggle-primary"
-          checked={showWeekend}
-          onChange={saveToggle("showWeekend", setShowWeekend)}
-          disabled={isSaving}
+          checked={displaySettings.showWeekend}
+          onChange={saveToggle("showWeekend")}
+          disabled={isSaving || !isLoaded}
         />
         <span className="label-text font-medium">Wochenende anzeigen</span>
       </label>
@@ -89,5 +71,4 @@ export function DisplaySettingsPanel({ onClose, onChanged }: Props) {
 
 interface Props {
   onClose: () => void;
-  onChanged?: () => void;
 }

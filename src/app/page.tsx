@@ -15,7 +15,6 @@ import type {
   EmployeeSetting,
   PlanningContactRecord,
 } from "../generated/tauri";
-import type { ProjectCategoryColors } from "../services/daylite-categories";
 import { AppointmentSyncAlert } from "./components/appointment-sync-alert";
 import { MoveReconciliationDialog } from "./components/move-reconciliation-dialog";
 import {
@@ -30,12 +29,13 @@ import type { AppointmentDragPayload } from "./hooks/use-appointment-drag";
 import { useAppointmentDrag } from "./hooks/use-appointment-drag";
 import { useAppointmentSyncFailures } from "./hooks/use-appointment-sync-failures";
 import { type HolidaysState, useHolidays } from "./hooks/use-holidays";
+import { useLocalStore } from "./hooks/use-local-store";
 import type { PlanningAssignmentsState } from "./hooks/use-planning-assignments";
 import { usePlanningEmployees } from "./hooks/use-planning-employees";
 import { useWeekSwipe } from "./hooks/use-week-swipe";
 import type { ActiveHighlight, CellEvent } from "./types";
 import { activeHighlightForWeek, highlightKey, nextHighlight } from "./types";
-import { getWeekDays, shiftWeekDays, toLocalISODate } from "./util";
+import { shiftWeekDays, toLocalISODate } from "./util";
 import { swipeSettleMs } from "./week-swipe";
 
 // The pointer, not the dragged card's box, picks the target cell and the position within the cell
@@ -83,33 +83,26 @@ function useFrozenDuringDrag<T>(
 }
 
 export function PlanningGrid({
-  weekOffset,
-  showWeekend = false,
-  employeeState,
+  weekDays,
   assignmentState,
-  employeeSettings = [],
-  hideNonPlannableEmployees = true,
-  holidaysState,
-  categoryColors = {},
   onOpenIcalDialog = () => {},
   onNavigateWeek,
   onJumpToWeek,
 }: Props) {
-  const weekDays = getWeekDays(weekOffset, showWeekend);
   const weekStart = toLocalISODate(weekDays[0]);
 
-  const fallbackEmployeesState = usePlanningEmployees();
-  const fallbackHolidaysState = useHolidays(weekStart);
+  const employeeState = usePlanningEmployees();
+  const holidaysState = useHolidays(weekStart);
+  const { employeeSettings, displaySettings } = useLocalStore();
 
   return (
     <PlanningGridTable
       weekDays={weekDays}
-      employeeState={employeeState ?? fallbackEmployeesState}
+      employeeState={employeeState}
       assignmentState={assignmentState}
       employeeSettings={employeeSettings}
-      hideNonPlannableEmployees={hideNonPlannableEmployees}
-      holidaysState={holidaysState ?? fallbackHolidaysState}
-      categoryColors={categoryColors}
+      hideNonPlannableEmployees={displaySettings.hideNonPlannableEmployees}
+      holidaysState={holidaysState}
       onOpenIcalDialog={onOpenIcalDialog}
       onNavigateWeek={onNavigateWeek}
       onJumpToWeek={onJumpToWeek}
@@ -124,7 +117,6 @@ export function PlanningGridTable({
   employeeSettings,
   hideNonPlannableEmployees,
   holidaysState,
-  categoryColors,
   onOpenIcalDialog,
   onNavigateWeek,
   onJumpToWeek,
@@ -135,13 +127,7 @@ export function PlanningGridTable({
     errorMessage: employeeErrorMessage,
     reloadEmployees,
   } = employeeState;
-  const {
-    reloadAssignments,
-    invalidateWeeksContaining,
-    moveEvent,
-    refreshEmployees,
-    removeEvent,
-  } = assignmentState;
+  const { reloadAssignments } = assignmentState;
   const {
     holidays,
     errorMessage: holidayErrorMessage,
@@ -158,31 +144,25 @@ export function PlanningGridTable({
   const dragSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
   );
+  const weekStart = toLocalISODate(weekDays[0]);
   const drag = useAppointmentDrag({
+    weekStart,
     onNavigateWeek: onNavigateWeek ?? (() => {}),
-    reloadAssignments,
-    invalidateWeeksContaining,
-    moveEvent,
-    refreshEmployees,
   });
   const isDragActive = drag.activePayload !== null;
-  const weekStart = toLocalISODate(weekDays[0]);
-  const handleAssignmentWritten = (
-    employeeRef: string,
-    removedUid: string | null,
-  ) => {
-    if (removedUid !== null) removeEvent(removedUid);
-    refreshEmployees(weekStart, [employeeRef]);
-  };
 
   const [highlight, setHighlight] = useState<ActiveHighlight | null>(null);
   const activeHighlight = activeHighlightForWeek(highlight, weekStart);
   // Deriving keeps the highlight out of other weeks; dropping it keeps navigating back from restoring it.
   if (highlight && activeHighlight === null) setHighlight(null);
-  const toggleHighlight = (event: CellEvent) => {
-    const key = nextHighlight(activeHighlight, highlightKey(event));
-    setHighlight(key === null ? null : { key, weekStart });
-  };
+  const toggleHighlight = (event: CellEvent) =>
+    setHighlight((current) => {
+      const key = nextHighlight(
+        activeHighlightForWeek(current, weekStart),
+        highlightKey(event),
+      );
+      return key === null ? null : { key, weekStart };
+    });
   const {
     eventsByEmployee,
     errorsByEmployee,
@@ -268,29 +248,23 @@ export function PlanningGridTable({
             employeeSettings={employeeSettings}
             eventsByEmployee={eventsByEmployee}
             errorsByEmployee={errorsByEmployee}
-            categoryColors={categoryColors}
             holidays={holidays}
             isEmployeeLoading={isEmployeeLoading}
             dropPreview={drag.dropPreview}
             draggedUid={drag.activePayload?.uid ?? null}
             activeHighlight={activeHighlight}
             onOpenIcalDialog={onOpenIcalDialog}
-            onReloadAssignments={reloadAssignments}
-            onAssignmentWritten={handleAssignmentWritten}
             onToggleHighlight={toggleHighlight}
             onJumpToWeek={onJumpToWeek}
           />
-          {/* Not for Tauri: bun tests render through react-dom/server, which has no `document`. */}
-          {typeof document === "undefined"
-            ? null
-            : createPortal(
-                <DragOverlay style={{ pointerEvents: "none" }}>
-                  {drag.activePayload ? (
-                    <DragPreviewCard payload={drag.activePayload} />
-                  ) : null}
-                </DragOverlay>,
-                document.body,
-              )}
+          {createPortal(
+            <DragOverlay style={{ pointerEvents: "none" }}>
+              {drag.activePayload ? (
+                <DragPreviewCard payload={drag.activePayload} />
+              ) : null}
+            </DragOverlay>,
+            document.body,
+          )}
         </DndContext>
       </section>
 
@@ -315,12 +289,9 @@ export function PlanningGridTable({
               employeeSettings={employeeSettings}
               eventsByEmployee={incomingWeek?.eventsByEmployee ?? {}}
               errorsByEmployee={incomingWeek?.errorsByEmployee ?? {}}
-              categoryColors={categoryColors}
               holidays={holidays}
               isEmployeeLoading={isEmployeeLoading}
               onOpenIcalDialog={onOpenIcalDialog}
-              onReloadAssignments={reloadAssignments}
-              onAssignmentWritten={handleAssignmentWritten}
             />
           </DndContext>
         </aside>
@@ -362,7 +333,7 @@ interface ReloadableAlertProps {
   variant?: keyof typeof alertVariantClass;
 }
 
-function DragPreviewCard({ payload }: { payload: AppointmentDragPayload }) {
+function DragPreviewCard({ payload }: DragPreviewCardProps) {
   return (
     <span
       className={`${assignmentCardClass} ${assignmentStripClass} bg-base-200 text-base-content shadow-lg`}
@@ -377,15 +348,13 @@ function DragPreviewCard({ payload }: { payload: AppointmentDragPayload }) {
   );
 }
 
+interface DragPreviewCardProps {
+  payload: AppointmentDragPayload;
+}
+
 interface Props {
-  weekOffset: number;
-  showWeekend?: boolean;
-  employeeState?: PlanningGridEmployeesState;
+  weekDays: Date[];
   assignmentState: PlanningGridAssignmentState;
-  employeeSettings?: EmployeeSetting[];
-  hideNonPlannableEmployees?: boolean;
-  holidaysState?: HolidaysState;
-  categoryColors?: ProjectCategoryColors;
   onOpenIcalDialog?: (employee: PlanningContactRecord) => void;
   onNavigateWeek?: (direction: -1 | 1) => void;
   onJumpToWeek?: (day: Date) => void;
@@ -398,7 +367,6 @@ export interface PlanningGridTableProps {
   employeeSettings: EmployeeSetting[];
   hideNonPlannableEmployees: boolean;
   holidaysState: HolidaysState;
-  categoryColors: ProjectCategoryColors;
   onOpenIcalDialog: (employee: PlanningContactRecord) => void;
   onNavigateWeek?: (direction: -1 | 1) => void;
   onJumpToWeek?: (day: Date) => void;

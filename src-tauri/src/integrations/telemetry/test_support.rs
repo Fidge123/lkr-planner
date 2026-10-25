@@ -1,6 +1,6 @@
 use super::events::{Integration, Operation, TelemetryEvent};
+use super::recorder::TelemetrySettings;
 use super::recorder::{TelemetryCommand, TelemetryRecorder};
-use crate::integrations::local_store::types::TelemetrySettings;
 use std::sync::Arc;
 use tokio::sync::mpsc::Receiver;
 

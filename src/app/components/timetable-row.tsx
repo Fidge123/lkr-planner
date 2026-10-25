@@ -1,20 +1,20 @@
 import { TriangleAlert } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import {
-  type CalendarCellEvent,
-  commands,
-  type EmployeeSetting,
-  type PlanningContactRecord,
+import type {
+  CalendarCellEvent,
+  EmployeeSetting,
+  PlanningContactRecord,
 } from "../../generated/tauri";
 import { recordLastAssignedProject } from "../../services/assignment-suggestions";
-import type { ProjectCategoryColors } from "../../services/daylite-categories";
+import { createAssignment } from "../../services/assignments";
 import type { DropPreview } from "../hooks/use-appointment-drag";
+import { useWeekCache } from "../hooks/use-planning-assignments";
+import { useProjectCategoryColors } from "../hooks/use-project-category-colors";
 import type { GhostSuggestion, ModalSaveAction } from "../next-day-quick-add";
 import { isGhostVisible, nextGhostState } from "../next-day-quick-add";
-import type { CellEvent } from "../types";
-import { toCellEvent } from "../types";
-import { isToday, toLocalISODate } from "../util";
+import { type CellEvent, cellEventsByDay } from "../types";
+import { toLocalISODate } from "../util";
 import { AssignmentModal } from "./assignment-modal";
 import { TimetableCell } from "./timetable-cell";
 
@@ -22,15 +22,12 @@ export function TimetableRow({
   employee,
   calendarEvents,
   calendarError,
-  categoryColors,
   week,
   employeeSetting,
   dropPreview = null,
   draggedUid = null,
   activeHighlight = null,
   onOpenIcalDialog,
-  onReloadAssignments,
-  onAssignmentWritten,
   onToggleHighlight,
 }: Props) {
   const showWarning = needsAttention(employeeSetting);
@@ -45,6 +42,18 @@ export function TimetableRow({
     setGhost(null);
   }
 
+  const cache = useWeekCache();
+  const categoryColors = useProjectCategoryColors();
+  // The compiler leaves this unmemoized, which would hand every card new props on each render.
+  const eventsByDay = useMemo(
+    () => cellEventsByDay(calendarEvents, categoryColors),
+    [calendarEvents, categoryColors],
+  );
+  const handleWritten = (removedUid: string | null) => {
+    if (removedUid !== null) cache.removeEvent(removedUid);
+    void cache.refreshEmployees(weekStart, [employee.self]);
+  };
+
   const openCreateModal = (date: string) =>
     setModalState({ date, assignment: null });
 
@@ -58,17 +67,20 @@ export function TimetableRow({
       action.kind === "delete" ? (modalState?.assignment?.uid ?? null) : null;
     setModalState(null);
     setGhost((current) => nextGhostState(current, action, isoWeekDays));
-    onAssignmentWritten(employee.self, removedUid);
+    handleWritten(removedUid);
   };
 
   const handleSuggestionClick = async (suggestion: GhostSuggestion) => {
-    const result = await commands.createAssignment({
-      employeeReference: employee.self,
-      date: suggestion.date,
-      projectRef: suggestion.projectRef,
-      projectName: suggestion.projectName,
-    });
-    if (result.status === "error") return;
+    try {
+      await createAssignment({
+        employeeReference: employee.self,
+        date: suggestion.date,
+        projectRef: suggestion.projectRef,
+        projectName: suggestion.projectName,
+      });
+    } catch {
+      return;
+    }
     recordLastAssignedProject({
       self: suggestion.projectRef,
       name: suggestion.projectName,
@@ -85,7 +97,7 @@ export function TimetableRow({
         isoWeekDays,
       ),
     );
-    onAssignmentWritten(employee.self, null);
+    handleWritten(null);
   };
 
   return (
@@ -118,29 +130,23 @@ export function TimetableRow({
               <button
                 type="button"
                 className="btn btn-xs btn-ghost"
-                onClick={onReloadAssignments}
+                onClick={() => void cache.reload(weekStart)}
               >
                 Erneut laden
               </button>
             </div>
           </td>
         ) : (
-          week.days.map((day) => {
-            const isoDay = toLocalISODate(day);
-            const rawDayEvents = calendarEvents.filter(
-              (e) => e.date === isoDay,
-            );
-            const dayEvents = rawDayEvents.map((event) =>
-              toCellEvent(event, categoryColors),
-            );
+          isoWeekDays.map((isoDay) => {
+            const dayEvents = eventsByDay[isoDay] ?? noEvents;
             const suggestion =
-              ghost && isGhostVisible(ghost, isoDay, rawDayEvents)
+              ghost && isGhostVisible(ghost, isoDay, dayEvents.length)
                 ? ghost
                 : undefined;
             return (
               <TimetableCell
-                key={day.toISOString()}
-                isToday={isToday(day)}
+                key={isoDay}
+                isToday={isoDay === week.today}
                 isHoliday={week.holidayDates.has(isoDay)}
                 employeeRef={employee.self}
                 date={isoDay}
@@ -149,8 +155,8 @@ export function TimetableRow({
                 dropPreview={dropPreview}
                 draggedUid={draggedUid}
                 activeHighlight={activeHighlight}
-                onAddClick={() => openCreateModal(isoDay)}
-                onEventClick={(event) => openEditModal(isoDay, event)}
+                onAddClick={openCreateModal}
+                onEventClick={openEditModal}
                 onSuggestionClick={handleSuggestionClick}
                 onToggleHighlight={onToggleHighlight}
               />
@@ -160,8 +166,7 @@ export function TimetableRow({
       </tr>
 
       {/* The grid's scroll container is isolated, so a modal inside it could not paint over the header. */}
-      {/* The document guard is for bun specs, which render this row with react-dom/server. */}
-      {modalState === null || typeof document === "undefined"
+      {modalState === null
         ? null
         : createPortal(
             <AssignmentModal
@@ -193,6 +198,8 @@ function needsAttention(setting: EmployeeSetting | null | undefined): boolean {
   return false;
 }
 
+const noEvents: CellEvent[] = [];
+
 interface ModalState {
   date: string;
   assignment: CalendarCellEvent | null;
@@ -202,18 +209,16 @@ interface Props {
   employee: PlanningContactRecord;
   calendarEvents: CalendarCellEvent[];
   calendarError: string | null;
-  categoryColors: ProjectCategoryColors;
   week: {
     days: Date[];
     holidayDates: Set<string>;
+    today: string;
   };
   employeeSetting: EmployeeSetting | null;
   dropPreview?: DropPreview | null;
   draggedUid?: string | null;
   activeHighlight?: string | null;
   onOpenIcalDialog: (employee: PlanningContactRecord) => void;
-  onReloadAssignments: () => void;
   /** A deleted assignment's UID lets the card disappear before the row is refreshed. */
-  onAssignmentWritten: (employeeRef: string, removedUid: string | null) => void;
   onToggleHighlight?: (event: CellEvent) => void;
 }

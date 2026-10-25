@@ -1,128 +1,91 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useIsFetching, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useEffectEvent, useState } from "react";
 import "./app.css";
 import { ChevronLeft, ChevronRight, Settings } from "lucide-react";
 import { DataLoadingIndicator } from "./app/components/data-loading-indicator";
 import { EmployeeIcalDialog } from "./app/components/employee-ical-dialog";
 import { SettingsDialog } from "./app/components/settings/settings-dialog";
 import { useCalendarAutoRefresh } from "./app/hooks/use-calendar-auto-refresh";
+import { localStoreQuery, useLocalStore } from "./app/hooks/use-local-store";
 import { usePlanningAssignments } from "./app/hooks/use-planning-assignments";
-import { usePlanningEmployees } from "./app/hooks/use-planning-employees";
-import { useProjectCategoryColors } from "./app/hooks/use-project-category-colors";
+import { contactsQuery } from "./app/hooks/use-planning-employees";
 import { useReloadDataMenu } from "./app/hooks/use-reload-data-menu";
-import { useRerenderOnDayChange } from "./app/hooks/use-rerender-on-day-change";
+import { useToday } from "./app/hooks/use-today";
 import { useZepCalendars } from "./app/hooks/use-zep-calendars";
 import { PlanningGrid } from "./app/page";
 import { runStartupSync } from "./app/startup-sync";
-import { getWeekStart, weekOffsetFor } from "./app/util";
-import type { EmployeeSetting, PlanningContactRecord } from "./generated/tauri";
-import { commands } from "./generated/tauri";
-import { resetProjectCategoryColors } from "./services/daylite-categories";
-import { loadDayliteContacts } from "./services/daylite-contacts";
+import { getWeekDays, toLocalISODate, weekOffsetFor } from "./app/util";
+import type { PlanningContactRecord } from "./generated/tauri";
 
 function App() {
   const [weekOffset, setWeekOffset] = useState(0);
-  const [showWeekend, setShowWeekend] = useState(false);
+  const localStore = useLocalStore();
+  const { showWeekend } = localStore.displaySettings;
+  const today = useToday();
+  const weekDays = getWeekDays(today, weekOffset, showWeekend);
+  const weekStart = toLocalISODate(weekDays[0]);
   // On a weekend the weekend setting decides which week is shown, so no week loads before it is read.
-  const [settingsLoaded, setSettingsLoaded] = useState(false);
-  useRerenderOnDayChange();
-  const weekStart = getWeekStart(weekOffset, showWeekend);
   const planningAssignmentsState = usePlanningAssignments(
-    settingsLoaded ? weekStart : null,
+    localStore.isLoaded ? weekStart : null,
   );
   useCalendarAutoRefresh(
     planningAssignmentsState.lastLoadedAt,
     planningAssignmentsState.refreshAssignments,
   );
-  const planningEmployeesState = usePlanningEmployees();
-  const categoryColors = useProjectCategoryColors();
+  const queryClient = useQueryClient();
+  const isLoadingEmployees =
+    useIsFetching({ queryKey: contactsQuery.queryKey }) > 0;
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [icalDialogEmployee, setIcalDialogEmployee] =
     useState<PlanningContactRecord | null>(null);
 
-  const [employeeSettings, setEmployeeSettings] = useState<EmployeeSetting[]>(
-    [],
-  );
-  const [employeeSettingsError, setEmployeeSettingsError] = useState<
-    string | null
-  >(null);
-  const [hideNonPlannableEmployees, setHideNonPlannableEmployees] =
-    useState(true);
-  const zepCalendarsState = useZepCalendars();
+  const zepCalendarsState = useZepCalendars(icalDialogEmployee !== null);
 
-  const loadEmployeeSettings = useCallback(async () => {
-    const result = await commands.loadLocalStore();
-    setSettingsLoaded(true);
-    if (result.status === "ok") {
-      setEmployeeSettings(result.data.employeeSettings);
-      setHideNonPlannableEmployees(
-        result.data.displaySettings?.hideNonPlannableEmployees ?? true,
-      );
-      setShowWeekend(result.data.displaySettings?.showWeekend ?? false);
-      setEmployeeSettingsError(null);
-      return result.data.employeeSettings;
-    }
-    setEmployeeSettingsError(result.error.userMessage);
-    return null;
-  }, []);
-
-  const reloadAssignmentsRef = useRef(
-    planningAssignmentsState.reloadAssignments,
+  const reloadWeek = useEffectEvent(() =>
+    planningAssignmentsState.reloadAssignments(),
   );
-  reloadAssignmentsRef.current = planningAssignmentsState.reloadAssignments;
 
   useEffect(() => {
     let cancelled = false;
     void runStartupSync({
-      readSettings: loadEmployeeSettings,
+      readSettings: () =>
+        queryClient.fetchQuery({ ...localStoreQuery, staleTime: 0 }).then(
+          (store) => store.employeeSettings,
+          () => null,
+        ),
       syncContacts: async () => {
-        await loadDayliteContacts();
+        await queryClient.fetchQuery(contactsQuery);
       },
-      reloadWeek: () => reloadAssignmentsRef.current(),
+      reloadWeek: () => reloadWeek(),
       isCancelled: () => cancelled,
     });
     return () => {
       cancelled = true;
     };
-  }, [loadEmployeeSettings]);
-
-  const handleOpenIcalDialog = useCallback(
-    (employee: PlanningContactRecord) => {
-      setIcalDialogEmployee(employee);
-      zepCalendarsState.ensureLoaded();
-    },
-    [zepCalendarsState.ensureLoaded],
-  );
+  }, [queryClient]);
 
   const handleIcalDialogClose = () => {
     setIcalDialogEmployee(null);
   };
 
-  const handleNavigateWeek = useCallback((direction: -1 | 1) => {
+  const handleNavigateWeek = (direction: -1 | 1) => {
     setWeekOffset((prev) => prev + direction);
-  }, []);
+  };
 
-  const handleJumpToWeek = useCallback(
-    (day: Date) => setWeekOffset(weekOffsetFor(day, showWeekend)),
-    [showWeekend],
-  );
+  const handleJumpToWeek = (day: Date) =>
+    setWeekOffset(weekOffsetFor(today, day, showWeekend));
 
-  const reloadData = useCallback(() => {
-    resetProjectCategoryColors();
-    void loadEmployeeSettings();
-    planningEmployeesState.reloadEmployees();
+  const reloadData = () => {
+    void queryClient.invalidateQueries();
     planningAssignmentsState.reloadAssignments();
-  }, [
-    loadEmployeeSettings,
-    planningEmployeesState.reloadEmployees,
-    planningAssignmentsState.reloadAssignments,
-  ]);
+  };
 
   useReloadDataMenu(reloadData);
 
-  const handleSettingsSaved = useCallback(() => {
-    void loadEmployeeSettings();
+  const handleSettingsSaved = () => {
+    void queryClient.invalidateQueries({ queryKey: localStoreQuery.queryKey });
     planningAssignmentsState.reloadAssignments();
-  }, [loadEmployeeSettings, planningAssignmentsState.reloadAssignments]);
+  };
 
   return (
     <article className="h-screen flex flex-col">
@@ -138,10 +101,7 @@ function App() {
             <Settings className="size-6 text-base-content/50" />
           </button>
           <DataLoadingIndicator
-            isLoading={
-              planningAssignmentsState.isLoading ||
-              planningEmployeesState.isLoading
-            }
+            isLoading={planningAssignmentsState.isLoading || isLoadingEmployees}
           />
         </div>
         <nav className="navbar-end gap-2">
@@ -172,23 +132,18 @@ function App() {
       </header>
 
       <main className="flex-1 min-h-0 overflow-hidden">
-        {employeeSettingsError ? (
+        {localStore.errorMessage ? (
           <section className="alert alert-error m-4">
             <span>
               Einstellungen konnten nicht geladen werden:{" "}
-              {employeeSettingsError}
+              {localStore.errorMessage}
             </span>
           </section>
         ) : null}
         <PlanningGrid
-          weekOffset={weekOffset}
-          showWeekend={showWeekend}
+          weekDays={weekDays}
           assignmentState={planningAssignmentsState}
-          employeeState={planningEmployeesState}
-          employeeSettings={employeeSettings}
-          categoryColors={categoryColors}
-          hideNonPlannableEmployees={hideNonPlannableEmployees}
-          onOpenIcalDialog={handleOpenIcalDialog}
+          onOpenIcalDialog={setIcalDialogEmployee}
           onNavigateWeek={handleNavigateWeek}
           onJumpToWeek={handleJumpToWeek}
         />
@@ -197,14 +152,13 @@ function App() {
       <SettingsDialog
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
-        onDisplaySettingsChanged={loadEmployeeSettings}
       />
 
       <EmployeeIcalDialog
         employee={icalDialogEmployee}
         employeeSetting={
           icalDialogEmployee
-            ? (employeeSettings.find(
+            ? (localStore.employeeSettings.find(
                 (s) => s.dayliteContactReference === icalDialogEmployee.self,
               ) ?? null)
             : null

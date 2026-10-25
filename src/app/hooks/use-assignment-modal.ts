@@ -1,12 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  type CalendarCellEvent,
-  commands,
-  type DayliteProjectSummary,
+import { type SyntheticEvent, useEffect, useRef, useState } from "react";
+import type {
+  CalendarCellEvent,
+  DayliteProjectSummary,
 } from "../../generated/tauri";
 import { recordLastAssignedProject } from "../../services/assignment-suggestions";
 import {
-  commandErrorMessage,
+  createAssignment,
+  deleteAssignment,
+  updateAssignment,
+} from "../../services/assignments";
+import {
   isProtectedAssignment,
   nextHighlightIndex,
   resolveDisplayedProjects,
@@ -28,8 +31,6 @@ export function useAssignmentModal({
   date,
   onSave,
   onClose,
-  initialShowDeleteConfirm,
-  initialShowUnsavedConfirm,
 }: Input) {
   const isEditMode = assignment !== null;
 
@@ -46,12 +47,8 @@ export function useAssignmentModal({
   >(null);
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(
-    initialShowDeleteConfirm,
-  );
-  const [showUnsavedConfirm, setShowUnsavedConfirm] = useState(
-    initialShowUnsavedConfirm,
-  );
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showUnsavedConfirm, setShowUnsavedConfirm] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
   const [isUnlocked, setIsUnlocked] = useState(false);
   const filterInputRef = useRef<HTMLInputElement>(null);
@@ -74,19 +71,6 @@ export function useAssignmentModal({
     filterInputRef.current?.focus();
   }, []);
 
-  // A callback ref, not a mount effect: the dialog remounts on each swap, which would detach the listener.
-  // requestClose is read through a ref because the listener outlives the render that attached it.
-  const requestCloseRef = useRef<() => void>(() => {});
-  const dialogRef = useCallback((dialog: HTMLDialogElement | null) => {
-    if (!dialog) return;
-    const handleCancel = (event: Event) => {
-      event.preventDefault();
-      requestCloseRef.current();
-    };
-    dialog.addEventListener("cancel", handleCancel);
-    return () => dialog.removeEventListener("cancel", handleCancel);
-  }, []);
-
   const requestClose = () => {
     if (isSaving) return;
     if (isDirty) {
@@ -95,7 +79,12 @@ export function useAssignmentModal({
     }
     onClose();
   };
-  requestCloseRef.current = requestClose;
+
+  // Escape would close the dialog without the unsaved-changes check.
+  const cancelDialog = (event: SyntheticEvent) => {
+    event.preventDefault();
+    requestClose();
+  };
 
   const selectProject = (project: DayliteProjectSummary) => {
     setSelectedProjectRef(project.self);
@@ -152,28 +141,29 @@ export function useAssignmentModal({
     setErrorMessage(null);
 
     const projectName = selectedProjectName || assignment?.title || "";
+    const write = () =>
+      assignment?.href
+        ? updateAssignment({
+            href: assignment.href,
+            uid: assignment.uid,
+            date,
+            projectRef: selectedProjectRef,
+            projectName,
+            // Editing an assignment must not move it within its day.
+            orderIndex: null,
+            overrideProtection: isUnlocked,
+          })
+        : createAssignment({
+            employeeReference,
+            date,
+            projectRef: selectedProjectRef,
+            projectName,
+          });
 
-    const result: { status: string; error?: string } = assignment?.href
-      ? await commands.updateAssignment({
-          href: assignment.href,
-          uid: assignment.uid,
-          date,
-          projectRef: selectedProjectRef,
-          projectName,
-          // Editing an assignment must not move it within its day.
-          orderIndex: null,
-          overrideProtection: isUnlocked,
-        })
-      : await commands.createAssignment({
-          employeeReference,
-          date,
-          projectRef: selectedProjectRef,
-          projectName,
-        });
-
-    const writeError = commandErrorMessage(result);
-    if (writeError) {
-      setErrorMessage(writeError);
+    try {
+      await write();
+    } catch (error) {
+      setErrorMessage((error as Error).message);
       setIsSaving(false);
       return;
     }
@@ -196,10 +186,10 @@ export function useAssignmentModal({
     }
     setIsSaving(true);
     setErrorMessage(null);
-    const result = await commands.deleteAssignment(assignment.href, isUnlocked);
-    const deleteError = commandErrorMessage(result);
-    if (deleteError) {
-      setErrorMessage(deleteError);
+    try {
+      await deleteAssignment(assignment.href, isUnlocked);
+    } catch (error) {
+      setErrorMessage((error as Error).message);
       setIsSaving(false);
       return;
     }
@@ -211,7 +201,6 @@ export function useAssignmentModal({
     isProtected,
     isLocked,
     isUnlocked,
-    dialogRef,
     filterInputRef,
     filter,
     highlightedIndex,
@@ -228,6 +217,7 @@ export function useAssignmentModal({
     showDeleteConfirm,
     showUnsavedConfirm,
     requestClose,
+    cancelDialog,
     selectProject,
     changeFilter,
     handleProjectKeyDown,
@@ -246,6 +236,4 @@ interface Input {
   date: string;
   onSave: (action: ModalSaveAction) => void;
   onClose: () => void;
-  initialShowDeleteConfirm: boolean;
-  initialShowUnsavedConfirm: boolean;
 }

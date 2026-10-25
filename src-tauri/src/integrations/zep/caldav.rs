@@ -1,6 +1,5 @@
-use super::types::{ZepCalendar, ZepError, ZepErrorCode};
-use std::time::Duration;
-use tauri_plugin_http::reqwest;
+use super::types::ZepCalendar;
+use crate::error::{AppError, AppErrorCode};
 use tauri_plugin_http::reqwest::Method;
 
 const PROPFIND_BODY: &str = r#"<?xml version="1.0" encoding="utf-8"?>
@@ -11,28 +10,14 @@ const PROPFIND_BODY: &str = r#"<?xml version="1.0" encoding="utf-8"?>
   </d:prop>
 </d:propfind>"#;
 
-/// Cloning a reqwest client shares its connection pool rather than copying it.
-pub(crate) fn shared_caldav_client() -> Result<reqwest::Client, String> {
-    static CLIENT: std::sync::OnceLock<Result<reqwest::Client, String>> =
-        std::sync::OnceLock::new();
-    CLIENT
-        .get_or_init(|| {
-            reqwest::Client::builder()
-                .timeout(Duration::from_secs(30))
-                .build()
-                .map_err(|e| format!("HTTP-Client konnte nicht erstellt werden: {e}"))
-        })
-        .clone()
-}
-
 pub(super) async fn propfind(
     url: &str,
     username: &str,
     password: &str,
-) -> Result<String, ZepError> {
-    let client = shared_caldav_client().map_err(|e| {
-        ZepError::new(
-            ZepErrorCode::NetworkError,
+) -> Result<String, AppError> {
+    let client = crate::http::shared_client().map_err(|e| {
+        AppError::new(
+            AppErrorCode::NetworkError,
             "HTTP-Client konnte nicht initialisiert werden.",
             e,
         )
@@ -49,8 +34,8 @@ pub(super) async fn propfind(
         .send()
         .await
         .map_err(|e| {
-            ZepError::new(
-                ZepErrorCode::NetworkError,
+            AppError::new(
+                AppErrorCode::NetworkError,
                 "ZEP CalDAV-Server ist nicht erreichbar.",
                 format!("PROPFIND fehlgeschlagen für {url}: {e}"),
             )
@@ -59,23 +44,23 @@ pub(super) async fn propfind(
     let status = response.status().as_u16();
     match status {
         401 => {
-            return Err(ZepError::new(
-                ZepErrorCode::Unauthorized,
+            return Err(AppError::new(
+                AppErrorCode::Unauthorized,
                 "Authentifizierung fehlgeschlagen. ZEP-Zugangsdaten prüfen.",
                 format!("PROPFIND returned HTTP 401 for {url}"),
             ));
         }
         404 => {
-            return Err(ZepError::new(
-                ZepErrorCode::NotFound,
+            return Err(AppError::new(
+                AppErrorCode::NotFound,
                 "ZEP CalDAV-URL nicht gefunden. Root-URL prüfen.",
                 format!("PROPFIND returned HTTP 404 for {url}"),
             ));
         }
         200..=299 => {}
         _ => {
-            return Err(ZepError::new(
-                ZepErrorCode::NetworkError,
+            return Err(AppError::new(
+                AppErrorCode::NetworkError,
                 "ZEP CalDAV-Server hat einen Fehler zurückgegeben.",
                 format!("PROPFIND returned HTTP {status} for {url}"),
             ));
@@ -83,8 +68,8 @@ pub(super) async fn propfind(
     }
 
     response.text().await.map_err(|e| {
-        ZepError::new(
-            ZepErrorCode::InvalidResponse,
+        AppError::new(
+            AppErrorCode::InvalidResponse,
             "Die Antwort des ZEP CalDAV-Servers konnte nicht gelesen werden.",
             format!("Response body read fehlgeschlagen: {e}"),
         )
@@ -95,10 +80,10 @@ pub(super) async fn probe_calendar(
     url: &str,
     username: &str,
     password: &str,
-) -> Result<(), ZepError> {
-    let client = shared_caldav_client().map_err(|e| {
-        ZepError::new(
-            ZepErrorCode::NetworkError,
+) -> Result<(), AppError> {
+    let client = crate::http::shared_client().map_err(|e| {
+        AppError::new(
+            AppErrorCode::NetworkError,
             "HTTP-Client konnte nicht initialisiert werden.",
             e,
         )
@@ -115,8 +100,8 @@ pub(super) async fn probe_calendar(
         .send()
         .await
         .map_err(|e| {
-            ZepError::new(
-                ZepErrorCode::NetworkError,
+            AppError::new(
+                AppErrorCode::NetworkError,
                 "ZEP CalDAV-Server ist nicht erreichbar.",
                 format!("PROPFIND Depth:0 fehlgeschlagen für {url}: {e}"),
             )
@@ -124,19 +109,19 @@ pub(super) async fn probe_calendar(
 
     let status = response.status().as_u16();
     match status {
-        401 => Err(ZepError::new(
-            ZepErrorCode::Unauthorized,
+        401 => Err(AppError::new(
+            AppErrorCode::Unauthorized,
             "Authentifizierung fehlgeschlagen. ZEP-Zugangsdaten prüfen.",
             format!("PROPFIND Depth:0 returned HTTP 401 for {url}"),
         )),
-        404 => Err(ZepError::new(
-            ZepErrorCode::NotFound,
+        404 => Err(AppError::new(
+            AppErrorCode::NotFound,
             "Kalender nicht gefunden. Kalender-Zuweisung prüfen.",
             format!("PROPFIND Depth:0 returned HTTP 404 for {url}"),
         )),
         200..=299 => Ok(()),
-        _ => Err(ZepError::new(
-            ZepErrorCode::NetworkError,
+        _ => Err(AppError::new(
+            AppErrorCode::NetworkError,
             "ZEP CalDAV-Server hat einen Fehler zurückgegeben.",
             format!("PROPFIND Depth:0 returned HTTP {status} for {url}"),
         )),
@@ -226,57 +211,6 @@ mod tests {
     #[test]
     fn extract_origin_handles_url_without_path() {
         assert_eq!(extract_origin("https://app.zep.de"), "https://app.zep.de");
-    }
-
-    #[test]
-    fn parse_propfind_calendars_extracts_calendar_entries() {
-        let body = r#"<?xml version="1.0" encoding="utf-8"?>
-<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
-  <d:response>
-    <d:href>/caldav/admin/</d:href>
-    <d:propstat>
-      <d:prop>
-        <d:displayname>admin</d:displayname>
-        <d:resourcetype><d:collection/></d:resourcetype>
-      </d:prop>
-      <d:status>HTTP/1.1 200 OK</d:status>
-    </d:propstat>
-  </d:response>
-  <d:response>
-    <d:href>/caldav/admin/john-einsatz/</d:href>
-    <d:propstat>
-      <d:prop>
-        <d:displayname>John Doe - Einsatz</d:displayname>
-        <d:resourcetype><d:collection/><c:calendar/></d:resourcetype>
-      </d:prop>
-      <d:status>HTTP/1.1 200 OK</d:status>
-    </d:propstat>
-  </d:response>
-  <d:response>
-    <d:href>/caldav/admin/john-abwesenheit/</d:href>
-    <d:propstat>
-      <d:prop>
-        <d:displayname>John Doe - Abwesenheit</d:displayname>
-        <d:resourcetype><d:collection/><c:calendar/></d:resourcetype>
-      </d:prop>
-      <d:status>HTTP/1.1 200 OK</d:status>
-    </d:propstat>
-  </d:response>
-</d:multistatus>"#;
-
-        let calendars = parse_propfind_calendars(body, "https://app.zep.de/caldav/admin");
-
-        assert_eq!(calendars.len(), 2);
-        assert_eq!(calendars[0].display_name, "John Doe - Einsatz");
-        assert_eq!(
-            calendars[0].url,
-            "https://app.zep.de/caldav/admin/john-einsatz/"
-        );
-        assert_eq!(calendars[1].display_name, "John Doe - Abwesenheit");
-        assert_eq!(
-            calendars[1].url,
-            "https://app.zep.de/caldav/admin/john-abwesenheit/"
-        );
     }
 
     #[test]

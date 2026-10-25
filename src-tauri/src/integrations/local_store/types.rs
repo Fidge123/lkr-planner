@@ -1,3 +1,4 @@
+use crate::integrations::telemetry::recorder::TelemetrySettings;
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 use specta::Type;
@@ -76,15 +77,6 @@ impl Default for DisplaySettings {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
-pub struct TelemetrySettings {
-    #[serde(default)]
-    pub enabled: bool,
-    #[serde(default)]
-    pub install_id: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq, Default)]
-#[serde(rename_all = "camelCase")]
 pub struct DayliteCache {
     pub last_synced_at: Option<String>,
     pub contacts: Vec<DayliteContactCacheEntry>,
@@ -127,37 +119,6 @@ pub struct CachedHoliday {
     pub name: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct StoreError {
-    pub code: StoreErrorCode,
-    pub user_message: String,
-    pub technical_message: String,
-}
-
-impl StoreError {
-    pub(super) fn new(
-        code: StoreErrorCode,
-        user_message: impl Into<String>,
-        technical_message: impl Into<String>,
-    ) -> Self {
-        Self {
-            code,
-            user_message: user_message.into(),
-            technical_message: technical_message.into(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum StoreErrorCode {
-    ReadFailed,
-    WriteFailed,
-    CorruptFile,
-    MissingFields,
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -197,18 +158,5 @@ mod tests {
                 .hide_non_plannable_employees
         );
         assert!(!LocalStore::default().display_settings.show_weekend);
-    }
-
-    #[test]
-    fn telemetry_settings_serialize_as_camel_case() {
-        let settings = TelemetrySettings {
-            enabled: true,
-            install_id: Some("11111111-2222-4333-8444-555555555555".to_string()),
-        };
-
-        let serialized = serde_json::to_string(&settings).expect("serialization should succeed");
-
-        assert!(serialized.contains("\"installId\""));
-        assert!(serialized.contains("\"enabled\":true"));
     }
 }

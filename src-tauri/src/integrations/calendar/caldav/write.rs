@@ -3,42 +3,14 @@ use tauri_plugin_http::reqwest;
 use uuid::Uuid;
 
 use super::super::ical::{build_ical_payload, parse_ical_events};
+use super::super::session::CaldavSession;
 use super::super::slots::{full_window, plan_slot_updates, DayPlacement, DayPlan, SlotUpdate};
 use super::super::types::{MoveAssignmentResult, RawVEvent};
 use super::report::fetch_events_in_range;
-use crate::integrations::telemetry::events::{Integration, Operation, TelemetryEvent};
-use crate::integrations::telemetry::observe::{RequestFailure, TelemetryError};
-use crate::integrations::telemetry::recorder::TelemetryRecorder;
-use std::sync::Arc;
+use crate::integrations::telemetry::events::Operation;
+use crate::integrations::telemetry::observe::RequestFailure;
 
 const MAX_REALLOCATE_ATTEMPTS: u32 = 3;
-
-pub(crate) struct CaldavSession {
-    pub(crate) client: reqwest::Client,
-    pub(crate) username: String,
-    pub(crate) password: String,
-    pub(crate) base_url: String,
-    pub(crate) absence_urls: Vec<String>,
-    pub(crate) telemetry: Option<Arc<TelemetryRecorder>>,
-}
-
-impl CaldavSession {
-    pub(crate) fn record_failure(&self, operation: Operation, failure: RequestFailure) {
-        let Some(recorder) = &self.telemetry else {
-            return;
-        };
-
-        recorder.record(
-            TelemetryEvent::error_occurred(
-                operation,
-                Integration::Zep,
-                failure.error_code(),
-                failure.technical_message(),
-            )
-            .with_http_status(failure.http_status()),
-        );
-    }
-}
 
 pub(crate) struct AssignmentWrite {
     pub(crate) date: String,
@@ -654,6 +626,10 @@ mod tests {
         Some((method, path))
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "tests need their own client settings"
+    )]
     fn test_client() -> reqwest::Client {
         reqwest::Client::builder()
             .timeout(Duration::from_secs(5))
@@ -1062,6 +1038,10 @@ mod tests {
     }
 
     /// A client that bypasses any ambient HTTP(S) proxy so it can reach 127.0.0.1 directly.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "tests need their own client settings"
+    )]
     fn direct_client() -> reqwest::Client {
         reqwest::Client::builder()
             .no_proxy()

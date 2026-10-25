@@ -1,8 +1,8 @@
 import { ExternalLink } from "lucide-react";
 import { type ChangeEvent, useEffect, useState } from "react";
 import {
-  DAYLITE_PERSONAL_TOKEN_URL,
-  DEFAULT_DAYLITE_BASE_URL,
+  daylitePersonalTokenUrl,
+  defaultDayliteBaseUrl,
   resolveDayliteBaseUrl,
   updateDayliteRefreshToken,
 } from "../../../services/daylite-auth";
@@ -11,7 +11,7 @@ import { StatusAlert } from "./panel-status";
 
 export function DayliteSettingsPanel({ onClose }: Props) {
   const [dayliteBaseUrlInput, setDayliteBaseUrlInput] = useState(
-    DEFAULT_DAYLITE_BASE_URL,
+    defaultDayliteBaseUrl,
   );
   const [refreshTokenInput, setRefreshTokenInput] = useState("");
   const { isSaving, status, setStatus, run } = usePanelSubmit();
@@ -80,7 +80,7 @@ export function DayliteSettingsPanel({ onClose }: Props) {
         <section className="flex items-center justify-between gap-3">
           <a
             className="btn btn-ghost btn-sm"
-            href={DAYLITE_PERSONAL_TOKEN_URL}
+            href={daylitePersonalTokenUrl}
             target="_blank"
             rel="noreferrer"
           >

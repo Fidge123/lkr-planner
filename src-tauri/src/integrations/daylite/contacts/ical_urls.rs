@@ -37,7 +37,7 @@ pub(super) fn merge_contact_ical_urls(
 }
 
 /// Changed or removed calendar URLs clear the stored connection-test result (docs/adr/0011).
-pub(super) fn reconcile_employee_calendars_from_contacts(
+pub(crate) fn reconcile_employee_calendars_from_contacts(
     settings: &mut Vec<EmployeeSetting>,
     contacts: &[PlanningContactRecord],
 ) {

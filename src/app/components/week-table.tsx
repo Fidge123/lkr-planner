@@ -6,8 +6,8 @@ import type {
   Holiday,
   PlanningContactRecord,
 } from "../../generated/tauri";
-import type { ProjectCategoryColors } from "../../services/daylite-categories";
 import type { DropPreview } from "../hooks/use-appointment-drag";
+import { useToday } from "../hooks/use-today";
 import type { CellEvent } from "../types";
 import { getIsoWeek, toLocalISODate } from "../util";
 import { stickyHeaderClass, TimetableHeader } from "./timetable-header";
@@ -20,20 +20,19 @@ export function WeekTable({
   employeeSettings,
   eventsByEmployee,
   errorsByEmployee,
-  categoryColors,
   holidays,
   isEmployeeLoading,
   dropPreview = null,
   draggedUid = null,
   activeHighlight = null,
   onOpenIcalDialog,
-  onReloadAssignments,
-  onAssignmentWritten,
   onToggleHighlight,
   onJumpToWeek,
 }: WeekTableProps) {
+  const today = useToday();
   const holidayByDate = new Map(holidays.map((h) => [h.date, h.name]));
   const holidayDates = new Set(holidays.map((h) => h.date));
+  const week = { days: weekDays, holidayDates, today };
 
   // WKWebView keeps a re-slotted card's stale pixels after a cell reload.
   // Promoting the grid to a compositing layer for one frame forces a full repaint.
@@ -67,7 +66,11 @@ export function WeekTable({
         <tr>
           <th className={`w-40 p-4 font-bold bg-base-100 ${stickyHeaderClass}`}>
             {onJumpToWeek ? (
-              <WeekPicker weekDays={weekDays} onJumpToWeek={onJumpToWeek}>
+              <WeekPicker
+                weekDays={weekDays}
+                today={today}
+                onJumpToWeek={onJumpToWeek}
+              >
                 {calendarWeek}
               </WeekPicker>
             ) : (
@@ -80,6 +83,7 @@ export function WeekTable({
             <TimetableHeader
               key={day.getTime()}
               day={day}
+              isToday={toLocalISODate(day) === today}
               holiday={holidayByDate.get(toLocalISODate(day))}
             />
           ))}
@@ -90,10 +94,9 @@ export function WeekTable({
           <TimetableRow
             key={employee.self || `employee-${index}`}
             employee={employee}
-            calendarEvents={eventsByEmployee[employee.self] ?? []}
+            calendarEvents={eventsByEmployee[employee.self] ?? noEvents}
             calendarError={errorsByEmployee[employee.self] ?? null}
-            categoryColors={categoryColors}
-            week={{ days: weekDays, holidayDates }}
+            week={week}
             employeeSetting={
               employeeSettings.find(
                 (s) => s.dayliteContactReference === employee.self,
@@ -103,8 +106,6 @@ export function WeekTable({
             draggedUid={draggedUid}
             activeHighlight={activeHighlight}
             onOpenIcalDialog={onOpenIcalDialog}
-            onReloadAssignments={onReloadAssignments}
-            onAssignmentWritten={onAssignmentWritten}
             onToggleHighlight={onToggleHighlight}
           />
         ))}
@@ -123,21 +124,20 @@ export function WeekTable({
   );
 }
 
+const noEvents: CalendarCellEvent[] = [];
+
 export interface WeekTableProps {
   weekDays: Date[];
   employees: PlanningContactRecord[];
   employeeSettings: EmployeeSetting[];
   eventsByEmployee: Record<string, CalendarCellEvent[]>;
   errorsByEmployee: Record<string, string>;
-  categoryColors: ProjectCategoryColors;
   holidays: Holiday[];
   isEmployeeLoading: boolean;
   dropPreview?: DropPreview | null;
   draggedUid?: string | null;
   activeHighlight?: string | null;
   onOpenIcalDialog: (employee: PlanningContactRecord) => void;
-  onReloadAssignments: () => void;
-  onAssignmentWritten: (employeeRef: string, removedUid: string | null) => void;
   onToggleHighlight?: (event: CellEvent) => void;
   onJumpToWeek?: (day: Date) => void;
 }

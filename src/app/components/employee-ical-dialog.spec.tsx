@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import { renderToStaticMarkup } from "react-dom/server";
 import type { PlanningContactRecord, ZepCalendar } from "../../generated/tauri";
+import { renderComponent } from "../../test/render-component";
 import type { ZepCalendarsState } from "../hooks/use-zep-calendars";
 import { CalendarSection } from "./calendar-section";
 import { EmployeeIcalDialog } from "./employee-ical-dialog";
@@ -13,17 +13,16 @@ function calendarState(
     isLoading: false,
     errorMessage: null,
     reload: () => {},
-    ensureLoaded: () => {},
     ...overrides,
   };
 }
 
-const CALENDARS: ZepCalendar[] = [
+const zepCalendars: ZepCalendar[] = [
   { displayName: "Team-Kalender", url: "https://zep.example.com/calendars/1" },
   { displayName: "Urlaub", url: "https://zep.example.com/calendars/2" },
 ];
 
-const EMPLOYEE: PlanningContactRecord = {
+const ownEmployee: PlanningContactRecord = {
   self: "/contacts/42",
   full_name: "Max Mustermann",
   nickname: null,
@@ -34,13 +33,13 @@ const EMPLOYEE: PlanningContactRecord = {
 function renderSection(
   overrides: Partial<Parameters<typeof CalendarSection>[0]> = {},
 ): string {
-  return renderToStaticMarkup(
+  return renderComponent(
     <CalendarSection
       title="Einsatz"
       source="primary"
-      calendars={CALENDARS}
-      selectedUrl={CALENDARS[0].url}
-      storedUrl={CALENDARS[0].url}
+      calendars={zepCalendars}
+      selectedUrl={zepCalendars[0].url}
+      storedUrl={zepCalendars[0].url}
       onUrlChange={() => {}}
       status={null}
       isSubmitting={false}
@@ -48,22 +47,22 @@ function renderSection(
       isDisabled={false}
       {...overrides}
     />,
-  );
+  ).container.innerHTML;
 }
 
 function renderDialog(
   overrides: Partial<Parameters<typeof EmployeeIcalDialog>[0]> = {},
 ): string {
-  return renderToStaticMarkup(
+  return renderComponent(
     <EmployeeIcalDialog
-      employee={EMPLOYEE}
+      employee={ownEmployee}
       employeeSetting={null}
       onClose={() => {}}
       onSettingsSaved={() => {}}
       calendarState={calendarState()}
       {...overrides}
     />,
-  );
+  ).container.innerHTML;
 }
 
 describe("CalendarSection", () => {

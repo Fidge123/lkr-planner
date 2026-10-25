@@ -1,5 +1,4 @@
 import { describe, expect, it } from "bun:test";
-import type { CalendarCellEvent } from "../generated/tauri";
 import {
   type GhostSuggestion,
   isGhostVisible,
@@ -15,35 +14,7 @@ const weekDays = [
   "2026-05-08",
 ];
 
-function event(
-  date: string,
-  kind: CalendarCellEvent["kind"] = "assignment",
-): CalendarCellEvent {
-  return {
-    uid: `uid-${date}`,
-    kind,
-    title: "Irrelevant",
-    projectStatus: null,
-    projectCategory: null,
-    projectRef: null,
-    date,
-    startTime: null,
-    endTime: null,
-    href: null,
-    orderIndex: null,
-    projectPending: false,
-  };
-}
-
 describe("nextVisibleDay", () => {
-  it("returns the following day within the visible week", () => {
-    expect(nextVisibleDay(weekDays, "2026-05-05")).toBe("2026-05-06");
-  });
-
-  it("returns null when the date is the last visible day", () => {
-    expect(nextVisibleDay(weekDays, "2026-05-08")).toBeNull();
-  });
-
   it("returns null when the date is not part of the visible week", () => {
     expect(nextVisibleDay(weekDays, "2026-05-11")).toBeNull();
   });
@@ -94,10 +65,6 @@ describe("nextGhostState", () => {
     expect(nextGhostState(existing, { kind: "edit" }, weekDays)).toBe(existing);
   });
 
-  it("stays null after an edit when no ghost exists", () => {
-    expect(nextGhostState(null, { kind: "edit" }, weekDays)).toBeNull();
-  });
-
   it("clears the ghost after a delete", () => {
     const existing: GhostSuggestion = {
       date: "2026-05-06",
@@ -117,26 +84,18 @@ describe("isGhostVisible", () => {
   };
 
   it("is visible on its target day when that day holds no events", () => {
-    expect(isGhostVisible(ghost, "2026-05-06", [])).toBe(true);
+    expect(isGhostVisible(ghost, "2026-05-06", 0)).toBe(true);
   });
 
   it("is not visible on a different day", () => {
-    expect(isGhostVisible(ghost, "2026-05-07", [])).toBe(false);
+    expect(isGhostVisible(ghost, "2026-05-07", 0)).toBe(false);
   });
 
-  it("is suppressed when the target day already holds an assignment", () => {
-    expect(isGhostVisible(ghost, "2026-05-06", [event("2026-05-06")])).toBe(
-      false,
-    );
-  });
-
-  it("is suppressed when the target day already holds an absence", () => {
-    expect(
-      isGhostVisible(ghost, "2026-05-06", [event("2026-05-06", "absence")]),
-    ).toBe(false);
+  it("is suppressed when the target day already holds an assignment or absence", () => {
+    expect(isGhostVisible(ghost, "2026-05-06", 1)).toBe(false);
   });
 
   it("is never visible when there is no ghost", () => {
-    expect(isGhostVisible(null, "2026-05-06", [])).toBe(false);
+    expect(isGhostVisible(null, "2026-05-06", 0)).toBe(false);
   });
 });

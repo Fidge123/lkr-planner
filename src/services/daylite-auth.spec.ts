@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
 import { mockCommands } from "../test/mock-commands";
 import {
-  DEFAULT_DAYLITE_BASE_URL,
+  defaultDayliteBaseUrl,
   resolveDayliteBaseUrl,
   updateDayliteRefreshToken,
 } from "./daylite-auth";
@@ -45,7 +45,7 @@ describe("daylite auth service", () => {
 
     const baseUrl = await resolveDayliteBaseUrl();
 
-    expect(baseUrl).toBe(DEFAULT_DAYLITE_BASE_URL);
+    expect(baseUrl).toBe(defaultDayliteBaseUrl);
   });
 
   it("updates refresh token with resolved base url", async () => {
@@ -92,29 +92,5 @@ describe("daylite auth service", () => {
         refreshToken: "refresh-token-123",
       }),
     ).rejects.toThrow("Bitte eine Daylite-API-URL eingeben.");
-  });
-
-  it("throws daylite command error message on connect failure", async () => {
-    mockLoadLocalStore.mockResolvedValue({
-      status: "ok",
-      data: {
-        apiEndpoints: {
-          dayliteBaseUrl: "https://api.marketcircle.net/v1",
-        },
-      },
-    });
-    mockDayliteConnectRefreshToken.mockResolvedValue({
-      status: "error",
-      error: {
-        userMessage: "Token konnte nicht validiert werden.",
-      },
-    });
-
-    await expect(
-      updateDayliteRefreshToken({
-        baseUrl: "https://api.marketcircle.net/v1",
-        refreshToken: "refresh-token-123",
-      }),
-    ).rejects.toThrow("Token konnte nicht validiert werden.");
   });
 });

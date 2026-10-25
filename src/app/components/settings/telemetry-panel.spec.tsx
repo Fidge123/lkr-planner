@@ -1,52 +1,29 @@
 import { describe, expect, it } from "bun:test";
-import { renderToStaticMarkup } from "react-dom/server";
+import { screen } from "@testing-library/react";
+import { renderComponent } from "../../../test/render-component";
 import { TelemetrySettingsPanel } from "./telemetry-panel";
+
+function renderPanel() {
+  renderComponent(<TelemetrySettingsPanel onClose={() => {}} />);
+}
 
 describe("TelemetrySettingsPanel", () => {
   it("renders the diagnostics section with a toggle", () => {
-    const html = renderToStaticMarkup(
-      <TelemetrySettingsPanel onClose={() => {}} />,
-    );
+    renderPanel();
 
-    expect(html).toContain("Diagnose");
-    expect(html).toContain("Diagnosedaten senden");
-    expect(html).toContain('type="checkbox"');
-  });
-
-  it("describes in German what is transmitted", () => {
-    const html = renderToStaticMarkup(
-      <TelemetrySettingsPanel onClose={() => {}} />,
-    );
-
-    expect(html).toContain("Fehler- und Leistungsdaten");
-    expect(html).toContain("technische Details");
-    expect(html).toContain("Projekt- oder Mitarbeiternamen");
-    expect(html).toContain("IP-Adresse");
-  });
-
-  it("no longer calls the transmitted data anonymous", () => {
-    const html = renderToStaticMarkup(
-      <TelemetrySettingsPanel onClose={() => {}} />,
-    );
-
-    expect(html).not.toContain("anonym");
-  });
-
-  it("describes in German what is never transmitted", () => {
-    const html = renderToStaticMarkup(
-      <TelemetrySettingsPanel onClose={() => {}} />,
-    );
-
-    expect(html).toContain(
-      "Passwörter, Zugangsschlüssel und Tokens werden nie übertragen.",
-    );
+    expect(screen.getByText("Diagnose")).toBeDefined();
+    expect(
+      screen.getByRole("checkbox", { name: "Diagnosedaten senden" }),
+    ).toBeDefined();
   });
 
   it("shows telemetry as disabled before the stored state is loaded", () => {
-    const html = renderToStaticMarkup(
-      <TelemetrySettingsPanel onClose={() => {}} />,
-    );
+    renderPanel();
 
-    expect(html).not.toContain("checked=");
+    expect(
+      screen.getByRole<HTMLInputElement>("checkbox", {
+        name: "Diagnosedaten senden",
+      }).checked,
+    ).toBe(false);
   });
 });

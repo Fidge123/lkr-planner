@@ -1,48 +1,38 @@
 import { describe, expect, it } from "bun:test";
-import { unwrapCommandResult } from "./command-result";
+import { appError } from "../test/app-error";
+import { callCommand } from "./command-result";
 
-describe("unwrapCommandResult", () => {
-  it("returns the data on ok results", () => {
-    const value = unwrapCommandResult(
-      { status: "ok", data: "wert" },
-      "fallback",
-    );
-
-    expect(value).toBe("wert");
-  });
-
-  it("throws plain string errors unchanged", () => {
-    expect(() =>
-      unwrapCommandResult(
-        { status: "error", error: "actual error" },
+describe("callCommand", () => {
+  it("resolves the data of an ok result", async () => {
+    expect(
+      await callCommand(
+        Promise.resolve({ status: "ok", data: "wert" }),
         "fallback",
       ),
-    ).toThrow("actual error");
+    ).toBe("wert");
   });
 
-  it("throws the userMessage from api error objects when available", () => {
-    expect(() =>
-      unwrapCommandResult(
-        {
-          status: "error",
-          error: {
-            userMessage: "user error",
-            code: "UNAUTHORIZED",
-            httpStatus: 401,
-            technicalMessage: "tech msg",
-          },
-        },
+  it("throws the user message of an error result", async () => {
+    await expect(
+      callCommand(
+        Promise.resolve({ status: "error", error: appError("actual error") }),
         "fallback",
       ),
-    ).toThrow("user error");
+    ).rejects.toThrow("actual error");
   });
 
-  it("throws the fallback message when the error has no userMessage", () => {
-    expect(() =>
-      unwrapCommandResult(
-        { status: "error", error: { code: "UNAUTHORIZED" } },
+  it("throws the fallback message for an empty user message", async () => {
+    await expect(
+      callCommand(
+        Promise.resolve({ status: "error", error: appError("") }),
         "fallback",
       ),
-    ).toThrow("fallback");
+    ).rejects.toThrow("fallback");
+  });
+
+  it("throws the fallback message when the command rejects", async () => {
+    await expect(
+      callCommand(Promise.reject(new Error("IPC failure")), "fallback"),
+    ).rejects.toThrow("fallback");
   });
 });

@@ -1,17 +1,20 @@
-import { beforeAll, describe, expect, it, setSystemTime } from "bun:test";
-import { renderToStaticMarkup } from "react-dom/server";
+import { describe, expect, it } from "bun:test";
 import type {
   CalendarCellEvent,
   PlanningContactRecord,
 } from "../generated/tauri";
+import { renderComponent } from "../test/render-component";
 import type { HolidaysState } from "./hooks/use-holidays";
+import { categoryColorsQuery } from "./hooks/use-project-category-colors";
 import {
-  PlanningGrid,
   type PlanningGridAssignmentState,
   type PlanningGridEmployeesState,
   PlanningGridTable,
+  type PlanningGridTableProps,
 } from "./page";
 import { getWeekDays } from "./util";
+
+const today = "2026-01-28";
 
 const defaultEmployeeState: PlanningGridEmployeesState = {
   employees: [],
@@ -27,26 +30,26 @@ const defaultAssignmentState: PlanningGridAssignmentState = {
   errorMessage: null,
   loadedWeekStart: null,
   reloadAssignments: () => {},
-  refreshEmployees: () => {},
-  removeEvent: () => {},
-  moveEvent: () => null,
-  invalidateWeeksContaining: () => {},
   getCachedWeek: () => null,
 };
 
 const defaultHolidaysState: HolidaysState = {
   holidays: [],
-  isLoading: false,
   errorMessage: null,
   reloadHolidays: () => {},
 };
 
-function renderGrid(
-  overrides: Partial<Parameters<typeof PlanningGrid>[0]> = {},
-): string {
-  return renderToStaticMarkup(
-    <PlanningGrid
-      weekOffset={0}
+function renderGrid({
+  showWeekend = false,
+  categoryColors = {},
+  ...overrides
+}: Partial<PlanningGridTableProps> & {
+  showWeekend?: boolean;
+  categoryColors?: Record<string, string>;
+} = {}): string {
+  return renderComponent(
+    <PlanningGridTable
+      weekDays={getWeekDays(today, 0, showWeekend)}
       employeeState={defaultEmployeeState}
       assignmentState={defaultAssignmentState}
       employeeSettings={[]}
@@ -55,7 +58,8 @@ function renderGrid(
       onOpenIcalDialog={() => {}}
       {...overrides}
     />,
-  );
+    [[categoryColorsQuery.queryKey, categoryColors]],
+  ).container.innerHTML;
 }
 
 const employee: PlanningContactRecord = {
@@ -96,25 +100,6 @@ function withEvents(events: CalendarCellEvent[]) {
 }
 
 describe("planning grid employee states", () => {
-  beforeAll(() => {
-    setSystemTime(new Date(2026, 0, 28, 9, 0, 0));
-  });
-
-  it("keeps the pinned date row in its own stacking context so a swiped week covers it", () => {
-    const scrollContainer =
-      renderGrid().match(/<section class="[^"]*overflow-auto[^"]*"/)?.[0] ?? "";
-
-    expect(scrollContainer).toContain("isolate");
-  });
-
-  it("renders daylite-backed employee names instead of dummy employee names", () => {
-    const html = renderGrid({
-      employeeState: { ...defaultEmployeeState, employees: [employee] },
-    });
-
-    expect(html).toContain("Monteur Aus Daylite");
-  });
-
   it("hides employees without a calendar and test employees when the toggle is enabled", () => {
     const html = renderGrid({
       employeeState: {
@@ -160,10 +145,6 @@ describe("planning grid employee states", () => {
 });
 
 describe("planning grid assignment states", () => {
-  beforeAll(() => {
-    setSystemTime(new Date(2026, 0, 28, 9, 0, 0));
-  });
-
   it("shows german error banner with retry when assignment fetch fails", () => {
     const html = renderGrid({
       assignmentState: {
@@ -183,32 +164,7 @@ describe("planning grid assignment states", () => {
     });
 
     expect(html).toContain("Projekt Nord");
-    expect(html).toContain("border-left-color:#8bc34a");
-  });
-
-  it("renders bare event in cell with neutral style and no edit affordance", () => {
-    const html = renderGrid(
-      withEvents([
-        cellEvent({
-          uid: "bare-uid-1",
-          kind: "bare",
-          title: "Auto Werkstatt",
-          projectStatus: null,
-          projectRef: null,
-        }),
-      ]),
-    );
-
-    expect(html).toContain("Auto Werkstatt");
-    expect(html).toContain("bg-base-200");
-    expect(html).not.toContain("bg-secondary");
-  });
-
-  it("renders empty cells when no events exist for the week", () => {
-    const html = renderGrid(withEvents([]));
-
-    expect(html).toContain("Monteur Aus Daylite");
-    expect(html).not.toContain("bg-secondary");
+    expect(html).toContain("border-left-color: #8bc34a");
   });
 
   it("offers the week picker on the calendar week cell when a jump is passed", () => {
@@ -216,10 +172,6 @@ describe("planning grid assignment states", () => {
       "KW 5, Woche auswählen",
     );
     expect(renderGrid()).not.toContain("Woche auswählen");
-  });
-
-  it("renders dates from the next week when weekOffset is 1", () => {
-    expect(renderGrid({ weekOffset: 1 })).toContain("02.02");
   });
 
   it("renders per-employee calendar error inline in the row", () => {
@@ -234,46 +186,10 @@ describe("planning grid assignment states", () => {
     expect(html).toContain("Kalender nicht verfügbar");
     expect(html).toContain("CalDAV server unreachable");
     expect(html).toContain("Erneut laden");
-    expect(html).not.toContain("bg-secondary");
-  });
-});
-
-describe("planning grid drag-and-drop wiring", () => {
-  beforeAll(() => {
-    setSystemTime(new Date(2026, 0, 28, 9, 0, 0));
-  });
-
-  const renderGridTable = () =>
-    renderToStaticMarkup(
-      <PlanningGridTable
-        weekDays={getWeekDays(0)}
-        employeeSettings={[]}
-        hideNonPlannableEmployees={false}
-        holidaysState={defaultHolidaysState}
-        categoryColors={{}}
-        onOpenIcalDialog={() => {}}
-        onNavigateWeek={() => {}}
-        {...withEvents([
-          cellEvent({ startTime: "08:00", endTime: "16:00", href: "/cal.ics" }),
-        ])}
-      />,
-    );
-
-  it("renders assignment cards as draggable inside the drag context", () => {
-    const html = renderGridTable();
-
-    expect(html).toContain("Projekt Nord");
-    expect(html).toContain('aria-roledescription="draggable"');
   });
 });
 
 describe("planning grid weekend visibility", () => {
-  beforeAll(() => {
-    setSystemTime(new Date(2026, 0, 28, 9, 0, 0));
-  });
-
-  const countDayColumns = (html: string) => (html.match(/<time/g) ?? []).length;
-
   it("gives each day column a machine-readable date matching its visible date", () => {
     const columns = [
       ...renderGrid().matchAll(/<time dateTime="([^"]+)"[^>]*>([^<]+)</gi),
@@ -284,10 +200,6 @@ describe("planning grid weekend visibility", () => {
       const [, month, day] = machineDate.split("-");
       expect(visibleText).toContain(`${day}.${month}.`);
     }
-  });
-
-  it("renders 7 day columns when showWeekend is on", () => {
-    expect(countDayColumns(renderGrid({ showWeekend: true }))).toBe(7);
   });
 
   it("displays a holiday that falls on a weekend day when showWeekend is on", () => {

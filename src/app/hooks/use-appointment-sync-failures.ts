@@ -1,6 +1,6 @@
 import { listen } from "@tauri-apps/api/event";
 import { useEffect, useState } from "react";
-import { commands } from "../../generated/tauri";
+import { retryAppointmentSync } from "../../services/assignments";
 import { subscribeToTauriEvent } from "../tauri-event";
 
 const appointmentSyncFailuresEvent = "daylite-appointment-sync-failures";
@@ -22,7 +22,7 @@ export function useAppointmentSyncFailures() {
   const retry = async () => {
     setIsRetrying(true);
     try {
-      await commands.retryDayliteAppointmentSync();
+      await retryAppointmentSync();
     } finally {
       setIsRetrying(false);
     }

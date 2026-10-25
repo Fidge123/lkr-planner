@@ -1,9 +1,19 @@
 use super::events::TelemetryEvent;
-use crate::integrations::local_store::types::TelemetrySettings;
+use serde::{Deserialize, Serialize};
+use specta::Type;
 use std::sync::Mutex;
 use tokio::sync::{mpsc, oneshot};
 
 const COMMAND_CHANNEL_CAPACITY: usize = 256;
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct TelemetrySettings {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default)]
+    pub install_id: Option<String>,
+}
 
 #[derive(Debug)]
 pub enum TelemetryCommand {
@@ -125,6 +135,7 @@ fn generate_install_id() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
     use crate::integrations::telemetry::test_support::{enabled, event, INSTALL_ID};
 
     #[test]
