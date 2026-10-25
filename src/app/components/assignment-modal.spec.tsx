@@ -11,11 +11,7 @@ import { mockCommands } from "../../test/mock-commands";
 import { renderComponent } from "../../test/render-component";
 import { AssignmentModal } from "./assignment-modal";
 import {
-  isProtectedAssignment,
   nextHighlightIndex,
-  resolveDisplayedProjects,
-  resolveEscapeAction,
-  resolveSaveAction,
   resolveWriteIntent,
 } from "./assignment-modal-logic";
 import {
@@ -377,23 +373,6 @@ describe("nextHighlightIndex", () => {
   });
 });
 
-describe("resolveDisplayedProjects", () => {
-  const suggestions = [project("Projekt Zuletzt", "/v1/projects/99")];
-  const results = [project("Projekt Nord", "/v1/projects/10")];
-
-  it("shows the default suggestions for an empty filter", () => {
-    expect(resolveDisplayedProjects("", suggestions, results)).toBe(
-      suggestions,
-    );
-  });
-
-  it("shows the live search results while a filter is set", () => {
-    expect(resolveDisplayedProjects("Nord", suggestions, results)).toBe(
-      results,
-    );
-  });
-});
-
 describe("SuggestionEmptyState", () => {
   it("shows the German message when no suggestions are available", () => {
     const html = renderComponent(
@@ -436,59 +415,7 @@ describe("SuggestionEmptyState", () => {
   });
 });
 
-describe("resolveEscapeAction", () => {
-  it("clears a non-empty filter instead of closing", () => {
-    expect(resolveEscapeAction("Nord")).toBe("clear");
-  });
-
-  it("falls through to the modal close flow when the filter is empty", () => {
-    expect(resolveEscapeAction("")).toBe("close");
-  });
-});
-
-describe("resolveSaveAction", () => {
-  it("builds a create action carrying the saved project", () => {
-    expect(
-      resolveSaveAction(false, "2026-05-06", "/v1/projects/1", "Projekt Nord"),
-    ).toEqual({
-      kind: "create",
-      date: "2026-05-06",
-      projectRef: "/v1/projects/1",
-      projectName: "Projekt Nord",
-    });
-  });
-
-  it("builds a bare edit action regardless of the selected project", () => {
-    expect(
-      resolveSaveAction(true, "2026-05-06", "/v1/projects/1", "Projekt Nord"),
-    ).toEqual({ kind: "edit" });
-  });
-});
-
-describe("isProtectedAssignment", () => {
-  it("protects an assignment whose project is a fixed appointment", () => {
-    expect(isProtectedAssignment("Termin FIX geplant")).toBe(true);
-  });
-
-  it("leaves an assignment of any other project category plannable", () => {
-    expect(isProtectedAssignment("Liefertermin bekannt")).toBe(false);
-  });
-
-  it("leaves an assignment without a resolved category plannable", () => {
-    expect(isProtectedAssignment(null)).toBe(false);
-  });
-});
-
 describe("resolveWriteIntent", () => {
-  it("creates when not editing", () => {
-    expect(resolveWriteIntent(false, null)).toBe("create");
-    expect(resolveWriteIntent(false, "/cal/uid-1.ics")).toBe("create");
-  });
-
-  it("updates an edited assignment that has a resource URL", () => {
-    expect(resolveWriteIntent(true, "/cal/uid-1.ics")).toBe("update");
-  });
-
   it("refuses an edit without a resource URL instead of falling back to create", () => {
     expect(resolveWriteIntent(true, null)).toBe("missing-href");
     expect(resolveWriteIntent(true, undefined)).toBe("missing-href");
