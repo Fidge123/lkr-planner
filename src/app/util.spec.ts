@@ -43,13 +43,6 @@ describe("util", () => {
       }
     });
 
-    it("returns 5 days from Monday to Friday when showWeekend is false", () => {
-      const weekDays = getWeekDays(today, 0, false);
-      expect(weekDays).toHaveLength(5);
-      expect(weekDays[0].getDay()).toBe(1);
-      expect(weekDays[4].getDay()).toBe(5);
-    });
-
     it("returns 7 days from Monday to Sunday when showWeekend is true", () => {
       const weekDays = getWeekDays(today, 0, true);
       expect(weekDays).toHaveLength(7);

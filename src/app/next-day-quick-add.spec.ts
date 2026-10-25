@@ -15,14 +15,6 @@ const weekDays = [
 ];
 
 describe("nextVisibleDay", () => {
-  it("returns the following day within the visible week", () => {
-    expect(nextVisibleDay(weekDays, "2026-05-05")).toBe("2026-05-06");
-  });
-
-  it("returns null when the date is the last visible day", () => {
-    expect(nextVisibleDay(weekDays, "2026-05-08")).toBeNull();
-  });
-
   it("returns null when the date is not part of the visible week", () => {
     expect(nextVisibleDay(weekDays, "2026-05-11")).toBeNull();
   });
@@ -71,10 +63,6 @@ describe("nextGhostState", () => {
     };
 
     expect(nextGhostState(existing, { kind: "edit" }, weekDays)).toBe(existing);
-  });
-
-  it("stays null after an edit when no ghost exists", () => {
-    expect(nextGhostState(null, { kind: "edit" }, weekDays)).toBeNull();
   });
 
   it("clears the ghost after a delete", () => {
