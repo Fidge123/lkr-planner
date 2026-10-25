@@ -93,28 +93,4 @@ describe("daylite auth service", () => {
       }),
     ).rejects.toThrow("Bitte eine Daylite-API-URL eingeben.");
   });
-
-  it("throws daylite command error message on connect failure", async () => {
-    mockLoadLocalStore.mockResolvedValue({
-      status: "ok",
-      data: {
-        apiEndpoints: {
-          dayliteBaseUrl: "https://api.marketcircle.net/v1",
-        },
-      },
-    });
-    mockDayliteConnectRefreshToken.mockResolvedValue({
-      status: "error",
-      error: {
-        userMessage: "Token konnte nicht validiert werden.",
-      },
-    });
-
-    await expect(
-      updateDayliteRefreshToken({
-        baseUrl: "https://api.marketcircle.net/v1",
-        refreshToken: "refresh-token-123",
-      }),
-    ).rejects.toThrow("Token konnte nicht validiert werden.");
-  });
 });

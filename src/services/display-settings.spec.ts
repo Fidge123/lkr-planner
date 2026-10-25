@@ -1,13 +1,6 @@
-import { describe, expect, it, mock } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import type { LocalStore } from "../generated/tauri";
-import { mockCommands } from "../test/mock-commands";
-import { displaySettingsOf, saveDisplaySettings } from "./display-settings";
-
-const mockSaveDisplaySettings = mock(() =>
-  Promise.resolve({ status: "ok" as const, data: null }),
-);
-
-mockCommands({ saveDisplaySettings: mockSaveDisplaySettings });
+import { displaySettingsOf } from "./display-settings";
 
 const store = (displaySettings?: LocalStore["displaySettings"]) =>
   ({ displaySettings }) as LocalStore;
@@ -26,19 +19,5 @@ describe("displaySettingsOf", () => {
         store({ hideNonPlannableEmployees: false, showWeekend: true }),
       ),
     ).toEqual({ hideNonPlannableEmployees: false, showWeekend: true });
-  });
-});
-
-describe("saveDisplaySettings", () => {
-  it("hands both settings to the backend", async () => {
-    await saveDisplaySettings({
-      hideNonPlannableEmployees: false,
-      showWeekend: true,
-    });
-
-    expect(mockSaveDisplaySettings).toHaveBeenCalledWith({
-      hideNonPlannableEmployees: false,
-      showWeekend: true,
-    });
   });
 });

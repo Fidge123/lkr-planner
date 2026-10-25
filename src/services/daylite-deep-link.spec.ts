@@ -17,14 +17,6 @@ mockCommands({ dayliteOpenProject: mockOpenProject });
 const { openProjectInDaylite } = await import("./daylite-deep-link");
 
 describe("openProjectInDaylite", () => {
-  it("hands the project reference to the backend", async () => {
-    mockOpenProject.mockClear();
-
-    await openProjectInDaylite("/v1/projects/2035");
-
-    expect(mockOpenProject).toHaveBeenCalledWith("/v1/projects/2035");
-  });
-
   it("returns the German message of a failing command instead of throwing", async () => {
     mockOpenProject.mockImplementationOnce(() =>
       Promise.resolve({

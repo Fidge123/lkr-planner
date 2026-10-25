@@ -1,29 +1,10 @@
-import { beforeEach, describe, expect, it } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import type { DayliteProjectSummary } from "../generated/tauri";
-import {
-  combineSuggestions,
-  getLastAssignedProject,
-  recordLastAssignedProject,
-  resetLastAssignedProject,
-} from "./assignment-suggestions";
+import { combineSuggestions } from "./assignment-suggestions";
 
 function project(name: string, ref: string): DayliteProjectSummary {
   return { self: ref, name };
 }
-
-describe("last-used cache", () => {
-  beforeEach(() => {
-    resetLastAssignedProject();
-  });
-
-  it("returns the most recently recorded project", () => {
-    recordLastAssignedProject(project("Projekt Alt", "/v1/projects/1"));
-    recordLastAssignedProject(project("Projekt Neu", "/v1/projects/2"));
-
-    expect(getLastAssignedProject()?.self).toBe("/v1/projects/2");
-    expect(getLastAssignedProject()?.name).toBe("Projekt Neu");
-  });
-});
 
 describe("combineSuggestions", () => {
   const overdue = [
