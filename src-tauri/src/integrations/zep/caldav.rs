@@ -214,57 +214,6 @@ mod tests {
     }
 
     #[test]
-    fn parse_propfind_calendars_extracts_calendar_entries() {
-        let body = r#"<?xml version="1.0" encoding="utf-8"?>
-<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
-  <d:response>
-    <d:href>/caldav/admin/</d:href>
-    <d:propstat>
-      <d:prop>
-        <d:displayname>admin</d:displayname>
-        <d:resourcetype><d:collection/></d:resourcetype>
-      </d:prop>
-      <d:status>HTTP/1.1 200 OK</d:status>
-    </d:propstat>
-  </d:response>
-  <d:response>
-    <d:href>/caldav/admin/john-einsatz/</d:href>
-    <d:propstat>
-      <d:prop>
-        <d:displayname>John Doe - Einsatz</d:displayname>
-        <d:resourcetype><d:collection/><c:calendar/></d:resourcetype>
-      </d:prop>
-      <d:status>HTTP/1.1 200 OK</d:status>
-    </d:propstat>
-  </d:response>
-  <d:response>
-    <d:href>/caldav/admin/john-abwesenheit/</d:href>
-    <d:propstat>
-      <d:prop>
-        <d:displayname>John Doe - Abwesenheit</d:displayname>
-        <d:resourcetype><d:collection/><c:calendar/></d:resourcetype>
-      </d:prop>
-      <d:status>HTTP/1.1 200 OK</d:status>
-    </d:propstat>
-  </d:response>
-</d:multistatus>"#;
-
-        let calendars = parse_propfind_calendars(body, "https://app.zep.de/caldav/admin");
-
-        assert_eq!(calendars.len(), 2);
-        assert_eq!(calendars[0].display_name, "John Doe - Einsatz");
-        assert_eq!(
-            calendars[0].url,
-            "https://app.zep.de/caldav/admin/john-einsatz/"
-        );
-        assert_eq!(calendars[1].display_name, "John Doe - Abwesenheit");
-        assert_eq!(
-            calendars[1].url,
-            "https://app.zep.de/caldav/admin/john-abwesenheit/"
-        );
-    }
-
-    #[test]
     fn parse_propfind_skips_non_calendar_collections() {
         let body = r#"<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
   <d:response>

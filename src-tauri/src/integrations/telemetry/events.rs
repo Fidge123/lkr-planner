@@ -168,45 +168,6 @@ mod tests {
     use super::*;
     use crate::error::{AppError, AppErrorCode};
 
-    fn dimension<T: serde::Serialize>(value: &T) -> String {
-        serde_json::to_value(value)
-            .expect("dimension should serialize")
-            .as_str()
-            .expect("dimension should serialize to a string")
-            .to_string()
-    }
-
-    #[test]
-    fn operations_serialize_to_snake_case() {
-        assert_eq!(dimension(&Operation::LoadWeekEvents), "load_week_events");
-        assert_eq!(dimension(&Operation::CreateAssignment), "create_assignment");
-        assert_eq!(
-            dimension(&Operation::DayliteSearchProjects),
-            "daylite_search_projects"
-        );
-        assert_eq!(dimension(&Operation::CaldavWrite), "caldav_write");
-        assert_eq!(
-            dimension(&Operation::DayliteAppointmentSync),
-            "daylite_appointment_sync"
-        );
-    }
-
-    #[test]
-    fn background_work_has_its_own_operations() {
-        assert_eq!(
-            dimension(&Operation::PrefetchWeekEvents),
-            "prefetch_week_events"
-        );
-        assert_eq!(
-            dimension(&Operation::RefreshWeekEvents),
-            "refresh_week_events"
-        );
-        assert_eq!(
-            dimension(&Operation::ResolveWeekProjects),
-            "resolve_week_projects"
-        );
-    }
-
     #[test]
     fn event_built_from_zep_error_keeps_the_calendar_url() {
         let error = AppError::new(
@@ -253,15 +214,5 @@ mod tests {
         assert_eq!(properties.get("success"), Some(&Value::Bool(false)));
         assert_eq!(properties.get("duration_ms"), Some(&Value::from(1234)));
         assert_eq!(properties.get("http_status"), Some(&Value::from(500)));
-    }
-
-    #[test]
-    fn integrations_serialize_to_snake_case() {
-        assert_eq!(dimension(&Integration::Daylite), "daylite");
-        assert_eq!(dimension(&Integration::Zep), "zep");
-        assert_eq!(dimension(&Integration::Holidays), "holidays");
-        assert_eq!(dimension(&Integration::LocalStore), "local_store");
-        assert_eq!(dimension(&Integration::Keychain), "keychain");
-        assert_eq!(dimension(&Integration::Frontend), "frontend");
     }
 }

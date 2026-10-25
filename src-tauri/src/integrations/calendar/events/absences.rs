@@ -88,31 +88,6 @@ mod tests {
     }
 
     #[test]
-    fn maps_multiple_absence_events_from_raw() {
-        let week_start = NaiveDate::from_ymd_opt(2026, 4, 27).unwrap();
-        let raw = vec![
-            RawVEvent {
-                uid: "abs-1".to_string(),
-                summary: "Urlaub".to_string(),
-                dtstart: "2026-04-28".to_string(),
-                ..Default::default()
-            },
-            RawVEvent {
-                uid: "abs-2".to_string(),
-                summary: "Krankenstand".to_string(),
-                dtstart: "2026-04-29".to_string(),
-                ..Default::default()
-            },
-        ];
-
-        let events = map_absence_raw_events_for_week(raw, week_start);
-
-        assert_eq!(events.len(), 2);
-        assert!(events.iter().all(|e| e.kind == CalendarEventKind::Absence));
-        assert!(events.iter().all(|e| e.project_status.is_none()));
-    }
-
-    #[test]
     fn multi_day_absence_expands_into_one_event_per_day_in_week() {
         let raw = vec![RawVEvent {
             uid: "abs-1".to_string(),

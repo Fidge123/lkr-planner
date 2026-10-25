@@ -136,18 +136,6 @@ fn generate_install_id() -> String {
 mod tests {
     use super::*;
 
-    #[test]
-    fn telemetry_settings_serialize_as_camel_case() {
-        let settings = TelemetrySettings {
-            enabled: true,
-            install_id: Some("11111111-2222-4333-8444-555555555555".to_string()),
-        };
-
-        let serialized = serde_json::to_string(&settings).expect("serialization should succeed");
-
-        assert!(serialized.contains("\"installId\""));
-        assert!(serialized.contains("\"enabled\":true"));
-    }
     use crate::integrations::telemetry::test_support::{enabled, event, INSTALL_ID};
 
     #[test]

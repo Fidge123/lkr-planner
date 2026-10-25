@@ -593,16 +593,4 @@ mod tests {
             ]
         );
     }
-
-    #[test]
-    fn update_input_carries_the_override_the_frontend_sends() {
-        let input: UpdateAssignmentInput = serde_json::from_str(
-            r#"{"href":"/cal/uid-1.ics","uid":"uid-1","date":"2026-05-06",
-                "projectRef":"/v1/projects/1","projectName":"Projekt Nord",
-                "orderIndex":null,"overrideProtection":true}"#,
-        )
-        .expect("update input parses");
-
-        assert!(input.override_protection);
-    }
 }

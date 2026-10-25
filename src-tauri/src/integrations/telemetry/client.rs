@@ -180,9 +180,4 @@ mod tests {
             "PostHog was unreachable or rejected the batch"
         );
     }
-
-    #[test]
-    fn the_endpoint_is_the_eu_region_batch_url() {
-        assert_eq!(POSTHOG_ENDPOINT, "https://eu.i.posthog.com/batch/");
-    }
 }

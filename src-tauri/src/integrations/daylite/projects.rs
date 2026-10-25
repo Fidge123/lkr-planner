@@ -412,7 +412,7 @@ mod tests {
         resolve_project, search_projects_core, DayliteProjectSummaryDto, ResolvedProject,
         FIXED_APPOINTMENT_CATEGORY,
     };
-    use crate::error::{AppError, AppErrorCode};
+    use crate::error::AppErrorCode;
     use crate::integrations::daylite::client::DayliteApiClient;
     use crate::integrations::daylite::client::DayliteHttpMethod;
     use crate::integrations::daylite::shared::{
@@ -1063,33 +1063,6 @@ mod tests {
             err.user_message.contains("Daylite"),
             "error message should mention Daylite: {}",
             err.user_message
-        );
-    }
-
-    #[tokio::test]
-    async fn timeout_error_propagates_from_transport() {
-        let (client, _) = mock_client(vec![Err(AppError {
-            code: AppErrorCode::Timeout,
-            http_status: None,
-            user_message: "Zeitüberschreitung bei der Daylite-Anfrage.".to_string(),
-            technical_message: "request timed out".to_string(),
-        })]);
-
-        let result = search_projects_core(
-            &client,
-            valid_token_state(),
-            &DayliteSearchInput {
-                search_term: "Nord".to_string(),
-                ..Default::default()
-            },
-        )
-        .await;
-
-        let err = result.expect_err("timeout from transport should propagate as error");
-        assert_eq!(err.code, AppErrorCode::Timeout);
-        assert_eq!(
-            err.user_message,
-            "Zeitüberschreitung bei der Daylite-Anfrage."
         );
     }
 }

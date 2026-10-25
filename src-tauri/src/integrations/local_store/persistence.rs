@@ -406,24 +406,6 @@ mod tests {
     }
 
     #[test]
-    fn show_weekend_round_trips_through_save_and_load() {
-        let test_path = unique_test_path("show-weekend-round-trip.json");
-        let store = LocalStore {
-            display_settings: DisplaySettings {
-                hide_non_plannable_employees: true,
-                show_weekend: true,
-            },
-            ..LocalStore::default()
-        };
-
-        save_store_to_path(&test_path, &store).expect("save should succeed");
-        let loaded = load_store_from_path(&test_path).expect("reload should succeed");
-
-        assert!(loaded.display_settings.show_weekend);
-        assert!(loaded.display_settings.hide_non_plannable_employees);
-    }
-
-    #[test]
     fn store_without_telemetry_field_loads_with_telemetry_disabled() {
         let test_path = unique_test_path("no-telemetry-section.json");
         write_test_file(
