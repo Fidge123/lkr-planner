@@ -22,7 +22,7 @@
     "@tailwindcss/vite": "^4.3.3",
     "@tauri-apps/api": "^2.12.4",
     "daisyui": "^5.7.50",
-    "lucide-react": "^1.61.0",
+    "lucide-react": "^1.65.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "tailwindcss": "^4.3.3"
