@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, jest } from "bun:test";
 import { onlineManager, QueryObserver } from "@tanstack/react-query";
-import type { CalendarCellEvent, EmployeeWeekEvents } from "../generated/tauri";
+import type {
+  CalendarCellEvent,
+  EmployeeWeekEvents,
+  WeekLoadPurpose,
+} from "../generated/tauri";
 import { createQueryClient } from "./query-client";
 import { createWeekCache, lastLoadedAt } from "./week-cache";
 import type { WeekData } from "./week-data";
@@ -68,13 +72,15 @@ afterEach(() => {
 function setup() {
   const client = createQueryClient();
   const requests: string[] = [];
+  const purposes: WeekLoadPurpose[] = [];
   const forcedResolutions: boolean[] = [];
   let respond: (weekStart: string) => Rows | Promise<Rows> = () => [
     row("emp-1", assignment("uid-1")),
   ];
   const cache = createWeekCache(client, {
-    loadWeekEvents: async (weekStart) => {
+    loadWeekEvents: async (weekStart, _employeeRefs, purpose) => {
       requests.push(weekStart);
+      purposes.push(purpose);
       return respond(weekStart);
     },
     resolveWeekProjects: async (_refs, forceRefresh) => {
@@ -88,6 +94,7 @@ function setup() {
     client,
     cache,
     requests,
+    purposes,
     forcedResolutions,
     respond: (next: typeof respond) => {
       respond = next;
@@ -253,6 +260,22 @@ describe("retry of a failed automatic refresh", () => {
     cache.removeEvent("uid-1");
 
     expect(state().error?.message).toBe("Kalender nicht erreichbar.");
+  });
+
+  it("retries as a refresh although the grid re-applies its options", async () => {
+    const { cache, client, purposes, respond } = setup();
+    const grid = new QueryObserver(client, cache.weekQuery(shownWeek));
+    cleanups.push(grid.subscribe(() => {}));
+    await settle();
+    respond(unreachable);
+    void cache.refresh(shownWeek);
+    await settle();
+
+    grid.setOptions(cache.weekQuery(shownWeek));
+    jest.advanceTimersByTime(30_000);
+    await settle();
+
+    expect(purposes).toEqual(["display", "refresh", "refresh"]);
   });
 
   it("holds the retry back while offline", async () => {

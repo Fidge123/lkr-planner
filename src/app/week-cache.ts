@@ -59,6 +59,8 @@ export function joinProjects(
 /** Week events and project details are cached apart and joined when read. */
 export function createWeekCache(client: QueryClient, backend: WeekBackend) {
   const edits = createEditSequence();
+  // The grid puts its own options back on every render, so a refresh and its retry are marked here instead.
+  const refreshing = new Set<string>();
 
   // A refresh that an optimistic edit overtook keeps the edited week; the edit's row refresh follows.
   const fetchWeek = async (weekStart: string, purpose: WeekLoadPurpose) => {
@@ -74,7 +76,8 @@ export function createWeekCache(client: QueryClient, backend: WeekBackend) {
   const weekQuery = (weekStart: string) =>
     queryOptions({
       queryKey: weekKey(weekStart),
-      queryFn: () => fetchWeek(weekStart, "display"),
+      queryFn: () =>
+        fetchWeek(weekStart, refreshing.has(weekStart) ? "refresh" : "display"),
     });
 
   const projectsQuery = (refs: string[]) =>
@@ -165,15 +168,16 @@ export function createWeekCache(client: QueryClient, backend: WeekBackend) {
         queryKey: ["week"],
         predicate: (query) => query.queryKey[1] !== weekStart,
       });
+      refreshing.add(weekStart);
       await client
         .fetchQuery({
           ...weekQuery(weekStart),
-          queryFn: () => fetchWeek(weekStart, "refresh"),
           staleTime: 0,
           retry: 1,
           retryDelay: refreshRetryDelayMs,
         })
-        .catch(() => {});
+        .catch(() => {})
+        .finally(() => refreshing.delete(weekStart));
     },
 
     /** A failed row refresh must not leave optimistic state on screen. */
