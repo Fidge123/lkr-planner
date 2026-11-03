@@ -1,29 +1,63 @@
-import { describe, expect, it } from "bun:test";
-import { screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { commandFailed, commandOk } from "../../../test/app-error";
+import { mockCommands } from "../../../test/mock-commands";
 import { renderComponent } from "../../../test/render-component";
+import { telemetrySettingsQuery } from "../../hooks/use-telemetry-settings";
 import { TelemetrySettingsPanel } from "./telemetry-panel";
 
-function renderPanel() {
-  renderComponent(<TelemetrySettingsPanel onClose={() => {}} />);
-}
+let storedEnabled = false;
+
+const mockSetEnabled = mock((enabled: boolean) => {
+  storedEnabled = enabled;
+  return commandOk({ enabled });
+});
+
+mockCommands({
+  telemetryGetSettings: () => Promise.resolve({ enabled: storedEnabled }),
+  telemetrySetEnabled: mockSetEnabled,
+});
+
+const toggle = () =>
+  screen.getByRole<HTMLInputElement>("checkbox", {
+    name: "Diagnosedaten senden",
+  });
 
 describe("TelemetrySettingsPanel", () => {
+  beforeEach(() => {
+    storedEnabled = false;
+  });
+
   it("renders the diagnostics section with a toggle", () => {
-    renderPanel();
+    renderComponent(<TelemetrySettingsPanel onClose={() => {}} />);
 
     expect(screen.getByText("Diagnose")).toBeDefined();
-    expect(
-      screen.getByRole("checkbox", { name: "Diagnosedaten senden" }),
-    ).toBeDefined();
+    expect(toggle()).toBeDefined();
   });
 
   it("shows telemetry as disabled before the stored state is loaded", () => {
-    renderPanel();
+    storedEnabled = true;
+
+    renderComponent(<TelemetrySettingsPanel onClose={() => {}} />);
+
+    expect(toggle().checked).toBe(false);
+  });
+
+  it("shows the stored setting again with a German message when saving fails", async () => {
+    mockSetEnabled.mockImplementationOnce(() =>
+      commandFailed("Die Einstellung konnte nicht gespeichert werden."),
+    );
+    renderComponent(<TelemetrySettingsPanel onClose={() => {}} />, [
+      [telemetrySettingsQuery.queryKey, false],
+    ]);
+
+    fireEvent.click(toggle());
 
     expect(
-      screen.getByRole<HTMLInputElement>("checkbox", {
-        name: "Diagnosedaten senden",
-      }).checked,
-    ).toBe(false);
+      await screen.findByText(
+        "Die Einstellung konnte nicht gespeichert werden.",
+      ),
+    ).toBeDefined();
+    await waitFor(() => expect(toggle().checked).toBe(false));
   });
 });
