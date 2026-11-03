@@ -12,7 +12,7 @@ Interactions such as unlocking a fixed appointment stayed untested.
 ### Evaluated Options
 - happy-dom with Testing Library in `bun test`
   - Pros: Specs click and type in the existing runner without a browser, and the suite stays fast.
-  - Cons: Two dev dependencies, and happy-dom computes no layout.
+  - Cons: Three dev dependencies, and happy-dom computes no layout.
 - Playwright tests against the built frontend
   - Pros: A real browser engine.
   - Cons: A second runner, slower feedback, and the Tauri backend would need its own mock layer.
@@ -31,4 +31,4 @@ Interactions such as unlocking a fixed appointment stayed untested.
 
 - Specs assert on markup or query by role and text, and inline styles serialize as the DOM writes them.
 - Behavior that depends on layout, such as drag measurement and the swipe gesture, stays covered by logic and hook specs.
-- `mockCommands` stays process-wide, so each spec mocks the commands it needs.
+- `mockCommands` replaces the commands until its spec file ends, so each spec mocks the commands it needs.

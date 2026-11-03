@@ -14,7 +14,7 @@ Each pattern guarded against superseded responses in its own way, and each new f
   - Cons: A new dependency of about 13 kB gzipped, and its own concepts to learn.
 - SWR
   - Pros: Smaller and simpler.
-  - Cons: No mutation lifecycle for optimistic updates with rollback, which the week grid needs.
+  - Cons: No way to read a key's invalidation or observers, or to retry a single fetch, which the week cache relies on.
 - Keep the hand-written caches
   - Pros: No dependency.
   - Cons: Every pattern keeps its own race handling and tests, and freshness features stay expensive.
@@ -23,10 +23,10 @@ Each pattern guarded against superseded responses in its own way, and each new f
 
 - Components read backend data through query hooks in `src/app/hooks` that call the services in `src/services`.
 - One `QueryClient` holds all frontend caches: data stays fresh until a write or "Daten neu laden" invalidates it, without retries or refetch on focus unless a query opts in.
-- The Rust backend remains the only persistent cache; the frontend keeps no cache of its own outside the query client.
+- The Rust backend remains the only persistent cache; outside the query client the frontend keeps only the project last assigned in this session.
 
 ## Consequences
 
 - The TTL cache, the generic resource hook and the hand-written loading hooks are removed as their data moves to queries.
 - Components that only render receive data as props, so their tests need no query client.
-- The week cache keeps the loading, edit and refresh rules of ADRs 0015, 0016 and 0018; the retry of a failed automatic refresh now also waits while the window is hidden.
+- The week cache keeps the loading, edit and refresh rules of ADRs 0015, 0016 and 0018; the retry of a failed automatic refresh now also waits while the window is hidden, and one that falls due while offline runs once the network is back instead of being skipped.

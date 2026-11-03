@@ -35,7 +35,7 @@ Current implementation covers storing employee primary and absence calendar URLs
 
 ### Local Quality Workflow
 
-CI runs these checks, so run them before pushing:
+CI runs the same checks, with Biome and rustfmt only checking instead of fixing, so run these before pushing:
 
 ```bash
 # Frontend and script tests, once and in six timezones

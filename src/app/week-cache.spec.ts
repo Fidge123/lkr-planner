@@ -255,7 +255,7 @@ describe("retry of a failed automatic refresh", () => {
     expect(state().error?.message).toBe("Kalender nicht erreichbar.");
   });
 
-  it("skips the retry while offline", async () => {
+  it("holds the retry back while offline", async () => {
     const { requests, state } = await failedRefresh();
 
     onlineManager.setOnline(false);

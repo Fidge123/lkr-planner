@@ -22,7 +22,7 @@ This is a desktop application which provides a planning view and integrates with
 - Naming:
   - **Files**: kebab-case
   - **Components**: PascalCase function components
-  - **Constants**: camelCase, which Biome enforces for module-level constants
+  - **Constants**: camelCase, and Biome rejects CONSTANT_CASE for module-level constants
 
 ### Documentation
 
@@ -43,7 +43,7 @@ Avoid `---` between headers and avoid em dashes.
 - Commands that can fail return `Result<T, AppError>` and wrap their body in `observe`, which `architecture.rs` checks; local store commands record only their failures
 - Read the local store with `load_local_store` and change it only through `update_local_store`
 - Send HTTP requests through `crate::http::shared_client`, and Clippy rejects building another client
-- A process-wide singleton is a `static OnceLock` in the module that owns it; Tauri managed state is only for state that needs the app handle at startup, like telemetry
+- A process-wide singleton is a `static` in the module that owns it, a `OnceLock` when it is built on first use; Tauri managed state is only for state that needs the app handle at startup, like telemetry
 - Areas form layers, `error` → `http`/`secret_manager` → `telemetry` → `local_store` → `daylite`/`holidays`/`zep` → `calendar`, an area uses only lower layers, and no two modules use each other in a cycle, which `architecture.rs` checks
 
 ### Frontend (`src`)
