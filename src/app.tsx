@@ -75,12 +75,8 @@ function App() {
   const handleJumpToWeek = (day: Date) =>
     setWeekOffset(weekOffsetFor(today, day, showWeekend));
 
-  const reloadData = () => {
-    void queryClient.invalidateQueries();
-    planningAssignmentsState.reloadAssignments();
-  };
-
-  useReloadDataMenu(reloadData);
+  // The invalidation already reloads the shown week, so resetting it as well would load it twice.
+  useReloadDataMenu(() => void queryClient.invalidateQueries());
 
   const handleSettingsSaved = () => {
     void queryClient.invalidateQueries({ queryKey: localStoreQuery.queryKey });
