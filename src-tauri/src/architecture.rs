@@ -6,7 +6,8 @@ use std::path::{Path, PathBuf};
 use syn::visit::{self, Visit};
 
 const LAYERS: &[&[&str]] = &[
-    &["error", "http", "secret_manager"],
+    &["error"],
+    &["http", "secret_manager"],
     &["telemetry"],
     &["local_store"],
     &["daylite", "holidays", "zep"],

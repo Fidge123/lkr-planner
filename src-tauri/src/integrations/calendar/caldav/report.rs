@@ -146,15 +146,10 @@ mod tests {
     use crate::integrations::telemetry::recorder::TelemetryRecorder;
     use crate::integrations::telemetry::test_support::{enabled_recorder, recorded};
     use std::sync::Arc;
-    use tauri_plugin_http::reqwest;
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "tests need their own client settings"
-    )]
     fn session(telemetry: Option<Arc<TelemetryRecorder>>) -> CaldavSession {
         CaldavSession {
-            client: reqwest::Client::new(),
+            client: crate::http::shared_client().unwrap(),
             username: "user".to_string(),
             password: "pass".to_string(),
             base_url: "https://zep.example".to_string(),

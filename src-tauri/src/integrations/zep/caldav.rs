@@ -15,13 +15,7 @@ pub(super) async fn propfind(
     username: &str,
     password: &str,
 ) -> Result<String, AppError> {
-    let client = crate::http::shared_client().map_err(|e| {
-        AppError::new(
-            AppErrorCode::NetworkError,
-            "HTTP-Client konnte nicht initialisiert werden.",
-            e,
-        )
-    })?;
+    let client = crate::http::shared_client()?;
     let response = client
         .request(
             Method::from_bytes(b"PROPFIND").expect("PROPFIND is a valid HTTP method"),
@@ -81,13 +75,7 @@ pub(super) async fn probe_calendar(
     username: &str,
     password: &str,
 ) -> Result<(), AppError> {
-    let client = crate::http::shared_client().map_err(|e| {
-        AppError::new(
-            AppErrorCode::NetworkError,
-            "HTTP-Client konnte nicht initialisiert werden.",
-            e,
-        )
-    })?;
+    let client = crate::http::shared_client()?;
     let response = client
         .request(
             Method::from_bytes(b"PROPFIND").expect("PROPFIND is a valid HTTP method"),

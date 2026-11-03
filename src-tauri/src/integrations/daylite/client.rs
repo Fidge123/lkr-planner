@@ -190,16 +190,6 @@ pub(super) struct DayliteHttpResponse {
     pub body: String,
 }
 
-fn shared_http_client() -> Result<reqwest::Client, AppError> {
-    crate::http::shared_client().map_err(|technical_message| {
-        AppError::new(
-            AppErrorCode::RequestFailed,
-            "Die Verbindung zu Daylite konnte nicht aufgebaut werden.",
-            technical_message,
-        )
-    })
-}
-
 #[derive(Debug, Clone)]
 struct ReqwestTransport {
     base_url: String,
@@ -213,7 +203,7 @@ impl ReqwestTransport {
     fn new(base_url: &str, timeout: Duration) -> Result<Self, AppError> {
         Ok(Self {
             base_url: normalize_base_url(base_url)?,
-            http_client: shared_http_client()?,
+            http_client: crate::http::shared_client()?,
             timeout,
             #[cfg(test)]
             record_replay: None,

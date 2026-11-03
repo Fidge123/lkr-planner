@@ -12,7 +12,6 @@ const BUILD_TIME_API_KEY: Option<&str> = option_env!("POSTHOG_API_KEY");
 pub struct PostHogClient {
     api_key: Option<String>,
     endpoint: String,
-    http_client: reqwest::Client,
 }
 
 impl PostHogClient {
@@ -20,15 +19,10 @@ impl PostHogClient {
         Self::with_api_key(BUILD_TIME_API_KEY)
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "built once per process for PostHog alone"
-    )]
     pub(crate) fn with_api_key(api_key: Option<&str>) -> Self {
         Self {
             api_key: api_key.map(str::to_string),
             endpoint: POSTHOG_ENDPOINT.to_string(),
-            http_client: reqwest::Client::new(),
         }
     }
 
@@ -65,8 +59,8 @@ impl PostHogClient {
             return Ok(());
         };
 
-        let response = self
-            .http_client
+        let response = crate::http::shared_client()
+            .map_err(|_| DeliveryError)?
             .post(&self.endpoint)
             .header("content-type", "application/json")
             .body(payload.to_string())

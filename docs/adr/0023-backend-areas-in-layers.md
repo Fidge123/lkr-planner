@@ -21,7 +21,7 @@ A cycle ties two areas together so that neither can change or be tested alone, a
 
 ## Decision
 
-- Areas form layers, from the bottom: `error`, `http` and `secret_manager`; `telemetry`; `local_store`; `daylite`, `holidays` and `zep`; `calendar`.
+- Areas form layers, from the bottom: `error`; `http` and `secret_manager`; `telemetry`; `local_store`; `daylite`, `holidays` and `zep`; `calendar`.
 - An area uses only areas of lower layers, so areas on one layer, like Daylite and ZEP, never use each other.
 - Work that combines areas of one layer lives in an area above them, like the employee calendar commands in `calendar`.
 - No two modules use each other in a cycle, except a parent module and its children, since a parent re-exports them.
