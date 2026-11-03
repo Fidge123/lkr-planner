@@ -12,7 +12,12 @@ use crate::integrations::local_store::{
 use crate::integrations::telemetry::events::{Integration, Operation};
 use crate::integrations::telemetry::observe::observe;
 use crate::integrations::zep::types::{IcalSource, ZepCalendarTestResult};
-use crate::integrations::zep::{current_timestamp, run_calendar_test, test_untested_calendar_urls};
+use crate::integrations::zep::{
+    adopt_calendar_tests, current_timestamp, run_calendar_test, test_untested_calendar_urls,
+};
+
+/// Both commands write what they read from Daylite, so the second must not read before the first writes.
+static DAYLITE_CALENDAR_SYNC: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 #[tauri::command]
 #[specta::specta]
@@ -24,15 +29,27 @@ pub async fn daylite_list_contacts(
         Operation::DayliteListContacts,
         Integration::Daylite,
         async {
-            let contacts = fetch_planning_contacts(&app).await?;
+            let contacts = {
+                let _sync = DAYLITE_CALENDAR_SYNC.lock().await;
+                let contacts = fetch_planning_contacts(&app).await?;
+                update_local_store(&app, |store| {
+                    cache_contacts(store, &contacts);
+                    reconcile_employee_calendars_from_contacts(
+                        &mut store.employee_settings,
+                        &contacts,
+                    );
+                })?;
+                contacts
+            };
 
-            let mut settings = load_local_store(app.clone())?.employee_settings;
-            reconcile_employee_calendars_from_contacts(&mut settings, &contacts);
-            test_untested_calendar_urls(&mut settings).await;
-            update_local_store(&app, |store| {
-                cache_contacts(store, &contacts);
-                store.employee_settings = settings;
-            })?;
+            let untested = load_local_store(app.clone())?.employee_settings;
+            let mut tested = untested.clone();
+            test_untested_calendar_urls(&mut tested).await;
+            if tested != untested {
+                update_local_store(&app, |store| {
+                    adopt_calendar_tests(&mut store.employee_settings, &tested)
+                })?;
+            }
 
             Ok(contacts)
         },
@@ -59,18 +76,21 @@ pub async fn zep_save_and_test_calendar(
                 .filter(|s| !s.is_empty())
                 .map(ToString::to_string);
 
-            let mut synced = load_local_store(app.clone())?;
-            sync_calendar_to_daylite(
-                &mut synced,
-                &daylite_contact_reference,
-                &source,
-                &calendar_url,
-            )
-            .await?;
-            update_local_store(&app, |store| {
-                store.daylite_cache = synced.daylite_cache;
-                store_calendar_url(store, &daylite_contact_reference, &source, &calendar_url);
-            })?;
+            {
+                let _sync = DAYLITE_CALENDAR_SYNC.lock().await;
+                let mut synced = load_local_store(app.clone())?;
+                sync_calendar_to_daylite(
+                    &mut synced,
+                    &daylite_contact_reference,
+                    &source,
+                    &calendar_url,
+                )
+                .await?;
+                update_local_store(&app, |store| {
+                    store.daylite_cache = synced.daylite_cache;
+                    store_calendar_url(store, &daylite_contact_reference, &source, &calendar_url);
+                })?;
+            }
 
             // Clearing a calendar reports success without a connection test.
             let Some(ref cal_url) = calendar_url else {

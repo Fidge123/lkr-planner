@@ -58,6 +58,30 @@ pub(crate) async fn test_untested_calendar_urls(settings: &mut [EmployeeSetting]
     }
 }
 
+/// Takes results from a copy tested while the store could change, only for calendars still configured and untested.
+pub(crate) fn adopt_calendar_tests(settings: &mut [EmployeeSetting], tested: &[EmployeeSetting]) {
+    for setting in settings.iter_mut() {
+        let Some(test) = tested
+            .iter()
+            .find(|t| t.daylite_contact_reference == setting.daylite_contact_reference)
+        else {
+            continue;
+        };
+        if setting.primary_ical_last_tested_at.is_none()
+            && setting.zep_primary_calendar == test.zep_primary_calendar
+        {
+            setting.primary_ical_last_tested_at = test.primary_ical_last_tested_at.clone();
+            setting.primary_ical_last_test_passed = test.primary_ical_last_test_passed;
+        }
+        if setting.absence_ical_last_tested_at.is_none()
+            && setting.zep_absence_calendar == test.zep_absence_calendar
+        {
+            setting.absence_ical_last_tested_at = test.absence_ical_last_tested_at.clone();
+            setting.absence_ical_last_test_passed = test.absence_ical_last_test_passed;
+        }
+    }
+}
+
 pub(crate) async fn run_calendar_test(
     calendar_url: &str,
 ) -> Result<ZepCalendarTestResult, AppError> {
@@ -119,6 +143,43 @@ mod tests {
 
         assert_eq!(settings[0].primary_ical_last_tested_at, None);
         assert_eq!(settings[0].primary_ical_last_test_passed, None);
+    }
+
+    fn primary(url: &str, tested_at: Option<&str>) -> EmployeeSetting {
+        EmployeeSetting {
+            daylite_contact_reference: "/v1/contacts/4".to_string(),
+            zep_primary_calendar: Some(url.to_string()),
+            primary_ical_last_tested_at: tested_at.map(ToString::to_string),
+            primary_ical_last_test_passed: tested_at.map(|_| true),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn adopts_the_test_of_a_calendar_that_is_still_configured() {
+        let mut settings = vec![primary("https://zep/a/", None)];
+
+        adopt_calendar_tests(&mut settings, &[primary("https://zep/a/", Some("t1"))]);
+
+        assert_eq!(settings, vec![primary("https://zep/a/", Some("t1"))]);
+    }
+
+    #[test]
+    fn leaves_a_calendar_saved_during_the_test_untested() {
+        let mut settings = vec![primary("https://zep/b/", None)];
+
+        adopt_calendar_tests(&mut settings, &[primary("https://zep/a/", Some("t1"))]);
+
+        assert_eq!(settings, vec![primary("https://zep/b/", None)]);
+    }
+
+    #[test]
+    fn keeps_a_result_stored_during_the_test() {
+        let mut settings = vec![primary("https://zep/a/", Some("t2"))];
+
+        adopt_calendar_tests(&mut settings, &[primary("https://zep/a/", Some("t1"))]);
+
+        assert_eq!(settings, vec![primary("https://zep/a/", Some("t2"))]);
     }
 
     #[tokio::test]
