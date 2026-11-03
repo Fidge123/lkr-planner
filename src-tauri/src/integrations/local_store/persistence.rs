@@ -17,6 +17,7 @@ static STORE: StoreCell = StoreCell::new();
 #[specta::specta]
 pub fn load_local_store(app: tauri::AppHandle) -> Result<LocalStore, AppError> {
     store_path(&app)
+        .map_err(read_failed)
         .and_then(|path| STORE.read(&path))
         .inspect_err(|error| {
             record_failure(
@@ -65,6 +66,7 @@ pub(crate) fn update_local_store<R>(
     change: impl FnOnce(&mut LocalStore) -> R,
 ) -> Result<R, AppError> {
     store_path(app)
+        .map_err(write_failed)
         .and_then(|path| STORE.update(&path, change))
         .inspect_err(|error| {
             record_failure(
@@ -116,17 +118,27 @@ impl StoreCell {
     }
 }
 
-fn store_path(app: &tauri::AppHandle) -> Result<PathBuf, AppError> {
+fn store_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     app.path()
         .app_config_dir()
         .map(|path| path.join(STORE_FILE_NAME))
-        .map_err(|error| {
-            AppError::new(
-                AppErrorCode::ReadFailed,
-                "Die lokale Konfiguration konnte nicht geladen werden.",
-                format!("Pfad konnte nicht aufgelöst werden: {error}"),
-            )
-        })
+        .map_err(|error| format!("Pfad konnte nicht aufgelöst werden: {error}"))
+}
+
+fn read_failed(technical_message: String) -> AppError {
+    AppError::new(
+        AppErrorCode::ReadFailed,
+        "Die lokale Konfiguration konnte nicht geladen werden.",
+        technical_message,
+    )
+}
+
+fn write_failed(technical_message: String) -> AppError {
+    AppError::new(
+        AppErrorCode::WriteFailed,
+        "Die lokale Konfiguration konnte nicht gespeichert werden.",
+        technical_message,
+    )
 }
 
 fn load_store_from_path(path: &Path) -> Result<LocalStore, AppError> {
@@ -135,14 +147,10 @@ fn load_store_from_path(path: &Path) -> Result<LocalStore, AppError> {
     }
 
     let content = fs::read_to_string(path).map_err(|error| {
-        AppError::new(
-            AppErrorCode::ReadFailed,
-            "Die lokale Konfiguration konnte nicht geladen werden.",
-            format!(
-                "Datei konnte nicht gelesen werden ({}): {error}",
-                path.display()
-            ),
-        )
+        read_failed(format!(
+            "Datei konnte nicht gelesen werden ({}): {error}",
+            path.display()
+        ))
     })?;
 
     serde_json::from_str::<LocalStore>(&content).map_err(|error| {
@@ -165,34 +173,21 @@ fn load_store_from_path(path: &Path) -> Result<LocalStore, AppError> {
 fn save_store_to_path(path: &Path, store: &LocalStore) -> Result<(), AppError> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|error| {
-            AppError::new(
-                AppErrorCode::WriteFailed,
-                "Die lokale Konfiguration konnte nicht gespeichert werden.",
-                format!(
-                    "Verzeichnis konnte nicht erstellt werden ({}): {error}",
-                    parent.display()
-                ),
-            )
+            write_failed(format!(
+                "Verzeichnis konnte nicht erstellt werden ({}): {error}",
+                parent.display()
+            ))
         })?;
     }
 
-    let serialized_store = serde_json::to_string_pretty(store).map_err(|error| {
-        AppError::new(
-            AppErrorCode::WriteFailed,
-            "Die lokale Konfiguration konnte nicht gespeichert werden.",
-            format!("Serialisierung fehlgeschlagen: {error}"),
-        )
-    })?;
+    let serialized_store = serde_json::to_string_pretty(store)
+        .map_err(|error| write_failed(format!("Serialisierung fehlgeschlagen: {error}")))?;
 
     fs::write(path, serialized_store).map_err(|error| {
-        AppError::new(
-            AppErrorCode::WriteFailed,
-            "Die lokale Konfiguration konnte nicht gespeichert werden.",
-            format!(
-                "Datei konnte nicht geschrieben werden ({}): {error}",
-                path.display()
-            ),
-        )
+        write_failed(format!(
+            "Datei konnte nicht geschrieben werden ({}): {error}",
+            path.display()
+        ))
     })?;
 
     Ok(())
