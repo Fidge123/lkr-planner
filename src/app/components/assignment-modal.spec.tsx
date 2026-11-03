@@ -113,7 +113,7 @@ describe("AssignmentModal", () => {
     renderModal(plannableAssignment);
 
     expect(screen.getByText("Einsatz bearbeiten")).toBeDefined();
-    expect(screen.getByText("Projekt Alpha").textContent).toBe("Projekt Alpha");
+    expect(screen.getByText("Projekt Alpha")).toBeDefined();
     expect(button("Speichern").disabled).toBe(false);
     expect(button("Löschen").disabled).toBe(false);
     expect(screen.queryByText("Bearbeitung entsperren")).toBeNull();
