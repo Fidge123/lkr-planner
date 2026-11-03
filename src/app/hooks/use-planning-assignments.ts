@@ -71,6 +71,7 @@ export function usePlanningAssignments(
     ...cache.weekQuery(shownWeek ?? ""),
     enabled: shownWeek !== null,
   });
+  // The compiler leaves `refs` and `shown` unmemoized, which would hand every row new events on each render.
   const refs = useMemo(
     () => (week.data ? sortedProjectRefs(week.data) : []),
     [week.data],
@@ -98,21 +99,14 @@ export function usePlanningAssignments(
     [week.data, refs, projects.data, projects.isError],
   );
 
-  const actions = useMemo(
-    () => ({
-      reloadAssignments: () => {
-        if (weekStart !== null) void cache.reload(weekStart);
-      },
-      refreshAssignments: () => {
-        if (shownWeek !== null) void cache.refresh(shownWeek);
-      },
-      getCachedWeek: cache.cachedWeek,
-    }),
-    [cache, weekStart, shownWeek],
-  );
-
   return {
-    ...actions,
+    reloadAssignments: () => {
+      if (weekStart !== null) void cache.reload(weekStart);
+    },
+    refreshAssignments: () => {
+      if (shownWeek !== null) void cache.refresh(shownWeek);
+    },
+    getCachedWeek: cache.cachedWeek,
     eventsByEmployee: shown.eventsByEmployee,
     errorsByEmployee: shown.errorsByEmployee,
     // A failed automatic refresh waits for its retry without the spinner.
