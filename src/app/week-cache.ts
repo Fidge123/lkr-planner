@@ -60,14 +60,15 @@ export function joinProjects(
 export function createWeekCache(client: QueryClient, backend: WeekBackend) {
   const edits = createEditSequence();
 
-  // A fetch that an optimistic edit overtook keeps the edited week; the edit's row refresh follows.
+  // A refresh that an optimistic edit overtook keeps the edited week; the edit's row refresh follows.
   const fetchWeek = async (weekStart: string, purpose: WeekLoadPurpose) => {
     const isUnedited = edits.requestRefresh();
     const fetched = groupResults(
       await backend.loadWeekEvents(weekStart, null, purpose),
     );
     const current = client.getQueryData<WeekData>(weekKey(weekStart));
-    return isUnedited() || !current ? fetched : current;
+    const keepsEdit = purpose === "refresh" && !isUnedited() && current;
+    return keepsEdit ? current : fetched;
   };
 
   const weekQuery = (weekStart: string) =>

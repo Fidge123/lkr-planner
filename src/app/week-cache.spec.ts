@@ -320,6 +320,21 @@ describe("reload of every week", () => {
 
     expect(state(otherWeek).isInvalidated).toBe(true);
   });
+
+  it("stores a prefetched week that an edit in another week overtook", async () => {
+    const { cache, respond, week } = await reloaded();
+    const pending = deferred();
+    respond(() => pending.promise);
+
+    const prefetching = cache.prefetch(otherWeek);
+    cache.removeEvent("uid-1");
+    pending.resolve([row("emp-1", assignment("uid-2", { date: otherWeek }))]);
+    await prefetching;
+
+    expect(
+      week(otherWeek)?.eventsByEmployee["emp-1"].map((e) => e.uid),
+    ).toEqual(["uid-2"]);
+  });
 });
 
 describe("project details", () => {
