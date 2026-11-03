@@ -1,5 +1,5 @@
 //! An area may only use areas of lower layers, no modules may use each other in a cycle,
-//! and every command that can fail reports its duration and failure through `observe`.
+//! and every command that can fail outside the local store is one `observe` call.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -105,7 +105,7 @@ fn fallible_commands_observe_their_body() {
         .flat_map(|file| parse(file).items)
         .filter_map(|item| match item {
             syn::Item::Fn(command)
-                if is_command(&command) && returns_result(&command) && !calls_observe(&command) =>
+                if is_command(&command) && returns_result(&command) && !is_observed(&command) =>
             {
                 Some(command.sig.ident.to_string())
             }
@@ -231,23 +231,14 @@ fn returns_result(function: &syn::ItemFn) -> bool {
             if path.path.segments.last().is_some_and(|s| s.ident == "Result")))
 }
 
-fn calls_observe(function: &syn::ItemFn) -> bool {
-    struct ObserveFinder(bool);
-    impl<'ast> Visit<'ast> for ObserveFinder {
-        fn visit_expr_call(&mut self, call: &'ast syn::ExprCall) {
-            if let syn::Expr::Path(callee) = &*call.func {
-                self.0 |= callee
-                    .path
-                    .segments
-                    .last()
-                    .is_some_and(|s| s.ident == "observe");
-            }
-            visit::visit_expr_call(self, call);
-        }
-    }
-    let mut finder = ObserveFinder(false);
-    finder.visit_block(&function.block);
-    finder.0
+/// Code before the `observe` call would fail without being timed or recorded.
+fn is_observed(function: &syn::ItemFn) -> bool {
+    let [syn::Stmt::Expr(syn::Expr::Await(awaited), None)] = function.block.stmts.as_slice() else {
+        return false;
+    };
+    matches!(&*awaited.base, syn::Expr::Call(call)
+        if matches!(&*call.func, syn::Expr::Path(callee)
+            if callee.path.segments.last().is_some_and(|s| s.ident == "observe")))
 }
 
 /// Resolves `crate::` and `super::` paths outside of test code to absolute module paths.
