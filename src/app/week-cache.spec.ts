@@ -245,6 +245,16 @@ describe("retry of a failed automatic refresh", () => {
     expect(requests).toEqual([shownWeek, shownWeek, otherWeek]);
   });
 
+  it("keeps the error when the week is edited afterwards", async () => {
+    const { cache, state } = await failedRefresh();
+    jest.advanceTimersByTime(30_000);
+    await settle();
+
+    cache.removeEvent("uid-1");
+
+    expect(state().error?.message).toBe("Kalender nicht erreichbar.");
+  });
+
   it("skips the retry while offline", async () => {
     const { requests, state } = await failedRefresh();
 
@@ -288,6 +298,27 @@ describe("row refresh after a write", () => {
     await refreshing;
 
     expect(week()?.eventsByEmployee["emp-1"][0].date).toBe(nextDay);
+  });
+});
+
+describe("reload of every week", () => {
+  async function reloaded() {
+    const setupResult = setup();
+    await setupResult.load(shownWeek);
+    await setupResult.cache.prefetch(otherWeek);
+    await setupResult.client.invalidateQueries({
+      queryKey: ["week"],
+      refetchType: "none",
+    });
+    return setupResult;
+  }
+
+  it("keeps a week due for its reload when an edit follows", async () => {
+    const { cache, state } = await reloaded();
+
+    cache.removeEvent("uid-1");
+
+    expect(state(otherWeek).isInvalidated).toBe(true);
   });
 });
 

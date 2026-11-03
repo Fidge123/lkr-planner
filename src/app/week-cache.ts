@@ -1,4 +1,8 @@
-import { type QueryClient, queryOptions } from "@tanstack/react-query";
+import {
+  type QueryClient,
+  queryOptions,
+  replaceEqualDeep,
+} from "@tanstack/react-query";
 import type { ResolvedProject, WeekLoadPurpose } from "../generated/tauri";
 import type {
   loadWeekEvents,
@@ -90,17 +94,18 @@ export function createWeekCache(client: QueryClient, backend: WeekBackend) {
       .find({ queryKey: weekKey(weekStart) })
       ?.getObserversCount() ?? 0) > 0;
 
+  // setQueryData would count as a load, which restarts the refresh interval and clears an invalidation or error.
   const updateWeek = (
     weekStart: string,
     transform: (week: WeekData) => WeekData,
   ) => {
-    const queryKey = weekKey(weekStart);
-    client.setQueryData<WeekData>(
-      queryKey,
-      (week) => week && transform(week),
-      // An edit or row refresh must not count as a fresh load of the whole week.
-      { updatedAt: client.getQueryState(queryKey)?.dataUpdatedAt },
-    );
+    const query = client
+      .getQueryCache()
+      .find<WeekData>({ queryKey: weekKey(weekStart) });
+    const week = query?.state.data;
+    if (!query || !week) return;
+    const next = replaceEqualDeep(week, transform(week));
+    if (next !== week) query.setState({ data: next });
   };
 
   const cachedWeeks = () =>
