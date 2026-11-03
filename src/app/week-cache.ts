@@ -169,15 +169,21 @@ export function createWeekCache(client: QueryClient, backend: WeekBackend) {
         predicate: (query) => query.queryKey[1] !== weekStart,
       });
       refreshing.add(weekStart);
-      await client
+      const week = await client
         .fetchQuery({
           ...weekQuery(weekStart),
           staleTime: 0,
           retry: 1,
           retryDelay: refreshRetryDelayMs,
         })
-        .catch(() => {})
+        .catch(() => null)
         .finally(() => refreshing.delete(weekStart));
+      if (!week) return;
+      // Unlike an invalidation, a refetch lets the backend's project cache answer for entries still fresh.
+      await client.refetchQueries({
+        queryKey: projectsKey(sortedProjectRefs(week)),
+        exact: true,
+      });
     },
 
     /** A failed row refresh must not leave optimistic state on screen. */

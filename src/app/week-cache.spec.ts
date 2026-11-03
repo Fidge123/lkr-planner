@@ -361,6 +361,18 @@ describe("reload of every week", () => {
 });
 
 describe("project details", () => {
+  it("resolves the shown week's details again after an automatic refresh", async () => {
+    const { cache, client, forcedResolutions, load, respond } = setup();
+    const refs = ["/v1/projects/1"];
+    respond(() => [row("emp-1", assignment("uid-1", { projectRef: refs[0] }))]);
+    await load(shownWeek);
+    await client.fetchQuery(cache.projectsQuery(refs));
+
+    await cache.refresh(shownWeek);
+
+    expect(forcedResolutions).toEqual([false, false]);
+  });
+
   it("reloads invalidated project details from Daylite", async () => {
     const { cache, client, forcedResolutions } = setup();
     const refs = ["/v1/projects/1"];
