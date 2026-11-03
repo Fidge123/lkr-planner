@@ -1,4 +1,5 @@
-//! An area may only use areas of lower layers, and no modules may use each other in a cycle.
+//! An area may only use areas of lower layers, no modules may use each other in a cycle,
+//! and every command that can fail reports its duration and failure through `observe`.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -91,6 +92,26 @@ fn cycle_through(
         }
     }
     None
+}
+
+/// Timing a local store access tells nothing, so its commands record only their failures.
+#[test]
+fn fallible_commands_observe_their_body() {
+    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let unobserved: Vec<String> = rust_files(&src)
+        .iter()
+        .filter(|file| area_of(&module_path(&src, file)) != Some("local_store"))
+        .flat_map(|file| parse(file).items)
+        .filter_map(|item| match item {
+            syn::Item::Fn(command)
+                if is_command(&command) && returns_result(&command) && !calls_observe(&command) =>
+            {
+                Some(command.sig.ident.to_string())
+            }
+            _ => None,
+        })
+        .collect();
+    assert!(unobserved.is_empty(), "{unobserved:#?}");
 }
 
 /// Every module outside test code with the paths it uses, leaving out paths into test modules.
@@ -192,6 +213,40 @@ fn test_module_declarations(module: &[String], file: &Path) -> Vec<Vec<String>> 
             _ => None,
         })
         .collect()
+}
+
+fn is_command(function: &syn::ItemFn) -> bool {
+    function.attrs.iter().any(|attr| {
+        attr.path()
+            .segments
+            .last()
+            .is_some_and(|s| s.ident == "command")
+    })
+}
+
+fn returns_result(function: &syn::ItemFn) -> bool {
+    matches!(&function.sig.output, syn::ReturnType::Type(_, output)
+        if matches!(&**output, syn::Type::Path(path)
+            if path.path.segments.last().is_some_and(|s| s.ident == "Result")))
+}
+
+fn calls_observe(function: &syn::ItemFn) -> bool {
+    struct ObserveFinder(bool);
+    impl<'ast> Visit<'ast> for ObserveFinder {
+        fn visit_expr_call(&mut self, call: &'ast syn::ExprCall) {
+            if let syn::Expr::Path(callee) = &*call.func {
+                self.0 |= callee
+                    .path
+                    .segments
+                    .last()
+                    .is_some_and(|s| s.ident == "observe");
+            }
+            visit::visit_expr_call(self, call);
+        }
+    }
+    let mut finder = ObserveFinder(false);
+    finder.visit_block(&function.block);
+    finder.0
 }
 
 /// Resolves `crate::` and `super::` paths outside of test code to absolute module paths.

@@ -40,7 +40,7 @@ Avoid `---` between headers and avoid em dashes.
 ### Backend (`src-tauri/src`)
 
 - All third-party API logic is implemented in the Rust backend
-- Commands wrap their body in `observe` for telemetry and return `Result<T, AppError>` when they can fail
+- Commands that can fail return `Result<T, AppError>` and wrap their body in `observe`, which `architecture.rs` checks; local store commands record only their failures
 - Read the local store with `load_local_store` and change it only through `update_local_store`
 - Send HTTP requests through `crate::http::shared_client`, and Clippy rejects building another client
 - A process-wide singleton is a `static OnceLock` in the module that owns it; Tauri managed state is only for state that needs the app handle at startup, like telemetry
