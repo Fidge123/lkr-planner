@@ -219,6 +219,5 @@ interface Props {
   draggedUid?: string | null;
   activeHighlight?: string | null;
   onOpenIcalDialog: (employee: PlanningContactRecord) => void;
-  /** A deleted assignment's UID lets the card disappear before the row is refreshed. */
   onToggleHighlight?: (event: CellEvent) => void;
 }

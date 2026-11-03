@@ -31,7 +31,7 @@ impl AppError {
     }
 }
 
-/// For failures that only ever had a German message and no code.
+/// The message reaches the user as is, so it must be German.
 impl From<String> for AppError {
     fn from(message: String) -> Self {
         Self::new(AppErrorCode::CommandFailed, message.clone(), message)

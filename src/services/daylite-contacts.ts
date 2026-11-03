@@ -8,7 +8,6 @@ export function loadDayliteContacts(): Promise<PlanningContactRecord[]> {
   );
 }
 
-/** The contacts of the last successful load, kept by the backend. */
 export function loadCachedDayliteContacts(): Promise<PlanningContactRecord[]> {
   return callCommand(
     commands.dayliteListCachedContacts(),

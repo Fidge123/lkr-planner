@@ -20,7 +20,7 @@ pub(crate) fn sort_week_events(events: &mut [CalendarCellEvent]) {
     }
 }
 
-fn slot_order(event: &CalendarCellEvent) -> (u32, u32, std::cmp::Reverse<u32>, &str) {
+fn slot_order(event: &CalendarCellEvent) -> (u32, u32, Reverse<u32>, &str) {
     ordering_key(
         event.order_index,
         event.start_time.as_deref(),
