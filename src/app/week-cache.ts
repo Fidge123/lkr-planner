@@ -129,7 +129,10 @@ export function createWeekCache(client: QueryClient, backend: WeekBackend) {
         queryKey: projectsKey(sortedProjectRefs(week)),
       });
     }
-    return client.resetQueries({ queryKey: weekKey(weekStart) });
+    return client.invalidateQueries({
+      queryKey: weekKey(weekStart),
+      exact: true,
+    });
   };
 
   /** A drop into another week leaves the source week's cached copy with the event in its old slot. */

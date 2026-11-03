@@ -324,6 +324,19 @@ describe("row refresh after a write", () => {
   });
 });
 
+describe("reload of the shown week", () => {
+  it("keeps the week on screen while it loads again", async () => {
+    const { cache, show, state, week } = setup();
+    show(shownWeek);
+    await settle();
+
+    void cache.reload(shownWeek);
+
+    expect(week()?.eventsByEmployee["emp-1"]).toHaveLength(1);
+    expect(state().fetchStatus).toBe("fetching");
+  });
+});
+
 describe("reload of every week", () => {
   async function reloaded() {
     const setupResult = setup();
