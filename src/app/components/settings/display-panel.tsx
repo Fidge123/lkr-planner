@@ -19,13 +19,11 @@ export function DisplaySettingsPanel({ onClose }: Props) {
         (store) => store && { ...store, displaySettings: next },
       );
       void run(async () => {
-        try {
-          await saveDisplaySettings(next);
-        } finally {
-          await queryClient.invalidateQueries({
+        await saveDisplaySettings(next).finally(() =>
+          queryClient.invalidateQueries({
             queryKey: localStoreQuery.queryKey,
-          });
-        }
+          }),
+        );
         return null;
       }, "Die Anzeige-Einstellung konnte nicht gespeichert werden.");
     };

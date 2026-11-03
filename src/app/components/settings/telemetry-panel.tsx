@@ -17,13 +17,11 @@ export function TelemetrySettingsPanel({ onClose }: Props) {
     const enabled = event.target.checked;
     queryClient.setQueryData(telemetrySettingsQuery.queryKey, enabled);
     void run(async () => {
-      try {
-        await saveTelemetryEnabled(enabled);
-      } finally {
-        await queryClient.invalidateQueries({
+      await saveTelemetryEnabled(enabled).finally(() =>
+        queryClient.invalidateQueries({
           queryKey: telemetrySettingsQuery.queryKey,
-        });
-      }
+        }),
+      );
       return null;
     }, "Die Diagnose-Einstellung konnte nicht gespeichert werden.");
   };
