@@ -74,6 +74,7 @@ function setup() {
   const requests: string[] = [];
   const purposes: WeekLoadPurpose[] = [];
   const forcedResolutions: boolean[] = [];
+  let failResolution = false;
   let respond: (weekStart: string) => Rows | Promise<Rows> = () => [
     row("emp-1", assignment("uid-1")),
   ];
@@ -85,6 +86,7 @@ function setup() {
     },
     resolveWeekProjects: async (_refs, forceRefresh) => {
       forcedResolutions.push(forceRefresh);
+      if (failResolution) throw new Error("Daylite antwortet nicht.");
       return {};
     },
   });
@@ -98,6 +100,9 @@ function setup() {
     forcedResolutions,
     respond: (next: typeof respond) => {
       respond = next;
+    },
+    failResolutions: (fails: boolean) => {
+      failResolution = fails;
     },
     /** Subscribes like the planning grid does, which is what marks a week as shown. */
     show: (weekStart: string) => {
@@ -374,6 +379,35 @@ describe("reload of every week", () => {
 });
 
 describe("project details", () => {
+  it("lets the backend cache answer again after a failed resolution", async () => {
+    const { cache, client, failResolutions, forcedResolutions } = setup();
+    const refs = ["/v1/projects/1"];
+    failResolutions(true);
+    await client.fetchQuery(cache.projectsQuery(refs)).catch(() => {});
+    failResolutions(false);
+
+    await client.fetchQuery(cache.projectsQuery(refs));
+
+    expect(forcedResolutions).toEqual([false, false]);
+  });
+
+  it("forces only the reloaded week's details", async () => {
+    const { cache, client, load, respond } = setup();
+    const refs = ["/v1/projects/1"];
+    const otherRefs = ["/v1/projects/1", "/v1/projects/2"];
+    respond(() => [row("emp-1", assignment("uid-1", { projectRef: refs[0] }))]);
+    await load(shownWeek);
+    await client.fetchQuery(cache.projectsQuery(refs));
+    await client.fetchQuery(cache.projectsQuery(otherRefs));
+
+    void cache.reload(shownWeek);
+
+    expect(client.getQueryState(["projects", refs])?.isInvalidated).toBe(true);
+    expect(client.getQueryState(["projects", otherRefs])?.isInvalidated).toBe(
+      false,
+    );
+  });
+
   it("resolves the shown week's details again after an automatic refresh", async () => {
     const { cache, client, forcedResolutions, load, respond } = setup();
     const refs = ["/v1/projects/1"];

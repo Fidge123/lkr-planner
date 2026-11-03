@@ -84,11 +84,15 @@ export function createWeekCache(client: QueryClient, backend: WeekBackend) {
     queryOptions({
       queryKey: projectsKey(refs),
       // An invalidated entry is reloaded from Daylite instead of the backend's project cache.
-      queryFn: () =>
-        backend.resolveWeekProjects(
-          refs,
-          client.getQueryState(projectsKey(refs))?.isInvalidated ?? false,
-        ),
+      // A failed fetch marks its entry invalidated too, so only one that last succeeded is a reload.
+      queryFn: () => {
+        const state = client.getQueryState(projectsKey(refs));
+        const isReload =
+          state !== undefined &&
+          state.isInvalidated &&
+          state.errorUpdatedAt < state.dataUpdatedAt;
+        return backend.resolveWeekProjects(refs, isReload);
+      },
       enabled: refs.length > 0,
     });
 
@@ -127,6 +131,7 @@ export function createWeekCache(client: QueryClient, backend: WeekBackend) {
     if (week) {
       void client.invalidateQueries({
         queryKey: projectsKey(sortedProjectRefs(week)),
+        exact: true,
       });
     }
     return client.invalidateQueries({
