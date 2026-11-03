@@ -103,7 +103,7 @@ pub async fn zep_save_and_test_calendar(
 
             let result = run_calendar_test(cal_url).await?;
             update_local_store(&app, |store| {
-                store_test_result(store, &daylite_contact_reference, &source, &result)
+                store_test_result(store, &daylite_contact_reference, &source, cal_url, &result)
             })?;
 
             Ok(result)
@@ -180,26 +180,37 @@ fn store_calendar_url(
     );
 }
 
+/// The calendar may have changed while its test ran, and the result belongs only to the tested one.
 fn store_test_result(
     store: &mut LocalStore,
     contact_reference: &str,
     source: &IcalSource,
+    calendar_url: &str,
     result: &ZepCalendarTestResult,
 ) {
-    update_setting(
-        &mut store.employee_settings,
-        contact_reference,
-        |s| match source {
-            IcalSource::Primary => {
-                s.primary_ical_last_tested_at = Some(result.timestamp.clone());
-                s.primary_ical_last_test_passed = Some(result.success);
-            }
-            IcalSource::Absence => {
-                s.absence_ical_last_tested_at = Some(result.timestamp.clone());
-                s.absence_ical_last_test_passed = Some(result.success);
-            }
-        },
-    );
+    let Some(setting) = store
+        .employee_settings
+        .iter_mut()
+        .find(|s| s.daylite_contact_reference == contact_reference)
+    else {
+        return;
+    };
+    let (configured, tested_at, passed) = match source {
+        IcalSource::Primary => (
+            &setting.zep_primary_calendar,
+            &mut setting.primary_ical_last_tested_at,
+            &mut setting.primary_ical_last_test_passed,
+        ),
+        IcalSource::Absence => (
+            &setting.zep_absence_calendar,
+            &mut setting.absence_ical_last_tested_at,
+            &mut setting.absence_ical_last_test_passed,
+        ),
+    };
+    if configured.as_deref() == Some(calendar_url) {
+        *tested_at = Some(result.timestamp.clone());
+        *passed = Some(result.success);
+    }
 }
 
 fn find_or_default_setting(
@@ -239,6 +250,58 @@ fn update_setting(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn store_with_primary(url: &str) -> LocalStore {
+        LocalStore {
+            employee_settings: vec![EmployeeSetting {
+                daylite_contact_reference: "/v1/contacts/42".to_string(),
+                zep_primary_calendar: Some(url.to_string()),
+                ..Default::default()
+            }],
+            ..Default::default()
+        }
+    }
+
+    fn passed_test() -> ZepCalendarTestResult {
+        ZepCalendarTestResult {
+            success: true,
+            timestamp: "2026-11-03T08:00:00.000Z".to_string(),
+            error_message: None,
+        }
+    }
+
+    #[test]
+    fn a_test_result_marks_the_calendar_it_tested() {
+        let mut store = store_with_primary("https://zep/a/");
+
+        store_test_result(
+            &mut store,
+            "/v1/contacts/42",
+            &IcalSource::Primary,
+            "https://zep/a/",
+            &passed_test(),
+        );
+
+        assert_eq!(
+            store.employee_settings[0].primary_ical_last_test_passed,
+            Some(true)
+        );
+    }
+
+    #[test]
+    fn a_test_result_skips_a_calendar_saved_during_the_test() {
+        let mut store = store_with_primary("https://zep/b/");
+
+        store_test_result(
+            &mut store,
+            "/v1/contacts/42",
+            &IcalSource::Primary,
+            "https://zep/a/",
+            &passed_test(),
+        );
+
+        assert_eq!(store.employee_settings[0].primary_ical_last_tested_at, None);
+    }
 
     #[test]
     fn update_setting_creates_new_entry_when_not_found() {
