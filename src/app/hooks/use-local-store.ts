@@ -1,4 +1,5 @@
 import { queryOptions, useQuery } from "@tanstack/react-query";
+import { dayliteBaseUrlOf } from "../../services/daylite-auth";
 import { displaySettingsOf } from "../../services/display-settings";
 import { loadLocalStore } from "../../services/local-store";
 
@@ -14,5 +15,6 @@ export function useLocalStore() {
     errorMessage: error?.message ?? null,
     employeeSettings: data?.employeeSettings ?? [],
     displaySettings: displaySettingsOf(data),
+    dayliteBaseUrl: dayliteBaseUrlOf(data),
   };
 }

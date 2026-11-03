@@ -1,44 +1,33 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { ExternalLink } from "lucide-react";
-import { type ChangeEvent, useEffect, useState } from "react";
+import { type ChangeEvent, useState } from "react";
 import {
   daylitePersonalTokenUrl,
-  defaultDayliteBaseUrl,
-  resolveDayliteBaseUrl,
   updateDayliteRefreshToken,
 } from "../../../services/daylite-auth";
+import { localStoreQuery, useLocalStore } from "../../hooks/use-local-store";
 import { usePanelSubmit } from "../../hooks/use-panel-submit";
 import { StatusAlert } from "./panel-status";
 
 export function DayliteSettingsPanel({ onClose }: Props) {
-  const [dayliteBaseUrlInput, setDayliteBaseUrlInput] = useState(
-    defaultDayliteBaseUrl,
-  );
+  const queryClient = useQueryClient();
+  const { dayliteBaseUrl } = useLocalStore();
+  const [baseUrlInput, setBaseUrlInput] = useState<string | null>(null);
   const [refreshTokenInput, setRefreshTokenInput] = useState("");
-  const { isSaving, status, setStatus, run } = usePanelSubmit();
-
-  useEffect(() => {
-    setStatus(null);
-    setRefreshTokenInput("");
-    let isActive = true;
-    void resolveDayliteBaseUrl().then((resolvedBaseUrl) => {
-      if (!isActive) {
-        return;
-      }
-      setDayliteBaseUrlInput(resolvedBaseUrl);
-    });
-    return () => {
-      isActive = false;
-    };
-  }, [setStatus]);
+  const { isSaving, status, run } = usePanelSubmit();
+  const baseUrl = baseUrlInput ?? dayliteBaseUrl;
 
   const onSubmit = async (event: ChangeEvent<HTMLFormElement>) => {
     event.preventDefault();
     await run(async () => {
       await updateDayliteRefreshToken({
-        baseUrl: dayliteBaseUrlInput,
+        baseUrl,
         refreshToken: refreshTokenInput,
       });
       setRefreshTokenInput("");
+      await queryClient.invalidateQueries({
+        queryKey: localStoreQuery.queryKey,
+      });
       return {
         type: "success",
         message: "Daylite-Konfiguration wurde aktualisiert.",
@@ -58,8 +47,8 @@ export function DayliteSettingsPanel({ onClose }: Props) {
           <input
             type="url"
             className="input input-bordered w-full"
-            value={dayliteBaseUrlInput}
-            onChange={(event) => setDayliteBaseUrlInput(event.target.value)}
+            value={baseUrl}
+            onChange={(event) => setBaseUrlInput(event.target.value)}
             disabled={isSaving}
             placeholder="https://api.marketcircle.net/v1"
           />
