@@ -1,11 +1,11 @@
 use super::auth_flow::refresh_tokens;
 use super::client::DayliteApiClient;
 use super::shared::{
-    current_epoch_ms, load_daylite_tokens, load_store_or_error, missing_token_error,
-    DayliteTokenState,
+    current_epoch_ms, load_daylite_tokens, missing_token_error, DayliteTokenState,
 };
 use super::token_session::{token_session, TokenLease};
 use crate::error::{AppError, AppErrorCode};
+use crate::integrations::local_store::load_local_store;
 
 async fn lease_tokens(client: &DayliteApiClient) -> Result<TokenLease, AppError> {
     let session = token_session();
@@ -87,7 +87,7 @@ pub(super) async fn run_daylite_command<T>(
     app: tauri::AppHandle,
     operation: impl AsyncFn(&DayliteApiClient, DayliteTokenState) -> Result<T, AppError>,
 ) -> Result<T, AppError> {
-    let store = load_store_or_error(app.clone())?;
+    let store = load_local_store(app.clone())?;
     let client = DayliteApiClient::new(&store.api_endpoints.daylite_base_url)?.with_telemetry(&app);
     with_daylite_tokens(&client, |tokens| operation(&client, tokens)).await
 }

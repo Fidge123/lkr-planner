@@ -48,10 +48,11 @@ use super::client::DayliteHttpRequest;
 pub use super::project_cache::ResolvedProject;
 use super::project_cache::{cache_now_ms, persist_project_cache, project_cache};
 use super::shared::{
-    build_limit_query, load_store_or_error, trimmed, trimmed_or_none, DayliteSearchInput,
-    DayliteSearchResult, DayliteSearchSort, DayliteTokenState,
+    build_limit_query, trimmed, trimmed_or_none, DayliteSearchInput, DayliteSearchResult,
+    DayliteSearchSort, DayliteTokenState,
 };
 use crate::error::AppError;
+use crate::integrations::local_store::load_local_store;
 use chrono::{DateTime, NaiveDate, SecondsFormat, Utc};
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
@@ -310,7 +311,7 @@ pub async fn resolve_week_projects(
                     .collect());
             }
 
-            let store = load_store_or_error(app.clone())?;
+            let store = load_local_store(app.clone())?;
             let client =
                 DayliteApiClient::new(&store.api_endpoints.daylite_base_url)?.with_telemetry(&app);
             let resolved = resolve_all(references, PROJECT_RESOLUTION_CONCURRENCY, |reference| {

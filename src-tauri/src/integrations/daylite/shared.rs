@@ -1,4 +1,3 @@
-use super::super::local_store::{self, LocalStore};
 use crate::error::{AppError, AppErrorCode};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -116,17 +115,6 @@ pub(super) fn store_daylite_tokens(token_state: &DayliteTokenState) -> Result<()
     })
 }
 
-pub(super) fn load_store_or_error(app: tauri::AppHandle) -> Result<LocalStore, AppError> {
-    local_store::load_local_store(app).map_err(map_store_error)
-}
-
-pub(super) fn update_store_or_error(
-    app: &tauri::AppHandle,
-    change: impl FnOnce(&mut LocalStore),
-) -> Result<(), AppError> {
-    local_store::update_local_store(app, change).map_err(map_store_error)
-}
-
 pub(super) fn normalize_http_error(status: u16, body: &str, path: &str) -> AppError {
     let (code, user_message) = if status == 401 {
         (
@@ -238,12 +226,4 @@ pub(super) fn truncate_for_log(value: &str) -> String {
     let mut truncated = value.chars().take(limit).collect::<String>();
     truncated.push_str("...");
     truncated
-}
-
-fn map_store_error(error: AppError) -> AppError {
-    AppError::new(
-        AppErrorCode::InvalidConfiguration,
-        error.user_message,
-        error.technical_message,
-    )
 }
