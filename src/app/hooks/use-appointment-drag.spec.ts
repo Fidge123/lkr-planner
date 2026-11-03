@@ -1,4 +1,7 @@
-import { describe, expect, it, mock } from "bun:test";
+import { beforeEach, describe, expect, it, mock } from "bun:test";
+import type { MoveAssignmentResult } from "../../generated/tauri";
+import { commandFailed, commandOk } from "../../test/app-error";
+import { mockCommands } from "../../test/mock-commands";
 import type {
   AppointmentDragPayload,
   CardRect,
@@ -43,55 +46,46 @@ function cellZone(
   return { kind: "cell", employeeRef, date, cardRects: () => cards };
 }
 
-type MoveData =
-  | { kind: "moved"; newHref: string }
-  | { kind: "sourceDeleteFailed"; newHref: string; sourceHref: string };
-
-const okDeps = () => ({
-  updateAssignment: mock(async () => null),
-  reorderAssignment: mock(async () => null),
-  moveAssignment: mock(
-    async (): Promise<MoveData> => ({
+const writes = {
+  updateAssignment: mock(() => commandOk(null)),
+  reorderAssignment: mock(() => commandOk(null)),
+  moveAssignment: mock(() =>
+    commandOk<MoveAssignmentResult>({
       kind: "moved",
       newHref: "/calendars/emp-b/new.ics",
     }),
   ),
-});
+};
 
-const rejecting = (message: string) =>
-  mock(async (): Promise<never> => {
-    throw new Error(message);
-  });
+mockCommands(writes);
+
+beforeEach(() => {
+  for (const write of Object.values(writes)) write.mockClear();
+});
 
 describe("performDrop", () => {
   it("makes no persistence call when dropped on the originating cell", async () => {
-    const deps = okDeps();
-    const outcome = await performDrop(
-      payload,
-      {
-        employeeRef: payload.employeeRef,
-        date: payload.date,
-        orderIndex: payload.position,
-      },
-      deps,
-    );
+    const outcome = await performDrop(payload, {
+      employeeRef: payload.employeeRef,
+      date: payload.date,
+      orderIndex: payload.position,
+    });
 
     expect(outcome).toEqual({ kind: "none" });
-    expect(deps.updateAssignment).not.toHaveBeenCalled();
-    expect(deps.moveAssignment).not.toHaveBeenCalled();
-    expect(deps.reorderAssignment).not.toHaveBeenCalled();
+    expect(writes.updateAssignment).not.toHaveBeenCalled();
+    expect(writes.moveAssignment).not.toHaveBeenCalled();
+    expect(writes.reorderAssignment).not.toHaveBeenCalled();
   });
 
   it("reschedules via updateAssignment within the same employee", async () => {
-    const deps = okDeps();
-    const outcome = await performDrop(
-      payload,
-      { employeeRef: payload.employeeRef, date: "2026-07-08", orderIndex: 2 },
-      deps,
-    );
+    const outcome = await performDrop(payload, {
+      employeeRef: payload.employeeRef,
+      date: "2026-07-08",
+      orderIndex: 2,
+    });
 
     expect(outcome).toEqual({ kind: "done" });
-    expect(deps.updateAssignment).toHaveBeenCalledWith({
+    expect(writes.updateAssignment).toHaveBeenCalledWith({
       href: payload.href,
       uid: payload.uid,
       date: "2026-07-08",
@@ -100,19 +94,18 @@ describe("performDrop", () => {
       orderIndex: 2,
       overrideProtection: false,
     });
-    expect(deps.moveAssignment).not.toHaveBeenCalled();
+    expect(writes.moveAssignment).not.toHaveBeenCalled();
   });
 
   it("moves via moveAssignment to a different employee", async () => {
-    const deps = okDeps();
-    const outcome = await performDrop(
-      payload,
-      { employeeRef: "/v1/contacts/2", date: "2026-07-08", orderIndex: 0 },
-      deps,
-    );
+    const outcome = await performDrop(payload, {
+      employeeRef: "/v1/contacts/2",
+      date: "2026-07-08",
+      orderIndex: 0,
+    });
 
     expect(outcome).toEqual({ kind: "done" });
-    expect(deps.moveAssignment).toHaveBeenCalledWith({
+    expect(writes.moveAssignment).toHaveBeenCalledWith({
       href: payload.href,
       targetEmployeeReference: "/v1/contacts/2",
       date: "2026-07-08",
@@ -120,48 +113,40 @@ describe("performDrop", () => {
       projectName: payload.title,
       orderIndex: 0,
     });
-    expect(deps.updateAssignment).not.toHaveBeenCalled();
+    expect(writes.updateAssignment).not.toHaveBeenCalled();
   });
 
   it("reorders within the originating cell without a cross-calendar move", async () => {
-    const deps = okDeps();
-    const outcome = await performDrop(
-      payload,
-      {
-        employeeRef: payload.employeeRef,
-        date: payload.date,
-        orderIndex: 0,
-      },
-      deps,
-    );
+    const outcome = await performDrop(payload, {
+      employeeRef: payload.employeeRef,
+      date: payload.date,
+      orderIndex: 0,
+    });
 
     expect(outcome).toEqual({ kind: "done" });
-    expect(deps.reorderAssignment).toHaveBeenCalledWith({
+    expect(writes.reorderAssignment).toHaveBeenCalledWith({
       href: payload.href,
       uid: payload.uid,
       date: payload.date,
       orderIndex: 0,
     });
-    expect(deps.updateAssignment).not.toHaveBeenCalled();
-    expect(deps.moveAssignment).not.toHaveBeenCalled();
+    expect(writes.updateAssignment).not.toHaveBeenCalled();
+    expect(writes.moveAssignment).not.toHaveBeenCalled();
   });
 
   it("surfaces a partial move so the caller can reconcile", async () => {
-    const deps = {
-      ...okDeps(),
-      moveAssignment: mock(
-        async (): Promise<MoveData> => ({
-          kind: "sourceDeleteFailed",
-          newHref: "/calendars/emp-b/new.ics",
-          sourceHref: payload.href,
-        }),
-      ),
-    };
-    const outcome = await performDrop(
-      payload,
-      { employeeRef: "/v1/contacts/2", date: "2026-07-08", orderIndex: 0 },
-      deps,
+    writes.moveAssignment.mockImplementationOnce(() =>
+      commandOk<MoveAssignmentResult>({
+        kind: "sourceDeleteFailed",
+        newHref: "/calendars/emp-b/new.ics",
+        sourceHref: payload.href,
+      }),
     );
+    const outcome = await performDrop(payload, {
+      employeeRef: "/v1/contacts/2",
+      date: "2026-07-08",
+      orderIndex: 0,
+    });
 
     expect(outcome).toEqual({
       kind: "partialMove",
@@ -171,19 +156,14 @@ describe("performDrop", () => {
   });
 
   it("returns the backend error message when the command fails", async () => {
-    const deps = {
-      ...okDeps(),
-      updateAssignment: rejecting("Kalenderserver antwortete mit HTTP 500"),
-    };
-    const outcome = await performDrop(
-      payload,
-      {
-        employeeRef: payload.employeeRef,
-        date: "2026-07-08",
-        orderIndex: 3,
-      },
-      deps,
+    writes.updateAssignment.mockImplementationOnce(() =>
+      commandFailed("Kalenderserver antwortete mit HTTP 500"),
     );
+    const outcome = await performDrop(payload, {
+      employeeRef: payload.employeeRef,
+      date: "2026-07-08",
+      orderIndex: 3,
+    });
 
     expect(outcome).toEqual({
       kind: "error",
@@ -255,21 +235,19 @@ describe("resolveDropTarget", () => {
 
 describe("drop gesture end to end", () => {
   it("reorders a card to the front of its own day", async () => {
-    const deps = okDeps();
-
     // Above every card in the dragged card's own cell.
     const target = resolveDropTarget(payload, cellZone(ownCellCards), 90);
-    const outcome = await performDrop(payload, target, deps);
+    const outcome = await performDrop(payload, target);
 
     expect(outcome).toEqual({ kind: "done" });
-    expect(deps.reorderAssignment).toHaveBeenCalledWith({
+    expect(writes.reorderAssignment).toHaveBeenCalledWith({
       href: payload.href,
       uid: payload.uid,
       date: payload.date,
       orderIndex: 0,
     });
-    expect(deps.moveAssignment).not.toHaveBeenCalled();
-    expect(deps.updateAssignment).not.toHaveBeenCalled();
+    expect(writes.moveAssignment).not.toHaveBeenCalled();
+    expect(writes.updateAssignment).not.toHaveBeenCalled();
   });
 });
 

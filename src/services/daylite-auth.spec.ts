@@ -1,11 +1,7 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
 import type { LocalStore } from "../generated/tauri";
 import { mockCommands } from "../test/mock-commands";
-import {
-  dayliteBaseUrlOf,
-  defaultDayliteBaseUrl,
-  updateDayliteRefreshToken,
-} from "./daylite-auth";
+import { dayliteBaseUrlOf, updateDayliteRefreshToken } from "./daylite-auth";
 
 const mockDayliteConnectRefreshToken = mock(() =>
   Promise.resolve({} as unknown),
@@ -23,7 +19,7 @@ describe("daylite auth service", () => {
   it("falls back to the default base url when none is stored", () => {
     const store = { apiEndpoints: { dayliteBaseUrl: "  " } } as LocalStore;
 
-    expect(dayliteBaseUrlOf(store)).toBe(defaultDayliteBaseUrl);
+    expect(dayliteBaseUrlOf(store)).toBe("https://api.marketcircle.net/v1");
   });
 
   it("updates refresh token with resolved base url", async () => {

@@ -117,17 +117,10 @@ export function decideDropAction(
   return "none";
 }
 
-const assignmentWrites = {
-  updateAssignment,
-  reorderAssignment,
-  moveAssignment,
-};
-
 // Both paths rebuild the VEVENT from the payload, dropping properties set by other calendar clients.
 export async function performDrop(
   source: AppointmentDragPayload,
   target: DropCellTarget,
-  deps: typeof assignmentWrites = assignmentWrites,
 ): Promise<DropOutcome> {
   const action = decideDropAction(source, target);
 
@@ -137,7 +130,7 @@ export async function performDrop(
 
   try {
     if (action === "reorder") {
-      await deps.reorderAssignment({
+      await reorderAssignment({
         href: source.href,
         uid: source.uid,
         date: source.date,
@@ -147,7 +140,7 @@ export async function performDrop(
     }
 
     if (action === "reschedule") {
-      await deps.updateAssignment({
+      await updateAssignment({
         href: source.href,
         uid: source.uid,
         date: target.date,
@@ -160,7 +153,7 @@ export async function performDrop(
       return { kind: "done" };
     }
 
-    const moved = await deps.moveAssignment({
+    const moved = await moveAssignment({
       href: source.href,
       targetEmployeeReference: target.employeeRef,
       date: target.date,

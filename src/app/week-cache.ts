@@ -23,12 +23,12 @@ import {
   type WeekData,
 } from "./week-data";
 
-export interface WeekBackend {
+interface WeekBackend {
   loadWeekEvents: typeof loadWeekEvents;
   resolveWeekProjects: typeof resolveWeekProjects;
 }
 
-export type ResolvedProjects = Partial<Record<string, ResolvedProject | null>>;
+type ResolvedProjects = Partial<Record<string, ResolvedProject | null>>;
 
 export type WeekCache = ReturnType<typeof createWeekCache>;
 
