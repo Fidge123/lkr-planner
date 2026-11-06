@@ -31,7 +31,12 @@ function project(name: string, ref: string): DayliteProjectSummary {
 
 const overdueProject = project("Projekt Nord", "/v1/projects/10");
 
+const mockSearchProjects = mock(() =>
+  commandOk<{ results: DayliteProjectSummary[] }>({ results: [] }),
+);
+
 mockCommands({
+  dayliteSearchProjects: mockSearchProjects,
   dayliteQueryOverdueProjects: () => commandOk([overdueProject]),
   dayliteProjectCategoryColors: () => commandOk({}),
   updateAssignment: mockUpdateAssignment,
@@ -174,6 +179,31 @@ describe("AssignmentModal", () => {
 
     expect(screen.getByText("Einsatz bearbeiten")).toBeDefined();
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("shows five placeholder rows while a search runs", async () => {
+    let finishSearch: () => void = () => {};
+    mockSearchProjects.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishSearch = () =>
+            resolve({
+              status: "ok",
+              data: { results: [project("Halle 4 Umbau", "/v1/projects/4")] },
+            });
+        }),
+    );
+    const { container } = renderModal(null);
+    await screen.findByText("Projekt Nord");
+
+    fireEvent.change(searchInput(), { target: { value: "Hal" } });
+
+    expect(container.innerHTML.match(/skeleton/g)).toHaveLength(5);
+    await waitFor(() => expect(mockSearchProjects).toHaveBeenCalled());
+    expect(container.innerHTML.match(/skeleton/g)).toHaveLength(5);
+    finishSearch();
+    expect(await screen.findByText("Halle 4 Umbau")).toBeDefined();
+    expect(container.innerHTML).not.toContain("skeleton");
   });
 
   it("deletes only after confirmation", async () => {

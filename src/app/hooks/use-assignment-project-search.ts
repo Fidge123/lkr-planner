@@ -8,6 +8,8 @@ const debounceMs = 300;
 
 export interface AssignmentProjectSearchState {
   results: DayliteProjectSummary[];
+  /** True while the shown results do not belong to the typed term yet. */
+  isSearching: boolean;
   errorMessage: string | null;
 }
 
@@ -17,7 +19,7 @@ export function useAssignmentProjectSearch(
   const term = useLeadingDebounce(filter, debounceMs);
   const isSearchable =
     filter.length >= minFilterLength && term.length >= minFilterLength;
-  const { data, error } = useQuery({
+  const { data, error, isPending, isPlaceholderData } = useQuery({
     queryKey: ["project-search", term],
     queryFn: () => searchProjectsForAssignmentPicker(term),
     enabled: isSearchable,
@@ -26,8 +28,13 @@ export function useAssignmentProjectSearch(
     staleTime: 0,
   });
 
+  const isSearching =
+    filter.length >= minFilterLength &&
+    (term !== filter || isPending || isPlaceholderData);
+
   return {
-    results: isSearchable ? (data ?? []) : [],
+    results: isSearchable && !isSearching ? (data ?? []) : [],
+    isSearching,
     errorMessage: isSearchable ? (error?.message ?? null) : null,
   };
 }

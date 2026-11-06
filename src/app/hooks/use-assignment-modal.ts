@@ -57,8 +57,11 @@ export function useAssignmentModal({
     isEditMode && isProtectedAssignment(assignment.projectCategory);
   const isLocked = isProtected && !isUnlocked;
 
-  const { results, errorMessage: searchError } =
-    useAssignmentProjectSearch(filter);
+  const {
+    results,
+    isSearching,
+    errorMessage: searchError,
+  } = useAssignmentProjectSearch(filter);
   const { suggestions, suggestionsLoaded } = useAssignmentDefaultSuggestions();
   const displayedProjects = resolveDisplayedProjects(
     filter,
@@ -225,7 +228,8 @@ export function useAssignmentModal({
     searchError,
     suggestionsLoaded,
     suggestionCount: suggestions.length,
-    showResultPlaceholder: filter.length === 0 && !suggestionsLoaded,
+    showResultPlaceholder:
+      (filter.length === 0 && !suggestionsLoaded) || isSearching,
     showDeleteConfirm,
     showUnsavedConfirm,
     requestClose,

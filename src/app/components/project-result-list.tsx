@@ -54,7 +54,7 @@ export function ProjectResultList({
   );
 }
 
-/** Matches the suggestion limit in `assignment-suggestions`. */
+/** Matches the suggestion and search limits in `assignment-suggestions` and `assignment-project-picker`. */
 const placeholderRows = [0, 1, 2, 3, 4];
 
 export function ProjectResultPlaceholder() {
