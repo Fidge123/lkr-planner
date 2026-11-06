@@ -3,7 +3,7 @@ import { scheduleTimeout } from "../util";
 
 const autoRefreshIntervalMs = 5 * 60_000;
 // A Daylite token rotation lost on a network still connecting after wake signs the user out.
-const returnSettleDelayMs = 5_000;
+export const returnSettleDelayMs = 5_000;
 
 export function useCalendarAutoRefresh(
   lastLoadedAt: number | null,

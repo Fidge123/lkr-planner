@@ -1,5 +1,6 @@
-use super::caldav::{fetch_event_by_href, CaldavSession};
+use super::caldav::fetch_event_by_href;
 use super::events::parse_daylite_reference;
+use super::session::CaldavSession;
 use crate::integrations::daylite::projects::{ResolvedProject, FIXED_APPOINTMENT_CATEGORY};
 use crate::integrations::telemetry::events::Operation;
 use crate::integrations::telemetry::observe::RequestFailure;
@@ -157,6 +158,10 @@ mod tests {
         }
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "tests need their own client settings"
+    )]
     fn session(base_url: &str) -> CaldavSession {
         CaldavSession {
             telemetry: None,

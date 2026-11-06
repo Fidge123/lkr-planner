@@ -1,6 +1,10 @@
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import type { DayliteProjectSummary } from "../../generated/tauri";
-import { loadDefaultSuggestions } from "../../services/assignment-suggestions";
+import {
+  combineSuggestions,
+  getLastAssignedProject,
+  loadOverdueProjects,
+} from "../../services/assignment-suggestions";
 
 export interface AssignmentDefaultSuggestionsState {
   suggestions: DayliteProjectSummary[];
@@ -8,20 +12,17 @@ export interface AssignmentDefaultSuggestionsState {
 }
 
 export function useAssignmentDefaultSuggestions(): AssignmentDefaultSuggestionsState {
-  const [suggestions, setSuggestions] = useState<DayliteProjectSummary[]>([]);
-  const [suggestionsLoaded, setSuggestionsLoaded] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    loadDefaultSuggestions().then((next) => {
-      if (cancelled) return;
-      setSuggestions(next);
-      setSuggestionsLoaded(true);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  return { suggestions, suggestionsLoaded };
+  const overdue = useQuery({
+    queryKey: ["overdue-projects"],
+    queryFn: loadOverdueProjects,
+    // Projects fall overdue as days pass, so every open refreshes the shown list.
+    staleTime: 0,
+  });
+  return {
+    suggestions: combineSuggestions(
+      getLastAssignedProject(),
+      overdue.data ?? [],
+    ),
+    suggestionsLoaded: !overdue.isPending,
+  };
 }

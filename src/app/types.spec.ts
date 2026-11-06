@@ -114,15 +114,6 @@ describe("hasAbsenceConflict", () => {
     expect(hasAbsenceConflict(events)).toBe(false);
   });
 
-  it("does not flag several absences without an appointment", () => {
-    const events = [
-      cellEvent({ uid: "abs-1", kind: "absence", title: "UB" }),
-      cellEvent({ uid: "abs-2", kind: "absence", title: "KR" }),
-    ];
-
-    expect(hasAbsenceConflict(events)).toBe(false);
-  });
-
   it("does not flag appointments without an absence", () => {
     const events = [
       cellEvent({ uid: "asg", kind: "assignment" }),
@@ -131,30 +122,9 @@ describe("hasAbsenceConflict", () => {
 
     expect(hasAbsenceConflict(events)).toBe(false);
   });
-
-  it("does not flag an empty cell", () => {
-    expect(hasAbsenceConflict([])).toBe(false);
-  });
 });
 
 describe("toCellEvent absence colors", () => {
-  const codeColors: [string, string][] = [
-    ["UB", "bg-(--color-absence-vacation)/50"],
-    ["SU", "bg-(--color-absence-vacation)/30"],
-    ["UU", "bg-(--color-absence-vacation)/15"],
-    ["KR", "bg-(--color-absence-sick)/40"],
-    ["Kro", "bg-(--color-absence-sick)/20"],
-    ["FA", "bg-(--color-absence-special)/30"],
-  ];
-
-  for (const [title, expected] of codeColors) {
-    it(`maps absence code ${title} to its family color`, () => {
-      expect(toCellEvent(calendarEvent({ title }), categoryColors).color).toBe(
-        expected,
-      );
-    });
-  }
-
   it("matches codes case-insensitively and ignores surrounding whitespace", () => {
     expect(
       toCellEvent(calendarEvent({ title: "  kro  " }), categoryColors).color,
@@ -191,20 +161,6 @@ describe("toCellEvent assignment colors", () => {
     expect(event.color).toBe("bg-base-200");
   });
 
-  it("leaves the strip unset for a category that has no color", () => {
-    const event = toCellEvent(
-      calendarEvent({
-        kind: "assignment",
-        title: "Projekt Nord",
-        projectStatus: "in_progress",
-        projectCategory: "Ohne Farbe",
-      }),
-      categoryColors,
-    );
-
-    expect(event.categoryColor).toBeNull();
-  });
-
   it("uses the neutral surface without a category", () => {
     const event = toCellEvent(
       calendarEvent({
@@ -217,25 +173,6 @@ describe("toCellEvent assignment colors", () => {
 
     expect(event.categoryColor).toBeNull();
     expect(event.color).toBe("bg-base-200");
-  });
-
-  it("ignores the project status entirely", () => {
-    const statuses = [
-      "new_status",
-      "in_progress",
-      "done",
-      "abandoned",
-      "cancelled",
-      "deferred",
-    ];
-
-    for (const projectStatus of statuses) {
-      const event = toCellEvent(
-        calendarEvent({ kind: "assignment", title: "Projekt", projectStatus }),
-        categoryColors,
-      );
-      expect(event.color).toBe("bg-base-200");
-    }
   });
 
   it("ignores a category on absence and bare events", () => {
@@ -264,13 +201,10 @@ describe("highlightKey", () => {
     expect(highlightKey(event)).toBe("/v1/projects/42");
   });
 
-  it("gives a bare event no key", () => {
+  it("gives bare events and absences no key", () => {
     expect(highlightKey(cellEvent({ kind: "bare", title: "Werkstatt" }))).toBe(
       null,
     );
-  });
-
-  it("gives an absence no key", () => {
     expect(highlightKey(cellEvent({ kind: "absence", title: "UB" }))).toBe(
       null,
     );

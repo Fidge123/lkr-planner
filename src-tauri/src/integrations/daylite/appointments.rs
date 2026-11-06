@@ -5,11 +5,10 @@ use std::future::Future;
 use std::time::Duration;
 
 use super::auth_flow::{send_authenticated_json, send_authenticated_request};
+use super::calls::with_daylite_tokens;
 use super::client::{DayliteApiClient, DayliteHttpMethod, DayliteHttpRequest};
-use super::shared::{
-    normalize_http_error, trimmed, with_daylite_tokens, DayliteApiError, DayliteSearchResult,
-    DayliteTokenState,
-};
+use super::shared::{normalize_http_error, trimmed, DayliteSearchResult, DayliteTokenState};
+use crate::error::AppError;
 
 /// Appointments without this keyword are never touched.
 pub(crate) const APP_MANAGED_KEYWORD: &str = "lkr-planner";
@@ -88,28 +87,28 @@ pub(crate) trait AppointmentStore {
     fn search_day(
         &self,
         date: NaiveDate,
-    ) -> impl Future<Output = Result<Vec<DayliteAppointment>, DayliteApiError>> + Send;
+    ) -> impl Future<Output = Result<Vec<DayliteAppointment>, AppError>> + Send;
 
     fn create(
         &self,
         fields: &AppointmentFields,
         contact: &str,
-    ) -> impl Future<Output = Result<(), DayliteApiError>> + Send;
+    ) -> impl Future<Output = Result<(), AppError>> + Send;
 
     fn update(
         &self,
         reference: &str,
         fields: &AppointmentFields,
         link: Option<&str>,
-    ) -> impl Future<Output = Result<(), DayliteApiError>> + Send;
+    ) -> impl Future<Output = Result<(), AppError>> + Send;
 
     fn unlink(
         &self,
         reference: &str,
         contact: &str,
-    ) -> impl Future<Output = Result<(), DayliteApiError>> + Send;
+    ) -> impl Future<Output = Result<(), AppError>> + Send;
 
-    fn delete(&self, reference: &str) -> impl Future<Output = Result<(), DayliteApiError>> + Send;
+    fn delete(&self, reference: &str) -> impl Future<Output = Result<(), AppError>> + Send;
 }
 
 pub(crate) struct DayliteAppointments {
@@ -117,7 +116,7 @@ pub(crate) struct DayliteAppointments {
 }
 
 impl DayliteAppointments {
-    pub(crate) fn new(base_url: &str, app: &tauri::AppHandle) -> Result<Self, DayliteApiError> {
+    pub(crate) fn new(base_url: &str, app: &tauri::AppHandle) -> Result<Self, AppError> {
         Ok(Self {
             client: DayliteApiClient::with_timeout(base_url, SYNC_TIMEOUT)?.with_telemetry(app),
         })
@@ -125,21 +124,14 @@ impl DayliteAppointments {
 }
 
 impl AppointmentStore for DayliteAppointments {
-    async fn search_day(
-        &self,
-        date: NaiveDate,
-    ) -> Result<Vec<DayliteAppointment>, DayliteApiError> {
+    async fn search_day(&self, date: NaiveDate) -> Result<Vec<DayliteAppointment>, AppError> {
         with_daylite_tokens(&self.client, |tokens| {
             search_app_managed_appointments_core(&self.client, tokens, date)
         })
         .await
     }
 
-    async fn create(
-        &self,
-        fields: &AppointmentFields,
-        contact: &str,
-    ) -> Result<(), DayliteApiError> {
+    async fn create(&self, fields: &AppointmentFields, contact: &str) -> Result<(), AppError> {
         with_daylite_tokens(&self.client, |tokens| {
             create_appointment_core(&self.client, tokens, fields, contact)
         })
@@ -151,21 +143,21 @@ impl AppointmentStore for DayliteAppointments {
         reference: &str,
         fields: &AppointmentFields,
         link: Option<&str>,
-    ) -> Result<(), DayliteApiError> {
+    ) -> Result<(), AppError> {
         with_daylite_tokens(&self.client, |tokens| {
             update_appointment_core(&self.client, tokens, reference, fields, link)
         })
         .await
     }
 
-    async fn unlink(&self, reference: &str, contact: &str) -> Result<(), DayliteApiError> {
+    async fn unlink(&self, reference: &str, contact: &str) -> Result<(), AppError> {
         with_daylite_tokens(&self.client, |tokens| {
             unlink_contact_core(&self.client, tokens, reference, contact)
         })
         .await
     }
 
-    async fn delete(&self, reference: &str) -> Result<(), DayliteApiError> {
+    async fn delete(&self, reference: &str) -> Result<(), AppError> {
         with_daylite_tokens(&self.client, |tokens| {
             delete_appointment_core(&self.client, tokens, reference)
         })
@@ -177,7 +169,7 @@ pub(super) async fn search_app_managed_appointments_core(
     client: &DayliteApiClient,
     token_state: DayliteTokenState,
     date: NaiveDate,
-) -> Result<Vec<DayliteAppointment>, DayliteApiError> {
+) -> Result<Vec<DayliteAppointment>, AppError> {
     let search_result = send_authenticated_json::<DayliteSearchResult<DayliteAppointment>>(
         client,
         &token_state.access_token,
@@ -204,7 +196,7 @@ pub(super) async fn create_appointment_core(
     token_state: DayliteTokenState,
     fields: &AppointmentFields,
     contact: &str,
-) -> Result<(), DayliteApiError> {
+) -> Result<(), AppError> {
     let mut body = owned_fields_body(fields);
     body.insert("contacts".to_string(), json!([{ "contact": contact }]));
     body.insert("keywords".to_string(), json!([APP_MANAGED_KEYWORD]));
@@ -227,7 +219,7 @@ pub(super) async fn update_appointment_core(
     reference: &str,
     fields: &AppointmentFields,
     link: Option<&str>,
-) -> Result<(), DayliteApiError> {
+) -> Result<(), AppError> {
     let mut body = owned_fields_body(fields);
     if let Some(contact) = link {
         body.insert(
@@ -243,7 +235,7 @@ pub(super) async fn unlink_contact_core(
     token_state: DayliteTokenState,
     reference: &str,
     contact: &str,
-) -> Result<(), DayliteApiError> {
+) -> Result<(), AppError> {
     let body = json!({ "contacts": { "remove": [{ "contact": contact }] } });
     patch_appointment(client, token_state, reference, body).await
 }
@@ -253,7 +245,7 @@ async fn patch_appointment(
     token_state: DayliteTokenState,
     reference: &str,
     body: Value,
-) -> Result<(), DayliteApiError> {
+) -> Result<(), AppError> {
     send_authenticated_request(
         client,
         &token_state.access_token,
@@ -269,7 +261,7 @@ pub(super) async fn delete_appointment_core(
     client: &DayliteApiClient,
     token_state: DayliteTokenState,
     reference: &str,
-) -> Result<(), DayliteApiError> {
+) -> Result<(), AppError> {
     let path = api_path(reference);
     let response = client
         .send_request(DayliteHttpRequest {
@@ -342,7 +334,7 @@ pub(super) async fn record_appointment_lifecycle(
     token_state: DayliteTokenState,
     project_ref: &str,
     contact_ref: &str,
-) -> Result<(), DayliteApiError> {
+) -> Result<(), AppError> {
     let fields = cassette_fields(project_ref);
     create_appointment_core(client, token_state.clone(), &fields, contact_ref).await?;
     let found =

@@ -2,6 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-08-15
+- Amended: 2026-11-03 (local store commands record only their failures)
 
 ## Context
 
@@ -53,3 +54,9 @@ Errors already travel as structured payloads (`StoreError`, `ZepError`, `Daylite
   Making it visible needs an in-flight signal, which a later change can add.
 - `os_info` was added as a dependency because the standard library exposes no operating system version.
 - Telemetry adds an event per command invocation, which is well inside the PostHog free tier at the expected volume, provided nothing per-render, per-keystroke, or per-drag-frame is ever instrumented.
+
+## Amendment 2026-11-03
+
+The decision asked to wrap every Tauri command in `observe`, but the local store commands only ever recorded their failures, and `observe` needs a `Result`, which a command that cannot fail does not return.
+Timing a read or write of a small local file tells nothing, so the local store commands keep recording only their failures.
+Every other command that returns a `Result` wraps its body in `observe`, and a test in `src-tauri/src/architecture.rs` fails for one that does not.

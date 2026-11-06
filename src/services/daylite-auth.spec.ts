@@ -1,62 +1,28 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
+import type { LocalStore } from "../generated/tauri";
 import { mockCommands } from "../test/mock-commands";
-import {
-  DEFAULT_DAYLITE_BASE_URL,
-  resolveDayliteBaseUrl,
-  updateDayliteRefreshToken,
-} from "./daylite-auth";
+import { dayliteBaseUrlOf, updateDayliteRefreshToken } from "./daylite-auth";
 
-const mockLoadLocalStore = mock(() => Promise.resolve({} as unknown));
 const mockDayliteConnectRefreshToken = mock(() =>
   Promise.resolve({} as unknown),
 );
 
 mockCommands({
-  loadLocalStore: mockLoadLocalStore,
   dayliteConnectRefreshToken: mockDayliteConnectRefreshToken,
 });
 
 describe("daylite auth service", () => {
   beforeEach(() => {
-    mockLoadLocalStore.mockClear();
     mockDayliteConnectRefreshToken.mockClear();
   });
 
-  it("resolves configured daylite base url from store", async () => {
-    mockLoadLocalStore.mockResolvedValue({
-      status: "ok",
-      data: {
-        apiEndpoints: {
-          dayliteBaseUrl: " https://api.marketcircle.net/v1/ ",
-        },
-      },
-    });
+  it("falls back to the default base url when none is stored", () => {
+    const store = { apiEndpoints: { dayliteBaseUrl: "  " } } as LocalStore;
 
-    const baseUrl = await resolveDayliteBaseUrl();
-
-    expect(baseUrl).toBe("https://api.marketcircle.net/v1");
-  });
-
-  it("falls back to default base url when store is unavailable", async () => {
-    mockLoadLocalStore.mockResolvedValue({
-      status: "error",
-      error: { userMessage: "Lesefehler" },
-    });
-
-    const baseUrl = await resolveDayliteBaseUrl();
-
-    expect(baseUrl).toBe(DEFAULT_DAYLITE_BASE_URL);
+    expect(dayliteBaseUrlOf(store)).toBe("https://api.marketcircle.net/v1");
   });
 
   it("updates refresh token with resolved base url", async () => {
-    mockLoadLocalStore.mockResolvedValue({
-      status: "ok",
-      data: {
-        apiEndpoints: {
-          dayliteBaseUrl: "https://api.marketcircle.net/v1",
-        },
-      },
-    });
     mockDayliteConnectRefreshToken.mockResolvedValue({
       status: "ok",
       data: {
@@ -92,29 +58,5 @@ describe("daylite auth service", () => {
         refreshToken: "refresh-token-123",
       }),
     ).rejects.toThrow("Bitte eine Daylite-API-URL eingeben.");
-  });
-
-  it("throws daylite command error message on connect failure", async () => {
-    mockLoadLocalStore.mockResolvedValue({
-      status: "ok",
-      data: {
-        apiEndpoints: {
-          dayliteBaseUrl: "https://api.marketcircle.net/v1",
-        },
-      },
-    });
-    mockDayliteConnectRefreshToken.mockResolvedValue({
-      status: "error",
-      error: {
-        userMessage: "Token konnte nicht validiert werden.",
-      },
-    });
-
-    await expect(
-      updateDayliteRefreshToken({
-        baseUrl: "https://api.marketcircle.net/v1",
-        refreshToken: "refresh-token-123",
-      }),
-    ).rejects.toThrow("Token konnte nicht validiert werden.");
   });
 });

@@ -1,3 +1,4 @@
+use crate::error::AppError;
 use crate::integrations::telemetry::events::{Integration, Operation};
 use crate::integrations::telemetry::observe::observe;
 use tauri_plugin_opener::OpenerExt;
@@ -7,22 +8,20 @@ use tauri_plugin_opener::OpenerExt;
 pub async fn daylite_open_project(
     app: tauri::AppHandle,
     project_ref: String,
-) -> Result<(), String> {
-    let handle = app.clone();
+) -> Result<(), AppError> {
     observe(
-        &handle,
+        &app,
         Operation::DayliteOpenProject,
         Integration::Daylite,
-        async { daylite_open_project_inner(app, project_ref) },
+        async {
+            let url = project_deep_link_url(&project_ref)?;
+            app.opener()
+                .open_url(url, None::<&str>)
+                .map_err(|_| OPEN_FAILED_MESSAGE.to_string())?;
+            Ok(())
+        },
     )
     .await
-}
-
-fn daylite_open_project_inner(app: tauri::AppHandle, project_ref: String) -> Result<(), String> {
-    let url = project_deep_link_url(&project_ref)?;
-    app.opener()
-        .open_url(url, None::<&str>)
-        .map_err(|_| OPEN_FAILED_MESSAGE.to_string())
 }
 
 const OPEN_FAILED_MESSAGE: &str = "Das Projekt konnte in Daylite nicht geöffnet werden.";

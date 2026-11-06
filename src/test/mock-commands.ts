@@ -1,4 +1,4 @@
-import { mock } from "bun:test";
+import { afterAll, mock } from "bun:test";
 import { commands } from "../generated/tauri";
 
 const realCommands = commands;
@@ -7,11 +7,14 @@ const realCommands = commands;
 type CommandOverrides = { [K in keyof typeof commands]?: unknown };
 
 /**
- * `mock.module` is process-wide, so a partial replacement breaks later specs.
+ * `mock.module` is process-wide, so the real commands return after the calling spec file.
  * Overrides land on top of the real commands, which fail loudly when invoked.
  */
 export function mockCommands(overrides: CommandOverrides): void {
   mock.module("../generated/tauri", () => ({
     commands: { ...realCommands, ...overrides },
   }));
+  afterAll(() => {
+    mock.module("../generated/tauri", () => ({ commands: realCommands }));
+  });
 }

@@ -6,7 +6,16 @@ use std::time::Instant;
 
 use tauri::Manager;
 
-use super::projects::ResolvedProject;
+use serde::{Deserialize, Serialize};
+use specta::Type;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ResolvedProject {
+    pub name: String,
+    pub status: String,
+    pub category: Option<String>,
+}
 
 const PROJECT_CACHE_TTL_MS: u64 = 300_000;
 /// Above this, stale slots are swept before another one is added.

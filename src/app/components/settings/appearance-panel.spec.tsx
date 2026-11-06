@@ -1,24 +1,23 @@
 import { describe, expect, it } from "bun:test";
-import { renderToStaticMarkup } from "react-dom/server";
+import { screen } from "@testing-library/react";
+import { renderComponent } from "../../../test/render-component";
 import { AppearanceSettingsPanel } from "./appearance-panel";
 
 describe("AppearanceSettingsPanel", () => {
   it("offers light, dark and system color schemes", () => {
-    const html = renderToStaticMarkup(
-      <AppearanceSettingsPanel onClose={() => {}} />,
-    );
+    renderComponent(<AppearanceSettingsPanel onClose={() => {}} />);
 
-    expect(html).toContain("Darstellung");
-    expect(html).toContain("Hell");
-    expect(html).toContain("Dunkel");
-    expect(html).toContain("System");
+    expect(screen.getByText("Darstellung")).toBeDefined();
+    expect(screen.getByRole("radio", { name: "Hell" })).toBeDefined();
+    expect(screen.getByRole("radio", { name: "Dunkel" })).toBeDefined();
+    expect(screen.getByRole("radio", { name: "System" })).toBeDefined();
   });
 
   it("selects system by default", () => {
-    const html = renderToStaticMarkup(
-      <AppearanceSettingsPanel onClose={() => {}} />,
-    );
+    renderComponent(<AppearanceSettingsPanel onClose={() => {}} />);
 
-    expect(html).toMatch(/<input[^>]*checked=""[^>]*value="system"/);
+    expect(
+      screen.getByRole<HTMLInputElement>("radio", { name: "System" }).checked,
+    ).toBe(true);
   });
 });

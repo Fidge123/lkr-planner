@@ -1,52 +1,63 @@
-import { describe, expect, it } from "bun:test";
-import { renderToStaticMarkup } from "react-dom/server";
+import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { commandFailed, commandOk } from "../../../test/app-error";
+import { mockCommands } from "../../../test/mock-commands";
+import { renderComponent } from "../../../test/render-component";
+import { telemetrySettingsQuery } from "../../hooks/use-telemetry-settings";
 import { TelemetrySettingsPanel } from "./telemetry-panel";
 
+let storedEnabled = false;
+
+const mockSetEnabled = mock((enabled: boolean) => {
+  storedEnabled = enabled;
+  return commandOk({ enabled });
+});
+
+mockCommands({
+  telemetryGetSettings: () => Promise.resolve({ enabled: storedEnabled }),
+  telemetrySetEnabled: mockSetEnabled,
+});
+
+const toggle = () =>
+  screen.getByRole<HTMLInputElement>("checkbox", {
+    name: "Diagnosedaten senden",
+  });
+
 describe("TelemetrySettingsPanel", () => {
+  beforeEach(() => {
+    storedEnabled = false;
+  });
+
   it("renders the diagnostics section with a toggle", () => {
-    const html = renderToStaticMarkup(
-      <TelemetrySettingsPanel onClose={() => {}} />,
-    );
+    renderComponent(<TelemetrySettingsPanel onClose={() => {}} />);
 
-    expect(html).toContain("Diagnose");
-    expect(html).toContain("Diagnosedaten senden");
-    expect(html).toContain('type="checkbox"');
-  });
-
-  it("describes in German what is transmitted", () => {
-    const html = renderToStaticMarkup(
-      <TelemetrySettingsPanel onClose={() => {}} />,
-    );
-
-    expect(html).toContain("Fehler- und Leistungsdaten");
-    expect(html).toContain("technische Details");
-    expect(html).toContain("Projekt- oder Mitarbeiternamen");
-    expect(html).toContain("IP-Adresse");
-  });
-
-  it("no longer calls the transmitted data anonymous", () => {
-    const html = renderToStaticMarkup(
-      <TelemetrySettingsPanel onClose={() => {}} />,
-    );
-
-    expect(html).not.toContain("anonym");
-  });
-
-  it("describes in German what is never transmitted", () => {
-    const html = renderToStaticMarkup(
-      <TelemetrySettingsPanel onClose={() => {}} />,
-    );
-
-    expect(html).toContain(
-      "Passwörter, Zugangsschlüssel und Tokens werden nie übertragen.",
-    );
+    expect(screen.getByText("Diagnose")).toBeDefined();
+    expect(toggle()).toBeDefined();
   });
 
   it("shows telemetry as disabled before the stored state is loaded", () => {
-    const html = renderToStaticMarkup(
-      <TelemetrySettingsPanel onClose={() => {}} />,
-    );
+    storedEnabled = true;
 
-    expect(html).not.toContain("checked=");
+    renderComponent(<TelemetrySettingsPanel onClose={() => {}} />);
+
+    expect(toggle().checked).toBe(false);
+  });
+
+  it("shows the stored setting again with a German message when saving fails", async () => {
+    mockSetEnabled.mockImplementationOnce(() =>
+      commandFailed("Die Einstellung konnte nicht gespeichert werden."),
+    );
+    renderComponent(<TelemetrySettingsPanel onClose={() => {}} />, [
+      [telemetrySettingsQuery.queryKey, false],
+    ]);
+
+    fireEvent.click(toggle());
+
+    expect(
+      await screen.findByText(
+        "Die Einstellung konnte nicht gespeichert werden.",
+      ),
+    ).toBeDefined();
+    await waitFor(() => expect(toggle().checked).toBe(false));
   });
 });

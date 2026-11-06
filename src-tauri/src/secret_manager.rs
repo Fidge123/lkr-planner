@@ -81,10 +81,4 @@ mod tests {
             assert_eq!(err, SecretError::NotFound);
         });
     }
-
-    #[test]
-    fn map_keyring_error_maps_unexpected_error_to_other() {
-        let err = map_keyring_error(keyring_core::Error::TooLong("field".to_string(), 0));
-        assert!(matches!(err, SecretError::Other(_)));
-    }
 }

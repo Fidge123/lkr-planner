@@ -1,15 +1,15 @@
 import { describe, expect, it } from "bun:test";
-import { renderToStaticMarkup } from "react-dom/server";
+import { renderComponent } from "../../test/render-component";
 import { AppointmentSyncAlert } from "./appointment-sync-alert";
 
 function renderAlert(failedDates: string[], isRetrying = false): string {
-  return renderToStaticMarkup(
+  return renderComponent(
     <AppointmentSyncAlert
       failedDates={failedDates}
       isRetrying={isRetrying}
       onRetry={() => {}}
     />,
-  );
+  ).container.innerHTML;
 }
 
 describe("AppointmentSyncAlert", () => {

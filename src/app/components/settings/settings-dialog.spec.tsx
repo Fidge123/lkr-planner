@@ -1,25 +1,28 @@
-import { describe, expect, it } from "bun:test";
-import { renderToStaticMarkup } from "react-dom/server";
+import { describe, expect, it, mock } from "bun:test";
+import { fireEvent } from "@testing-library/react";
+import { renderComponent } from "../../../test/render-component";
 import { SettingsDialog } from "./settings-dialog";
 
 describe("SettingsDialog", () => {
-  it("lists a Diagnose section alongside the existing sections", () => {
-    const html = renderToStaticMarkup(
-      <SettingsDialog isOpen onClose={() => {}} />,
-    );
-
-    expect(html).toContain("Daylite");
-    expect(html).toContain("ZEP");
-    expect(html).toContain("Anzeige");
-    expect(html).toContain("Darstellung");
-    expect(html).toContain("Diagnose");
-  });
-
   it("renders nothing while closed", () => {
-    const html = renderToStaticMarkup(
+    const { container } = renderComponent(
       <SettingsDialog isOpen={false} onClose={() => {}} />,
     );
 
-    expect(html).toBe("");
+    expect(container.innerHTML).toBe("");
+  });
+
+  it("closes on Escape only while open", () => {
+    const onClose = mock(() => {});
+    const { rerender } = renderComponent(
+      <SettingsDialog isOpen={false} onClose={onClose} />,
+    );
+
+    fireEvent.keyDown(document.body, { key: "Escape" });
+    expect(onClose).not.toHaveBeenCalled();
+
+    rerender(<SettingsDialog isOpen onClose={onClose} />);
+    fireEvent.keyDown(document.body, { key: "Escape" });
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

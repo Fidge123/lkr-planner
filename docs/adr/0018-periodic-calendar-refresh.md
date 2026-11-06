@@ -2,6 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-10-19
+- Amended: 2026-11-03 (an offline retry waits for the network)
 
 ## Context
 
@@ -45,3 +46,7 @@ Daylite retires the old refresh token as it issues the new one (ADR 0006), so a 
 - A network that is still connecting after wake no longer greets the planner with an error, because the silent retry covers it.
 - `navigator.onLine` only reports whether an interface is up, so an unreachable VPN or server still runs into the retry and, if that fails too, the error.
 - The interval is a constant, not a setting.
+
+## Amendment 2026-11-03
+
+Since the week cache moved onto TanStack Query (ADR 0020), a retry that falls due while offline waits and runs once the network is back after the settle delay, instead of being skipped.

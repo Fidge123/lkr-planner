@@ -1,7 +1,5 @@
 use super::events::{ErrorCode, Integration, Operation, TelemetryEvent};
 use super::state::TelemetryState;
-use crate::integrations::local_store::types::{StoreError, TelemetrySettings};
-use crate::integrations::local_store::{load_local_store, save_local_store};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use tauri::Manager;
@@ -31,30 +29,6 @@ pub struct FrontendErrorInput {
     pub name: String,
     pub message: String,
     pub context: Option<String>,
-}
-
-#[tauri::command]
-#[specta::specta]
-pub fn telemetry_get_settings(app: tauri::AppHandle) -> TelemetrySettings {
-    app.state::<TelemetryState>().recorder().settings()
-}
-
-#[tauri::command]
-#[specta::specta]
-pub fn telemetry_set_enabled(
-    app: tauri::AppHandle,
-    enabled: bool,
-) -> Result<TelemetrySettings, StoreError> {
-    let settings = app
-        .state::<TelemetryState>()
-        .recorder()
-        .set_enabled(enabled);
-
-    let mut store = load_local_store(app.clone())?;
-    store.telemetry = settings.clone();
-    save_local_store(app, store)?;
-
-    Ok(settings)
 }
 
 #[tauri::command]

@@ -1,40 +1,27 @@
-import { type ChangeEvent, useEffect, useState } from "react";
-import {
-  loadTelemetrySettings,
-  saveTelemetryEnabled,
-} from "../../../services/telemetry";
+import { useQueryClient } from "@tanstack/react-query";
+import type { ChangeEvent } from "react";
+import { saveTelemetryEnabled } from "../../../services/telemetry";
 import { usePanelSubmit } from "../../hooks/use-panel-submit";
+import {
+  telemetrySettingsQuery,
+  useTelemetrySettings,
+} from "../../hooks/use-telemetry-settings";
 import { StatusAlert } from "./panel-status";
 
 export function TelemetrySettingsPanel({ onClose }: Props) {
-  const [isEnabled, setIsEnabled] = useState(false);
+  const queryClient = useQueryClient();
+  const { isLoaded, isEnabled } = useTelemetrySettings();
   const { isSaving, status, run } = usePanelSubmit();
 
-  useEffect(() => {
-    let isActive = true;
-    void loadTelemetrySettings()
-      .then((enabled) => {
-        if (isActive) {
-          setIsEnabled(enabled);
-        }
-      })
-      .catch(() => {});
-    return () => {
-      isActive = false;
-    };
-  }, []);
-
-  const saveToggle = async (event: ChangeEvent<HTMLInputElement>) => {
-    const nextValue = event.target.checked;
-    setIsEnabled(nextValue);
-
-    await run(async () => {
-      try {
-        await saveTelemetryEnabled(nextValue);
-      } catch (error) {
-        setIsEnabled(!nextValue);
-        throw error;
-      }
+  const saveToggle = (event: ChangeEvent<HTMLInputElement>) => {
+    const enabled = event.target.checked;
+    queryClient.setQueryData(telemetrySettingsQuery.queryKey, enabled);
+    void run(async () => {
+      await saveTelemetryEnabled(enabled).finally(() =>
+        queryClient.invalidateQueries({
+          queryKey: telemetrySettingsQuery.queryKey,
+        }),
+      );
       return null;
     }, "Die Diagnose-Einstellung konnte nicht gespeichert werden.");
   };
@@ -51,7 +38,7 @@ export function TelemetrySettingsPanel({ onClose }: Props) {
           className="toggle toggle-primary"
           checked={isEnabled}
           onChange={saveToggle}
-          disabled={isSaving}
+          disabled={isSaving || !isLoaded}
         />
         <span className="label-text font-medium">Diagnosedaten senden</span>
       </label>

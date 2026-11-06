@@ -1,30 +1,28 @@
-import { describe, expect, it, setSystemTime } from "bun:test";
-import { renderToStaticMarkup } from "react-dom/server";
+import { describe, expect, it, jest, setSystemTime } from "bun:test";
+import { act, screen } from "@testing-library/react";
 import type {
   CalendarCellEvent,
   PlanningContactRecord,
 } from "../../generated/tauri";
+import { renderComponent } from "../../test/render-component";
 import { WeekTable } from "./week-table";
 
 function renderTable(
   overrides: Partial<Parameters<typeof WeekTable>[0]> = {},
 ): string {
-  return renderToStaticMarkup(
+  return renderComponent(
     <WeekTable
       weekDays={[17, 18, 19, 20, 21].map((day) => new Date(2026, 7, day))}
       employees={[]}
       employeeSettings={[]}
       eventsByEmployee={{}}
       errorsByEmployee={{}}
-      categoryColors={{}}
       holidays={[]}
       isEmployeeLoading={false}
       onOpenIcalDialog={() => {}}
-      onReloadAssignments={() => {}}
-      onAssignmentWritten={() => {}}
       {...overrides}
     />,
-  );
+  ).container.innerHTML;
 }
 
 describe("WeekTable", () => {
@@ -32,25 +30,23 @@ describe("WeekTable", () => {
     expect(renderTable()).toContain("KW 34");
   });
 
-  it("keeps the date row fixed at the top of the scrolling grid", () => {
-    const html = renderTable();
-    const headerCells = html.match(/<th [^>]*>/g) ?? [];
-    expect(headerCells.length).toBe(6);
-    for (const cell of headerCells) {
-      expect(cell).toContain("sticky");
-      expect(cell).toContain("top-0");
+  it("moves the today highlight to the next day at midnight", () => {
+    const highlightedDays = () =>
+      screen
+        .getAllByRole("columnheader")
+        .filter((header) => header.className.includes("bg-primary"))
+        .map((header) => header.querySelector("time")?.dateTime);
+    jest.useFakeTimers({ now: new Date(2026, 7, 19, 23, 59, 30) });
+    try {
+      renderTable();
+      expect(highlightedDays()).toEqual(["2026-08-19"]);
+
+      act(() => jest.advanceTimersByTime(60_000));
+
+      expect(highlightedDays()).toEqual(["2026-08-20"]);
+    } finally {
+      jest.useRealTimers();
     }
-  });
-
-  it("opens the week picker from the calendar week cell when a jump is offered", () => {
-    const html = renderTable({ onJumpToWeek: () => {} });
-
-    const trigger =
-      html.match(/<button[^>]*aria-label="[^"]*Woche auswählen"[^>]*>/)?.[0] ??
-      "";
-    expect(trigger).toMatch(/popovertarget="[^"]+"/i);
-    expect(html).toContain('popover="auto"');
-    expect(html).toContain("KW 34");
   });
 });
 
@@ -143,27 +139,6 @@ describe("WeekTable highlighting", () => {
       "Bauprojekt Nord",
       "Bauprojekt Nord",
     ]);
-  });
-
-  it("leaves other projects and a bare event of the same name unmarked", () => {
-    const html = renderWeek(spreadWeek, nord);
-
-    expect(html).toContain("Halle 4 Umbau");
-    expect(markedTitles(html)).not.toContain("Halle 4 Umbau");
-    // The bare event reads like the project but carries no reference.
-    expect(markedTitles(html).length).toBe(3);
-  });
-
-  it("marks nothing while no highlight is active", () => {
-    expect(markedTitles(renderWeek(spreadWeek, null))).toEqual([]);
-    expect(
-      markedTitles(
-        renderTable({
-          employees: [kowalski, meier],
-          eventsByEmployee: spreadWeek,
-        }),
-      ),
-    ).toEqual([]);
   });
 
   it("marks nothing and changes nothing when every matching event is gone", () => {

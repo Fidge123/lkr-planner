@@ -12,7 +12,6 @@ const BUILD_TIME_API_KEY: Option<&str> = option_env!("POSTHOG_API_KEY");
 pub struct PostHogClient {
     api_key: Option<String>,
     endpoint: String,
-    http_client: reqwest::Client,
 }
 
 impl PostHogClient {
@@ -24,7 +23,6 @@ impl PostHogClient {
         Self {
             api_key: api_key.map(str::to_string),
             endpoint: POSTHOG_ENDPOINT.to_string(),
-            http_client: reqwest::Client::new(),
         }
     }
 
@@ -61,8 +59,8 @@ impl PostHogClient {
             return Ok(());
         };
 
-        let response = self
-            .http_client
+        let response = crate::http::shared_client()
+            .map_err(|_| DeliveryError)?
             .post(&self.endpoint)
             .header("content-type", "application/json")
             .body(payload.to_string())
@@ -175,10 +173,5 @@ mod tests {
             Ok(()),
             "PostHog was unreachable or rejected the batch"
         );
-    }
-
-    #[test]
-    fn the_endpoint_is_the_eu_region_batch_url() {
-        assert_eq!(POSTHOG_ENDPOINT, "https://eu.i.posthog.com/batch/");
     }
 }

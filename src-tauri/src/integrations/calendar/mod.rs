@@ -1,8 +1,10 @@
 mod appointment_sync;
 mod caldav;
 pub mod commands;
+pub mod employee_calendars;
 mod events;
 mod ical;
 mod protection;
+mod session;
 mod slots;
 pub mod types;
