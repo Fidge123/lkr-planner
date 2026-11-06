@@ -219,20 +219,24 @@ export function PlanningGridTable({
           isRetrying={appointmentSync.isRetrying}
           onRetry={() => void appointmentSync.retry()}
         />
-        {drag.errorMessage ? (
-          <section className="toast toast-top toast-center z-50">
-            <section className="alert alert-error">
-              <span>{drag.errorMessage}</span>
-              <button
-                type="button"
-                className="btn btn-sm"
-                onClick={drag.clearError}
-              >
-                Schließen
-              </button>
-            </section>
-          </section>
-        ) : null}
+        {/* WebKit clips fixed elements inside the scrolling grid to its bounds, so the toast renders outside it. */}
+        {drag.errorMessage
+          ? createPortal(
+              <section className="toast toast-top toast-center z-50">
+                <section className="alert alert-error">
+                  <span>{drag.errorMessage}</span>
+                  <button
+                    type="button"
+                    className="btn btn-sm"
+                    onClick={drag.clearError}
+                  >
+                    Schließen
+                  </button>
+                </section>
+              </section>,
+              document.body,
+            )
+          : null}
         <DndContext
           sensors={dragSensors}
           collisionDetection={collisionDetection}
