@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type {
   CalendarCellEvent,
   DayliteProjectSummary,
@@ -20,6 +20,7 @@ import {
 import type { ModalSaveAction } from "../next-day-quick-add";
 import { useAssignmentDefaultSuggestions } from "./use-assignment-default-suggestions";
 import { useAssignmentProjectSearch } from "./use-assignment-project-search";
+import { useEscapeKey } from "./use-escape-key";
 import { useProjectCategoryColors } from "./use-project-category-colors";
 
 const missingHrefMessage =
@@ -83,9 +84,8 @@ export function useAssignmentModal({
     onClose();
   };
 
-  // A dialog opened without showModal receives no cancel event; the search input claims an Escape that clears it.
-  const handleEscape = useEffectEvent((event: KeyboardEvent) => {
-    if (event.key !== "Escape" || event.defaultPrevented || isSaving) return;
+  useEscapeKey(() => {
+    if (isSaving) return;
     if (showDeleteConfirm) {
       setShowDeleteConfirm(false);
     } else if (showUnsavedConfirm) {
@@ -94,12 +94,6 @@ export function useAssignmentModal({
       requestClose();
     }
   });
-
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => handleEscape(event);
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, []);
 
   const selectProject = (project: DayliteProjectSummary) => {
     setSelectedProjectRef(project.self);

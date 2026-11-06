@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { deleteAssignment } from "../../services/assignments";
+import { useEscapeKey } from "../hooks/use-escape-key";
 
 export function MoveReconciliationDialog({
   reconciliation,
@@ -8,6 +9,10 @@ export function MoveReconciliationDialog({
   const [pendingChoice, setPendingChoice] =
     useState<ReconciliationChoice | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // Keeping both deletes nothing, so it is the one choice safe to make by dismissing.
+  useEscapeKey(() => {
+    if (pendingChoice === null) onResolved();
+  }, reconciliation !== null);
 
   if (!reconciliation) return null;
 

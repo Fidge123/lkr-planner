@@ -1,4 +1,5 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it, mock } from "bun:test";
+import { fireEvent } from "@testing-library/react";
 import type { PlanningContactRecord, ZepCalendar } from "../../generated/tauri";
 import { renderComponent } from "../../test/render-component";
 import type { ZepCalendarsState } from "../hooks/use-zep-calendars";
@@ -116,6 +117,15 @@ describe("EmployeeIcalDialog", () => {
     });
 
     expect([...html.matchAll(/<select[^>]*disabled[^>]*>/g)]).toHaveLength(2);
+  });
+
+  it("closes on Escape", () => {
+    const onClose = mock(() => {});
+    renderDialog({ onClose });
+
+    fireEvent.keyDown(document.body, { key: "Escape" });
+
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   it("renders nothing when no employee is selected", () => {

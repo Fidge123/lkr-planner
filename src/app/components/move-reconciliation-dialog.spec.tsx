@@ -41,6 +41,15 @@ describe("MoveReconciliationDialog", () => {
     expect(screen.getByText("Einsatz doppelt vorhanden")).toBeDefined();
   });
 
+  it("keeps both copies on Escape", () => {
+    renderDialog();
+
+    fireEvent.keyDown(document.body, { key: "Escape" });
+
+    expect(onResolved).toHaveBeenCalledTimes(1);
+    expect(mockDeleteAssignment).not.toHaveBeenCalled();
+  });
+
   it("deletes the original again, even if it is protected", async () => {
     renderDialog();
 

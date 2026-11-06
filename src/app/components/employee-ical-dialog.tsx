@@ -5,6 +5,7 @@ import type {
   PlanningContactRecord,
 } from "../../generated/tauri";
 import { saveAndTestCalendar } from "../../services/zep";
+import { useEscapeKey } from "../hooks/use-escape-key";
 import type { ZepCalendarsState } from "../hooks/use-zep-calendars";
 import { CalendarSection, type SectionStatus } from "./calendar-section";
 
@@ -33,6 +34,9 @@ export function EmployeeIcalDialog({
   );
   const [isPrimarySubmitting, setIsPrimarySubmitting] = useState(false);
   const [isAbsenceSubmitting, setIsAbsenceSubmitting] = useState(false);
+  useEscapeKey(() => {
+    if (!isPrimarySubmitting && !isAbsenceSubmitting) onClose();
+  }, isOpen);
 
   useEffect(() => {
     if (!isOpen) {
