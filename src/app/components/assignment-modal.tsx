@@ -49,7 +49,6 @@ export function AssignmentModal({
 
   return (
     <dialog
-      onCancel={modal.cancelDialog}
       className="modal modal-open"
       open
       aria-labelledby="assignment-modal-title"
@@ -110,7 +109,7 @@ export function AssignmentModal({
           {modal.searchError ? (
             <p className="text-sm text-error">{modal.searchError}</p>
           ) : null}
-          {modal.showSuggestionPlaceholder ? (
+          {modal.showResultPlaceholder ? (
             <ProjectResultPlaceholder />
           ) : (
             <ProjectResultList

@@ -62,6 +62,14 @@ const fixedAssignment: CalendarCellEvent = {
   href: "/calendars/user/cal/uid-9.ics",
 };
 
+const searchInput = () =>
+  screen.getByRole<HTMLInputElement>("combobox", { name: "Projekt" });
+
+const pressEscape = () =>
+  fireEvent.keyDown(document.activeElement ?? document.body, {
+    key: "Escape",
+  });
+
 function renderModal(assignment: CalendarCellEvent | null) {
   return renderComponent(
     <AssignmentModal
@@ -134,11 +142,6 @@ describe("AssignmentModal", () => {
   });
 
   it("closes on Escape, but asks first once a project was selected", async () => {
-    const pressEscape = () =>
-      fireEvent(
-        screen.getByRole("dialog"),
-        new Event("cancel", { cancelable: true }),
-      );
     renderModal(null);
 
     pressEscape();
@@ -148,6 +151,29 @@ describe("AssignmentModal", () => {
     pressEscape();
     expect(screen.getByText("Ungespeicherte Änderungen")).toBeDefined();
     expect(onClose).toHaveBeenCalledTimes(1);
+
+    pressEscape();
+    expect(screen.getByText("Einsatz erstellen")).toBeDefined();
+  });
+
+  it("clears the search on Escape before closing", () => {
+    renderModal(null);
+    fireEvent.change(searchInput(), { target: { value: "Ha" } });
+
+    pressEscape();
+
+    expect(searchInput().value).toBe("");
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("leaves the delete confirmation on Escape", () => {
+    renderModal(plannableAssignment);
+    fireEvent.click(button("Löschen"));
+
+    pressEscape();
+
+    expect(screen.getByText("Einsatz bearbeiten")).toBeDefined();
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it("deletes only after confirmation", async () => {

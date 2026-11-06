@@ -1,4 +1,4 @@
-import { type SyntheticEvent, useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import type {
   CalendarCellEvent,
   DayliteProjectSummary,
@@ -80,11 +80,23 @@ export function useAssignmentModal({
     onClose();
   };
 
-  // Escape would close the dialog without the unsaved-changes check.
-  const cancelDialog = (event: SyntheticEvent) => {
-    event.preventDefault();
-    requestClose();
-  };
+  // A dialog opened without showModal receives no cancel event; the search input claims an Escape that clears it.
+  const handleEscape = useEffectEvent((event: KeyboardEvent) => {
+    if (event.key !== "Escape" || event.defaultPrevented || isSaving) return;
+    if (showDeleteConfirm) {
+      setShowDeleteConfirm(false);
+    } else if (showUnsavedConfirm) {
+      setShowUnsavedConfirm(false);
+    } else {
+      requestClose();
+    }
+  });
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => handleEscape(event);
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   const selectProject = (project: DayliteProjectSummary) => {
     setSelectedProjectRef(project.self);
@@ -213,11 +225,10 @@ export function useAssignmentModal({
     searchError,
     suggestionsLoaded,
     suggestionCount: suggestions.length,
-    showSuggestionPlaceholder: filter.length === 0 && !suggestionsLoaded,
+    showResultPlaceholder: filter.length === 0 && !suggestionsLoaded,
     showDeleteConfirm,
     showUnsavedConfirm,
     requestClose,
-    cancelDialog,
     selectProject,
     changeFilter,
     handleProjectKeyDown,
