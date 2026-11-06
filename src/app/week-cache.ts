@@ -88,8 +88,7 @@ export function createWeekCache(client: QueryClient, backend: WeekBackend) {
       queryFn: () => {
         const state = client.getQueryState(projectsKey(refs));
         const isReload =
-          state !== undefined &&
-          state.isInvalidated &&
+          state?.isInvalidated === true &&
           state.errorUpdatedAt < state.dataUpdatedAt;
         return backend.resolveWeekProjects(refs, isReload);
       },
