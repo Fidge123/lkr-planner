@@ -3,8 +3,10 @@ use std::collections::HashMap;
 use serde::Deserialize;
 
 use super::auth_flow::send_authenticated_json;
+use super::calls::run_daylite_command;
 use super::client::{DayliteApiClient, DayliteHttpMethod, DayliteHttpRequest};
-use super::shared::{run_daylite_command, DayliteApiError, DayliteTokenState};
+use super::shared::DayliteTokenState;
+use crate::error::AppError;
 use crate::integrations::telemetry::events::{Integration, Operation};
 use crate::integrations::telemetry::observe::observe;
 
@@ -40,30 +42,25 @@ impl DayliteCategoryListDto {
 #[specta::specta]
 pub async fn daylite_project_category_colors(
     app: tauri::AppHandle,
-) -> Result<HashMap<String, String>, DayliteApiError> {
-    let handle = app.clone();
+) -> Result<HashMap<String, String>, AppError> {
     observe(
-        &handle,
+        &app,
         Operation::DayliteProjectCategoryColors,
         Integration::Daylite,
-        daylite_project_category_colors_inner(app),
+        async {
+            run_daylite_command(app.clone(), async |client, tokens| {
+                fetch_project_category_colors_core(client, tokens).await
+            })
+            .await
+        },
     )
-    .await
-}
-
-async fn daylite_project_category_colors_inner(
-    app: tauri::AppHandle,
-) -> Result<HashMap<String, String>, DayliteApiError> {
-    run_daylite_command(app, async |client, tokens| {
-        fetch_project_category_colors_core(client, tokens).await
-    })
     .await
 }
 
 pub(super) async fn fetch_project_category_colors_core(
     client: &DayliteApiClient,
     token_state: DayliteTokenState,
-) -> Result<HashMap<String, String>, DayliteApiError> {
+) -> Result<HashMap<String, String>, AppError> {
     let list = send_authenticated_json::<DayliteCategoryListDto>(
         client,
         &token_state.access_token,

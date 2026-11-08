@@ -3,7 +3,7 @@ use super::context::EventContext;
 use super::events::TelemetryEvent;
 use super::queue::{run_flush_task, DeliveryError, EventSink};
 use super::recorder::TelemetryRecorder;
-use crate::integrations::local_store::types::TelemetrySettings;
+use super::recorder::TelemetrySettings;
 use std::sync::Arc;
 use tokio::sync::oneshot;
 

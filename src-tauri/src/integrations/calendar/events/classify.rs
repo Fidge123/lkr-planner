@@ -93,26 +93,6 @@ mod tests {
     }
 
     #[test]
-    fn carries_summary_and_date_through_unchanged() {
-        let pending = classify_event(&event("daylite:/v1/projects/3001"));
-
-        assert_eq!(pending.date, "2026-01-26");
-        assert_eq!(pending.summary, "Projekt Nord");
-    }
-
-    /// The order index is what the reordering feature persists, so classification
-    /// must carry it through untouched.
-    #[test]
-    fn carries_the_order_index_through_classification() {
-        let pending = classify_event(&RawVEvent {
-            order_index: Some(2),
-            ..event("daylite:/v1/projects/3001")
-        });
-
-        assert_eq!(pending.order_index, Some(2));
-    }
-
-    #[test]
     fn synthesises_uid_for_event_without_uid() {
         let pending = classify_event(&RawVEvent {
             uid: String::new(),

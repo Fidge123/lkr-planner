@@ -1,8 +1,12 @@
 const millisecondsPerWeek = 7 * 24 * 60 * 60 * 1000;
 
-export function getWeekDays(weekOffset: number, showWeekend = false) {
-  const today = new Date();
-  const currentDay = today.getDay();
+export function getWeekDays(
+  today: string,
+  weekOffset: number,
+  showWeekend = false,
+) {
+  const date = fromLocalISODate(today);
+  const currentDay = date.getDay();
   let mondayOffset: number;
   if (currentDay === 0) {
     mondayOffset = showWeekend ? -6 : 1;
@@ -11,22 +15,26 @@ export function getWeekDays(weekOffset: number, showWeekend = false) {
   } else {
     mondayOffset = 1 - currentDay;
   }
-  const mondayDate = today.getDate() + mondayOffset + weekOffset * 7;
+  const mondayDate = date.getDate() + mondayOffset + weekOffset * 7;
 
   return Array.from(
     { length: showWeekend ? 7 : 5 },
-    (_, i) => new Date(today.getFullYear(), today.getMonth(), mondayDate + i),
+    (_, i) => new Date(date.getFullYear(), date.getMonth(), mondayDate + i),
   );
 }
 
-export function weekOffsetFor(day: Date, showWeekend = false): number {
+export function weekOffsetFor(
+  today: string,
+  day: Date,
+  showWeekend = false,
+): number {
   const daysSinceMonday = (day.getDay() + 6) % 7;
   const monday = new Date(
     day.getFullYear(),
     day.getMonth(),
     day.getDate() - daysSinceMonday,
   );
-  const currentMonday = getWeekDays(0, showWeekend)[0];
+  const currentMonday = getWeekDays(today, 0, showWeekend)[0];
   return Math.round(
     (monday.getTime() - currentMonday.getTime()) / millisecondsPerWeek,
   );
@@ -52,21 +60,17 @@ export function millisecondsUntilNextLocalMidnight(now: Date): number {
   return nextMidnight.getTime() - now.getTime();
 }
 
-export function isToday(day: Date) {
-  const today = new Date();
-  return day.toDateString() === today.toDateString();
-}
-
 // Must stay local time: the backend fetches [weekStart, weekStart + 7d), so a UTC start drops the last day east of UTC.
-export function getWeekStart(weekOffset: number, showWeekend = false): string {
-  return toLocalISODate(getWeekDays(weekOffset, showWeekend)[0]);
-}
-
 export function toLocalISODate(date: Date): string {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, "0");
   const d = String(date.getDate()).padStart(2, "0");
   return `${y}-${m}-${d}`;
+}
+
+export function fromLocalISODate(isoDate: string): Date {
+  const [y, m, d] = isoDate.split("-").map(Number);
+  return new Date(y, m - 1, d);
 }
 
 // ISO 8601: a date's week is the one holding its Thursday; week 1 holds 4 January.

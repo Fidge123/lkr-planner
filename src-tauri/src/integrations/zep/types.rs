@@ -1,51 +1,5 @@
-use crate::integrations::local_store::StoreError;
 use serde::{Deserialize, Serialize};
 use specta::Type;
-
-#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct ZepError {
-    pub code: ZepErrorCode,
-    pub user_message: String,
-    pub technical_message: String,
-}
-
-impl ZepError {
-    pub(crate) fn new(
-        code: ZepErrorCode,
-        user_message: impl Into<String>,
-        technical_message: impl Into<String>,
-    ) -> Self {
-        Self {
-            code,
-            user_message: user_message.into(),
-            technical_message: technical_message.into(),
-        }
-    }
-}
-
-impl From<StoreError> for ZepError {
-    fn from(error: StoreError) -> Self {
-        ZepError::new(
-            ZepErrorCode::InvalidConfiguration,
-            error.user_message,
-            error.technical_message,
-        )
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum ZepErrorCode {
-    KeychainError,
-    MissingCredentials,
-    Unauthorized,
-    NotFound,
-    NetworkError,
-    InvalidResponse,
-    InvalidConfiguration,
-    DayliteSyncFailed,
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]

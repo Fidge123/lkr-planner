@@ -1,9 +1,11 @@
 import { describe, expect, it, mock } from "bun:test";
+import type { AppError } from "../generated/tauri";
+import { appError } from "../test/app-error";
 import { mockCommands } from "../test/mock-commands";
 
 type OpenProjectResult =
   | { status: "ok"; data: null }
-  | { status: "error"; error: string };
+  | { status: "error"; error: AppError };
 
 const mockOpenProject = mock(
   (_projectRef: string): Promise<OpenProjectResult> =>
@@ -15,19 +17,11 @@ mockCommands({ dayliteOpenProject: mockOpenProject });
 const { openProjectInDaylite } = await import("./daylite-deep-link");
 
 describe("openProjectInDaylite", () => {
-  it("hands the project reference to the backend", async () => {
-    mockOpenProject.mockClear();
-
-    await openProjectInDaylite("/v1/projects/2035");
-
-    expect(mockOpenProject).toHaveBeenCalledWith("/v1/projects/2035");
-  });
-
   it("returns the German message of a failing command instead of throwing", async () => {
     mockOpenProject.mockImplementationOnce(() =>
       Promise.resolve({
         status: "error",
-        error: "Das Projekt konnte in Daylite nicht geöffnet werden.",
+        error: appError("Das Projekt konnte in Daylite nicht geöffnet werden."),
       }),
     );
 

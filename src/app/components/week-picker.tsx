@@ -4,7 +4,6 @@ import { useEffect, useId, useRef, useState } from "react";
 import type { YearMonth } from "../util";
 import {
   getIsoWeek,
-  isToday,
   monthWeeks,
   pickerAnchorMonth,
   shiftMonth,
@@ -23,7 +22,7 @@ const dayLabelFormat = new Intl.DateTimeFormat("de-DE", {
   year: "numeric",
 });
 
-export function WeekPicker({ weekDays, onJumpToWeek, children }: Props) {
+export function WeekPicker({ weekDays, today, onJumpToWeek, children }: Props) {
   const id = useId();
   const triggerRef = useRef<HTMLButtonElement>(null);
   const pickerRef = useRef<HTMLElement>(null);
@@ -104,6 +103,7 @@ export function WeekPicker({ weekDays, onJumpToWeek, children }: Props) {
             key={`${month.year}-${month.month}`}
             month={month}
             displayedMonday={displayedMonday}
+            today={today}
             onChoose={choose}
           />
         ))}
@@ -114,11 +114,17 @@ export function WeekPicker({ weekDays, onJumpToWeek, children }: Props) {
 
 interface Props {
   weekDays: Date[];
+  today: string;
   onJumpToWeek: (day: Date) => void;
   children: ReactNode;
 }
 
-function MonthGrid({ month, displayedMonday, onChoose }: MonthGridProps) {
+function MonthGrid({
+  month,
+  displayedMonday,
+  today,
+  onChoose,
+}: MonthGridProps) {
   return (
     <section className="flex flex-col gap-1">
       <h3 className="text-center font-semibold">
@@ -147,18 +153,21 @@ function MonthGrid({ month, displayedMonday, onChoose }: MonthGridProps) {
               >
                 {weekNumber}
               </button>
-              {days.map((day) => (
-                <button
-                  key={day.getDate()}
-                  type="button"
-                  aria-label={dayLabelFormat.format(day)}
-                  aria-current={isToday(day) ? "date" : undefined}
-                  className={dayClass(day, month)}
-                  onClick={() => onChoose(day)}
-                >
-                  {day.getDate()}
-                </button>
-              ))}
+              {days.map((day) => {
+                const isToday = toLocalISODate(day) === today;
+                return (
+                  <button
+                    key={day.getDate()}
+                    type="button"
+                    aria-label={dayLabelFormat.format(day)}
+                    aria-current={isToday ? "date" : undefined}
+                    className={dayClass(day, month, isToday)}
+                    onClick={() => onChoose(day)}
+                  >
+                    {day.getDate()}
+                  </button>
+                );
+              })}
             </li>
           );
         })}
@@ -170,12 +179,13 @@ function MonthGrid({ month, displayedMonday, onChoose }: MonthGridProps) {
 interface MonthGridProps {
   month: YearMonth;
   displayedMonday: string;
+  today: string;
   onChoose: (day: Date) => void;
 }
 
-function dayClass(day: Date, month: YearMonth): string {
+function dayClass(day: Date, month: YearMonth, isToday: boolean): string {
   const size = "btn btn-sm btn-square font-normal";
-  if (isToday(day)) return `${size} btn-primary`;
+  if (isToday) return `${size} btn-primary`;
   if (day.getMonth() !== month.month) {
     return `${size} btn-ghost text-base-content/40`;
   }

@@ -11,7 +11,7 @@ export interface PanelSubmitState {
   ) => Promise<void>;
 }
 
-/// `fallbackMessage` applies only to non-Error throws, because panels show `error.message` directly.
+/** `fallbackMessage` applies only to non-Error throws, because panels show `error.message` directly. */
 export function usePanelSubmit(): PanelSubmitState {
   const [isSaving, setIsSaving] = useState(false);
   const [status, setStatus] = useState<PanelStatus | null>(null);

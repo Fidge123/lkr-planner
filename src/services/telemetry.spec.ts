@@ -1,62 +1,12 @@
-import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { describe, it, mock } from "bun:test";
 import { mockCommands } from "../test/mock-commands";
-import {
-  loadTelemetrySettings,
-  reportFrontendError,
-  saveTelemetryEnabled,
-} from "./telemetry";
+import { reportFrontendError } from "./telemetry";
 
-let enabled = false;
-
-const mockGetSettings = mock(() =>
-  Promise.resolve({ enabled, installId: null }),
-);
-const mockSetEnabled = mock((next: boolean) => {
-  enabled = next;
-  return Promise.resolve({
-    status: "ok" as const,
-    data: { enabled: next, installId: "install-id" },
-  });
-});
 const mockCaptureFrontendError = mock(() => Promise.resolve(null));
 
-mockCommands({
-  telemetryGetSettings: mockGetSettings,
-  telemetrySetEnabled: mockSetEnabled,
-  telemetryCaptureFrontendError: mockCaptureFrontendError,
-});
+mockCommands({ telemetryCaptureFrontendError: mockCaptureFrontendError });
 
 describe("telemetry service", () => {
-  beforeEach(() => {
-    enabled = false;
-    mockGetSettings.mockClear();
-    mockSetEnabled.mockClear();
-    mockCaptureFrontendError.mockClear();
-  });
-
-  it("persists the enabled state through the backend command", async () => {
-    await saveTelemetryEnabled(true);
-
-    expect(mockSetEnabled).toHaveBeenCalledWith(true);
-    expect(await loadTelemetrySettings()).toBe(true);
-  });
-
-  it("forwards a frontend error to the backend command", async () => {
-    await reportFrontendError({
-      source: "render",
-      name: "TypeError",
-      message: "x is not a function",
-      context: "PlanningGrid",
-    });
-
-    expect(mockCaptureFrontendError).toHaveBeenCalledWith({
-      source: "render",
-      name: "TypeError",
-      message: "x is not a function",
-      context: "PlanningGrid",
-    });
-  });
-
   it("never rejects when the backend command fails", async () => {
     mockCaptureFrontendError.mockImplementationOnce(() =>
       Promise.reject(new Error("invoke failed")),

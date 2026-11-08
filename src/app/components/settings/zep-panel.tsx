@@ -1,42 +1,28 @@
-import { type ChangeEvent, useEffect, useState } from "react";
-import type { ZepCredentialsInfo } from "../../../generated/tauri";
-import {
-  loadZepCredentials,
-  saveZepCredentials,
-  testZepCredentials,
-} from "../../../services/zep";
+import { useQueryClient } from "@tanstack/react-query";
+import { type ChangeEvent, useState } from "react";
+import { saveZepCredentials, testZepCredentials } from "../../../services/zep";
 import { usePanelSubmit } from "../../hooks/use-panel-submit";
+import {
+  useZepCredentials,
+  zepCredentialsQuery,
+} from "../../hooks/use-zep-credentials";
 import { StatusAlert } from "./panel-status";
 
 export function ZepSettingsPanel({ onClose }: Props) {
-  const [rootUrlInput, setRootUrlInput] = useState("");
-  const [usernameInput, setUsernameInput] = useState("");
+  const queryClient = useQueryClient();
+  const { credentials, errorMessage } = useZepCredentials();
+  const [rootUrlInput, setRootUrlInput] = useState<string | null>(null);
+  const [usernameInput, setUsernameInput] = useState<string | null>(null);
   const [passwordInput, setPasswordInput] = useState("");
   const { isSaving, status, setStatus, run } = usePanelSubmit();
-
-  useEffect(() => {
-    setStatus(null);
-    setPasswordInput("");
-    let isActive = true;
-    void loadZepCredentials().then((info: ZepCredentialsInfo | null) => {
-      if (!isActive) {
-        return;
-      }
-      if (info) {
-        setRootUrlInput(info.rootUrl);
-        setUsernameInput(info.username);
-      }
-    });
-    return () => {
-      isActive = false;
-    };
-  }, [setStatus]);
+  const rootUrlValue = rootUrlInput ?? credentials?.rootUrl ?? "";
+  const usernameValue = usernameInput ?? credentials?.username ?? "";
 
   const onSubmit = async (event: ChangeEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    const rootUrl = rootUrlInput.trim().replace(/\/+$/, "");
-    const username = usernameInput.trim();
+    const rootUrl = rootUrlValue.trim().replace(/\/+$/, "");
+    const username = usernameValue.trim();
 
     if (!rootUrl) {
       setStatus({
@@ -65,6 +51,9 @@ export function ZepSettingsPanel({ onClose }: Props) {
       );
       await saveZepCredentials(rootUrl, username, passwordInput);
       setPasswordInput("");
+      await queryClient.invalidateQueries({
+        queryKey: zepCredentialsQuery.queryKey,
+      });
       return {
         type: "success",
         message: `ZEP-Verbindung erfolgreich gespeichert. ${testResult.calendarCount} Kalender gefunden.`,
@@ -76,7 +65,12 @@ export function ZepSettingsPanel({ onClose }: Props) {
     <>
       <h3 className="text-lg font-semibold">ZEP-Verbindung</h3>
 
-      <StatusAlert status={status} />
+      <StatusAlert
+        status={
+          status ??
+          (errorMessage ? { type: "error", message: errorMessage } : null)
+        }
+      />
 
       <form className="mt-4 flex flex-col gap-4" onSubmit={onSubmit}>
         <label className="form-control w-full">
@@ -84,7 +78,7 @@ export function ZepSettingsPanel({ onClose }: Props) {
           <input
             type="url"
             className="input input-bordered w-full"
-            value={rootUrlInput}
+            value={rootUrlValue}
             onChange={(event) => setRootUrlInput(event.target.value)}
             disabled={isSaving}
             placeholder="https://app.zep.de/caldav/admin"
@@ -96,7 +90,7 @@ export function ZepSettingsPanel({ onClose }: Props) {
           <input
             type="text"
             className="input input-bordered w-full"
-            value={usernameInput}
+            value={usernameValue}
             onChange={(event) => setUsernameInput(event.target.value)}
             disabled={isSaving}
             placeholder="ZEP-Benutzername"

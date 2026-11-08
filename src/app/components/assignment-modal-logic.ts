@@ -1,7 +1,8 @@
-import type { DayliteProjectSummary } from "../../generated/tauri";
+import {
+  type DayliteProjectSummary,
+  FIXED_APPOINTMENT_CATEGORY,
+} from "../../generated/tauri";
 import type { ModalSaveAction } from "../next-day-quick-add";
-
-const fixedAppointmentCategory = "Termin FIX geplant";
 
 export const fixedAppointmentNotice =
   "Dieser Termin ist als „Termin FIX geplant“ gesperrt. Zum Bearbeiten oder Löschen bitte entsperren.";
@@ -10,17 +11,7 @@ export const fixedAppointmentNotice =
 export function isProtectedAssignment(
   projectCategory: string | null | undefined,
 ): boolean {
-  return projectCategory === fixedAppointmentCategory;
-}
-
-const genericWriteError = "Die Änderung konnte nicht gespeichert werden.";
-
-// Keyed on the status: an error carrying no message must not read as success.
-export function commandErrorMessage(result: {
-  status: string;
-  error?: string;
-}): string | null {
-  return result.status === "error" ? result.error || genericWriteError : null;
+  return projectCategory === FIXED_APPOINTMENT_CATEGORY;
 }
 
 export function resolveDisplayedProjects(

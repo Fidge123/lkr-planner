@@ -4,16 +4,17 @@ use std::sync::{Arc, Mutex};
 use super::client::{
     BoxFuture, DayliteApiClient, DayliteHttpRequest, DayliteHttpResponse, DayliteHttpTransport,
 };
-use super::shared::{DayliteApiError, DayliteTokenState};
+use super::shared::DayliteTokenState;
+use crate::error::AppError;
 
 #[derive(Clone)]
 pub(super) struct MockTransport {
-    responses: Arc<Mutex<VecDeque<Result<DayliteHttpResponse, DayliteApiError>>>>,
+    responses: Arc<Mutex<VecDeque<Result<DayliteHttpResponse, AppError>>>>,
     requests: Arc<Mutex<Vec<DayliteHttpRequest>>>,
 }
 
 impl MockTransport {
-    pub(super) fn new(responses: Vec<Result<DayliteHttpResponse, DayliteApiError>>) -> Self {
+    pub(super) fn new(responses: Vec<Result<DayliteHttpResponse, AppError>>) -> Self {
         Self {
             responses: Arc::new(Mutex::new(VecDeque::from(responses))),
             requests: Arc::new(Mutex::new(Vec::new())),
@@ -32,7 +33,7 @@ impl DayliteHttpTransport for MockTransport {
     fn send<'a>(
         &'a self,
         request: DayliteHttpRequest,
-    ) -> BoxFuture<'a, Result<DayliteHttpResponse, DayliteApiError>> {
+    ) -> BoxFuture<'a, Result<DayliteHttpResponse, AppError>> {
         Box::pin(async move {
             self.requests
                 .lock()
@@ -49,7 +50,7 @@ impl DayliteHttpTransport for MockTransport {
 }
 
 pub(super) fn mock_client(
-    responses: Vec<Result<DayliteHttpResponse, DayliteApiError>>,
+    responses: Vec<Result<DayliteHttpResponse, AppError>>,
 ) -> (DayliteApiClient, MockTransport) {
     let transport = MockTransport::new(responses);
     (

@@ -2,7 +2,7 @@ use chrono::{NaiveDate, NaiveTime};
 use std::cmp::Reverse;
 use std::collections::HashMap;
 
-use super::events::classify_event;
+use super::events::{classify_event, ordering_key};
 use super::ical::ORDER_PROPERTY;
 use super::types::{PendingEvent, RawVEvent};
 
@@ -132,7 +132,7 @@ fn sequence_day(
     placement: Option<&DayPlacement>,
 ) -> Vec<String> {
     let mut ranked: Vec<&PendingEvent> = assignments.iter().map(|(pending, _)| pending).collect();
-    ranked.sort_by(|a, b| ordering_key(a).cmp(&ordering_key(b)));
+    ranked.sort_by(|a, b| pending_order(a).cmp(&pending_order(b)));
 
     let placed_uid = placement.map(|placement| placement.uid);
     let mut current_position = None;
@@ -162,27 +162,13 @@ fn sequence_day(
     keys.into_iter().map(|(_, uid)| uid.to_string()).collect()
 }
 
-/// Ordered by persisted index, then earlier start, then longer duration, then UID for a total order.
-/// Missing index or times sort last.
-fn ordering_key(pending: &PendingEvent) -> (u32, u32, Reverse<u32>, &str) {
-    let start = minute_of_time(pending.start_time.as_deref());
-    let end = minute_of_time(pending.end_time.as_deref());
-    let duration = match (start, end) {
-        (Some(start), Some(end)) => end.saturating_sub(start),
-        _ => 0,
-    };
-    (
-        pending.order_index.unwrap_or(u32::MAX),
-        start.unwrap_or(u32::MAX),
-        Reverse(duration),
-        pending.uid.as_str(),
+fn pending_order(pending: &PendingEvent) -> (u32, u32, Reverse<u32>, &str) {
+    ordering_key(
+        pending.order_index,
+        pending.start_time.as_deref(),
+        pending.end_time.as_deref(),
+        &pending.uid,
     )
-}
-
-/// Minutes since midnight for an `HH:MM` time, `None` for an all-day or malformed one.
-fn minute_of_time(time: Option<&str>) -> Option<u32> {
-    let (hours, minutes) = time?.split_once(':')?;
-    Some(hours.parse::<u32>().ok()? * 60 + minutes.parse::<u32>().ok()?)
 }
 
 /// Only the VEVENT's own DTSTART, DTEND and order property are rewritten; other lines survive untouched.

@@ -3,7 +3,6 @@ import type {
   EmployeeWeekEvents,
   ResolvedProject,
 } from "../generated/tauri";
-import { sortCellEvents } from "./cell-order";
 import { isProtectedAssignment } from "./components/assignment-modal-logic";
 
 export interface WeekData {
@@ -145,7 +144,7 @@ export function relocateEvent(
   const isTargetAssignment = (candidate: CalendarCellEvent) =>
     candidate.kind === "assignment" && candidate.date === target.date;
 
-  const cell = sortCellEvents(targetEvents.filter(isTargetAssignment));
+  const cell = targetEvents.filter(isTargetAssignment);
   const index = Math.min(Math.max(target.orderIndex, 0), cell.length);
   cell.splice(index, 0, {
     ...event,

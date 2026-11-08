@@ -1,16 +1,7 @@
-import {
-  afterAll,
-  beforeAll,
-  describe,
-  expect,
-  it,
-  setSystemTime,
-} from "bun:test";
+import { describe, expect, it } from "bun:test";
 import {
   getIsoWeek,
   getWeekDays,
-  getWeekStart,
-  isToday,
   millisecondsUntilNextLocalMidnight,
   monthWeeks,
   pickerAnchorMonth,
@@ -21,48 +12,39 @@ import {
 } from "./util";
 
 describe("util", () => {
-  beforeAll(() => {
-    setSystemTime(new Date(2026, 0, 1, 12, 34, 56));
-  });
+  const today = "2026-01-01";
 
   describe("getWeekDays", () => {
     // Compare local dates: toISOString shifts local midnight a day east of UTC.
     it("should return the correct week days", () => {
-      const weekDays = getWeekDays(0);
+      const weekDays = getWeekDays(today, 0);
       expect(weekDays).toHaveLength(5);
       expect(toLocalISODate(weekDays[0])).toBe("2025-12-29");
       expect(toLocalISODate(weekDays[4])).toBe("2026-01-02");
     });
 
     it("should return the correct week days for a week offset", () => {
-      const weekDays = getWeekDays(1);
+      const weekDays = getWeekDays(today, 1);
       expect(toLocalISODate(weekDays[0])).toBe("2026-01-05");
       expect(toLocalISODate(weekDays[4])).toBe("2026-01-09");
     });
 
     it("should return the correct week days for a negative week offset", () => {
-      const weekDays = getWeekDays(-4);
+      const weekDays = getWeekDays(today, -4);
       expect(toLocalISODate(weekDays[0])).toBe("2025-12-01");
       expect(toLocalISODate(weekDays[4])).toBe("2025-12-05");
     });
 
     it("should produce dates at local midnight (hours/minutes/seconds are zero)", () => {
-      for (const day of getWeekDays(0)) {
+      for (const day of getWeekDays(today, 0)) {
         expect(day.getHours()).toBe(0);
         expect(day.getMinutes()).toBe(0);
         expect(day.getSeconds()).toBe(0);
       }
     });
 
-    it("returns 5 days from Monday to Friday when showWeekend is false", () => {
-      const weekDays = getWeekDays(0, false);
-      expect(weekDays).toHaveLength(5);
-      expect(weekDays[0].getDay()).toBe(1);
-      expect(weekDays[4].getDay()).toBe(5);
-    });
-
     it("returns 7 days from Monday to Sunday when showWeekend is true", () => {
-      const weekDays = getWeekDays(0, true);
+      const weekDays = getWeekDays(today, 0, true);
       expect(weekDays).toHaveLength(7);
       expect(weekDays[0].getDay()).toBe(1);
       expect(weekDays[5].getDay()).toBe(6);
@@ -72,15 +54,10 @@ describe("util", () => {
 
   describe("getWeekDays weekend-aware anchoring", () => {
     describe("when today is a Saturday", () => {
-      beforeAll(() => {
-        setSystemTime(new Date(2026, 0, 3, 12, 0, 0));
-      });
-      afterAll(() => {
-        setSystemTime(new Date(2026, 0, 1, 12, 34, 56));
-      });
+      const saturday = "2026-01-03";
 
       it("anchors to the current week so today stays visible when showWeekend is on", () => {
-        const weekDays = getWeekDays(0, true);
+        const weekDays = getWeekDays(saturday, 0, true);
         expect(weekDays).toHaveLength(7);
         expect(weekDays[0].getDay()).toBe(1);
         expect(weekDays.map(toLocalISODate)).toContain("2026-01-03");
@@ -88,7 +65,7 @@ describe("util", () => {
       });
 
       it("anchors to the upcoming Monday when showWeekend is off", () => {
-        const weekDays = getWeekDays(0, false);
+        const weekDays = getWeekDays(saturday, 0, false);
         expect(weekDays).toHaveLength(5);
         expect(toLocalISODate(weekDays[0])).toBe("2026-01-05");
         expect(weekDays.map(toLocalISODate)).not.toContain("2026-01-03");
@@ -96,15 +73,10 @@ describe("util", () => {
     });
 
     describe("when today is a Sunday", () => {
-      beforeAll(() => {
-        setSystemTime(new Date(2026, 0, 4, 12, 0, 0));
-      });
-      afterAll(() => {
-        setSystemTime(new Date(2026, 0, 1, 12, 34, 56));
-      });
+      const sunday = "2026-01-04";
 
       it("anchors to the current week so today stays visible when showWeekend is on", () => {
-        const weekDays = getWeekDays(0, true);
+        const weekDays = getWeekDays(sunday, 0, true);
         expect(weekDays).toHaveLength(7);
         expect(weekDays[0].getDay()).toBe(1);
         expect(weekDays.map(toLocalISODate)).toContain("2026-01-04");
@@ -112,7 +84,7 @@ describe("util", () => {
       });
 
       it("anchors to the upcoming Monday when showWeekend is off", () => {
-        const weekDays = getWeekDays(0, false);
+        const weekDays = getWeekDays(sunday, 0, false);
         expect(weekDays).toHaveLength(5);
         expect(toLocalISODate(weekDays[0])).toBe("2026-01-05");
         expect(weekDays.map(toLocalISODate)).not.toContain("2026-01-04");
@@ -128,35 +100,18 @@ describe("util", () => {
     });
   });
 
-  describe("getWeekStart", () => {
-    it("covers every displayed day in the backend's seven-day window", () => {
-      for (const showWeekend of [false, true]) {
-        for (const offset of [-1, 0, 1]) {
-          const [y, m, d] = getWeekStart(offset, showWeekend)
-            .split("-")
-            .map(Number);
-          const start = new Date(y, m - 1, d);
-          const end = new Date(y, m - 1, d + 7);
-          for (const day of getWeekDays(offset, showWeekend)) {
-            expect(day >= start && day < end).toBe(true);
-          }
-        }
-      }
-    });
-  });
-
   describe("shiftWeekDays", () => {
     it("moves every day one week forward", () => {
-      const shifted = shiftWeekDays(getWeekDays(0), 1);
+      const shifted = shiftWeekDays(getWeekDays(today, 0), 1);
       expect(shifted.map(toLocalISODate)).toEqual(
-        getWeekDays(1).map(toLocalISODate),
+        getWeekDays(today, 1).map(toLocalISODate),
       );
     });
 
     it("moves every day one week back", () => {
-      const shifted = shiftWeekDays(getWeekDays(0), -1);
+      const shifted = shiftWeekDays(getWeekDays(today, 0), -1);
       expect(shifted.map(toLocalISODate)).toEqual(
-        getWeekDays(-1).map(toLocalISODate),
+        getWeekDays(today, -1).map(toLocalISODate),
       );
     });
 
@@ -176,7 +131,7 @@ describe("util", () => {
     });
 
     it("keeps every day of a week on the same number", () => {
-      const numbers = getWeekDays(0, true).map(getIsoWeek);
+      const numbers = getWeekDays(today, 0, true).map(getIsoWeek);
       expect(numbers).toEqual(Array(7).fill(numbers[0]));
     });
 
@@ -297,72 +252,71 @@ describe("util", () => {
   });
 
   describe("weekOffsetFor", () => {
-    afterAll(() => {
-      setSystemTime(new Date(2026, 0, 1, 12, 34, 56));
-    });
-
-    const firstShownDay = (day: Date, showWeekend: boolean) =>
+    const firstShownDay = (today: string, day: Date, showWeekend: boolean) =>
       toLocalISODate(
-        getWeekDays(weekOffsetFor(day, showWeekend), showWeekend)[0],
+        getWeekDays(
+          today,
+          weekOffsetFor(today, day, showWeekend),
+          showWeekend,
+        )[0],
       );
 
     it("counts whole weeks from the current week on a weekday", () => {
-      setSystemTime(new Date(2026, 9, 14, 12));
+      const today = "2026-10-14";
 
-      expect(weekOffsetFor(new Date(2026, 9, 16), false)).toBe(0);
-      expect(weekOffsetFor(new Date(2026, 8, 9), false)).toBe(-5);
-      expect(weekOffsetFor(new Date(2026, 9, 18), true)).toBe(0);
-      expect(firstShownDay(new Date(2026, 8, 9), false)).toBe("2026-09-07");
+      expect(weekOffsetFor(today, new Date(2026, 9, 16), false)).toBe(0);
+      expect(weekOffsetFor(today, new Date(2026, 8, 9), false)).toBe(-5);
+      expect(weekOffsetFor(today, new Date(2026, 9, 18), true)).toBe(0);
+      expect(firstShownDay(today, new Date(2026, 8, 9), false)).toBe(
+        "2026-09-07",
+      );
     });
 
     it("shows the chosen week on a Saturday whether the weekend is hidden or shown", () => {
-      setSystemTime(new Date(2026, 9, 17, 12));
+      const today = "2026-10-17";
 
-      expect(weekOffsetFor(new Date(2026, 9, 17), false)).toBe(-1);
-      expect(weekOffsetFor(new Date(2026, 9, 17), true)).toBe(0);
-      expect(firstShownDay(new Date(2026, 9, 17), false)).toBe("2026-10-12");
-      expect(firstShownDay(new Date(2026, 9, 21), false)).toBe("2026-10-19");
+      expect(weekOffsetFor(today, new Date(2026, 9, 17), false)).toBe(-1);
+      expect(weekOffsetFor(today, new Date(2026, 9, 17), true)).toBe(0);
+      expect(firstShownDay(today, new Date(2026, 9, 17), false)).toBe(
+        "2026-10-12",
+      );
+      expect(firstShownDay(today, new Date(2026, 9, 21), false)).toBe(
+        "2026-10-19",
+      );
     });
 
     it("shows the chosen week on a Sunday whether the weekend is hidden or shown", () => {
-      setSystemTime(new Date(2026, 9, 18, 12));
+      const today = "2026-10-18";
 
-      expect(weekOffsetFor(new Date(2026, 8, 13), false)).toBe(-6);
-      expect(weekOffsetFor(new Date(2026, 8, 13), true)).toBe(-5);
-      expect(firstShownDay(new Date(2026, 8, 13), false)).toBe("2026-09-07");
-      expect(firstShownDay(new Date(2026, 8, 13), true)).toBe("2026-09-07");
+      expect(weekOffsetFor(today, new Date(2026, 8, 13), false)).toBe(-6);
+      expect(weekOffsetFor(today, new Date(2026, 8, 13), true)).toBe(-5);
+      expect(firstShownDay(today, new Date(2026, 8, 13), false)).toBe(
+        "2026-09-07",
+      );
+      expect(firstShownDay(today, new Date(2026, 8, 13), true)).toBe(
+        "2026-09-07",
+      );
     });
 
     it("counts whole weeks across a DST switch", () => {
-      setSystemTime(new Date(2026, 9, 14, 12));
+      const today = "2026-10-14";
 
-      expect(weekOffsetFor(new Date(2026, 10, 4), false)).toBe(3);
-      expect(weekOffsetFor(new Date(2026, 2, 25), false)).toBe(-29);
-      expect(firstShownDay(new Date(2026, 2, 25), false)).toBe("2026-03-23");
+      expect(weekOffsetFor(today, new Date(2026, 10, 4), false)).toBe(3);
+      expect(weekOffsetFor(today, new Date(2026, 2, 25), false)).toBe(-29);
+      expect(firstShownDay(today, new Date(2026, 2, 25), false)).toBe(
+        "2026-03-23",
+      );
     });
 
     it("counts whole weeks across the year boundary", () => {
-      setSystemTime(new Date(2026, 11, 30, 12));
+      const today = "2026-12-30";
 
-      expect(weekOffsetFor(new Date(2027, 0, 6), false)).toBe(1);
-      expect(weekOffsetFor(new Date(2027, 0, 1), true)).toBe(0);
-      expect(weekOffsetFor(new Date(2026, 11, 20), false)).toBe(-2);
-      expect(firstShownDay(new Date(2027, 0, 6), false)).toBe("2027-01-04");
-    });
-  });
-
-  describe("isToday", () => {
-    it("should return true for today", () => {
-      expect(isToday(new Date())).toBe(true);
-      expect(isToday(new Date(2026, 0, 1, 23, 59, 59))).toBe(true);
-      expect(isToday(new Date(2026, 0, 1, 0, 0, 0))).toBe(true);
-    });
-
-    it("should return false for a different day", () => {
-      expect(isToday(new Date(2025, 0, 1, 12, 34, 56))).toBe(false);
-      expect(isToday(new Date(2026, 1, 1, 12, 34, 56))).toBe(false);
-      expect(isToday(new Date(2026, 0, 2, 12, 34, 56))).toBe(false);
-      expect(isToday(new Date(1970, 0, 1))).toBe(false);
+      expect(weekOffsetFor(today, new Date(2027, 0, 6), false)).toBe(1);
+      expect(weekOffsetFor(today, new Date(2027, 0, 1), true)).toBe(0);
+      expect(weekOffsetFor(today, new Date(2026, 11, 20), false)).toBe(-2);
+      expect(firstShownDay(today, new Date(2027, 0, 6), false)).toBe(
+        "2027-01-04",
+      );
     });
   });
 

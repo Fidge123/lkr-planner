@@ -1,22 +1,18 @@
-import { commands, type DayliteRefreshTokenRequest } from "../generated/tauri";
-import { unwrapCommandResult } from "./command-result";
+import {
+  commands,
+  type DayliteRefreshTokenRequest,
+  type LocalStore,
+} from "../generated/tauri";
+import { callCommand } from "./command-result";
 import { normalizeOptionalString } from "./daylite-service-helpers";
 
-export const DAYLITE_PERSONAL_TOKEN_URL =
+export const daylitePersonalTokenUrl =
   "https://www.marketcircle.com/account/oauth/authorize?client_id=com.marketcircle.sample&redirect_uri=https://api.marketcircle.net/v1/personal_token/auth_code&response_type=code";
-export const DEFAULT_DAYLITE_BASE_URL = "https://api.marketcircle.net/v1";
+const defaultDayliteBaseUrl = "https://api.marketcircle.net/v1";
 
-export async function resolveDayliteBaseUrl(): Promise<string> {
-  try {
-    const result = await commands.loadLocalStore();
-    if (result.status === "error") {
-      return DEFAULT_DAYLITE_BASE_URL;
-    }
-
-    return normalizeBaseUrl(result.data.apiEndpoints?.dayliteBaseUrl);
-  } catch {
-    return DEFAULT_DAYLITE_BASE_URL;
-  }
+export function dayliteBaseUrlOf(store: LocalStore | undefined): string {
+  const baseUrl = normalizeOptionalString(store?.apiEndpoints.dayliteBaseUrl);
+  return baseUrl ? baseUrl.replace(/\/+$/, "") : defaultDayliteBaseUrl;
 }
 
 export async function updateDayliteRefreshToken(
@@ -35,20 +31,11 @@ export async function updateDayliteRefreshToken(
     throw new Error("Bitte ein Refresh-Token eingeben.");
   }
 
-  unwrapCommandResult(
-    await commands.dayliteConnectRefreshToken({
+  await callCommand(
+    commands.dayliteConnectRefreshToken({
       baseUrl: normalizedBaseUrl,
       refreshToken: normalizedRefreshToken,
     }),
     "Das Daylite-Refresh-Token konnte nicht gespeichert werden.",
   );
-}
-
-function normalizeBaseUrl(baseUrl: string | null | undefined): string {
-  const normalizedBaseUrl = normalizeOptionalString(baseUrl);
-  if (!normalizedBaseUrl) {
-    return DEFAULT_DAYLITE_BASE_URL;
-  }
-
-  return normalizedBaseUrl.replace(/\/+$/, "");
 }

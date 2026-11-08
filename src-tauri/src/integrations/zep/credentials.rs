@@ -1,4 +1,5 @@
-use super::types::{ZepError, ZepErrorCode, ZepStoredCredentials};
+use super::types::ZepStoredCredentials;
+use crate::error::{AppError, AppErrorCode};
 use crate::secret_manager;
 use std::sync::{OnceLock, RwLock};
 
@@ -8,14 +9,14 @@ const ZEP_KEYCHAIN_ACCOUNT: &str = "LKR Planner ZEP Admin";
 pub(super) fn save_zep_credentials_to_keychain(
     username: &str,
     password: &str,
-) -> Result<(), ZepError> {
+) -> Result<(), AppError> {
     let payload = serde_json::to_string(&ZepStoredCredentials {
         username: username.to_string(),
         password: password.to_string(),
     })
     .map_err(|e| {
-        ZepError::new(
-            ZepErrorCode::KeychainError,
+        AppError::new(
+            AppErrorCode::KeychainError,
             "Die ZEP-Zugangsdaten konnten nicht gespeichert werden.",
             format!("Serialisierung fehlgeschlagen: {e}"),
         )
@@ -23,8 +24,8 @@ pub(super) fn save_zep_credentials_to_keychain(
 
     secret_manager::set_token(ZEP_KEYCHAIN_SERVICE, ZEP_KEYCHAIN_ACCOUNT, &payload).map_err(
         |e| {
-            ZepError::new(
-                ZepErrorCode::KeychainError,
+            AppError::new(
+                AppErrorCode::KeychainError,
                 "Die ZEP-Zugangsdaten konnten nicht im Keychain gespeichert werden (Zugriff verweigert?).",
                 e.to_string(),
             )
@@ -38,7 +39,7 @@ pub(super) fn save_zep_credentials_to_keychain(
     Ok(())
 }
 
-pub(crate) fn load_zep_credentials() -> Result<ZepStoredCredentials, ZepError> {
+pub(crate) fn load_zep_credentials() -> Result<ZepStoredCredentials, AppError> {
     credential_cache().get_or_load(load_zep_credentials_from_keychain)
 }
 
@@ -50,8 +51,8 @@ struct CredentialCache {
 impl CredentialCache {
     fn get_or_load(
         &self,
-        load: impl FnOnce() -> Result<ZepStoredCredentials, ZepError>,
-    ) -> Result<ZepStoredCredentials, ZepError> {
+        load: impl FnOnce() -> Result<ZepStoredCredentials, AppError>,
+    ) -> Result<ZepStoredCredentials, AppError> {
         if let Some(cached) = self
             .cached
             .read()
@@ -76,16 +77,16 @@ fn credential_cache() -> &'static CredentialCache {
     CACHE.get_or_init(CredentialCache::default)
 }
 
-fn load_zep_credentials_from_keychain() -> Result<ZepStoredCredentials, ZepError> {
+fn load_zep_credentials_from_keychain() -> Result<ZepStoredCredentials, AppError> {
     let json_str = secret_manager::get_token(ZEP_KEYCHAIN_SERVICE, ZEP_KEYCHAIN_ACCOUNT).map_err(
         |e| match e {
-            secret_manager::SecretError::NotFound => ZepError::new(
-                ZepErrorCode::MissingCredentials,
+            secret_manager::SecretError::NotFound => AppError::new(
+                AppErrorCode::MissingCredentials,
                 "Keine ZEP-Zugangsdaten hinterlegt. Bitte ZEP-Verbindung konfigurieren.",
                 "Kein Keychain-Eintrag für ZEP-Zugangsdaten.",
             ),
-            _ => ZepError::new(
-                ZepErrorCode::KeychainError,
+            _ => AppError::new(
+                AppErrorCode::KeychainError,
                 "Auf die ZEP-Zugangsdaten im Keychain konnte nicht zugegriffen werden.",
                 e.to_string(),
             ),
@@ -93,8 +94,8 @@ fn load_zep_credentials_from_keychain() -> Result<ZepStoredCredentials, ZepError
     )?;
 
     serde_json::from_str::<ZepStoredCredentials>(&json_str).map_err(|e| {
-        ZepError::new(
-            ZepErrorCode::KeychainError,
+        AppError::new(
+            AppErrorCode::KeychainError,
             "Die gespeicherten ZEP-Zugangsdaten sind beschädigt. Bitte neu eingeben.",
             format!("Deserialisierung fehlgeschlagen: {e}"),
         )
@@ -134,8 +135,8 @@ mod tests {
         let cache = CredentialCache::default();
 
         let failed = cache.get_or_load(|| {
-            Err(ZepError::new(
-                ZepErrorCode::MissingCredentials,
+            Err(AppError::new(
+                AppErrorCode::MissingCredentials,
                 "Keine ZEP-Zugangsdaten hinterlegt.",
                 "Kein Keychain-Eintrag",
             ))

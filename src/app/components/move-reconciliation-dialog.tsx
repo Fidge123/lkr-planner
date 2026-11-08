@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { commands } from "../../generated/tauri";
+import { deleteAssignment } from "../../services/assignments";
+import { useEscapeKey } from "../hooks/use-escape-key";
 
 export function MoveReconciliationDialog({
   reconciliation,
@@ -8,6 +9,10 @@ export function MoveReconciliationDialog({
   const [pendingChoice, setPendingChoice] =
     useState<ReconciliationChoice | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // Keeping both deletes nothing, so it is the one choice safe to make by dismissing.
+  useEscapeKey(() => {
+    if (pendingChoice === null) onResolved();
+  }, reconciliation !== null);
 
   if (!reconciliation) return null;
 
@@ -19,23 +24,18 @@ export function MoveReconciliationDialog({
       return;
     }
 
+    const duplicateHref =
+      choice === "retryDeleteSource"
+        ? reconciliation.sourceHref
+        : reconciliation.newHref;
     setPendingChoice(choice);
     setErrorMessage(null);
     try {
       // A half-finished move must always be able to drop its duplicate, even for a fixed appointment.
-      const result = await commands.deleteAssignment(
-        hrefToDelete(choice, reconciliation),
-        true,
-      );
-      if (result.status === "error") {
-        setErrorMessage(result.error);
-        setPendingChoice(null);
-        return;
-      }
+      await deleteAssignment(duplicateHref, true);
       onResolved();
-    } catch {
-      // Bindings re-throw Error-typed rejections; without this catch the dialog stays disabled.
-      setErrorMessage("Der Einsatz konnte nicht gelöscht werden.");
+    } catch (error) {
+      setErrorMessage((error as Error).message);
       setPendingChoice(null);
     }
   };
@@ -102,16 +102,7 @@ export interface MoveReconciliation {
   sourceHref: string;
 }
 
-export type ReconciliationChoice =
+type ReconciliationChoice =
   | "retryDeleteSource"
   | "keepOldDeleteNew"
   | "keepBoth";
-
-export function hrefToDelete(
-  choice: Exclude<ReconciliationChoice, "keepBoth">,
-  reconciliation: MoveReconciliation,
-): string {
-  return choice === "retryDeleteSource"
-    ? reconciliation.sourceHref
-    : reconciliation.newHref;
-}

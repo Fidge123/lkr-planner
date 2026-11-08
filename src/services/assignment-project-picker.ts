@@ -1,16 +1,16 @@
 import { commands, type DayliteProjectSummary } from "../generated/tauri";
-import { unwrapCommandResult } from "./command-result";
+import { callCommand } from "./command-result";
 
-const DISPLAY_LIMIT = 5;
-const CANDIDATE_LIMIT = 50;
+const displayLimit = 5;
+const candidateLimit = 50;
 
 export async function searchProjectsForAssignmentPicker(
   searchTerm: string,
 ): Promise<DayliteProjectSummary[]> {
-  const result = unwrapCommandResult(
-    await commands.dayliteSearchProjects({
+  const result = await callCommand(
+    commands.dayliteSearchProjects({
       searchTerm,
-      limit: CANDIDATE_LIMIT,
+      limit: candidateLimit,
       statuses: ["new_status", "in_progress"],
       fullRecords: true,
       start: null,
@@ -19,5 +19,5 @@ export async function searchProjectsForAssignmentPicker(
     "Projekte konnten nicht geladen werden.",
   );
 
-  return (result.results ?? []).slice(0, DISPLAY_LIMIT);
+  return (result.results ?? []).slice(0, displayLimit);
 }

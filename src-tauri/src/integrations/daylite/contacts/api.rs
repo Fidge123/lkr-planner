@@ -6,16 +6,15 @@ use super::mapping::{
 use super::types::{
     DayliteContactSummary, DayliteUpdateContactIcalUrlsInput, PlanningContactRecord,
 };
+use crate::error::{AppError, AppErrorCode};
 use crate::integrations::daylite::auth_flow::{
     send_authenticated_json, send_authenticated_request,
 };
+use crate::integrations::daylite::calls::{run_daylite_command, with_daylite_tokens_once};
 use crate::integrations::daylite::client::{
     DayliteApiClient, DayliteHttpMethod, DayliteHttpRequest,
 };
-use crate::integrations::daylite::shared::{
-    with_daylite_tokens_once, DayliteApiError, DayliteApiErrorCode, DayliteSearchResult,
-    DayliteTokenState,
-};
+use crate::integrations::daylite::shared::{DayliteSearchResult, DayliteTokenState};
 use crate::integrations::local_store::LocalStore;
 use chrono::{SecondsFormat, Utc};
 use serde_json::json;
@@ -23,7 +22,7 @@ use serde_json::json;
 pub async fn sync_contact_ical_urls(
     store: &mut LocalStore,
     input: DayliteUpdateContactIcalUrlsInput,
-) -> Result<(), DayliteApiError> {
+) -> Result<(), AppError> {
     let daylite_base_url = store.api_endpoints.daylite_base_url.clone();
     let client = DayliteApiClient::new(&daylite_base_url)?;
 
@@ -41,7 +40,7 @@ pub(in crate::integrations::daylite) async fn update_contact_ical_urls_core(
     token_state: DayliteTokenState,
     store: &mut LocalStore,
     input: &DayliteUpdateContactIcalUrlsInput,
-) -> Result<(), DayliteApiError> {
+) -> Result<(), AppError> {
     let contact_id = parse_contact_id(&input.contact_reference)?;
     let contact_path = format!("/contacts/{contact_id}");
     let current_contact = send_authenticated_json::<DayliteContactSummary>(
@@ -92,10 +91,28 @@ pub(in crate::integrations::daylite) async fn update_contact_ical_urls_core(
     Ok(())
 }
 
+pub(crate) async fn fetch_planning_contacts(
+    app: &tauri::AppHandle,
+) -> Result<Vec<PlanningContactRecord>, AppError> {
+    run_daylite_command(app.clone(), async |client, tokens| {
+        list_contacts_core(client, tokens).await
+    })
+    .await
+}
+
+pub(crate) fn cache_contacts(store: &mut LocalStore, contacts: &[PlanningContactRecord]) {
+    store.daylite_cache.last_synced_at = Some(current_timestamp_iso8601());
+    store.daylite_cache.contacts = contacts
+        .iter()
+        .cloned()
+        .map(map_planning_contact_to_cache_entry)
+        .collect();
+}
+
 pub(in crate::integrations::daylite) async fn list_contacts_core(
     client: &DayliteApiClient,
     token_state: DayliteTokenState,
-) -> Result<Vec<PlanningContactRecord>, DayliteApiError> {
+) -> Result<Vec<PlanningContactRecord>, AppError> {
     let search_result = send_authenticated_json::<DayliteSearchResult<DayliteContactSummary>>(
         client,
         &token_state.access_token,
@@ -125,14 +142,13 @@ pub(super) fn current_timestamp_iso8601() -> String {
     Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true)
 }
 
-fn parse_contact_id(contact_reference: &str) -> Result<u64, DayliteApiError> {
+fn parse_contact_id(contact_reference: &str) -> Result<u64, AppError> {
     let trimmed_reference = contact_reference.trim();
     let contact_id_raw = trimmed_reference.rsplit('/').next().unwrap_or_default();
 
     contact_id_raw.parse::<u64>().map_err(|error| {
-        DayliteApiError::new(
-            DayliteApiErrorCode::InvalidResponse,
-            None,
+        AppError::new(
+            AppErrorCode::InvalidResponse,
             "Die Daylite-Kontaktreferenz ist ungültig.",
             format!("Ungültige Kontaktreferenz `{trimmed_reference}`: {error}"),
         )
