@@ -33,3 +33,4 @@ Rows filtered their events per cell on every render and passed new callbacks to 
 - Week navigation still mounts every card of the new week, and measuring drop targets during a drag remains its main cost.
 - Hooks that keep the latest value in a ref during render, and code with `try`/`finally`, stay uncompiled.
 - A behavior only the compiled build shows needs a check in the built app, since specs run uncompiled.
+- `@babel/core` stays on version 7 until the compiler supports Babel 8, which makes it skip every component with a destructured prop default.
