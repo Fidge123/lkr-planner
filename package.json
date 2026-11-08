@@ -29,7 +29,7 @@
     "tailwindcss": "^4.3.4"
   },
   "devDependencies": {
-    "@babel/core": "^7.29.7",
+    "@babel/core": "^7.29.13",
     "@biomejs/biome": "2.6.5",
     "@fission-ai/openspec": "^1.16.0",
     "@happy-dom/global-registrator": "^21.0.4",
