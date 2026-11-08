@@ -1,12 +1,5 @@
 schema: spec-driven
 
-context: |
-  LKR Planner is a Tauri desktop app (React, TypeScript, Bun, Rust) for weekly assignment planning.
-  Daylite is the source of truth for projects and employees, and ZEP CalDAV calendars hold the assignments.
-  Display text is German; code and documentation are English with one sentence per line.
-  Each artifact states a fact once: the proposal says why, the specs say what users observe, the design says how; refer to the other artifact instead of restating it.
-  Prefer one user-facing outcome per change and split a proposal that bundles independent outcomes.
-
 rules:
   proposal:
     - Keep the proposal under 30 lines.
