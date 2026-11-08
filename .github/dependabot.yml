@@ -6,6 +6,10 @@ updates:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 5
+    ignore:
+      # babel-plugin-react-compiler 1.0 skips every component with a destructured prop default under Babel 8.
+      - dependency-name: "@babel/core"
+        versions: [">=8"]
     groups:
       development-dependencies:
         dependency-type: "development"
