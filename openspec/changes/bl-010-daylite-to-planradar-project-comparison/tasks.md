@@ -1,17 +1,16 @@
-## 1. Link Detection (TDD)
+## 1. Link storage
 
-- [ ] 1.1 (red) Service tests: linked project returns the ID, unlinked returns none, unset field handled
-- [ ] 1.2 (green) Implement link check and read the ID from the `planradar-link` custom field
+- [ ] 1.1 Record a Daylite cassette that reads and writes the `planradar-link` field on a project, and switch design.md to the keyword fallback if that fails
+- [ ] 1.2 Read the link from a Daylite project and write it, with unit tests
 
-## 2. Link field provisioning and write (TDD)
+## 2. Linking commands
 
-- [ ] 2.1 (red) Test the `planradar-link` field is created when missing and reused when present
-- [ ] 2.2 (green) Implement field provisioning
-- [ ] 2.3 (red) Test writing a selected Planradar project ID, idempotent re-link (no duplicate write), and that link create and failure emit sync events
-- [ ] 2.4 (green) Implement link write with check-before-write and sync event logging
+- [ ] 2.1 Give the linking area a layer above `daylite` and `planradar` in `architecture.rs` and ADR 0023
+- [ ] 2.2 Add a command that returns a Daylite project's link state (unlinked, linked with name and status, not found), with unit tests
+- [ ] 2.3 Add a command that lists all Planradar projects across pages, with unit tests
+- [ ] 2.4 Add a command that links a Daylite project to a Planradar project and keeps a link another device stored, with unit tests
 
-## 3. Project Title Fallback (folded in from BL-036) (TDD)
+## 3. Edit modal
 
-- [ ] 3.1 (red) Title-fallback tests: Planradar name, then single Daylite company, then Daylite project name, plus the empty custom-name slot
-- [ ] 3.2 (green) Implement title resolution and the single-linked-company helper
-- [ ] 3.3 Wire the resolved title into the assignment card (rendering already exists in assignment-persistence / timetable-cell)
+- [ ] 3.1 Add the service functions and query hooks, and render the Planradar section in its linked, unlinked, not-found and unavailable states, with component specs
+- [ ] 3.2 Add the name-filtered project picker and the link action, with component specs

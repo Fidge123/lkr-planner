@@ -1,74 +1,47 @@
+## Purpose
+
+Lets a planner create the Planradar project for a Daylite project from the planner, blank or as a copy of an existing project, and leaves it linked.
+
 ## ADDED Requirements
 
-### Requirement: Create a blank Planradar project from a form
-The system SHALL create a new Planradar project from a user-editable form, for an unlinked Daylite project.
+### Requirement: Create a blank project
+The system SHALL offer `In Planradar anlegen` in the assignment edit modal when the link state of `planradar-project-linking` is unlinked or not found, and create a Planradar project from a form with name, address, start and end date and description.
 
-#### Scenario: Submit create form
-- **GIVEN** user has filled the create form
-- **WHEN** user submits the form
-- **THEN** a new project is created from the form values
-- **AND** the new project ID is returned
+#### Scenario: Form defaults
+- **WHEN** the planner opens the form
+- **THEN** the name holds the Daylite project name and the other fields are empty
 
-#### Scenario: Default form values
-- **GIVEN** user opens the create form without selecting a source project
-- **WHEN** the form is shown
-- **THEN** the project name defaults to the Daylite project name
-- **AND** the remaining fields start empty
+#### Scenario: Submit
+- **WHEN** the planner submits the form without a source project
+- **THEN** a Planradar project with the entered values exists and is linked to the Daylite project
 
-### Requirement: Create by copying a source project then editing
-The system SHALL let the user create a project by copying an existing Planradar project, then editing the copy.
+#### Scenario: Name already used
+- **WHEN** the entered name equals the name of a Planradar project the account can access
+- **THEN** nothing is created, and the planner is offered to link that project or change the name
 
-#### Scenario: Choose aspects to copy
-- **GIVEN** user selects a source project
-- **WHEN** configuring the copy
-- **THEN** the user chooses a name and which aspects to copy (details, groups, ticket types, users, components)
+### Requirement: Create a copy of an existing project
+The system SHALL create a Planradar project as a copy of a source project picked from the project list, with the planner choosing which of details, groups, forms, users and layers are copied, all but users preselected.
 
-#### Scenario: Copy then edit
-- **GIVEN** user confirms the copy
-- **WHEN** the project is created
-- **THEN** the source project is copied via the copy-project endpoint with the selected toggles and name
-- **AND** an edit form is opened to adjust the copied project's details before finishing
-- **AND** the new project ID is returned
+#### Scenario: Copy and adjust
+- **WHEN** the planner picks a source project, confirms name and aspects and the copy has finished
+- **THEN** the copy is linked to the Daylite project
+- **AND** a form shows the copy's address, dates and description, and saving it changes the copy
 
-### Requirement: Idempotent creation
-The system SHALL prevent duplicate Planradar project creation.
+#### Scenario: Copy is in progress
+- **WHEN** Planradar has accepted the copy but the copy does not exist yet
+- **THEN** the modal shows that the project is being created and offers no second creation
 
-#### Scenario: Existing link found
-- **GIVEN** Daylite project has existing Planradar ID in custom field
-- **AND** the Planradar project exists
-- **WHEN** user initiates create
-- **THEN** existing project is returned (no new creation)
+#### Scenario: Copy does not appear in time
+- **WHEN** the copy has not appeared when the wait ends
+- **THEN** a German message says the copy may still appear in Planradar and can then be linked, and nothing is linked
 
-#### Scenario: Stale link (orphan Planradar)
-- **GIVEN** Daylite project has Planradar ID but project missing in Planradar
-- **WHEN** user initiates create
-- **THEN** a sync issue is logged
-- **AND** new project is created
+### Requirement: Link the created project
+The system SHALL store the link as soon as the Planradar project exists and never create a second project because storing the link failed.
 
-### Requirement: Persist link
-The system SHALL persist created Planradar ID to Daylite.
+#### Scenario: Link cannot be stored
+- **WHEN** the project was created but Daylite rejects the link write
+- **THEN** a German error message names the created project and offers `Erneut verknüpfen`, which stores the link without creating a project
 
-#### Scenario: Write link to Daylite
-- **GIVEN** new Planradar project is created
-- **WHEN** persisting the link
-- **THEN** Planradar ID is written to Daylite custom field
-- **AND** operation succeeds
-
-#### Scenario: Write failure handling
-- **GIVEN** write to Daylite fails
-- **WHEN** persisting the link
-- **THEN** operation is queued for retry
-- **AND** sync issue is logged
-
-### Requirement: Source project selection
-The system SHALL allow user to filter and select a source project.
-
-#### Scenario: Filter source projects
-- **GIVEN** user types search filter
-- **WHEN** filtering the source project list
-- **THEN** only matching projects are shown
-
-#### Scenario: Select source project
-- **GIVEN** user selects a source project
-- **WHEN** confirming selection
-- **THEN** the source project ID is stored for creation
+#### Scenario: Adjusting the copy is abandoned
+- **WHEN** the planner closes the form that adjusts a finished copy
+- **THEN** the copy stays in Planradar and stays linked

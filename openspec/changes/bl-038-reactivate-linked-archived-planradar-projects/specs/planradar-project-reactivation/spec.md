@@ -1,49 +1,31 @@
+## Purpose
+
+Lets a planner reopen an archived Planradar project that a Daylite project is linked to, without leaving the planner.
+
 ## ADDED Requirements
 
-### Requirement: Detect archived projects
-The system SHALL detect linked Planradar projects that are archived.
+### Requirement: Offer reactivation for an archived linked project
+The system SHALL offer `Reaktivieren` in the assignment edit modal only when the link state of `planradar-project-linking` shows the linked project as archived.
 
-#### Scenario: Fetch project status
-- **GIVEN** a linked Planradar project ID
-- **WHEN** fetching project status
-- **THEN** the current status (active/archived/closed) is returned
+#### Scenario: Archived project
+- **WHEN** the planner opens the edit modal for an assignment whose linked Planradar project is archived
+- **THEN** `Reaktivieren` is offered
 
-#### Scenario: Identify archived status
-- **GIVEN** a project with archived status
-- **WHEN** checking status
-- **THEN** the project is identified as archived
+#### Scenario: Active project
+- **WHEN** the linked Planradar project is active
+- **THEN** reactivation is not offered
 
-### Requirement: Reactivate archived projects
-The system SHALL reactivate archived linked projects.
+### Requirement: Reactivate on request
+The system SHALL reactivate the linked Planradar project only when the planner asks for it, and report success only after Planradar shows the project as active.
 
-#### Scenario: Reactivate archived project
-- **GIVEN** an archived linked project
-- **WHEN** reactivating the project
-- **THEN** the archive-project endpoint is called with status set to active (status `1`)
-- **AND** the project status changes to active
-- **AND** success is logged
+#### Scenario: Reactivation succeeds
+- **WHEN** the planner chooses `Reaktivieren` and Planradar then shows the project as active
+- **THEN** the modal shows the project as active and no longer offers reactivation
 
-#### Scenario: Skip already active project
-- **GIVEN** an active linked project
-- **WHEN** reactivating the project
-- **THEN** no API call is made
-- **AND** success is returned (idempotent)
+#### Scenario: Project was reactivated elsewhere
+- **WHEN** the planner chooses `Reaktivieren` for a project that someone reactivated in the meantime
+- **THEN** the modal shows the project as active without an error
 
-#### Scenario: Handle missing project
-- **GIVEN** a linked project ID that doesn't exist in Planradar
-- **WHEN** attempting reactivation
-- **THEN** an error is returned
-- **AND** sync issue is logged
-
-### Requirement: Logging
-The system SHALL log reactivation actions.
-
-#### Scenario: Log successful reactivation
-- **GIVEN** project is successfully reactivated
-- **WHEN** logging the action
-- **THEN** log includes project ID, name, and timestamp
-
-#### Scenario: Log failed reactivation
-- **GIVEN** reactivation fails
-- **WHEN** logging the failure
-- **THEN** log includes project ID, error message, and timestamp
+#### Scenario: Reactivation fails
+- **WHEN** Planradar rejects the request, cannot be reached or still shows the project as archived
+- **THEN** a German error message names the cause, a missing permission included, and the project stays shown as archived
