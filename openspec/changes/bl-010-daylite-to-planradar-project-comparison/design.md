@@ -1,40 +1,19 @@
-## Context
-
-This change enables linking Daylite projects to existing Planradar projects.
-It builds on the Planradar API client from BL-009 and uses Daylite's custom fields to store the link reference.
-
-## Goals / Non-Goals
-
-**Goals:**
-- Detect existing links between Daylite and Planradar projects
-- Allow manual linking of unlinked projects
-- Persist links in Daylite custom fields
-- Ensure idempotent operations
-
-**Non-Goals:**
-- Creating new Planradar projects (covered by BL-037)
-- Reactivating archived projects (covered by BL-038)
-- Automatic project matching
-
 ## Decisions
 
-### Link Storage
-**Decision**: Store Planradar project ID in the `planradar-link` Daylite custom field
-- The field key is a fixed, predetermined value (`planradar-link`), not configurable
-- The app creates the custom field if it does not yet exist
-- Uses existing Daylite custom field infrastructure
-- Persists link data with the Daylite project
-- Supports synchronization across devices
+### Link storage
+The link is the Planradar project ID in the Daylite custom field `planradar-link`, so it travels with the project to every device.
+Daylite documents `extra_fields` on a project as writable but gives neither its shape nor a way to define a field, so the first task proves reading and writing against the live API and whether the field has to be set up once in Daylite.
+- A `planradar:<id>` keyword is writable and searchable today but shows up in Daylite's keyword list; it is the fallback if the proof fails.
+- A mapping in the local store would not reach other devices.
 
-### Idempotency
-**Decision**: Check for existing link before writing
-- Query custom field before creating new link
-- Reuse existing link if present to avoid duplicates
+### Stored ID form
+Planradar answers with hashed project IDs while the recorded request paths use numeric ones.
+The stored value is the form that the project read, copy and archive paths accept, which BL-009's follow-up 8.1 establishes before this change starts.
 
-## Risks / Trade-offs
+### Backend area
+`daylite` and `planradar` sit on one layer and may not use each other, so linking lives in a new area above both, recorded in [ADR 0023](../../../docs/adr/0023-backend-areas-in-layers.md).
+- Putting it into `calendar` would mix link handling into CalDAV code.
 
-- **Risk**: Custom field not configured
-  - **Mitigation**: Validate field exists before operations, show clear error
-
-- **Risk**: Planradar project deleted after linking
-  - **Mitigation**: Validate project exists when reading link
+### Project list
+The Planradar list endpoint has no text filter, so all pages are loaded once and filtered by name in the app.
+- Reading Planradar on every keystroke would exhaust the client's 15 requests per minute.

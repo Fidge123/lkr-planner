@@ -1,25 +1,26 @@
 ## Why
 
-Linked Planradar projects may become archived/closed over time.
-When assigning employees to these projects, they need to be reactivated first.
-This ensures assignments work correctly in Planradar.
+A linked Planradar project that was archived cannot take new tickets, so work planned for it cannot be documented there until someone reopens it in Planradar.
+The planner already shows that the linked project is archived and is where the need comes up.
 
 ## What Changes
 
-- Detect archived/closed Planradar projects that are linked
-- Implement reactivation/reopen operation via Planradar API
-- Log reactivation actions and failures as sync events
-- Skip already active projects without side effects
+- Offer `Reaktivieren` in the assignment edit modal when the linked Planradar project is archived
+- Reactivate the project in Planradar on that action and show it as active once Planradar confirms it
+- Show a German error message when reactivation fails, a missing permission included
+- Record the live reactivate exchange as a cassette
 
 ## Capabilities
 
 ### New Capabilities
-- `planradar-project-reactivation`: Reactivate archived linked projects
+- `planradar-project-reactivation`: Reactivate an archived linked Planradar project from the planner
 
 ### Modified Capabilities
-- `ical-sync`: Extended to reactivate projects before sync
+
+None.
 
 ## Impact
 
-- Code: New service function for project reactivation
-- Dependencies: Depends on BL-009, BL-010, BL-037
+- Backend: the linking area from BL-010, Planradar cassettes
+- Frontend: Planradar section of the assignment edit modal
+- Depends on BL-009 and BL-010

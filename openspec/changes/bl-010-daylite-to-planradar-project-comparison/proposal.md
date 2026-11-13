@@ -1,27 +1,26 @@
 ## Why
 
-The application needs to link Daylite projects with existing Planradar projects.
-This enables tracking which Planradar project corresponds to each Daylite project, which is essential for synchronization and data consistency across both systems.
+A Daylite project and its Planradar project are only connected in people's heads, so the planner cannot show or act on the Planradar side of an assignment.
+Storing the Planradar project ID on the Daylite project gives every device the same link and is the base for creating (BL-037) and reactivating (BL-038) Planradar projects.
 
 ## What Changes
 
-- Determine if Daylite project has a linked Planradar project reference
-- Allow linking an already existing Planradar project when no link exists
-- Persist Planradar project ID into the fixed `planradar-link` Daylite custom field, creating it if missing
-- Ensure idempotent link behavior across repeated runs
-- Resolve the assignment display title via a fallback chain that prefers the linked Planradar project name (folded in from the dropped BL-036; rendering itself already ships via assignment-persistence)
+- Show in the assignment edit modal whether the assignment's Daylite project is linked to a Planradar project, with the linked project's name and status
+- Let the planner pick an existing Planradar project from a name-filtered list and link it
+- Store the Planradar project ID in the `planradar-link` custom field of the Daylite project
+- Let the planner link another project when the stored link matches no Planradar project
 
 ## Capabilities
 
 ### New Capabilities
-- `planradar-project-linking`: Link existing Planradar projects to Daylite projects
-- `project-title-fallback`: Determine the assignment display title from multiple sources, preferring the linked Planradar project name
+- `planradar-project-linking`: Show and set the link between a Daylite project and an existing Planradar project
 
 ### Modified Capabilities
-- `planradar-api-client`: Extends BL-009 with linking functionality
+
+None.
 
 ## Impact
 
-- Code: New linking module in Tauri backend; title-fallback resolution for the assignment card title
-- APIs: Daylite custom field read/write, Planradar project read, Daylite company query (for the single-company fallback)
-- Dependencies: BL-009 Planradar API client
+- Backend: a new area above `daylite` and `planradar` that combines both, Daylite project read and write of the link field
+- Frontend: Planradar section in the assignment edit modal
+- Depends on BL-009 with its open project-ID follow-up, and on a way to connect Planradar in the settings, which no change covers yet

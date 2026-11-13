@@ -1,23 +1,13 @@
-## 1. Project Creation Service (TDD)
+## 1. Blank creation
 
-- [ ] 1.1 (red) Service test: blank create from a Daylite project returns the new Planradar ID with the Daylite name
-- [ ] 1.2 (green) Implement blank create via the create-project endpoint
-- [ ] 1.3 (red) Service test: copy from a source project passes the chosen name and aspect toggles, then applies the edits
-- [ ] 1.4 (green) Implement copy-then-edit creation via copy_project plus project update
+- [ ] 1.1 Add a command that creates a blank Planradar project for a Daylite project, refuses a used name and stores the link, with unit tests
+- [ ] 1.2 Add the service function and offer `In Planradar anlegen` in the edit modal for unlinked and not-found projects, with component specs
+- [ ] 1.3 Add the creation form with its defaults, the used-name choice and the link retry, with component specs
 
-## 2. Idempotency Logic (TDD)
+## 2. Copy
 
-- [ ] 2.1 (red) Tests: existing valid link returns the existing project (no create); orphan link logs a sync issue and creates new
-- [ ] 2.2 (green) Implement idempotent create (read `planradar-link`, verify the project exists, branch accordingly)
-
-## 3. Link Persistence (TDD)
-
-- [ ] 3.1 (red) Test the Planradar ID is written to `planradar-link` after creation; write failure queues a retry and logs a sync issue
-- [ ] 3.2 (green) Implement write-back with retry queue and local mapping backup
-
-## 4. Source Project Selection UI
-
-- [ ] 4.1 Add "Create in Planradar" action to unlinked projects
-- [ ] 4.2 Show source project list with search/filter and the aspect toggles
-- [ ] 4.3 Open the edit form for the copied project before finishing
-- [ ] 4.4 Handle the blank create option
+- [ ] 2.1 Add reading and updating a project's details to the Planradar client, with cassette tests
+- [ ] 2.2 Add a command that copies a source project for a Daylite project, refuses a used name, waits for the copy and stores the link, with unit tests
+- [ ] 2.3 Add the source picker and the aspect choices with their defaults to the form, with component specs
+- [ ] 2.4 Show the in-progress and timed-out states of a copy, with component specs
+- [ ] 2.5 Add the form that adjusts the finished copy, with component specs
