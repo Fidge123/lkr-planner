@@ -15,6 +15,8 @@ const RELOAD_DATA_EVENT: &str = "reload-data";
 
 fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
     tauri_specta::Builder::<tauri::Wry>::new()
+        .error_handling(tauri_specta::ErrorHandlingMode::Result)
+        .disable_serde_phases()
         .constant(
             "FIXED_APPOINTMENT_CATEGORY",
             integrations::daylite::projects::FIXED_APPOINTMENT_CATEGORY,
